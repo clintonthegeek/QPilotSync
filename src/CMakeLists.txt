@@ -3,6 +3,8 @@
 add_library(QPilotCore STATIC
     qpilotsync_core.cpp
     qpilotsync_version.h
+
+    # Palm device communication
     palm/kpilotlink.cpp
     palm/kpilotlink.h
     palm/pilotrecord.cpp
@@ -11,6 +13,8 @@ add_library(QPilotCore STATIC
     palm/kpilotdevicelink.h
     palm/categoryinfo.cpp
     palm/categoryinfo.h
+
+    # Data format mappers
     mappers/memomapper.cpp
     mappers/memomapper.h
     mappers/contactmapper.cpp
@@ -19,6 +23,16 @@ add_library(QPilotCore STATIC
     mappers/calendarmapper.h
     mappers/todomapper.cpp
     mappers/todomapper.h
+
+    # Sync engine (Phase 4)
+    sync/synctypes.h
+    sync/syncstate.cpp
+    sync/syncstate.h
+    sync/syncbackend.h
+    sync/conduit.cpp
+    sync/conduit.h
+    sync/syncengine.cpp
+    sync/syncengine.h
 )
 
 target_link_libraries(QPilotCore
