@@ -1,0 +1,133 @@
+# Build directories
+build/
+cmake-build-*/
+pilot-link-install/
+
+# Compiled Object files
+*.o
+*.obj
+*.ko
+*.elf
+
+# Libraries
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+qpilotsync
+
+# Qt generated files
+moc_*
+ui_*
+qrc_*
+*.qm
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# IDE files
+.vscode/
+.vs/
+.idea/
+*.user
+*.user.*
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.autosave
+.clangd/
+.cache/
+
+# Qt Creator
+*.pro.user
+*.pro.user.*
+CMakeLists.txt.user*
+
+# Backup files
+*~
+*.swp
+*.swo
+*.bak
+*.orig
+*.rej
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Package files (for future packaging)
+*.deb
+*.rpm
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.AppImage
+
+# Test data
+test_data/
+*.pdb
+*.prc
+
+# Generated documentation
+html/
+latex/
+doc/html/
+doc/latex/
+
+# Sync data (user data - should not be in repo)
+sync_data/
+backups/
+calendars/
+contacts/
+memos/
+
+# Test export directories
+cal1/
+cal2/
+contact2/
+todo1/
+todo2/
+*.vcf
+*.ics
+
+# Test Palm apps/databases
+PlanStanLite
+*.pdb
+*.prc
+
+# Reference code (external projects for study)
+kdepim-*
+kdepim-*/
+
+# pilot-link source (external dependency - built via ExternalProject)
+pilot-link/
+pilot-link-git/

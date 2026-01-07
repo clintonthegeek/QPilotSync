@@ -1,0 +1,37 @@
+# QPilotCore library - Core functionality that will be reused by main app and tests
+
+add_library(QPilotCore STATIC
+    qpilotsync_core.cpp
+    qpilotsync_version.h
+    palm/kpilotlink.cpp
+    palm/kpilotlink.h
+    palm/pilotrecord.cpp
+    palm/pilotrecord.h
+    palm/kpilotdevicelink.cpp
+    palm/kpilotdevicelink.h
+    palm/categoryinfo.cpp
+    palm/categoryinfo.h
+    mappers/memomapper.cpp
+    mappers/memomapper.h
+    mappers/contactmapper.cpp
+    mappers/contactmapper.h
+    mappers/calendarmapper.cpp
+    mappers/calendarmapper.h
+    mappers/todomapper.cpp
+    mappers/todomapper.h
+)
+
+target_link_libraries(QPilotCore
+    PUBLIC
+        Qt::Core
+        Qt::Widgets
+        KF6::CalendarCore
+        pisock
+)
+
+target_include_directories(QPilotCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Ensure pilot-link is built before QPilotCore
+add_dependencies(QPilotCore pilot-link-external)
