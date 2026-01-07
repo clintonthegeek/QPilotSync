@@ -269,6 +269,11 @@ private slots:
 
     void onDisconnectDevice() {
         if (m_deviceLink) {
+            // Properly end sync session before closing
+            if (m_deviceLink->isConnected()) {
+                m_logWidget->logInfo("Ending sync session...");
+                m_deviceLink->endSync();
+            }
             m_deviceLink->closeConnection();
             delete m_deviceLink;
             m_deviceLink = nullptr;
@@ -400,6 +405,106 @@ private slots:
             m_logWidget->logError("Failed to set user name");
             QMessageBox::warning(this, "Error", "Failed to set user name on Palm device");
         }
+    }
+
+    void onDeviceInfo() {
+        if (!m_deviceLink) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        // Gather device information
+        PilotUser user;
+        SysInfo sysInfo;
+
+        QString userName = "<Unknown>";
+        QString userId = "<Unknown>";
+        QString lastSyncDate = "<Never>";
+        QString palmOS = "<Unknown>";
+        QString productId = "<Unknown>";
+
+        if (m_deviceLink->readUserInfo(user)) {
+            userName = QString::fromUtf8(user.username);
+            if (userName.isEmpty()) userName = "<Not Set>";
+            userId = QString::number(user.userID);
+
+            // Convert last sync time
+            if (user.lastSyncDate > 0) {
+                // Palm epoch is Jan 1, 1904. Unix epoch is Jan 1, 1970.
+                // Difference is 2082844800 seconds
+                qint64 unixTime = user.lastSyncDate - 2082844800;
+                QDateTime lastSync = QDateTime::fromSecsSinceEpoch(unixTime);
+                lastSyncDate = lastSync.toString("yyyy-MM-dd hh:mm:ss");
+            }
+        }
+
+        if (m_deviceLink->readSysInfo(sysInfo)) {
+            int major = (sysInfo.romVersion >> 12) & 0x0F;
+            int minor = (sysInfo.romVersion >> 8) & 0x0F;
+            int bugfix = (sysInfo.romVersion >> 4) & 0x0F;
+            palmOS = QString("%1.%2.%3").arg(major).arg(minor).arg(bugfix);
+            productId = QString::fromUtf8(sysInfo.prodID);
+        }
+
+        // Count records in main databases
+        int memoCount = countDatabaseRecords("MemoDB");
+        int contactCount = countDatabaseRecords("AddressDB");
+        int calendarCount = countDatabaseRecords("DatebookDB");
+        int todoCount = countDatabaseRecords("ToDoDB");
+
+        // Build info dialog
+        QDialog dialog(this);
+        dialog.setWindowTitle("Palm Device Information");
+        dialog.setMinimumWidth(350);
+
+        QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+        QString infoHtml = QString(
+            "<h3>Device Information</h3>"
+            "<table>"
+            "<tr><td><b>User Name:</b></td><td>%1</td></tr>"
+            "<tr><td><b>User ID:</b></td><td>%2</td></tr>"
+            "<tr><td><b>Last Sync:</b></td><td>%3</td></tr>"
+            "<tr><td><b>Palm OS:</b></td><td>%4</td></tr>"
+            "<tr><td><b>Product ID:</b></td><td>%5</td></tr>"
+            "</table>"
+            "<h3>Database Record Counts</h3>"
+            "<table>"
+            "<tr><td><b>Memos:</b></td><td>%6</td></tr>"
+            "<tr><td><b>Contacts:</b></td><td>%7</td></tr>"
+            "<tr><td><b>Calendar Events:</b></td><td>%8</td></tr>"
+            "<tr><td><b>ToDos:</b></td><td>%9</td></tr>"
+            "</table>"
+        ).arg(userName, userId, lastSyncDate, palmOS, productId)
+         .arg(memoCount).arg(contactCount).arg(calendarCount).arg(todoCount);
+
+        QLabel *infoLabel = new QLabel(infoHtml, &dialog);
+        infoLabel->setTextFormat(Qt::RichText);
+        layout->addWidget(infoLabel);
+
+        QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Ok, &dialog);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        layout->addWidget(buttons);
+
+        dialog.exec();
+    }
+
+    int countDatabaseRecords(const QString &dbName) {
+        int dbHandle = m_deviceLink->openDatabase(dbName);
+        if (dbHandle < 0) {
+            return -1;  // Could not open
+        }
+
+        QList<PilotRecord*> records = m_deviceLink->readAllRecords(dbHandle);
+        int count = 0;
+        for (PilotRecord *record : records) {
+            if (!record->isDeleted()) {
+                count++;
+            }
+            delete record;
+        }
+        m_deviceLink->closeDatabase(dbHandle);
+        return count;
     }
 
     void onExportMemos() {
@@ -852,13 +957,306 @@ private slots:
         QMessageBox::information(this, "ToDo Export Complete", summary);
     }
 
-    void onSyncFromPalm() {
-        QMessageBox::information(this, "Sync from Palm",
-            "Sync functionality coming in Phase 2.\n\n"
-            "This will export:\n"
-            "- Calendar events to .ics files\n"
-            "- Contacts to .vcf files\n"
-            "- Memos to Markdown files");
+    void onExportAll() {
+        if (!m_deviceLink) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        // Ask user for base export directory
+        QString baseDir = QFileDialog::getExistingDirectory(this,
+            "Select Export Directory (subdirectories will be created)",
+            Settings::instance().lastExportPath(),
+            QFileDialog::ShowDirsOnly);
+
+        if (baseDir.isEmpty()) {
+            return;
+        }
+
+        Settings::instance().setLastExportPath(baseDir);
+
+        m_logWidget->logInfo("=== Starting Full Export ===");
+        m_logWidget->logInfo(QString("Base directory: %1").arg(baseDir));
+
+        // Create subdirectories
+        QDir base(baseDir);
+        QString memosDir = base.filePath("Memos");
+        QString contactsDir = base.filePath("Contacts");
+        QString calendarDir = base.filePath("Calendar");
+        QString todosDir = base.filePath("ToDos");
+
+        QDir().mkpath(memosDir);
+        QDir().mkpath(contactsDir);
+        QDir().mkpath(calendarDir);
+        QDir().mkpath(todosDir);
+
+        int totalExported = 0;
+        int totalSkipped = 0;
+        QStringList results;
+
+        // Export Memos
+        m_logWidget->logInfo("--- Exporting Memos ---");
+        int memoCount = 0, memoSkipped = 0;
+        exportMemosToDir(memosDir, memoCount, memoSkipped);
+        totalExported += memoCount;
+        totalSkipped += memoSkipped;
+        results << QString("Memos: %1 exported, %2 skipped").arg(memoCount).arg(memoSkipped);
+
+        // Export Contacts
+        m_logWidget->logInfo("--- Exporting Contacts ---");
+        int contactCount = 0, contactSkipped = 0;
+        exportContactsToDir(contactsDir, contactCount, contactSkipped);
+        totalExported += contactCount;
+        totalSkipped += contactSkipped;
+        results << QString("Contacts: %1 exported, %2 skipped").arg(contactCount).arg(contactSkipped);
+
+        // Export Calendar
+        m_logWidget->logInfo("--- Exporting Calendar ---");
+        int calendarCount = 0, calendarSkipped = 0;
+        exportCalendarToDir(calendarDir, calendarCount, calendarSkipped);
+        totalExported += calendarCount;
+        totalSkipped += calendarSkipped;
+        results << QString("Calendar: %1 exported, %2 skipped").arg(calendarCount).arg(calendarSkipped);
+
+        // Export ToDos
+        m_logWidget->logInfo("--- Exporting ToDos ---");
+        int todoCount = 0, todoSkipped = 0;
+        exportTodosToDir(todosDir, todoCount, todoSkipped);
+        totalExported += todoCount;
+        totalSkipped += todoSkipped;
+        results << QString("ToDos: %1 exported, %2 skipped").arg(todoCount).arg(todoSkipped);
+
+        m_logWidget->logInfo("=== Export Complete ===");
+
+        QString summary = QString("Full Export Complete!\n\n%1\n\nTotal: %2 items exported, %3 skipped\n\nExported to:\n%4")
+            .arg(results.join("\n"))
+            .arg(totalExported)
+            .arg(totalSkipped)
+            .arg(baseDir);
+
+        QMessageBox::information(this, "Export Complete", summary);
+    }
+
+    // Helper functions for batch export
+    void exportMemosToDir(const QString &exportDir, int &exportedCount, int &skippedCount) {
+        exportedCount = 0;
+        skippedCount = 0;
+
+        int dbHandle = m_deviceLink->openDatabase("MemoDB");
+        if (dbHandle < 0) {
+            m_logWidget->logWarning("Could not open MemoDB");
+            return;
+        }
+
+        CategoryInfo categories;
+        unsigned char appInfoBuf[4096];
+        size_t appInfoSize = sizeof(appInfoBuf);
+        if (m_deviceLink->readAppBlock(dbHandle, appInfoBuf, &appInfoSize)) {
+            categories.parse(appInfoBuf, appInfoSize);
+        }
+
+        QList<PilotRecord*> records = m_deviceLink->readAllRecords(dbHandle);
+        for (PilotRecord *record : records) {
+            if (record->isDeleted()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            MemoMapper::Memo memo = MemoMapper::unpackMemo(record);
+            if (memo.text.trimmed().isEmpty()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            QString categoryName = categories.categoryName(memo.category);
+            QString markdown = MemoMapper::memoToMarkdown(memo, categoryName);
+            QString filename = MemoMapper::generateFilename(memo);
+            QString filepath = QDir(exportDir).filePath(filename);
+
+            int suffix = 1;
+            QString basePath = filepath;
+            while (QFile::exists(filepath)) {
+                filepath = basePath.left(basePath.length() - 3) + QString("_%1.md").arg(suffix++);
+            }
+
+            QFile file(filepath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&file);
+                out << markdown;
+                file.close();
+                exportedCount++;
+            }
+            delete record;
+        }
+        m_deviceLink->closeDatabase(dbHandle);
+    }
+
+    void exportContactsToDir(const QString &exportDir, int &exportedCount, int &skippedCount) {
+        exportedCount = 0;
+        skippedCount = 0;
+
+        int dbHandle = m_deviceLink->openDatabase("AddressDB");
+        if (dbHandle < 0) {
+            m_logWidget->logWarning("Could not open AddressDB");
+            return;
+        }
+
+        CategoryInfo categories;
+        unsigned char appInfoBuf[4096];
+        size_t appInfoSize = sizeof(appInfoBuf);
+        if (m_deviceLink->readAppBlock(dbHandle, appInfoBuf, &appInfoSize)) {
+            categories.parse(appInfoBuf, appInfoSize);
+        }
+
+        QList<PilotRecord*> records = m_deviceLink->readAllRecords(dbHandle);
+        for (PilotRecord *record : records) {
+            if (record->isDeleted()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            ContactMapper::Contact contact = ContactMapper::unpackContact(record);
+            if (contact.firstName.isEmpty() && contact.lastName.isEmpty() &&
+                contact.company.isEmpty() && contact.phone1.isEmpty()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            QString categoryName = categories.categoryName(contact.category);
+            QString vcard = ContactMapper::contactToVCard(contact, categoryName);
+            QString filename = ContactMapper::generateFilename(contact);
+            QString filepath = QDir(exportDir).filePath(filename);
+
+            int suffix = 1;
+            QString basePath = filepath;
+            while (QFile::exists(filepath)) {
+                filepath = basePath.left(basePath.length() - 4) + QString("_%1.vcf").arg(suffix++);
+            }
+
+            QFile file(filepath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&file);
+                out << vcard;
+                file.close();
+                exportedCount++;
+            }
+            delete record;
+        }
+        m_deviceLink->closeDatabase(dbHandle);
+    }
+
+    void exportCalendarToDir(const QString &exportDir, int &exportedCount, int &skippedCount) {
+        exportedCount = 0;
+        skippedCount = 0;
+
+        int dbHandle = m_deviceLink->openDatabase("DatebookDB");
+        if (dbHandle < 0) {
+            m_logWidget->logWarning("Could not open DatebookDB");
+            return;
+        }
+
+        CategoryInfo categories;
+        unsigned char appInfoBuf[4096];
+        size_t appInfoSize = sizeof(appInfoBuf);
+        if (m_deviceLink->readAppBlock(dbHandle, appInfoBuf, &appInfoSize)) {
+            categories.parse(appInfoBuf, appInfoSize);
+        }
+
+        QList<PilotRecord*> records = m_deviceLink->readAllRecords(dbHandle);
+        for (PilotRecord *record : records) {
+            if (record->isDeleted()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            CalendarMapper::Event event = CalendarMapper::unpackEvent(record);
+            if (event.description.trimmed().isEmpty()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            QString categoryName = categories.categoryName(event.category);
+            QString ical = CalendarMapper::eventToICal(event, categoryName);
+            QString filename = CalendarMapper::generateFilename(event);
+            QString filepath = QDir(exportDir).filePath(filename);
+
+            int suffix = 1;
+            QString basePath = filepath;
+            while (QFile::exists(filepath)) {
+                filepath = basePath.left(basePath.length() - 4) + QString("_%1.ics").arg(suffix++);
+            }
+
+            QFile file(filepath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&file);
+                out << ical;
+                file.close();
+                exportedCount++;
+            }
+            delete record;
+        }
+        m_deviceLink->closeDatabase(dbHandle);
+    }
+
+    void exportTodosToDir(const QString &exportDir, int &exportedCount, int &skippedCount) {
+        exportedCount = 0;
+        skippedCount = 0;
+
+        int dbHandle = m_deviceLink->openDatabase("ToDoDB");
+        if (dbHandle < 0) {
+            m_logWidget->logWarning("Could not open ToDoDB");
+            return;
+        }
+
+        CategoryInfo categories;
+        unsigned char appInfoBuf[4096];
+        size_t appInfoSize = sizeof(appInfoBuf);
+        if (m_deviceLink->readAppBlock(dbHandle, appInfoBuf, &appInfoSize)) {
+            categories.parse(appInfoBuf, appInfoSize);
+        }
+
+        QList<PilotRecord*> records = m_deviceLink->readAllRecords(dbHandle);
+        for (PilotRecord *record : records) {
+            if (record->isDeleted()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            TodoMapper::Todo todo = TodoMapper::unpackTodo(record);
+            if (todo.description.trimmed().isEmpty()) {
+                skippedCount++;
+                delete record;
+                continue;
+            }
+
+            QString categoryName = categories.categoryName(todo.category);
+            QString ical = TodoMapper::todoToICal(todo, categoryName);
+            QString filename = TodoMapper::generateFilename(todo);
+            QString filepath = QDir(exportDir).filePath(filename);
+
+            int suffix = 1;
+            QString basePath = filepath;
+            while (QFile::exists(filepath)) {
+                filepath = basePath.left(basePath.length() - 4) + QString("_%1.ics").arg(suffix++);
+            }
+
+            QFile file(filepath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&file);
+                out << ical;
+                file.close();
+                exportedCount++;
+            }
+            delete record;
+        }
+        m_deviceLink->closeDatabase(dbHandle);
     }
 
     void onQuit() {
@@ -920,8 +1318,9 @@ private:
         connect(m_setUserInfoAction, &QAction::triggered, this, &MainWindow::onSetUserInfo);
         m_setUserInfoAction->setEnabled(false);
 
-        m_deviceInfoAction = deviceMenu->addAction("Device &Info");
-        m_deviceInfoAction->setEnabled(false); // Will enable when device connected
+        m_deviceInfoAction = deviceMenu->addAction("Device &Info...");
+        connect(m_deviceInfoAction, &QAction::triggered, this, &MainWindow::onDeviceInfo);
+        m_deviceInfoAction->setEnabled(false);
 
         // Sync menu
         QMenu *syncMenu = menuBar()->addMenu("&Sync");
@@ -944,14 +1343,10 @@ private:
 
         syncMenu->addSeparator();
 
-        m_syncFromPalmAction = syncMenu->addAction("Sync &from Palm");
-        connect(m_syncFromPalmAction, &QAction::triggered, this, &MainWindow::onSyncFromPalm);
-        m_syncFromPalmAction->setEnabled(false);
-
-        syncMenu->addSeparator();
-
-        QAction *settingsAction = syncMenu->addAction("&Settings...");
-        settingsAction->setEnabled(false); // Phase 5
+        m_exportAllAction = syncMenu->addAction("Export &All...");
+        m_exportAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E));
+        connect(m_exportAllAction, &QAction::triggered, this, &MainWindow::onExportAll);
+        m_exportAllAction->setEnabled(false);
 
         // View menu
         QMenu *viewMenu = menuBar()->addMenu("&View");
@@ -978,7 +1373,7 @@ private:
         m_exportContactsAction->setEnabled(connected);
         m_exportCalendarAction->setEnabled(connected);
         m_exportTodosAction->setEnabled(connected);
-        m_syncFromPalmAction->setEnabled(connected);
+        m_exportAllAction->setEnabled(connected);
     }
 
     LogWidget *m_logWidget;
@@ -994,7 +1389,7 @@ private:
     QAction *m_exportContactsAction;
     QAction *m_exportCalendarAction;
     QAction *m_exportTodosAction;
-    QAction *m_syncFromPalmAction;
+    QAction *m_exportAllAction;
 };
 
 int main(int argc, char *argv[]) {
