@@ -75,7 +75,7 @@ public:
     bool writeUserInfo(const struct PilotUser &user) override;
     bool readSysInfo(struct SysInfo &sysInfo) override;
 
-    int openDatabase(const QString &dbName) override;
+    int openDatabase(const QString &dbName, bool readWrite = false) override;
     bool closeDatabase(int handle) override;
     QStringList listDatabases() override;
 

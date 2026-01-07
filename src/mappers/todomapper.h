@@ -60,6 +60,22 @@ public:
      */
     static QString generateFilename(const Todo &todo);
 
+    // ========== Reverse mapping: iCalendar VTODO → Palm ==========
+
+    /**
+     * @brief Parse an iCalendar VTODO into a Todo structure
+     * @param ical The iCalendar content (RFC 5545 format)
+     * @return Todo structure with parsed data
+     */
+    static Todo iCalToTodo(const QString &ical);
+
+    /**
+     * @brief Pack a Todo structure into a Palm record
+     * @param todo The todo to pack
+     * @return PilotRecord ready for writing to Palm (caller takes ownership)
+     */
+    static PilotRecord* packTodo(const Todo &todo);
+
 signals:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);

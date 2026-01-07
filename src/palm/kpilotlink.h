@@ -51,7 +51,7 @@ public:
     virtual bool readSysInfo(struct SysInfo &sysInfo) = 0;
 
     // Database operations
-    virtual int openDatabase(const QString &dbName) = 0;
+    virtual int openDatabase(const QString &dbName, bool readWrite = false) = 0;
     virtual bool closeDatabase(int handle) = 0;
     virtual QStringList listDatabases() = 0;
 

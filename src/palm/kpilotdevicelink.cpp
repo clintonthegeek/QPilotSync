@@ -433,9 +433,10 @@ bool KPilotDeviceLink::readSysInfo(struct SysInfo &sysInfo)
     return true;
 }
 
-int KPilotDeviceLink::openDatabase(const QString &dbName)
+int KPilotDeviceLink::openDatabase(const QString &dbName, bool readWrite)
 {
-    qDebug() << "[KPilotDeviceLink] openDatabase() called for:" << dbName;
+    qDebug() << "[KPilotDeviceLink] openDatabase() called for:" << dbName
+             << "readWrite:" << readWrite;
 
     if (!m_isConnected) {
         qWarning() << "[KPilotDeviceLink] openDatabase() - not connected";
@@ -444,10 +445,11 @@ int KPilotDeviceLink::openDatabase(const QString &dbName)
     }
 
     int dbHandle = 0;
-    int mode = dlpOpenRead;  // Read-only for Phase 2
+    int mode = readWrite ? (dlpOpenRead | dlpOpenWrite) : dlpOpenRead;
 
     qDebug() << "[KPilotDeviceLink] Calling dlp_OpenDB() mode:" << mode;
-    emit logMessage(QString("Opening database: %1").arg(dbName));
+    emit logMessage(QString("Opening database: %1 (%2)")
+                   .arg(dbName, readWrite ? "read-write" : "read-only"));
 
     int result = dlp_OpenDB(m_socket, 0, mode, dbName.toUtf8().constData(), &dbHandle);
     if (result < 0) {
@@ -651,20 +653,76 @@ PilotRecord* KPilotDeviceLink::readRecordById(int dbHandle, int recordId)
 
 bool KPilotDeviceLink::writeRecord(int dbHandle, PilotRecord *record)
 {
-    qDebug() << "[KPilotDeviceLink] writeRecord() - not implemented in Phase 2";
-    Q_UNUSED(dbHandle);
-    Q_UNUSED(record);
-    setError("Write operations not implemented in Phase 2");
-    return false;
+    qDebug() << "[KPilotDeviceLink] writeRecord() called for handle:" << dbHandle
+             << "recordId:" << record->id() << "category:" << record->category();
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] writeRecord() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    if (!record) {
+        qWarning() << "[KPilotDeviceLink] writeRecord() - null record";
+        setError("Cannot write null record");
+        return false;
+    }
+
+    const QByteArray &data = record->data();
+    recordid_t newRecordId = 0;
+
+    // flags: 0 = normal write
+    // recuid: 0 = create new record, otherwise update existing
+    recordid_t recuid = record->id();
+
+    qDebug() << "[KPilotDeviceLink] Calling dlp_WriteRecord() size:" << data.size()
+             << "category:" << record->category() << "recuid:" << recuid;
+
+    int result = dlp_WriteRecord(m_socket, dbHandle, 0, recuid,
+                                 record->category(),
+                                 reinterpret_cast<const void*>(data.constData()),
+                                 data.size(), &newRecordId);
+
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_WriteRecord() failed, result:" << result;
+        setError(QString("Failed to write record: error %1").arg(result));
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Record written successfully, newRecordId:" << newRecordId;
+
+    // Update record with new ID if it was a create operation
+    if (recuid == 0 && newRecordId != 0) {
+        record->setId(newRecordId);
+    }
+
+    emit logMessage(QString("Record written (ID: %1, size: %2 bytes)")
+                   .arg(newRecordId).arg(data.size()));
+    return true;
 }
 
 bool KPilotDeviceLink::deleteRecord(int dbHandle, int recordId)
 {
-    qDebug() << "[KPilotDeviceLink] deleteRecord() - not implemented in Phase 2";
-    Q_UNUSED(dbHandle);
-    Q_UNUSED(recordId);
-    setError("Delete operations not implemented in Phase 2");
-    return false;
+    qDebug() << "[KPilotDeviceLink] deleteRecord() handle:" << dbHandle << "recordId:" << recordId;
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] deleteRecord() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Calling dlp_DeleteRecord()";
+    int result = dlp_DeleteRecord(m_socket, dbHandle, 0, recordId);
+
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_DeleteRecord() failed, result:" << result;
+        setError(QString("Failed to delete record %1: error %2").arg(recordId).arg(result));
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Record deleted successfully";
+    emit logMessage(QString("Record deleted (ID: %1)").arg(recordId));
+    return true;
 }
 
 bool KPilotDeviceLink::readAppBlock(int dbHandle, unsigned char *buffer, size_t *size)

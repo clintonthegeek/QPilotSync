@@ -50,6 +50,22 @@ public:
      */
     static QString generateFilename(const Memo &memo);
 
+    // ========== Reverse mapping: Markdown → Palm ==========
+
+    /**
+     * @brief Parse a Markdown file with YAML frontmatter into a Memo
+     * @param markdown The markdown content including YAML frontmatter
+     * @return Memo structure with parsed data
+     */
+    static Memo markdownToMemo(const QString &markdown);
+
+    /**
+     * @brief Pack a Memo structure into a Palm record
+     * @param memo The memo to pack
+     * @return PilotRecord ready for writing to Palm (caller takes ownership)
+     */
+    static PilotRecord* packMemo(const Memo &memo);
+
 signals:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);

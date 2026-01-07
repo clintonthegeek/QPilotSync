@@ -5,9 +5,15 @@
 #include <QTime>
 #include <QStringConverter>
 
+// Windows-1252 to Unicode mapping table for 0x80-0x9F
+static const unsigned short cp1252_to_unicode[] = {
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, // 0x80-0x87
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F, // 0x88-0x8F
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 0x90-0x97
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178  // 0x98-0x9F
+};
+
 // Helper to decode Palm text which uses Windows-1252 encoding
-// Palm OS uses Windows-1252 (not pure Latin-1) for the 0x80-0x9F range
-// This includes characters like ™ (0x99), smart quotes, em/en dashes, etc.
 static QString decodePalmText(const char *palmText)
 {
     if (!palmText) {
@@ -15,22 +21,11 @@ static QString decodePalmText(const char *palmText)
     }
 
     QByteArray data(palmText);
-
-    // Manually map Windows-1252 characters in the 0x80-0x9F range
-    // This range is undefined in ISO-8859-1 but defined in Windows-1252
     QByteArray fixed;
     fixed.reserve(data.size());
 
     for (unsigned char byte : data) {
         if (byte >= 0x80 && byte <= 0x9F) {
-            // Map Windows-1252 C1 controls to their Unicode equivalents
-            static const unsigned short cp1252_to_unicode[] = {
-                0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, // 0x80-0x87
-                0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F, // 0x88-0x8F
-                0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 0x90-0x97
-                0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178  // 0x98-0x9F
-            };
-
             ushort unicode = cp1252_to_unicode[byte - 0x80];
             QString unicodeChar = QString(QChar(unicode));
             fixed.append(unicodeChar.toUtf8());
@@ -40,6 +35,37 @@ static QString decodePalmText(const char *palmText)
     }
 
     return QString::fromUtf8(fixed);
+}
+
+// Helper to encode Unicode text to Windows-1252 for Palm
+static QByteArray encodePalmText(const QString &text)
+{
+    QByteArray result;
+    result.reserve(text.size());
+
+    for (QChar ch : text) {
+        ushort unicode = ch.unicode();
+
+        if (unicode < 0x80) {
+            result.append(static_cast<char>(unicode));
+        } else if (unicode <= 0xFF && !(unicode >= 0x80 && unicode <= 0x9F)) {
+            result.append(static_cast<char>(unicode));
+        } else {
+            bool found = false;
+            for (int i = 0; i < 32; ++i) {
+                if (cp1252_to_unicode[i] == unicode) {
+                    result.append(static_cast<char>(0x80 + i));
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                result.append('?');
+            }
+        }
+    }
+
+    return result;
 }
 
 // Helper function to fold iCalendar lines to 75 octets as per RFC 5545 section 3.1
@@ -439,4 +465,378 @@ QString CalendarMapper::generateFilename(const Event &event)
     filename += ".ics";
 
     return filename;
+}
+
+// ========== Reverse mapping: iCalendar → Palm ==========
+
+// Helper to unfold iCalendar content (reverse of foldLine)
+static QString unfoldICalContent(const QString &content)
+{
+    QString result = content;
+    result.replace("\r\n ", "");
+    result.replace("\r\n\t", "");
+    result.replace("\n ", "");
+    result.replace("\n\t", "");
+    return result;
+}
+
+// Helper to parse iCalendar date-time string (YYYYMMDDTHHMMSS or YYYYMMDD)
+static QDateTime parseICalDateTime(const QString &str)
+{
+    QString value = str;
+
+    // Remove any VALUE=DATE prefix
+    if (value.contains("VALUE=DATE:")) {
+        value = value.section("VALUE=DATE:", 1);
+    }
+
+    // Handle UTC marker 'Z' at end
+    bool isUtc = value.endsWith('Z');
+    if (isUtc) {
+        value.chop(1);
+    }
+
+    // Parse based on format
+    if (value.length() == 8) {
+        // DATE only: YYYYMMDD
+        QDate date = QDate::fromString(value, "yyyyMMdd");
+        return QDateTime(date, QTime(0, 0, 0));
+    } else if (value.length() >= 15) {
+        // DATE-TIME: YYYYMMDDTHHMMSS
+        QString dateStr = value.left(8);
+        QString timeStr = value.mid(9, 6);
+        QDate date = QDate::fromString(dateStr, "yyyyMMdd");
+        QTime time = QTime::fromString(timeStr, "HHmmss");
+        return QDateTime(date, time);
+    }
+
+    return QDateTime();
+}
+
+// Helper to unescape iCalendar text values
+static QString unescapeICalText(const QString &text)
+{
+    QString result = text;
+    result.replace("\\n", "\n");
+    result.replace("\\N", "\n");
+    result.replace("\\,", ",");
+    result.replace("\\;", ";");
+    result.replace("\\\\", "\\");
+    return result;
+}
+
+// Helper to parse RRULE into event repeat fields
+static void parseRRule(const QString &rrule, CalendarMapper::Event &event)
+{
+    QStringList parts = rrule.split(';', Qt::SkipEmptyParts);
+
+    for (const QString &part : parts) {
+        int eqPos = part.indexOf('=');
+        if (eqPos == -1) continue;
+
+        QString key = part.left(eqPos).toUpper();
+        QString value = part.mid(eqPos + 1);
+
+        if (key == "FREQ") {
+            if (value == "DAILY") {
+                event.repeatType = CalendarMapper::RepeatDaily;
+            } else if (value == "WEEKLY") {
+                event.repeatType = CalendarMapper::RepeatWeekly;
+            } else if (value == "MONTHLY") {
+                event.repeatType = CalendarMapper::RepeatMonthlyByDate;  // Default, may be overridden
+            } else if (value == "YEARLY") {
+                event.repeatType = CalendarMapper::RepeatYearly;
+            }
+        } else if (key == "INTERVAL") {
+            event.repeatFrequency = value.toInt();
+            if (event.repeatFrequency < 1) event.repeatFrequency = 1;
+        } else if (key == "UNTIL") {
+            event.repeatEnd = parseICalDateTime(value);
+            event.repeatForever = false;
+        } else if (key == "COUNT") {
+            // COUNT not directly supported by Palm, leave as forever
+            event.repeatForever = true;
+        } else if (key == "BYDAY") {
+            // Weekly: SU,MO,TU,WE,TH,FR,SA
+            QMap<QString, int> dayMap = {
+                {"SU", 0}, {"MO", 1}, {"TU", 2}, {"WE", 3},
+                {"TH", 4}, {"FR", 5}, {"SA", 6}
+            };
+
+            QStringList days = value.split(',');
+            for (const QString &day : days) {
+                // Handle positional days like "2MO" (second Monday)
+                QString dayCode = day.right(2).toUpper();
+                if (dayMap.contains(dayCode)) {
+                    int dayIndex = dayMap[dayCode];
+                    event.repeatDays[dayIndex] = true;
+                }
+            }
+        } else if (key == "BYMONTHDAY") {
+            event.repeatType = CalendarMapper::RepeatMonthlyByDay;
+            event.repeatDay = value.toInt();
+        } else if (key == "WKST") {
+            QMap<QString, int> dayMap = {
+                {"SU", 0}, {"MO", 1}, {"TU", 2}, {"WE", 3},
+                {"TH", 4}, {"FR", 5}, {"SA", 6}
+            };
+            if (dayMap.contains(value.toUpper())) {
+                event.repeatWeekstart = dayMap[value.toUpper()];
+            }
+        }
+    }
+}
+
+// Helper to parse TRIGGER duration into minutes
+static int parseTriggerDuration(const QString &trigger)
+{
+    QString value = trigger;
+
+    // Remove leading '-' if present
+    bool negative = value.startsWith('-');
+    if (negative) value = value.mid(1);
+
+    // Remove 'P' for period
+    if (value.startsWith('P')) value = value.mid(1);
+
+    int minutes = 0;
+
+    // Parse days
+    int dPos = value.indexOf('D');
+    if (dPos > 0) {
+        minutes += value.left(dPos).toInt() * 24 * 60;
+        value = value.mid(dPos + 1);
+    }
+
+    // Parse time portion after 'T'
+    if (value.startsWith('T')) {
+        value = value.mid(1);
+    }
+
+    // Parse hours
+    int hPos = value.indexOf('H');
+    if (hPos > 0) {
+        minutes += value.left(hPos).toInt() * 60;
+        value = value.mid(hPos + 1);
+    }
+
+    // Parse minutes
+    int mPos = value.indexOf('M');
+    if (mPos > 0) {
+        minutes += value.left(mPos).toInt();
+    }
+
+    return minutes;
+}
+
+CalendarMapper::Event CalendarMapper::iCalToEvent(const QString &ical)
+{
+    Event event;
+    event.recordId = 0;
+    event.category = 0;
+    event.isUntimed = false;
+    event.hasAlarm = false;
+    event.alarmAdvance = 0;
+    event.alarmUnits = AlarmMinutes;
+    event.repeatType = RepeatNone;
+    event.repeatForever = true;
+    event.repeatFrequency = 1;
+    event.repeatDay = 0;
+    event.repeatWeekstart = 0;
+    for (int i = 0; i < 7; i++) event.repeatDays[i] = false;
+    event.isPrivate = false;
+    event.isDirty = false;
+    event.isDeleted = false;
+
+    // Unfold the content
+    QString content = unfoldICalContent(ical);
+
+    // Split into lines
+    QStringList lines = content.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+
+    bool inVEvent = false;
+    bool inVAlarm = false;
+
+    for (const QString &line : lines) {
+        if (line.startsWith("BEGIN:VEVENT")) {
+            inVEvent = true;
+            continue;
+        }
+        if (line.startsWith("END:VEVENT")) {
+            inVEvent = false;
+            continue;
+        }
+        if (line.startsWith("BEGIN:VALARM")) {
+            inVAlarm = true;
+            continue;
+        }
+        if (line.startsWith("END:VALARM")) {
+            inVAlarm = false;
+            continue;
+        }
+
+        if (!inVEvent) continue;
+
+        // Parse property and value
+        int colonPos = line.indexOf(':');
+        if (colonPos == -1) continue;
+
+        QString propertyPart = line.left(colonPos);
+        QString value = line.mid(colonPos + 1);
+
+        // Split property name from parameters
+        QString propertyName = propertyPart.split(';').first().toUpper();
+
+        if (inVAlarm) {
+            if (propertyName == "TRIGGER") {
+                event.hasAlarm = true;
+                int minutes = parseTriggerDuration(value);
+
+                // Convert to Palm alarm units
+                if (minutes >= 24 * 60) {
+                    event.alarmAdvance = minutes / (24 * 60);
+                    event.alarmUnits = AlarmDays;
+                } else if (minutes >= 60) {
+                    event.alarmAdvance = minutes / 60;
+                    event.alarmUnits = AlarmHours;
+                } else {
+                    event.alarmAdvance = minutes;
+                    event.alarmUnits = AlarmMinutes;
+                }
+            }
+            continue;
+        }
+
+        if (propertyName == "DTSTART") {
+            // Check if VALUE=DATE (all-day event)
+            if (propertyPart.contains("VALUE=DATE") && !propertyPart.contains("VALUE=DATE-TIME")) {
+                event.isUntimed = true;
+            }
+            event.begin = parseICalDateTime(value);
+        } else if (propertyName == "DTEND") {
+            event.end = parseICalDateTime(value);
+            // For all-day events, DTEND is non-inclusive, so subtract 1 day
+            if (event.isUntimed && event.end.isValid()) {
+                event.end = event.end.addDays(-1);
+            }
+        } else if (propertyName == "SUMMARY") {
+            event.description = unescapeICalText(value);
+        } else if (propertyName == "DESCRIPTION") {
+            event.note = unescapeICalText(value);
+        } else if (propertyName == "CLASS") {
+            event.isPrivate = (value.toUpper() == "PRIVATE");
+        } else if (propertyName == "RRULE") {
+            parseRRule(value, event);
+        } else if (propertyName == "EXDATE") {
+            // Parse exception dates
+            QStringList exDates = value.split(',');
+            for (const QString &exDateStr : exDates) {
+                QDateTime exDate = parseICalDateTime(exDateStr);
+                if (exDate.isValid()) {
+                    event.exceptions.append(exDate);
+                }
+            }
+        } else if (propertyName == "UID") {
+            // Extract record ID from UID if it's in palm-datebook-XXXX format
+            if (value.startsWith("palm-datebook-")) {
+                bool ok;
+                int id = value.mid(14).toInt(&ok);
+                if (ok) event.recordId = id;
+            }
+        }
+    }
+
+    // If no end time, set it to start time (instant event)
+    if (!event.end.isValid()) {
+        event.end = event.begin;
+    }
+
+    return event;
+}
+
+PilotRecord* CalendarMapper::packEvent(const Event &event)
+{
+    // Create Appointment structure
+    Appointment_t appt;
+    memset(&appt, 0, sizeof(appt));
+
+    // Set untimed flag
+    appt.event = event.isUntimed ? 1 : 0;
+
+    // Convert QDateTime to struct tm
+    auto setStructTm = [](struct tm &tm, const QDateTime &dt) {
+        tm.tm_year = dt.date().year() - 1900;
+        tm.tm_mon = dt.date().month() - 1;
+        tm.tm_mday = dt.date().day();
+        tm.tm_hour = dt.time().hour();
+        tm.tm_min = dt.time().minute();
+        tm.tm_sec = dt.time().second();
+    };
+
+    setStructTm(appt.begin, event.begin);
+    setStructTm(appt.end, event.end);
+
+    // Description and note
+    if (!event.description.isEmpty()) {
+        QByteArray descData = encodePalmText(event.description);
+        appt.description = strdup(descData.constData());
+    }
+    if (!event.note.isEmpty()) {
+        QByteArray noteData = encodePalmText(event.note);
+        appt.note = strdup(noteData.constData());
+    }
+
+    // Alarm
+    appt.alarm = event.hasAlarm ? 1 : 0;
+    appt.advance = event.alarmAdvance;
+    appt.advanceUnits = event.alarmUnits;
+
+    // Repeat
+    appt.repeatType = static_cast<repeatTypes>(event.repeatType);
+    appt.repeatForever = event.repeatForever ? 1 : 0;
+
+    if (!event.repeatForever && event.repeatEnd.isValid()) {
+        setStructTm(appt.repeatEnd, event.repeatEnd);
+    }
+
+    appt.repeatFrequency = event.repeatFrequency;
+    appt.repeatDay = static_cast<DayOfMonthType>(event.repeatDay);
+    appt.repeatWeekstart = event.repeatWeekstart;
+
+    for (int i = 0; i < 7; i++) {
+        appt.repeatDays[i] = event.repeatDays[i] ? 1 : 0;
+    }
+
+    // Exception dates
+    appt.exceptions = event.exceptions.size();
+    if (appt.exceptions > 0) {
+        appt.exception = static_cast<struct tm*>(malloc(sizeof(struct tm) * appt.exceptions));
+        for (int i = 0; i < event.exceptions.size(); i++) {
+            setStructTm(appt.exception[i], event.exceptions[i]);
+        }
+    }
+
+    // Pack to buffer
+    pi_buffer_t *buf = pi_buffer_new(0xFFFF);
+    int packResult = pack_Appointment(&appt, buf, datebook_v1);
+
+    // Free allocated memory
+    free_Appointment(&appt);
+
+    if (packResult < 0) {
+        pi_buffer_free(buf);
+        return nullptr;
+    }
+
+    // Create QByteArray from buffer
+    QByteArray data(reinterpret_cast<const char*>(buf->data), buf->used);
+    pi_buffer_free(buf);
+
+    // Create attributes from flags
+    int attr = 0;
+    if (event.isPrivate) attr |= PilotRecord::AttrSecret;
+    if (event.isDirty) attr |= PilotRecord::AttrDirty;
+    if (event.isDeleted) attr |= PilotRecord::AttrDeleted;
+
+    return new PilotRecord(event.recordId, event.category, attr, data);
 }

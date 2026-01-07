@@ -88,6 +88,22 @@ public:
      */
     static QString generateFilename(const Event &event);
 
+    // ========== Reverse mapping: iCalendar → Palm ==========
+
+    /**
+     * @brief Parse an iCalendar VEVENT into an Event structure
+     * @param ical The iCalendar content (RFC 5545 format)
+     * @return Event structure with parsed data
+     */
+    static Event iCalToEvent(const QString &ical);
+
+    /**
+     * @brief Pack an Event structure into a Palm record
+     * @param event The event to pack
+     * @return PilotRecord ready for writing to Palm (caller takes ownership)
+     */
+    static PilotRecord* packEvent(const Event &event);
+
 signals:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);

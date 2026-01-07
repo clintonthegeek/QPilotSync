@@ -35,7 +35,9 @@ public:
 
     // Accessors
     int recordId() const { return m_recordId; }
+    int id() const { return m_recordId; }  // Alias for recordId
     void setRecordId(int id) { m_recordId = id; }
+    void setId(int id) { m_recordId = id; }  // Alias for setRecordId
 
     int category() const { return m_category; }
     void setCategory(int cat) { m_category = cat; }

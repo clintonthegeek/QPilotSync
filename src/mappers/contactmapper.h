@@ -77,6 +77,22 @@ public:
      */
     static QString generateFilename(const Contact &contact);
 
+    // ========== Reverse mapping: vCard → Palm ==========
+
+    /**
+     * @brief Parse a vCard string into a Contact structure
+     * @param vcard The vCard content (RFC 6350/2426 format)
+     * @return Contact structure with parsed data
+     */
+    static Contact vCardToContact(const QString &vcard);
+
+    /**
+     * @brief Pack a Contact structure into a Palm record
+     * @param contact The contact to pack
+     * @return PilotRecord ready for writing to Palm (caller takes ownership)
+     */
+    static PilotRecord* packContact(const Contact &contact);
+
 signals:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);

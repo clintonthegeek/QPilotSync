@@ -57,9 +57,15 @@ static QString formatDate(const QDateTime &dt)
     return dt.toString("yyyyMMdd");
 }
 
+// Windows-1252 to Unicode mapping table for 0x80-0x9F
+static const unsigned short cp1252_to_unicode[] = {
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, // 0x80-0x87
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F, // 0x88-0x8F
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 0x90-0x97
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178  // 0x98-0x9F
+};
+
 // Helper to decode Palm text which uses Windows-1252 encoding
-// Palm OS uses Windows-1252 (not pure Latin-1) for the 0x80-0x9F range
-// This includes characters like ™ (0x99), smart quotes, em/en dashes, etc.
 static QString decodePalmText(const char *palmText)
 {
     if (!palmText) {
@@ -67,22 +73,11 @@ static QString decodePalmText(const char *palmText)
     }
 
     QByteArray data(palmText);
-
-    // Manually map Windows-1252 characters in the 0x80-0x9F range
-    // This range is undefined in ISO-8859-1 but defined in Windows-1252
     QByteArray fixed;
     fixed.reserve(data.size());
 
     for (unsigned char byte : data) {
         if (byte >= 0x80 && byte <= 0x9F) {
-            // Map Windows-1252 C1 controls to their Unicode equivalents
-            static const unsigned short cp1252_to_unicode[] = {
-                0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, // 0x80-0x87
-                0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F, // 0x88-0x8F
-                0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 0x90-0x97
-                0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178  // 0x98-0x9F
-            };
-
             ushort unicode = cp1252_to_unicode[byte - 0x80];
             QString unicodeChar = QString(QChar(unicode));
             fixed.append(unicodeChar.toUtf8());
@@ -92,6 +87,37 @@ static QString decodePalmText(const char *palmText)
     }
 
     return QString::fromUtf8(fixed);
+}
+
+// Helper to encode Unicode text to Windows-1252 for Palm
+static QByteArray encodePalmText(const QString &text)
+{
+    QByteArray result;
+    result.reserve(text.size());
+
+    for (QChar ch : text) {
+        ushort unicode = ch.unicode();
+
+        if (unicode < 0x80) {
+            result.append(static_cast<char>(unicode));
+        } else if (unicode <= 0xFF && !(unicode >= 0x80 && unicode <= 0x9F)) {
+            result.append(static_cast<char>(unicode));
+        } else {
+            bool found = false;
+            for (int i = 0; i < 32; ++i) {
+                if (cp1252_to_unicode[i] == unicode) {
+                    result.append(static_cast<char>(0x80 + i));
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                result.append('?');
+            }
+        }
+    }
+
+    return result;
 }
 
 TodoMapper::TodoMapper(QObject *parent)
@@ -267,4 +293,187 @@ QString TodoMapper::generateFilename(const Todo &todo)
     filename += ".ics";
 
     return filename;
+}
+
+// ========== Reverse mapping: iCalendar VTODO → Palm ==========
+
+// Helper to unfold iCalendar content
+static QString unfoldICalContent(const QString &content)
+{
+    QString result = content;
+    result.replace("\r\n ", "");
+    result.replace("\r\n\t", "");
+    result.replace("\n ", "");
+    result.replace("\n\t", "");
+    return result;
+}
+
+// Helper to parse iCalendar date string (YYYYMMDD)
+static QDateTime parseICalDate(const QString &str)
+{
+    QString value = str;
+
+    // Handle UTC marker 'Z' at end
+    if (value.endsWith('Z')) {
+        value.chop(1);
+    }
+
+    // Parse based on format
+    if (value.length() == 8) {
+        // DATE only: YYYYMMDD
+        QDate date = QDate::fromString(value, "yyyyMMdd");
+        return QDateTime(date, QTime(0, 0, 0));
+    } else if (value.length() >= 15) {
+        // DATE-TIME: YYYYMMDDTHHMMSS
+        QString dateStr = value.left(8);
+        QDate date = QDate::fromString(dateStr, "yyyyMMdd");
+        return QDateTime(date, QTime(0, 0, 0));
+    }
+
+    return QDateTime();
+}
+
+// Helper to unescape iCalendar text values
+static QString unescapeICalText(const QString &text)
+{
+    QString result = text;
+    result.replace("\\n", "\n");
+    result.replace("\\N", "\n");
+    result.replace("\\,", ",");
+    result.replace("\\;", ";");
+    result.replace("\\\\", "\\");
+    return result;
+}
+
+TodoMapper::Todo TodoMapper::iCalToTodo(const QString &ical)
+{
+    Todo todo;
+    todo.recordId = 0;
+    todo.category = 0;
+    todo.priority = 3;  // Default middle priority
+    todo.isComplete = false;
+    todo.hasIndefiniteDue = true;
+    todo.isPrivate = false;
+    todo.isDirty = false;
+    todo.isDeleted = false;
+
+    // Unfold the content
+    QString content = unfoldICalContent(ical);
+
+    // Split into lines
+    QStringList lines = content.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+
+    bool inVTodo = false;
+
+    for (const QString &line : lines) {
+        if (line.startsWith("BEGIN:VTODO")) {
+            inVTodo = true;
+            continue;
+        }
+        if (line.startsWith("END:VTODO")) {
+            inVTodo = false;
+            continue;
+        }
+
+        if (!inVTodo) continue;
+
+        // Parse property and value
+        int colonPos = line.indexOf(':');
+        if (colonPos == -1) continue;
+
+        QString propertyPart = line.left(colonPos);
+        QString value = line.mid(colonPos + 1);
+
+        // Split property name from parameters
+        QString propertyName = propertyPart.split(';').first().toUpper();
+
+        if (propertyName == "SUMMARY") {
+            todo.description = unescapeICalText(value);
+        } else if (propertyName == "DESCRIPTION") {
+            todo.note = unescapeICalText(value);
+        } else if (propertyName == "DUE") {
+            todo.due = parseICalDate(value);
+            if (todo.due.isValid()) {
+                todo.hasIndefiniteDue = false;
+            }
+        } else if (propertyName == "PRIORITY") {
+            // iCalendar: 1 (highest) to 9 (lowest), 0 = undefined
+            // Palm: 1 (highest) to 5 (lowest)
+            // Mapping: iCal 1-2->Palm 1, 3-4->2, 5->3, 6-7->4, 8-9->5
+            int icalPriority = value.toInt();
+            if (icalPriority >= 1 && icalPriority <= 9) {
+                todo.priority = (icalPriority + 1) / 2;  // Maps 1,2->1, 3,4->2, 5,6->3, 7,8->4, 9->5
+                if (todo.priority > 5) todo.priority = 5;
+                if (todo.priority < 1) todo.priority = 1;
+            }
+        } else if (propertyName == "STATUS") {
+            todo.isComplete = (value.toUpper() == "COMPLETED");
+        } else if (propertyName == "PERCENT-COMPLETE") {
+            if (value == "100") {
+                todo.isComplete = true;
+            }
+        } else if (propertyName == "CLASS") {
+            todo.isPrivate = (value.toUpper() == "PRIVATE");
+        } else if (propertyName == "UID") {
+            // Extract record ID from UID if it's in palm-todo-XXXX format
+            if (value.startsWith("palm-todo-")) {
+                bool ok;
+                int id = value.mid(10).toInt(&ok);
+                if (ok) todo.recordId = id;
+            }
+        }
+    }
+
+    return todo;
+}
+
+PilotRecord* TodoMapper::packTodo(const Todo &todo)
+{
+    // Create ToDo structure
+    ToDo_t palmTodo;
+    memset(&palmTodo, 0, sizeof(palmTodo));
+
+    // Description and note
+    if (!todo.description.isEmpty()) {
+        QByteArray descData = encodePalmText(todo.description);
+        palmTodo.description = strdup(descData.constData());
+    }
+    if (!todo.note.isEmpty()) {
+        QByteArray noteData = encodePalmText(todo.note);
+        palmTodo.note = strdup(noteData.constData());
+    }
+
+    palmTodo.priority = todo.priority;
+    palmTodo.complete = todo.isComplete ? 1 : 0;
+    palmTodo.indefinite = todo.hasIndefiniteDue ? 1 : 0;
+
+    if (!todo.hasIndefiniteDue && todo.due.isValid()) {
+        palmTodo.due.tm_year = todo.due.date().year() - 1900;
+        palmTodo.due.tm_mon = todo.due.date().month() - 1;
+        palmTodo.due.tm_mday = todo.due.date().day();
+    }
+
+    // Pack to buffer
+    pi_buffer_t *buf = pi_buffer_new(0xFFFF);
+    int packResult = pack_ToDo(&palmTodo, buf, todo_v1);
+
+    // Free allocated memory
+    free_ToDo(&palmTodo);
+
+    if (packResult < 0) {
+        pi_buffer_free(buf);
+        return nullptr;
+    }
+
+    // Create QByteArray from buffer
+    QByteArray data(reinterpret_cast<const char*>(buf->data), buf->used);
+    pi_buffer_free(buf);
+
+    // Create attributes from flags
+    int attr = 0;
+    if (todo.isPrivate) attr |= PilotRecord::AttrSecret;
+    if (todo.isDirty) attr |= PilotRecord::AttrDirty;
+    if (todo.isDeleted) attr |= PilotRecord::AttrDeleted;
+
+    return new PilotRecord(todo.recordId, todo.category, attr, data);
 }
