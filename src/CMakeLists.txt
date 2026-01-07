@@ -33,6 +33,18 @@ add_library(QPilotCore STATIC
     sync/conduit.h
     sync/syncengine.cpp
     sync/syncengine.h
+    sync/localfilebackend.cpp
+    sync/localfilebackend.h
+
+    # Conduits - data type sync plugins
+    sync/conduits/memoconduit.cpp
+    sync/conduits/memoconduit.h
+    sync/conduits/contactconduit.cpp
+    sync/conduits/contactconduit.h
+    sync/conduits/calendarconduit.cpp
+    sync/conduits/calendarconduit.h
+    sync/conduits/todoconduit.cpp
+    sync/conduits/todoconduit.h
 )
 
 target_link_libraries(QPilotCore
