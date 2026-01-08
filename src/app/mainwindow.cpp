@@ -318,7 +318,7 @@ void MainWindow::onConnectionComplete(bool success)
         }
 
         // Handle first sync (no username set on device)
-        if (userName.isEmpty() || userId == 0) {
+        if (userName.isEmpty() && userId == 0) {
             m_logWidget->logWarning("This appears to be an uninitialized device (no user info)");
 
             QString newUserName = QInputDialog::getText(this, "Initialize Device",
