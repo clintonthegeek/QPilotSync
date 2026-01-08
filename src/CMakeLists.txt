@@ -4,6 +4,16 @@ add_library(QPilotCore STATIC
     qpilotsync_core.cpp
     qpilotsync_version.h
 
+    # Application UI
+    app/mainwindow.cpp
+    app/mainwindow.h
+    app/logwidget.cpp
+    app/logwidget.h
+    app/exporthandler.cpp
+    app/exporthandler.h
+    app/importhandler.cpp
+    app/importhandler.h
+
     # Settings and dialogs
     settings.cpp
     settings.h
@@ -67,6 +77,7 @@ target_link_libraries(QPilotCore
 
 target_include_directories(QPilotCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
 )
 
 # Ensure pilot-link is built before QPilotCore
