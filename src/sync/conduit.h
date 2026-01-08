@@ -3,11 +3,17 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QList>
+#include <QIcon>
+#include <QJsonObject>
+#include <QDateTime>
 #include <functional>
 #include "synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
+
+class QWidget;
 
 // Forward declarations
 class KPilotDeviceLink;
@@ -94,6 +100,113 @@ public:
      * Examples: ".md", ".vcf", ".ics"
      */
     virtual QString fileExtension() const = 0;
+
+    // ========== Conduit Metadata ==========
+
+    /**
+     * @brief Icon for this conduit (for UI display)
+     *
+     * Default returns a null icon. Override to provide custom icon.
+     */
+    virtual QIcon icon() const { return QIcon(); }
+
+    /**
+     * @brief Description of what this conduit does
+     */
+    virtual QString description() const { return QString(); }
+
+    /**
+     * @brief Version string for this conduit
+     */
+    virtual QString version() const { return "1.0.0"; }
+
+    // ========== Capabilities ==========
+
+    /**
+     * @brief Whether this conduit requires a Palm device connection
+     *
+     * False for conduits like WebCalendar that fetch from web.
+     */
+    virtual bool requiresDevice() const { return true; }
+
+    /**
+     * @brief Whether this conduit can write to Palm
+     */
+    virtual bool canSyncToPalm() const { return true; }
+
+    /**
+     * @brief Whether this conduit can read from Palm
+     */
+    virtual bool canSyncFromPalm() const { return true; }
+
+    // ========== Dependency Ordering ==========
+
+    /**
+     * @brief Conduit IDs that this conduit must run BEFORE
+     *
+     * Example: WebCalendarConduit returns {"calendar"} to run before CalendarConduit
+     */
+    virtual QStringList runBefore() const { return {}; }
+
+    /**
+     * @brief Conduit IDs that this conduit must run AFTER
+     */
+    virtual QStringList runAfter() const { return {}; }
+
+    // ========== Settings ==========
+
+    /**
+     * @brief Whether this conduit has configurable settings
+     */
+    virtual bool hasSettings() const { return false; }
+
+    /**
+     * @brief Create a settings widget for this conduit
+     *
+     * Called when user clicks "Settings..." for this conduit.
+     * The caller takes ownership of the returned widget.
+     *
+     * @param parent Parent widget
+     * @return Settings widget, or nullptr if no settings
+     */
+    virtual QWidget* createSettingsWidget(QWidget *parent) { Q_UNUSED(parent); return nullptr; }
+
+    /**
+     * @brief Load conduit settings from JSON
+     *
+     * Called when profile is loaded.
+     */
+    virtual void loadSettings(const QJsonObject &settings) { Q_UNUSED(settings); }
+
+    /**
+     * @brief Save conduit settings to JSON
+     *
+     * Called when profile is saved.
+     */
+    virtual QJsonObject saveSettings() const { return QJsonObject(); }
+
+    /**
+     * @brief Get the last time this conduit ran successfully
+     */
+    QDateTime lastRunTime() const { return m_lastRunTime; }
+
+    /**
+     * @brief Set the last run time
+     */
+    void setLastRunTime(const QDateTime &time) { m_lastRunTime = time; }
+
+    // ========== Pre-Sync Check ==========
+
+    /**
+     * @brief Check if this conduit should run in this sync cycle
+     *
+     * Used by interval-based conduits (e.g., weekly fetch) to skip
+     * if they ran recently. Default always returns true.
+     *
+     * @param context Sync context
+     * @return true if conduit should run, false to skip
+     */
+    virtual bool shouldRun(SyncContext *context) const { Q_UNUSED(context); return true; }
 
     // ========== Core Sync Operation ==========
 
@@ -301,6 +414,7 @@ protected:
 
     int m_dbHandle = -1;  ///< Open Palm database handle
     std::function<bool()> m_cancelCheck;  ///< External cancellation check
+    QDateTime m_lastRunTime;  ///< Last successful run time
 };
 
 } // namespace Sync

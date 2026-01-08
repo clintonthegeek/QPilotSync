@@ -96,7 +96,13 @@ QList<BackendRecord*> LocalFileBackend::loadRecords(const QString &collectionId)
     QStringList filters;
     filters << "*" + ext;
 
-    QDirIterator it(path, filters, QDir::Files);
+    // For calendar and todos, scan subdirectories (e.g., for webcalendar feeds)
+    QDirIterator::IteratorFlags flags = QDirIterator::NoIteratorFlags;
+    if (collectionId == "calendar" || collectionId == "todos") {
+        flags = QDirIterator::Subdirectories;
+    }
+
+    QDirIterator it(path, filters, QDir::Files, flags);
     while (it.hasNext()) {
         QString filePath = it.next();
 
@@ -143,14 +149,22 @@ BackendRecord* LocalFileBackend::loadRecord(const QString &recordId)
         record->type = "contact";
     } else if (ext == "ics") {
         // Could be event or todo - would need to parse to determine
-        // For now, use the parent directory name
-        QString parentDir = info.dir().dirName();
-        if (parentDir == "calendar") {
+        // Check if path contains calendar/ or todos/ collection directory
+        QString filePath = info.absoluteFilePath();
+        if (filePath.contains("/calendar/")) {
             record->type = "event";
-        } else if (parentDir == "todos") {
+        } else if (filePath.contains("/todos/")) {
             record->type = "todo";
         } else {
-            record->type = "icalendar";
+            // Fall back to parent directory check for direct files
+            QString parentDir = info.dir().dirName();
+            if (parentDir == "calendar") {
+                record->type = "event";
+            } else if (parentDir == "todos") {
+                record->type = "todo";
+            } else {
+                record->type = "icalendar";
+            }
         }
     }
 
@@ -247,7 +261,13 @@ QList<BackendRecord*> LocalFileBackend::modifiedSince(const QString &collectionI
     QStringList filters;
     filters << "*" + ext;
 
-    QDirIterator it(path, filters, QDir::Files);
+    // For calendar and todos, scan subdirectories (e.g., for webcalendar feeds)
+    QDirIterator::IteratorFlags flags = QDirIterator::NoIteratorFlags;
+    if (collectionId == "calendar" || collectionId == "todos") {
+        flags = QDirIterator::Subdirectories;
+    }
+
+    QDirIterator it(path, filters, QDir::Files, flags);
     while (it.hasNext()) {
         QString filePath = it.next();
         QFileInfo info(filePath);

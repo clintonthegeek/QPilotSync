@@ -131,4 +131,20 @@ kdepim-*/
 # pilot-link source (external dependency - built via ExternalProject)
 pilot-link/
 pilot-link-git/
+
+# Personal sync data folders (symlinks or directories)
 PalmSync/
+PalmSync
+
+# Reference projects
+PlanStanLite
+PlanStanLite/
+
+# Export/test directories
+exportAll/
+
+# Claude Code settings
+.claude/
+
+# Symlinks (personal development environment)
+kdepim-4.3.4

@@ -71,12 +71,15 @@ add_library(QPilotCore STATIC
     sync/conduits/todoconduit.h
     sync/conduits/installconduit.cpp
     sync/conduits/installconduit.h
+    sync/conduits/webcalendarconduit.cpp
+    sync/conduits/webcalendarconduit.h
 )
 
 target_link_libraries(QPilotCore
     PUBLIC
         Qt::Core
         Qt::Widgets
+        Qt::Network
         KF6::CalendarCore
         pisock
 )

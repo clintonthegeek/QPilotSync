@@ -8,6 +8,7 @@
 #include <functional>
 
 #include "../sync/synctypes.h"
+#include "../profile.h"  // For ConnectionMode
 
 // Forward declarations
 class KPilotDeviceLink;
@@ -108,12 +109,23 @@ public:
      */
     QString currentOperation() const { return m_currentOperation; }
 
+    /**
+     * @brief Set connection mode (keep alive vs disconnect after sync)
+     */
+    void setConnectionMode(ConnectionMode mode) { m_connectionMode = mode; }
+
+    /**
+     * @brief Get current connection mode
+     */
+    ConnectionMode connectionMode() const { return m_connectionMode; }
+
 signals:
     // ========== Connection Signals ==========
 
     void connectionStarted();
     void connectionComplete(bool success);
     void deviceReady(const QString &userName, const QString &deviceId);
+    void readyForSync();  // Emitted when device is fully ready for operations
     void disconnected();
 
     // ========== Operation Lifecycle ==========
@@ -175,6 +187,7 @@ private:
     std::atomic<bool> m_busy{false};
     QString m_currentOperation;
     bool m_conduitOpened = false;
+    ConnectionMode m_connectionMode = ConnectionMode::KeepAlive;
 
     // Pending operation state
     Sync::SyncEngine *m_pendingSyncEngine = nullptr;

@@ -20,6 +20,7 @@
 #include "../sync/conduits/calendarconduit.h"
 #include "../sync/conduits/todoconduit.h"
 #include "../sync/conduits/installconduit.h"
+#include "../sync/conduits/webcalendarconduit.h"
 
 #include <QApplication>
 #include <QMenuBar>
@@ -41,6 +42,7 @@
 #include <QListWidget>
 #include <QSet>
 #include <QFileDialog>
+#include <QTimer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -143,6 +145,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 void MainWindow::onConnectDevice()
 {
+    // If already listening, stop listening (toggle behavior)
+    if (m_listeningForDevice) {
+        stopListening();
+        return;
+    }
+
     // Create dialog
     QDialog dialog(this);
     dialog.setWindowTitle("Connect to Palm Device");
@@ -153,7 +161,7 @@ void MainWindow::onConnectDevice()
     // Info label
     QLabel *infoLabel = new QLabel(
         "Enter the device path and press Connect.\n"
-        "Then press the HotSync button on your Palm device.");
+        "Press the HotSync button on your Palm - QPilotSync will wait for it.");
     layout->addWidget(infoLabel);
 
     // Form layout for settings
@@ -220,6 +228,85 @@ void MainWindow::onConnectDevice()
         m_currentProfile->save();
     }
 
+    // Check if device exists (skip check for "usb:" protocol)
+    bool deviceExists = devicePath.startsWith("usb:") || QFile::exists(devicePath);
+
+    if (deviceExists) {
+        // Device exists - connect immediately
+        startConnection(devicePath);
+    } else {
+        // Device doesn't exist - enter listening mode
+        startListening(devicePath);
+    }
+}
+
+void MainWindow::startListening(const QString &devicePath)
+{
+    m_listeningForDevice = true;
+    m_listeningDevicePath = devicePath;
+
+    m_logWidget->logInfo(QString("Waiting for HotSync on %1...").arg(devicePath));
+    m_logWidget->logInfo("Press the HotSync button on your Palm device.");
+    statusBar()->showMessage(QString("Waiting for HotSync on %1...").arg(devicePath));
+
+    // Create poll timer if needed
+    if (!m_devicePollTimer) {
+        m_devicePollTimer = new QTimer(this);
+        connect(m_devicePollTimer, &QTimer::timeout, this, &MainWindow::onDevicePoll);
+    }
+
+    // Poll every 500ms for device appearance
+    m_devicePollTimer->start(500);
+
+    // Update UI
+    m_cancelConnectionAction->setEnabled(true);
+    updateMenuState(false);
+}
+
+void MainWindow::stopListening()
+{
+    if (!m_listeningForDevice) {
+        return;
+    }
+
+    m_listeningForDevice = false;
+    m_listeningDevicePath.clear();
+
+    if (m_devicePollTimer) {
+        m_devicePollTimer->stop();
+    }
+
+    m_logWidget->logInfo("Stopped listening for HotSync");
+    statusBar()->showMessage("Ready");
+
+    m_cancelConnectionAction->setEnabled(false);
+    updateMenuState(false);
+}
+
+void MainWindow::onDevicePoll()
+{
+    if (!m_listeningForDevice || m_listeningDevicePath.isEmpty()) {
+        return;
+    }
+
+    // Check if device appeared
+    if (QFile::exists(m_listeningDevicePath)) {
+        m_logWidget->logInfo(QString("Device %1 detected!").arg(m_listeningDevicePath));
+
+        // Stop polling
+        m_devicePollTimer->stop();
+        m_listeningForDevice = false;
+
+        QString devicePath = m_listeningDevicePath;
+        m_listeningDevicePath.clear();
+
+        // Connect to the device
+        startConnection(devicePath);
+    }
+}
+
+void MainWindow::startConnection(const QString &devicePath)
+{
     // Clean up old session
     if (m_session) {
         delete m_session;
@@ -229,6 +316,11 @@ void MainWindow::onConnectDevice()
 
     // Create new device session
     m_session = new DeviceSession(this);
+
+    // Apply profile settings to session
+    if (m_currentProfile) {
+        m_session->setConnectionMode(m_currentProfile->connectionMode());
+    }
 
     // Connect DeviceSession signals
     connect(m_session, &DeviceSession::connectionComplete,
@@ -260,9 +352,11 @@ void MainWindow::onConnectDevice()
                 updateMenuState(false);
                 statusBar()->showMessage("Disconnected");
             });
+    connect(m_session, &DeviceSession::readyForSync,
+            this, &MainWindow::onReadyForSync);
 
     m_logWidget->logInfo(QString("Connecting to %1...").arg(devicePath));
-    statusBar()->showMessage(QString("Waiting for device on %1...").arg(devicePath));
+    statusBar()->showMessage(QString("Connecting to %1...").arg(devicePath));
 
     // Start async connection
     m_session->connectDevice(devicePath);
@@ -480,6 +574,13 @@ void MainWindow::onDisconnectDevice()
 
 void MainWindow::onCancelConnection()
 {
+    // Stop listening mode if active
+    if (m_listeningForDevice) {
+        stopListening();
+        return;
+    }
+
+    // Cancel active connection
     if (m_session) {
         m_session->requestCancel();
         m_logWidget->logInfo("Connection cancelled by user");
@@ -521,6 +622,24 @@ void MainWindow::onDeviceStatusChanged(int status)
 void MainWindow::onDeviceReady(const QString &userName, const QString &deviceName)
 {
     m_logWidget->logInfo(QString("Device ready: %1 (%2)").arg(userName).arg(deviceName));
+}
+
+void MainWindow::onReadyForSync()
+{
+    // Check if auto-sync is enabled
+    if (!m_currentProfile || !m_currentProfile->autoSyncOnConnect()) {
+        return;
+    }
+
+    m_logWidget->logInfo("Auto-sync enabled - starting sync...");
+
+    // Determine sync type
+    QString syncType = m_currentProfile->defaultSyncType();
+    if (syncType == "fullsync") {
+        onFullSync();
+    } else {
+        onHotSync();
+    }
 }
 
 void MainWindow::onListDatabases()
@@ -716,6 +835,7 @@ void MainWindow::initializeSyncEngine()
     m_syncEngine->registerConduit(new Sync::ContactConduit());
     m_syncEngine->registerConduit(new Sync::CalendarConduit());
     m_syncEngine->registerConduit(new Sync::TodoConduit());
+    m_syncEngine->registerConduit(new Sync::WebCalendarConduit());
 
     // Create install conduit (handled separately)
     m_installConduit = new Sync::InstallConduit(this);
@@ -773,6 +893,188 @@ void MainWindow::runInstallConduit()
     }
 }
 
+void MainWindow::showWebCalendarSettings(QWidget *parent)
+{
+    // Get the WebCalendarConduit from the sync engine
+    Sync::Conduit *conduit = m_syncEngine->conduit("webcalendar");
+    Sync::WebCalendarConduit *webCal = dynamic_cast<Sync::WebCalendarConduit*>(conduit);
+    if (!webCal) {
+        QMessageBox::warning(parent, "Error", "WebCalendarConduit not found");
+        return;
+    }
+
+    QDialog dialog(parent);
+    dialog.setWindowTitle("Web Calendar Settings");
+    dialog.setMinimumWidth(500);
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+    // Feeds list
+    QGroupBox *feedsGroup = new QGroupBox("Calendar Feeds");
+    QVBoxLayout *feedsLayout = new QVBoxLayout(feedsGroup);
+
+    QListWidget *feedsList = new QListWidget();
+    feedsList->setMinimumHeight(120);
+
+    // Load existing feeds
+    QList<Sync::WebCalendarFeed> feeds = webCal->feeds();
+    for (const Sync::WebCalendarFeed &feed : feeds) {
+        QListWidgetItem *item = new QListWidgetItem(
+            QString("%1 - %2").arg(feed.name).arg(feed.url.toString()));
+        item->setData(Qt::UserRole, feed.url.toString());
+        item->setData(Qt::UserRole + 1, feed.name);
+        item->setData(Qt::UserRole + 2, feed.category);
+        item->setCheckState(feed.enabled ? Qt::Checked : Qt::Unchecked);
+        feedsList->addItem(item);
+    }
+
+    feedsLayout->addWidget(feedsList);
+
+    // Add/Remove buttons
+    QHBoxLayout *feedButtonsLayout = new QHBoxLayout();
+    QPushButton *addBtn = new QPushButton("Add...");
+    QPushButton *removeBtn = new QPushButton("Remove");
+    feedButtonsLayout->addWidget(addBtn);
+    feedButtonsLayout->addWidget(removeBtn);
+    feedButtonsLayout->addStretch();
+    feedsLayout->addLayout(feedButtonsLayout);
+
+    layout->addWidget(feedsGroup);
+
+    // Fetch settings
+    QGroupBox *fetchGroup = new QGroupBox("Fetch Schedule");
+    QFormLayout *fetchLayout = new QFormLayout(fetchGroup);
+
+    QComboBox *intervalCombo = new QComboBox();
+    intervalCombo->addItem("Every HotSync", "every_sync");
+    intervalCombo->addItem("Daily", "daily");
+    intervalCombo->addItem("Weekly", "weekly");
+    intervalCombo->addItem("Monthly", "monthly");
+
+    // Set current interval
+    int intervalIdx = static_cast<int>(webCal->fetchInterval());
+    intervalCombo->setCurrentIndex(intervalIdx);
+    fetchLayout->addRow("Fetch Frequency:", intervalCombo);
+
+    layout->addWidget(fetchGroup);
+
+    // Import options
+    QGroupBox *importGroup = new QGroupBox("Import Options");
+    QFormLayout *importLayout = new QFormLayout(importGroup);
+
+    QComboBox *dateFilterCombo = new QComboBox();
+    dateFilterCombo->addItem("All events", "all");
+    dateFilterCombo->addItem("Recurring + future events (Recommended)", "recurring_and_future");
+    dateFilterCombo->addItem("Future events only", "future");
+
+    // Set current date filter (read from saved settings)
+    QJsonObject currentSettings = webCal->saveSettings();
+    QString currentFilter = currentSettings["date_filter"].toString("recurring_and_future");
+    int filterIdx = dateFilterCombo->findData(currentFilter);
+    if (filterIdx >= 0) {
+        dateFilterCombo->setCurrentIndex(filterIdx);
+    } else {
+        dateFilterCombo->setCurrentIndex(1);  // Default to recurring_and_future
+    }
+    importLayout->addRow("Date Filter:", dateFilterCombo);
+
+    layout->addWidget(importGroup);
+
+    // Buttons
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttonBox);
+
+    // Add feed button handler
+    connect(addBtn, &QPushButton::clicked, [&]() {
+        QDialog addDialog(&dialog);
+        addDialog.setWindowTitle("Add Calendar Feed");
+        QFormLayout *addLayout = new QFormLayout(&addDialog);
+
+        QLineEdit *nameEdit = new QLineEdit();
+        QLineEdit *urlEdit = new QLineEdit();
+        urlEdit->setPlaceholderText("https://example.com/calendar.ics");
+
+        addLayout->addRow("Name:", nameEdit);
+        addLayout->addRow("URL:", urlEdit);
+
+        QDialogButtonBox *addButtons = new QDialogButtonBox(
+            QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        connect(addButtons, &QDialogButtonBox::accepted, &addDialog, &QDialog::accept);
+        connect(addButtons, &QDialogButtonBox::rejected, &addDialog, &QDialog::reject);
+        addLayout->addWidget(addButtons);
+
+        if (addDialog.exec() == QDialog::Accepted && !urlEdit->text().isEmpty()) {
+            QString name = nameEdit->text();
+            if (name.isEmpty()) {
+                name = "Calendar";
+            }
+            QListWidgetItem *item = new QListWidgetItem(
+                QString("%1 - %2").arg(name).arg(urlEdit->text()));
+            item->setData(Qt::UserRole, urlEdit->text());
+            item->setData(Qt::UserRole + 1, name);
+            item->setData(Qt::UserRole + 2, QString());  // category
+            item->setCheckState(Qt::Checked);
+            feedsList->addItem(item);
+        }
+    });
+
+    // Remove feed button handler
+    connect(removeBtn, &QPushButton::clicked, [&]() {
+        QListWidgetItem *item = feedsList->currentItem();
+        if (item) {
+            delete feedsList->takeItem(feedsList->row(item));
+        }
+    });
+
+    if (dialog.exec() == QDialog::Accepted) {
+        // Save feeds
+        QList<Sync::WebCalendarFeed> newFeeds;
+        for (int i = 0; i < feedsList->count(); ++i) {
+            QListWidgetItem *item = feedsList->item(i);
+            Sync::WebCalendarFeed feed;
+            feed.url = QUrl(item->data(Qt::UserRole).toString());
+            feed.name = item->data(Qt::UserRole + 1).toString();
+            feed.category = item->data(Qt::UserRole + 2).toString();
+            feed.enabled = item->checkState() == Qt::Checked;
+            newFeeds.append(feed);
+        }
+        webCal->setFeeds(newFeeds);
+
+        // Save fetch interval
+        QString intervalStr = intervalCombo->currentData().toString();
+        if (intervalStr == "every_sync") {
+            webCal->setFetchInterval(Sync::FetchInterval::EverySync);
+        } else if (intervalStr == "daily") {
+            webCal->setFetchInterval(Sync::FetchInterval::Daily);
+        } else if (intervalStr == "weekly") {
+            webCal->setFetchInterval(Sync::FetchInterval::Weekly);
+        } else if (intervalStr == "monthly") {
+            webCal->setFetchInterval(Sync::FetchInterval::Monthly);
+        }
+
+        // Save date filter
+        QString filterStr = dateFilterCombo->currentData().toString();
+        if (filterStr == "all") {
+            webCal->setDateFilter(Sync::WebCalendarConduit::DateFilter::All);
+        } else if (filterStr == "recurring_and_future") {
+            webCal->setDateFilter(Sync::WebCalendarConduit::DateFilter::RecurringAndFuture);
+        } else if (filterStr == "future") {
+            webCal->setDateFilter(Sync::WebCalendarConduit::DateFilter::FutureOnly);
+        }
+
+        // Save to profile
+        if (m_currentProfile) {
+            m_currentProfile->setConduitSettings("webcalendar", webCal->saveSettings());
+            m_currentProfile->save();
+        }
+
+        m_logWidget->logInfo("Web calendar settings saved");
+    }
+}
+
 // ========== Profile Management ==========
 
 void MainWindow::loadProfile(const QString &path)
@@ -821,6 +1123,20 @@ void MainWindow::loadProfile(const QString &path)
     // Apply profile's conduit enabled settings to sync engine
     for (const QString &conduitId : m_syncEngine->registeredConduits()) {
         m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+
+        // Load conduit-specific settings
+        QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
+        if (!conduitSettings.isEmpty()) {
+            Sync::Conduit *conduit = m_syncEngine->conduit(conduitId);
+            if (conduit) {
+                conduit->loadSettings(conduitSettings);
+            }
+        }
+    }
+
+    // Apply connection mode to session
+    if (m_session) {
+        m_session->setConnectionMode(m_currentProfile->connectionMode());
     }
 
     // Configure install conduit
@@ -978,6 +1294,34 @@ void MainWindow::onProfileSettings()
 
     layout->addWidget(deviceGroup);
 
+    // Connection group
+    QGroupBox *connectionGroup = new QGroupBox("Connection");
+    QFormLayout *connectionLayout = new QFormLayout(connectionGroup);
+
+    QCheckBox *autoSyncCheck = new QCheckBox("Automatically sync after connecting");
+    autoSyncCheck->setChecked(m_currentProfile->autoSyncOnConnect());
+    connectionLayout->addRow("", autoSyncCheck);
+
+    QComboBox *syncTypeCombo = new QComboBox();
+    syncTypeCombo->addItem("HotSync (sync changes)", "hotsync");
+    syncTypeCombo->addItem("Full Sync (copy all)", "fullsync");
+    syncTypeCombo->setCurrentIndex(m_currentProfile->defaultSyncType() == "fullsync" ? 1 : 0);
+    connectionLayout->addRow("Sync type:", syncTypeCombo);
+
+    QComboBox *connectionModeCombo = new QComboBox();
+    connectionModeCombo->addItem("Keep connection alive", static_cast<int>(ConnectionMode::KeepAlive));
+    connectionModeCombo->addItem("Disconnect after sync", static_cast<int>(ConnectionMode::DisconnectAfterSync));
+    connectionModeCombo->setCurrentIndex(
+        m_currentProfile->connectionMode() == ConnectionMode::KeepAlive ? 0 : 1);
+    connectionLayout->addRow("After sync:", connectionModeCombo);
+
+    QLabel *connectionHint = new QLabel(
+        "<small>For traditional HotSync experience: enable auto-sync and disconnect after sync.</small>");
+    connectionHint->setWordWrap(true);
+    connectionLayout->addRow("", connectionHint);
+
+    layout->addWidget(connectionGroup);
+
     // Conduits group
     QGroupBox *conduitsGroup = new QGroupBox("Conduits");
     QVBoxLayout *conduitsLayout = new QVBoxLayout(conduitsGroup);
@@ -997,6 +1341,22 @@ void MainWindow::onProfileSettings()
     QCheckBox *todosCheck = new QCheckBox("Todos");
     todosCheck->setChecked(m_currentProfile->conduitEnabled("todos"));
     conduitsLayout->addWidget(todosCheck);
+
+    // Web Calendar conduit with settings button
+    QHBoxLayout *webCalLayout = new QHBoxLayout();
+    QCheckBox *webCalCheck = new QCheckBox("Web Calendar Subscriptions");
+    webCalCheck->setChecked(m_currentProfile->conduitEnabled("webcalendar"));
+    webCalLayout->addWidget(webCalCheck);
+    QPushButton *webCalSettingsBtn = new QPushButton("Settings...");
+    webCalSettingsBtn->setMaximumWidth(80);
+    webCalLayout->addWidget(webCalSettingsBtn);
+    webCalLayout->addStretch();
+    conduitsLayout->addLayout(webCalLayout);
+
+    // Connect settings button
+    connect(webCalSettingsBtn, &QPushButton::clicked, this, [this, &dialog]() {
+        showWebCalendarSettings(&dialog);
+    });
 
     layout->addWidget(conduitsGroup);
 
@@ -1021,15 +1381,25 @@ void MainWindow::onProfileSettings()
     if (dialog.exec() == QDialog::Accepted) {
         m_currentProfile->setDevicePath(deviceCombo->currentText());
         m_currentProfile->setBaudRate(baudCombo->currentText());
+        m_currentProfile->setAutoSyncOnConnect(autoSyncCheck->isChecked());
+        m_currentProfile->setDefaultSyncType(syncTypeCombo->currentData().toString());
+        m_currentProfile->setConnectionMode(
+            static_cast<ConnectionMode>(connectionModeCombo->currentData().toInt()));
         m_currentProfile->setConduitEnabled("memos", memosCheck->isChecked());
         m_currentProfile->setConduitEnabled("contacts", contactsCheck->isChecked());
         m_currentProfile->setConduitEnabled("calendar", calendarCheck->isChecked());
         m_currentProfile->setConduitEnabled("todos", todosCheck->isChecked());
+        m_currentProfile->setConduitEnabled("webcalendar", webCalCheck->isChecked());
         m_currentProfile->save();
 
         // Update sync engine with new conduit settings
         for (const QString &conduitId : m_syncEngine->registeredConduits()) {
             m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+        }
+
+        // Update session connection mode
+        if (m_session) {
+            m_session->setConnectionMode(m_currentProfile->connectionMode());
         }
 
         updateWindowTitle();

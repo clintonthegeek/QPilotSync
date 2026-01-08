@@ -94,7 +94,7 @@ void DeviceSession::requestInstall(const QStringList &filePaths)
     emit operationStarted("Installing files");
 
     ensureWorkerThread();
-    // Note: tickle runs continuously while connected
+    stopTickle();  // Pause tickle - operation keeps connection alive
 
     // Invoke install on worker thread
     QMetaObject::invokeMethod(m_worker, "doInstall",
@@ -124,7 +124,7 @@ void DeviceSession::requestSync(Sync::SyncMode mode, Sync::SyncEngine *engine)
     emit operationStarted("Syncing");
 
     ensureWorkerThread();
-    // Note: tickle runs continuously while connected
+    stopTickle();  // Pause tickle - sync operations keep connection alive
 
     // Get enabled conduits
     QStringList enabledConduits;
@@ -173,10 +173,8 @@ void DeviceSession::onConnectionComplete(bool success)
         emit logMessage("Connected to Palm device");
         emit connectionComplete(true);
 
-        // Start tickle to keep connection alive while idle
-        startTickle();
-
         // Open conduit to advance Palm screen from "Identifying User"
+        // Note: Don't start tickle until openConduit completes to avoid socket conflicts
         openConduitAsync();
     } else {
         emit connectionComplete(false);
@@ -209,17 +207,30 @@ void DeviceSession::onWorkerPalmScreen(const QString &message)
 
 void DeviceSession::onWorkerInstallFinished(bool success, int successCount, int failCount)
 {
-    // Note: tickle keeps running to maintain connection
     m_busy = false;
     m_currentOperation.clear();
+
+    // Always resume tickle after install - MainWindow will handle disconnect
+    // if this was a standalone install (not part of HotSync)
+    if (m_connectionMode == ConnectionMode::KeepAlive) {
+        startTickle();
+    }
+
     emit installFinished(success, successCount, failCount);
 }
 
 void DeviceSession::onWorkerSyncFinished(bool success, const QString &summary)
 {
-    // Note: tickle keeps running to maintain connection
     m_busy = false;
     m_currentOperation.clear();
+
+    if (m_connectionMode == ConnectionMode::DisconnectAfterSync) {
+        emit logMessage("Disconnecting (connection mode: disconnect after sync)");
+        disconnectDevice();
+    } else {
+        startTickle();  // Resume tickle to keep connection alive while idle
+    }
+
     emit syncFinished(success, summary);
 }
 
@@ -233,12 +244,22 @@ void DeviceSession::onWorkerOpenConduitFinished(bool success)
     m_conduitOpened = success;
     if (success) {
         emit logMessage("Palm ready for sync");
+
+        // Start tickle if in keep-alive mode
+        if (m_connectionMode == ConnectionMode::KeepAlive) {
+            startTickle();
+        }
+
+        // Signal that we're ready for operations
+        emit readyForSync();
     }
 }
 
 void DeviceSession::onWorkerOperationFinished(bool success, const QString &operation)
 {
-    // Note: tickle keeps running to maintain connection
+    // Note: Don't start tickle here - the specific handlers (onWorkerInstallFinished,
+    // onWorkerSyncFinished) already handle tickle/disconnect based on connection mode.
+    // This signal is emitted alongside those, so we just update state and relay.
     m_busy = false;
     m_currentOperation.clear();
     emit operationFinished(success, operation);

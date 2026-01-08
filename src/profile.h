@@ -4,6 +4,29 @@
 #include <QString>
 #include <QStringList>
 #include <QMap>
+#include <QJsonObject>
+
+/**
+ * @brief Connection mode for Palm device
+ *
+ * Controls how the connection is managed between operations.
+ */
+enum class ConnectionMode
+{
+    /**
+     * Keep connection alive using periodic tickle (dlp_GetSysDateTime).
+     * Allows multiple operations without reconnecting.
+     * Note: Palm screen shows last operation until disconnect.
+     */
+    KeepAlive,
+
+    /**
+     * Disconnect after each operation completes (traditional HotSync).
+     * Palm shows "HotSync Complete" and closes cleanly.
+     * Requires pressing HotSync button again for next operation.
+     */
+    DisconnectAfterSync
+};
 
 /**
  * @brief Device fingerprint for identifying a specific Palm device
@@ -104,6 +127,18 @@ public:
     // Check if this profile has a registered device
     bool hasRegisteredDevice() const;
 
+    // Connection mode - how to manage connection between operations
+    ConnectionMode connectionMode() const;
+    void setConnectionMode(ConnectionMode mode);
+
+    // Auto-sync after connection
+    bool autoSyncOnConnect() const;
+    void setAutoSyncOnConnect(bool enabled);
+
+    // Default sync type for auto-sync
+    QString defaultSyncType() const;  // "hotsync" or "fullsync"
+    void setDefaultSyncType(const QString &type);
+
     // ========== Sync Settings ==========
 
     // Conflict resolution policy
@@ -114,6 +149,10 @@ public:
     bool conduitEnabled(const QString &conduitId) const;
     void setConduitEnabled(const QString &conduitId, bool enabled);
     QStringList enabledConduits() const;
+
+    // Conduit-specific settings
+    QJsonObject conduitSettings(const QString &conduitId) const;
+    void setConduitSettings(const QString &conduitId, const QJsonObject &settings);
 
     // ========== Persistence ==========
 
@@ -143,10 +182,14 @@ private:
     QString m_devicePath;
     QString m_baudRate;
     DeviceFingerprint m_deviceFingerprint;
+    ConnectionMode m_connectionMode = ConnectionMode::KeepAlive;
+    bool m_autoSyncOnConnect = false;
+    QString m_defaultSyncType = "hotsync";
 
     // Sync settings
     QString m_conflictPolicy;
     QMap<QString, bool> m_conduitEnabled;
+    QMap<QString, QJsonObject> m_conduitSettings;
 
     // Default values
     static const QString DEFAULT_CONFLICT_POLICY;

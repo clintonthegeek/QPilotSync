@@ -142,7 +142,7 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
     emit syncStarted();
     emit logMessage(QString("Starting sync for user: %1").arg(m_palmUserName));
 
-    // Run each enabled conduit
+    // Get enabled conduits
     QStringList enabledConduits;
     for (const QString &id : m_conduits.keys()) {
         if (m_conduitEnabled.value(id, true)) {
@@ -150,18 +150,48 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
         }
     }
 
+    // Resolve dependency order
+    QString depError = checkCircularDependencies(enabledConduits);
+    if (!depError.isEmpty()) {
+        totalResult.success = false;
+        totalResult.errorMessage = depError;
+        totalResult.endTime = QDateTime::currentDateTime();
+        emit errorOccurred(depError);
+        m_syncing = false;
+        return totalResult;
+    }
+
+    QStringList orderedConduits = resolveConduitOrder(enabledConduits);
+    emit logMessage(QString("Conduit order: %1").arg(orderedConduits.join(" → ")));
+
     int conduitIndex = 0;
-    for (const QString &id : enabledConduits) {
+    for (const QString &id : orderedConduits) {
         // Check both internal flag and external cancel callback
         if (m_cancelled || (m_cancelCheck && m_cancelCheck())) {
             emit logMessage("Sync cancelled by user");
             break;
         }
 
-        emit progressUpdated(conduitIndex, enabledConduits.size(),
-            QString("Syncing %1...").arg(m_conduits[id]->displayName()));
+        Conduit *cond = m_conduits[id];
+
+        // Check if conduit should run (interval-based conduits may skip)
+        SyncContext preCheckContext;
+        preCheckContext.mode = mode;
+        if (!cond->shouldRun(&preCheckContext)) {
+            emit logMessage(QString("Skipping %1 (not due yet)").arg(cond->displayName()));
+            conduitIndex++;
+            continue;
+        }
+
+        emit progressUpdated(conduitIndex, orderedConduits.size(),
+            QString("Syncing %1...").arg(cond->displayName()));
 
         SyncResult conduitResult = syncConduit(id, mode);
+
+        // Update conduit's last run time on success
+        if (conduitResult.success) {
+            cond->setLastRunTime(QDateTime::currentDateTime());
+        }
 
         // Accumulate results
         totalResult.palmStats.created += conduitResult.palmStats.created;
@@ -337,6 +367,160 @@ void SyncEngine::onConduitError(const QString &error)
 void SyncEngine::onConduitConflict(const QString &palmDesc, const QString &pcDesc)
 {
     emit conflictDetected(m_currentConduit, palmDesc, pcDesc);
+}
+
+// ========== Dependency Resolution ==========
+
+QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
+{
+    // Build dependency graph
+    // Edge A -> B means "A must run before B"
+    QMap<QString, QStringList> mustRunBefore;  // conduit -> list of conduits it must run before
+    QMap<QString, int> inDegree;               // how many conduits must run before this one
+
+    // Initialize
+    for (const QString &id : conduitIds) {
+        inDegree[id] = 0;
+        mustRunBefore[id] = QStringList();
+    }
+
+    // Build edges from runBefore() and runAfter()
+    for (const QString &id : conduitIds) {
+        Conduit *cond = m_conduits.value(id);
+        if (!cond) continue;
+
+        // "I must run before X" means edge: id -> X
+        for (const QString &beforeId : cond->runBefore()) {
+            if (conduitIds.contains(beforeId)) {
+                mustRunBefore[id].append(beforeId);
+                inDegree[beforeId]++;
+            }
+        }
+
+        // "I must run after X" means edge: X -> id
+        for (const QString &afterId : cond->runAfter()) {
+            if (conduitIds.contains(afterId)) {
+                mustRunBefore[afterId].append(id);
+                inDegree[id]++;
+            }
+        }
+    }
+
+    // Kahn's algorithm for topological sort
+    QStringList result;
+    QStringList queue;
+
+    // Start with nodes that have no dependencies
+    for (const QString &id : conduitIds) {
+        if (inDegree[id] == 0) {
+            queue.append(id);
+        }
+    }
+
+    while (!queue.isEmpty()) {
+        // Sort queue for deterministic ordering (alphabetical among equals)
+        queue.sort();
+        QString current = queue.takeFirst();
+        result.append(current);
+
+        // Remove edges from current
+        for (const QString &next : mustRunBefore[current]) {
+            inDegree[next]--;
+            if (inDegree[next] == 0) {
+                queue.append(next);
+            }
+        }
+    }
+
+    // If we didn't process all conduits, there's a cycle
+    // (This shouldn't happen if checkCircularDependencies was called first)
+    if (result.size() != conduitIds.size()) {
+        emit logMessage("Warning: Could not resolve all conduit dependencies");
+        // Return whatever we have plus the remaining ones
+        for (const QString &id : conduitIds) {
+            if (!result.contains(id)) {
+                result.append(id);
+            }
+        }
+    }
+
+    return result;
+}
+
+QString SyncEngine::checkCircularDependencies(const QStringList &conduitIds)
+{
+    // Build adjacency list for DFS cycle detection
+    QMap<QString, QStringList> edges;  // conduit -> conduits that must run after it
+
+    for (const QString &id : conduitIds) {
+        edges[id] = QStringList();
+    }
+
+    for (const QString &id : conduitIds) {
+        Conduit *cond = m_conduits.value(id);
+        if (!cond) continue;
+
+        // "I must run before X" means edge: id -> X
+        for (const QString &beforeId : cond->runBefore()) {
+            if (conduitIds.contains(beforeId)) {
+                edges[id].append(beforeId);
+            }
+        }
+
+        // "I must run after X" means edge: X -> id
+        for (const QString &afterId : cond->runAfter()) {
+            if (conduitIds.contains(afterId)) {
+                edges[afterId].append(id);
+            }
+        }
+    }
+
+    // DFS to detect cycles
+    // States: 0 = unvisited, 1 = visiting (in current path), 2 = visited
+    QMap<QString, int> state;
+    for (const QString &id : conduitIds) {
+        state[id] = 0;
+    }
+
+    std::function<QString(const QString&, QStringList&)> dfs;
+    dfs = [&](const QString &node, QStringList &path) -> QString {
+        if (state[node] == 1) {
+            // Found cycle - build error message
+            int cycleStart = path.indexOf(node);
+            QStringList cycle = path.mid(cycleStart);
+            cycle.append(node);
+            return QString("Circular dependency detected: %1").arg(cycle.join(" → "));
+        }
+        if (state[node] == 2) {
+            return QString();  // Already fully explored
+        }
+
+        state[node] = 1;
+        path.append(node);
+
+        for (const QString &next : edges[node]) {
+            QString error = dfs(next, path);
+            if (!error.isEmpty()) {
+                return error;
+            }
+        }
+
+        path.removeLast();
+        state[node] = 2;
+        return QString();
+    };
+
+    for (const QString &id : conduitIds) {
+        if (state[id] == 0) {
+            QStringList path;
+            QString error = dfs(id, path);
+            if (!error.isEmpty()) {
+                return error;
+            }
+        }
+    }
+
+    return QString();  // No cycles found
 }
 
 } // namespace Sync

@@ -4,6 +4,7 @@
 #include <QMainWindow>
 
 // Forward declarations
+class QTimer;
 class QMdiArea;
 class QMdiSubWindow;
 class QMenu;
@@ -43,9 +44,14 @@ private slots:
     void onConnectDevice();
     void onConnectionComplete(bool success);
     void onDisconnectDevice();
+    void onDevicePoll();  // Check if device appeared while listening
     void onCancelConnection();
+    void startListening(const QString &devicePath);
+    void stopListening();
+    void startConnection(const QString &devicePath);
     void onDeviceStatusChanged(int status);
     void onDeviceReady(const QString &userName, const QString &deviceName);
+    void onReadyForSync();
     void onListDatabases();
     void onSetUserInfo();
     void onDeviceInfo();
@@ -96,6 +102,7 @@ private:
     void initializeSyncEngine();
     void runInstallConduit();
     void showSyncResult(const Sync::SyncResult &result, const QString &operationName);
+    void showWebCalendarSettings(QWidget *parent);
 
     // Profile management
     void loadProfile(const QString &path);
@@ -127,6 +134,11 @@ private:
     // Last used connection settings (for passing to new profiles)
     QString m_lastUsedDevicePath;
     QString m_lastUsedBaudRate;
+
+    // Device listening mode
+    QTimer *m_devicePollTimer = nullptr;
+    bool m_listeningForDevice = false;
+    QString m_listeningDevicePath;
 
     // Current async operation
     QString m_pendingSyncOperationName;

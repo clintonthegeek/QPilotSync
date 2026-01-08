@@ -130,8 +130,12 @@ void DeviceWorker::doInstall(const QStringList &filePaths)
         }
     }
 
-    emit palmScreenChanged("Install complete");
     emit progress(total, total, "Install complete");
+
+    // Call dlp_OpenConduit to reset Palm screen back to ready state
+    dlp_OpenConduit(m_socket);
+
+    emit palmScreenChanged("Install complete");
 
     QString summary = QString("Installed %1 file(s), %2 failed")
                           .arg(successCount).arg(failCount);

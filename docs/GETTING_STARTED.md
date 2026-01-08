@@ -304,7 +304,7 @@ See `docs/` directory for:
 
 ## License
 
-TBD - Suggest GPL-2.0 (to match KPilot and pilot-link)
+GPL-3.0-or-later
 
 ## Credits
 

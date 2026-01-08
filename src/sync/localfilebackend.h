@@ -16,10 +16,15 @@ namespace Sync {
  *   ├── memos/           - Markdown files (.md)
  *   ├── contacts/        - vCard files (.vcf)
  *   ├── calendar/        - iCalendar event files (.ics)
+ *   │   └── <feed>/      - Subdirectories for web calendar feeds
  *   └── todos/           - iCalendar todo files (.ics)
+ *       └── <feed>/      - Subdirectories for web calendar feeds
  *
  * Each collection is a subdirectory. Records are individual files.
  * File modification times are used for change detection.
+ *
+ * For calendar and todos collections, subdirectories are scanned
+ * recursively (e.g., for web calendar feed subscriptions).
  */
 class LocalFileBackend : public SyncBackend
 {

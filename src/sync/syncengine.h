@@ -203,6 +203,24 @@ private slots:
 private:
     void connectConduitSignals(Conduit *conduit);
 
+    /**
+     * @brief Get conduits in dependency-resolved order
+     *
+     * Uses topological sort based on runBefore/runAfter dependencies.
+     * Throws error on circular dependencies.
+     *
+     * @param conduitIds IDs of conduits to order
+     * @return Ordered list of conduit IDs
+     */
+    QStringList resolveConduitOrder(const QStringList &conduitIds);
+
+    /**
+     * @brief Check for circular dependencies
+     *
+     * @return Error message if circular, empty string if OK
+     */
+    QString checkCircularDependencies(const QStringList &conduitIds);
+
     KPilotDeviceLink *m_deviceLink = nullptr;
     SyncBackend *m_backend = nullptr;
 

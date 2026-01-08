@@ -5,11 +5,12 @@
 #include <QFileInfo>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QJsonDocument>
 
 const QString Profile::DEFAULT_CONFLICT_POLICY = "ask";
 const QString Profile::DEFAULT_DEVICE_PATH = "/dev/ttyUSB0";
 const QString Profile::DEFAULT_BAUD_RATE = "115200";
-const QStringList Profile::ALL_CONDUITS = {"memos", "contacts", "calendar", "todos"};
+const QStringList Profile::ALL_CONDUITS = {"memos", "contacts", "calendar", "todos", "webcalendar"};
 
 Profile::Profile(const QString &syncFolderPath)
     : m_syncFolderPath(syncFolderPath)
@@ -102,6 +103,36 @@ bool Profile::hasRegisteredDevice() const
     return m_deviceFingerprint.isValid();
 }
 
+ConnectionMode Profile::connectionMode() const
+{
+    return m_connectionMode;
+}
+
+void Profile::setConnectionMode(ConnectionMode mode)
+{
+    m_connectionMode = mode;
+}
+
+bool Profile::autoSyncOnConnect() const
+{
+    return m_autoSyncOnConnect;
+}
+
+void Profile::setAutoSyncOnConnect(bool enabled)
+{
+    m_autoSyncOnConnect = enabled;
+}
+
+QString Profile::defaultSyncType() const
+{
+    return m_defaultSyncType;
+}
+
+void Profile::setDefaultSyncType(const QString &type)
+{
+    m_defaultSyncType = type;
+}
+
 // ========== Sync Settings ==========
 
 QString Profile::conflictPolicy() const
@@ -135,6 +166,16 @@ QStringList Profile::enabledConduits() const
     return enabled;
 }
 
+QJsonObject Profile::conduitSettings(const QString &conduitId) const
+{
+    return m_conduitSettings.value(conduitId);
+}
+
+void Profile::setConduitSettings(const QString &conduitId, const QJsonObject &settings)
+{
+    m_conduitSettings[conduitId] = settings;
+}
+
 bool Profile::load()
 {
     QString configPath = configFilePath();
@@ -153,6 +194,18 @@ bool Profile::load()
     m_deviceFingerprint.userId = settings.value("device/userId", 0).toUInt();
     m_deviceFingerprint.userName = settings.value("device/userName", QString()).toString();
 
+    // Connection mode (default to KeepAlive for development)
+    QString modeStr = settings.value("device/connectionMode", "keepalive").toString();
+    if (modeStr == "disconnect") {
+        m_connectionMode = ConnectionMode::DisconnectAfterSync;
+    } else {
+        m_connectionMode = ConnectionMode::KeepAlive;
+    }
+
+    // Auto-sync settings
+    m_autoSyncOnConnect = settings.value("device/autoSyncOnConnect", false).toBool();
+    m_defaultSyncType = settings.value("device/defaultSyncType", "hotsync").toString();
+
     // Sync settings
     m_conflictPolicy = settings.value("sync/conflictPolicy", DEFAULT_CONFLICT_POLICY).toString();
 
@@ -160,6 +213,16 @@ bool Profile::load()
     for (const QString &conduit : ALL_CONDUITS) {
         m_conduitEnabled[conduit] = settings.value(
             QString("conduits/%1/enabled").arg(conduit), true).toBool();
+
+        // Load conduit-specific settings as JSON
+        QString settingsStr = settings.value(
+            QString("conduits/%1/settings").arg(conduit)).toString();
+        if (!settingsStr.isEmpty()) {
+            QJsonDocument doc = QJsonDocument::fromJson(settingsStr.toUtf8());
+            if (!doc.isNull() && doc.isObject()) {
+                m_conduitSettings[conduit] = doc.object();
+            }
+        }
     }
 
     return true;
@@ -197,6 +260,14 @@ bool Profile::save()
         settings.setValue("device/userName", m_deviceFingerprint.userName);
     }
 
+    // Connection mode
+    settings.setValue("device/connectionMode",
+        m_connectionMode == ConnectionMode::DisconnectAfterSync ? "disconnect" : "keepalive");
+
+    // Auto-sync settings
+    settings.setValue("device/autoSyncOnConnect", m_autoSyncOnConnect);
+    settings.setValue("device/defaultSyncType", m_defaultSyncType);
+
     // Sync settings
     settings.setValue("sync/conflictPolicy", m_conflictPolicy);
 
@@ -204,6 +275,13 @@ bool Profile::save()
     for (const QString &conduit : ALL_CONDUITS) {
         settings.setValue(QString("conduits/%1/enabled").arg(conduit),
                           m_conduitEnabled.value(conduit, true));
+
+        // Save conduit-specific settings as JSON string
+        if (m_conduitSettings.contains(conduit)) {
+            QJsonDocument doc(m_conduitSettings[conduit]);
+            settings.setValue(QString("conduits/%1/settings").arg(conduit),
+                              QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+        }
     }
 
     settings.sync();
