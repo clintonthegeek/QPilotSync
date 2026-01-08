@@ -94,7 +94,7 @@ void DeviceSession::requestInstall(const QStringList &filePaths)
     emit operationStarted("Installing files");
 
     ensureWorkerThread();
-    startTickle();  // Keep connection alive during install
+    // Note: tickle runs continuously while connected
 
     // Invoke install on worker thread
     QMetaObject::invokeMethod(m_worker, "doInstall",
@@ -124,7 +124,7 @@ void DeviceSession::requestSync(Sync::SyncMode mode, Sync::SyncEngine *engine)
     emit operationStarted("Syncing");
 
     ensureWorkerThread();
-    startTickle();  // Keep connection alive during sync
+    // Note: tickle runs continuously while connected
 
     // Get enabled conduits
     QStringList enabledConduits;
@@ -173,6 +173,9 @@ void DeviceSession::onConnectionComplete(bool success)
         emit logMessage("Connected to Palm device");
         emit connectionComplete(true);
 
+        // Start tickle to keep connection alive while idle
+        startTickle();
+
         // Open conduit to advance Palm screen from "Identifying User"
         openConduitAsync();
     } else {
@@ -206,7 +209,7 @@ void DeviceSession::onWorkerPalmScreen(const QString &message)
 
 void DeviceSession::onWorkerInstallFinished(bool success, int successCount, int failCount)
 {
-    stopTickle();  // Stop keep-alive
+    // Note: tickle keeps running to maintain connection
     m_busy = false;
     m_currentOperation.clear();
     emit installFinished(success, successCount, failCount);
@@ -214,7 +217,7 @@ void DeviceSession::onWorkerInstallFinished(bool success, int successCount, int 
 
 void DeviceSession::onWorkerSyncFinished(bool success, const QString &summary)
 {
-    stopTickle();  // Stop keep-alive
+    // Note: tickle keeps running to maintain connection
     m_busy = false;
     m_currentOperation.clear();
     emit syncFinished(success, summary);
@@ -235,7 +238,7 @@ void DeviceSession::onWorkerOpenConduitFinished(bool success)
 
 void DeviceSession::onWorkerOperationFinished(bool success, const QString &operation)
 {
-    stopTickle();  // Stop keep-alive (in case not already stopped)
+    // Note: tickle keeps running to maintain connection
     m_busy = false;
     m_currentOperation.clear();
     emit operationFinished(success, operation);
@@ -249,6 +252,30 @@ void DeviceSession::onWorkerError(const QString &error)
 void DeviceSession::onWorkerLogMessage(const QString &message)
 {
     emit logMessage(message);
+}
+
+void DeviceSession::onConnectionLost()
+{
+    qWarning() << "[DeviceSession] Connection lost detected by tickle thread";
+    emit errorOccurred("Connection to Palm device lost");
+    emit logMessage("Connection lost - Palm may have timed out or been disconnected");
+
+    // Force cleanup of connection state
+    m_busy = false;
+    m_currentOperation.clear();
+    m_conduitOpened = false;
+
+    // Clean up threads
+    stopTickleThread();
+    stopWorkerThread();
+
+    // Clean up device link
+    if (m_deviceLink) {
+        m_deviceLink->deleteLater();
+        m_deviceLink = nullptr;
+    }
+
+    emit disconnected();
 }
 
 // ========== Private ==========
@@ -335,6 +362,8 @@ void DeviceSession::ensureTickleThread()
             this, [this](const QString &error) {
                 emit logMessage(QString("Keep-alive warning: %1").arg(error));
             });
+    connect(m_tickle, &TickleWorker::connectionLost,
+            this, &DeviceSession::onConnectionLost);
 
     // Clean up tickle worker when thread finishes
     connect(m_tickleThread, &QThread::finished,

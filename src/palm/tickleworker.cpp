@@ -49,8 +49,9 @@ void TickleWorker::start()
     }
 
     m_running = true;
+    m_consecutiveFailures = 0;
     m_timer->start(m_intervalMs);
-    qDebug() << "[TickleWorker] Started with interval:" << m_intervalMs << "ms";
+    qDebug() << "[TickleWorker] Started with interval:" << m_intervalMs << "ms on socket:" << m_socket;
 }
 
 void TickleWorker::stop()
@@ -67,6 +68,7 @@ void TickleWorker::stop()
 void TickleWorker::sendTickle()
 {
     if (!m_running.load() || m_socket < 0) {
+        qDebug() << "[TickleWorker] sendTickle skipped - running:" << m_running.load() << "socket:" << m_socket;
         return;
     }
 
@@ -76,12 +78,19 @@ void TickleWorker::sendTickle()
     int result = dlp_GetSysDateTime(m_socket, &palmTime);
 
     if (result < 0) {
-        qWarning() << "[TickleWorker] Tickle failed:" << result;
-        emit tickleFailed(QString("Tickle failed: %1").arg(result));
-        // Don't stop - let DeviceSession decide what to do
+        qWarning() << "[TickleWorker] Tickle FAILED:" << result;
+        m_consecutiveFailures++;
+        emit tickleFailed(QString("Tickle failed: %1 (attempt %2)").arg(result).arg(m_consecutiveFailures));
+
+        // After 3 consecutive failures, connection is likely dead
+        if (m_consecutiveFailures >= 3) {
+            qWarning() << "[TickleWorker] Too many failures, connection appears dead";
+            emit connectionLost();
+            stop();
+        }
     } else {
+        m_consecutiveFailures = 0;
         emit tickleSent();
-        // Uncomment for verbose logging:
-        // qDebug() << "[TickleWorker] Tickle sent, Palm time:" << palmTime;
+        qDebug() << "[TickleWorker] Tickle OK, Palm time:" << palmTime;
     }
 }

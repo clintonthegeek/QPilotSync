@@ -154,6 +154,9 @@ private slots:
     void onWorkerError(const QString &error);
     void onWorkerLogMessage(const QString &message);
 
+    // Tickle callbacks
+    void onConnectionLost();
+
 private:
     void ensureWorkerThread();
     void stopWorkerThread();

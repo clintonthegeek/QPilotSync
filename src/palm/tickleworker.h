@@ -70,6 +70,13 @@ signals:
      */
     void tickleFailed(const QString &error);
 
+    /**
+     * @brief Emitted when connection appears to be dead
+     *
+     * Triggered after multiple consecutive tickle failures.
+     */
+    void connectionLost();
+
 private slots:
     void sendTickle();
 
@@ -77,6 +84,7 @@ private:
     QTimer *m_timer = nullptr;
     int m_socket = -1;
     int m_intervalMs = 5000;
+    int m_consecutiveFailures = 0;
     std::atomic<bool> m_running{false};
 };
 

@@ -252,6 +252,14 @@ void MainWindow::onConnectDevice()
             });
     connect(m_session, &DeviceSession::syncResultReady,
             this, &MainWindow::onAsyncSyncResult);
+    connect(m_session, &DeviceSession::disconnected,
+            this, [this]() {
+                m_deviceLink = nullptr;
+                m_exportHandler->setDeviceLink(nullptr);
+                m_importHandler->setDeviceLink(nullptr);
+                updateMenuState(false);
+                statusBar()->showMessage("Disconnected");
+            });
 
     m_logWidget->logInfo(QString("Connecting to %1...").arg(devicePath));
     statusBar()->showMessage(QString("Waiting for device on %1...").arg(devicePath));
