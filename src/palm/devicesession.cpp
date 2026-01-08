@@ -1,5 +1,6 @@
 #include "devicesession.h"
 #include "deviceworker.h"
+#include "tickleworker.h"
 #include "kpilotdevicelink.h"
 #include "../sync/syncengine.h"
 #include "../sync/synctypes.h"
@@ -16,6 +17,7 @@ DeviceSession::DeviceSession(QObject *parent)
 DeviceSession::~DeviceSession()
 {
     disconnectDevice();
+    stopTickleThread();
     stopWorkerThread();
     qDebug() << "[DeviceSession] Destroyed";
 }
@@ -55,6 +57,9 @@ void DeviceSession::disconnectDevice()
             requestCancel();
         }
 
+        stopTickle();  // Stop keep-alive before disconnecting
+        stopTickleThread();
+
         m_deviceLink->closeConnection();
         m_deviceLink->deleteLater();
         m_deviceLink = nullptr;
@@ -89,6 +94,7 @@ void DeviceSession::requestInstall(const QStringList &filePaths)
     emit operationStarted("Installing files");
 
     ensureWorkerThread();
+    startTickle();  // Keep connection alive during install
 
     // Invoke install on worker thread
     QMetaObject::invokeMethod(m_worker, "doInstall",
@@ -118,6 +124,7 @@ void DeviceSession::requestSync(Sync::SyncMode mode, Sync::SyncEngine *engine)
     emit operationStarted("Syncing");
 
     ensureWorkerThread();
+    startTickle();  // Keep connection alive during sync
 
     // Get enabled conduits
     QStringList enabledConduits;
@@ -199,6 +206,7 @@ void DeviceSession::onWorkerPalmScreen(const QString &message)
 
 void DeviceSession::onWorkerInstallFinished(bool success, int successCount, int failCount)
 {
+    stopTickle();  // Stop keep-alive
     m_busy = false;
     m_currentOperation.clear();
     emit installFinished(success, successCount, failCount);
@@ -206,6 +214,7 @@ void DeviceSession::onWorkerInstallFinished(bool success, int successCount, int 
 
 void DeviceSession::onWorkerSyncFinished(bool success, const QString &summary)
 {
+    stopTickle();  // Stop keep-alive
     m_busy = false;
     m_currentOperation.clear();
     emit syncFinished(success, summary);
@@ -226,6 +235,7 @@ void DeviceSession::onWorkerOpenConduitFinished(bool success)
 
 void DeviceSession::onWorkerOperationFinished(bool success, const QString &operation)
 {
+    stopTickle();  // Stop keep-alive (in case not already stopped)
     m_busy = false;
     m_currentOperation.clear();
     emit operationFinished(success, operation);
@@ -303,6 +313,75 @@ void DeviceSession::stopWorkerThread()
         m_workerThread = nullptr;
         m_worker = nullptr;  // Deleted by thread finished signal
         qDebug() << "[DeviceSession] Worker thread stopped";
+    }
+}
+
+void DeviceSession::ensureTickleThread()
+{
+    if (m_tickleThread && m_tickleThread->isRunning()) {
+        return;  // Already running
+    }
+
+    // Clean up any existing thread
+    stopTickleThread();
+
+    // Create new tickle thread
+    m_tickleThread = new QThread(this);
+    m_tickle = new TickleWorker();
+    m_tickle->moveToThread(m_tickleThread);
+
+    // Connect tickle signals
+    connect(m_tickle, &TickleWorker::tickleFailed,
+            this, [this](const QString &error) {
+                emit logMessage(QString("Keep-alive warning: %1").arg(error));
+            });
+
+    // Clean up tickle worker when thread finishes
+    connect(m_tickleThread, &QThread::finished,
+            m_tickle, &QObject::deleteLater);
+
+    // Set the socket
+    if (m_deviceLink) {
+        m_tickle->setSocket(m_deviceLink->socketDescriptor());
+    }
+
+    m_tickleThread->start();
+    qDebug() << "[DeviceSession] Tickle thread started";
+}
+
+void DeviceSession::stopTickleThread()
+{
+    if (m_tickleThread) {
+        // Stop tickle first
+        if (m_tickle) {
+            QMetaObject::invokeMethod(m_tickle, "stop", Qt::QueuedConnection);
+        }
+
+        m_tickleThread->quit();
+        if (!m_tickleThread->wait(2000)) {
+            qWarning() << "[DeviceSession] Tickle thread didn't stop, terminating";
+            m_tickleThread->terminate();
+            m_tickleThread->wait();
+        }
+        delete m_tickleThread;
+        m_tickleThread = nullptr;
+        m_tickle = nullptr;  // Deleted by thread finished signal
+        qDebug() << "[DeviceSession] Tickle thread stopped";
+    }
+}
+
+void DeviceSession::startTickle()
+{
+    ensureTickleThread();
+    if (m_tickle) {
+        QMetaObject::invokeMethod(m_tickle, "start", Qt::QueuedConnection);
+    }
+}
+
+void DeviceSession::stopTickle()
+{
+    if (m_tickle) {
+        QMetaObject::invokeMethod(m_tickle, "stop", Qt::QueuedConnection);
     }
 }
 

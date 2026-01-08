@@ -12,6 +12,7 @@
 // Forward declarations
 class KPilotDeviceLink;
 class DeviceWorker;
+class TickleWorker;
 
 namespace Sync {
 class SyncEngine;
@@ -156,11 +157,17 @@ private slots:
 private:
     void ensureWorkerThread();
     void stopWorkerThread();
+    void ensureTickleThread();
+    void stopTickleThread();
+    void startTickle();
+    void stopTickle();
     void openConduitAsync();
 
     KPilotDeviceLink *m_deviceLink = nullptr;
     QThread *m_workerThread = nullptr;
     DeviceWorker *m_worker = nullptr;
+    QThread *m_tickleThread = nullptr;
+    TickleWorker *m_tickle = nullptr;
 
     std::atomic<bool> m_busy{false};
     QString m_currentOperation;
