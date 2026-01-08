@@ -799,6 +799,11 @@ void MainWindow::loadProfile(const QString &path)
     Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
     m_syncEngine->setBackend(backend);
 
+    // Apply profile's conduit enabled settings to sync engine
+    for (const QString &conduitId : m_syncEngine->registeredConduits()) {
+        m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+    }
+
     // Configure install conduit
     m_installConduit->setInstallFolder(m_currentProfile->installFolderPath());
 
@@ -1002,6 +1007,11 @@ void MainWindow::onProfileSettings()
         m_currentProfile->setConduitEnabled("calendar", calendarCheck->isChecked());
         m_currentProfile->setConduitEnabled("todos", todosCheck->isChecked());
         m_currentProfile->save();
+
+        // Update sync engine with new conduit settings
+        for (const QString &conduitId : m_syncEngine->registeredConduits()) {
+            m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+        }
 
         updateWindowTitle();
         m_logWidget->logInfo("Profile settings saved");

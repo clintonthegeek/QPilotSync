@@ -150,6 +150,7 @@ SyncResult Conduit::hotSync(SyncContext *context)
     }
 
     // Process modified backend records that weren't already handled
+    emit logMessage(QString("Processing %1 backend records for changes...").arg(backendRecords.size()));
     for (BackendRecord *backendRecord : backendRecords) {
         if (context->cancelled) break;
         if (processedBackendIds.contains(backendRecord->id)) continue;
@@ -162,6 +163,12 @@ SyncResult Conduit::hotSync(SyncContext *context)
         QString palmId = context->state->palmIdForPC(backendRecord->id);
         bool isNew = palmId.isEmpty();
         bool isModified = !baselineHash.isEmpty() && (currentHash != baselineHash);
+
+        emit logMessage(QString("  Backend: %1 - palmId=%2 isNew=%3 isModified=%4")
+            .arg(backendRecord->description())
+            .arg(palmId.isEmpty() ? "(none)" : palmId)
+            .arg(isNew ? "yes" : "no")
+            .arg(isModified ? "yes" : "no"));
 
         if (isNew || isModified) {
             PilotRecord *palmRecord = nullptr;
@@ -694,14 +701,22 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
             palmStats.deleted++;
         } else {
             // New on Palm - create on backend
+            emit logMessage(QString("Creating PC file from Palm record %1: %2")
+                .arg(palmRecord->id()).arg(palmRecordDescription(palmRecord)));
             BackendRecord *newRecord = palmToBackend(palmRecord, context);
             if (newRecord) {
+                emit logMessage(QString("  Converted to backend record, size=%1 bytes").arg(newRecord->data.size()));
                 QString newId = context->backend->createRecord(context->collectionId, *newRecord);
                 if (!newId.isEmpty()) {
+                    emit logMessage(QString("  Created file: %1").arg(newId));
                     context->state->mapIds(QString::number(palmRecord->id()), newId);
                     pcStats.created++;
+                } else {
+                    emit logMessage("  ERROR: Failed to create file on PC!");
                 }
                 delete newRecord;
+            } else {
+                emit logMessage("  ERROR: palmToBackend() returned null!");
             }
         }
     }
@@ -712,13 +727,20 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
             pcStats.deleted++;
         } else {
             // New on PC - create on Palm
+            emit logMessage(QString("Creating Palm record from PC: %1").arg(backendRecord->description()));
             PilotRecord *newRecord = backendToPalm(backendRecord, context);
             if (newRecord) {
+                emit logMessage(QString("  Converted to Palm record, size=%1 bytes").arg(newRecord->size()));
                 if (writePalmRecord(newRecord, context)) {
+                    emit logMessage(QString("  Written successfully, new Palm ID: %1").arg(newRecord->id()));
                     context->state->mapIds(QString::number(newRecord->id()), backendRecord->id);
                     palmStats.created++;
+                } else {
+                    emit logMessage("  ERROR: Failed to write Palm record!");
                 }
                 delete newRecord;
+            } else {
+                emit logMessage("  ERROR: backendToPalm() returned null!");
             }
         }
     }

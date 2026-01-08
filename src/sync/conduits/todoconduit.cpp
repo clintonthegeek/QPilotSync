@@ -93,7 +93,13 @@ PilotRecord* TodoConduit::backendToPalm(BackendRecord *backendRecord,
 
     // Parse iCalendar content
     QString content = QString::fromUtf8(backendRecord->data);
+    qDebug() << "[TodoConduit] Parsing iCal content, length:" << content.length();
+
     TodoMapper::Todo todo = TodoMapper::iCalToTodo(content);
+    qDebug() << "[TodoConduit] Parsed todo - description:" << todo.description
+             << "priority:" << todo.priority
+             << "complete:" << todo.isComplete
+             << "hasDue:" << !todo.hasIndefiniteDue;
 
     // Look up category index from name if available
     if (!todo.categoryName.isEmpty() && m_categories) {
@@ -102,6 +108,9 @@ PilotRecord* TodoConduit::backendToPalm(BackendRecord *backendRecord,
 
     // Pack to Palm record
     PilotRecord *record = TodoMapper::packTodo(todo);
+    if (!record) {
+        qWarning() << "[TodoConduit] packTodo() returned null!";
+    }
 
     return record;
 }
