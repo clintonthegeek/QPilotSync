@@ -3,6 +3,7 @@
 
 #include "../conduit.h"
 #include "../../palm/categoryinfo.h"
+#include <QByteArray>
 
 namespace Sync {
 
@@ -14,6 +15,7 @@ namespace Sync {
  *   - Local .md files with YAML frontmatter
  *
  * Uses MemoMapper for format conversion.
+ * Supports bidirectional category sync.
  */
 class MemoConduit : public Conduit
 {
@@ -21,7 +23,7 @@ class MemoConduit : public Conduit
 
 public:
     explicit MemoConduit(QObject *parent = nullptr);
-    ~MemoConduit() override = default;
+    ~MemoConduit() override;
 
     // ========== Conduit Identity ==========
 
@@ -42,9 +44,12 @@ public:
 
     QString palmRecordDescription(PilotRecord *record) const override;
 
+protected:
+    bool writeModifiedCategories(SyncContext *context) override;
+
 private:
-    // Category info cache for the current sync session
     CategoryInfo *m_categories = nullptr;
+    QByteArray m_originalAppInfo;  // Store original AppInfo block for write-back
 
     void loadCategories(SyncContext *context);
     QString categoryName(int categoryIndex) const;

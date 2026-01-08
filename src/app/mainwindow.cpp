@@ -5,6 +5,7 @@
 
 #include "../qpilotsync_version.h"
 #include "../palm/kpilotdevicelink.h"
+#include "../palm/devicesession.h"
 #include "../palm/pilotrecord.h"
 #include "../palm/categoryinfo.h"
 #include "../settings.h"
@@ -55,6 +56,7 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
+    , m_session(nullptr)
     , m_deviceLink(nullptr)
     , m_syncEngine(nullptr)
     , m_installConduit(nullptr)
@@ -117,10 +119,8 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    if (m_deviceLink) {
-        m_deviceLink->closeConnection();
-        delete m_deviceLink;
-    }
+    delete m_session;  // DeviceSession handles disconnection
+    m_deviceLink = nullptr;  // Owned by DeviceSession
     delete m_syncEngine;
     delete m_currentProfile;
 }
@@ -220,46 +220,48 @@ void MainWindow::onConnectDevice()
         m_currentProfile->save();
     }
 
-    // Clean up old connection
-    if (m_deviceLink) {
-        m_deviceLink->closeConnection();
-        delete m_deviceLink;
+    // Clean up old session
+    if (m_session) {
+        delete m_session;
+        m_session = nullptr;
         m_deviceLink = nullptr;
     }
 
-    // Create new device link
-    m_deviceLink = new KPilotDeviceLink(devicePath, this);
+    // Create new device session
+    m_session = new DeviceSession(this);
 
-    // Update handlers
-    m_exportHandler->setDeviceLink(m_deviceLink);
-    m_importHandler->setDeviceLink(m_deviceLink);
-
-    // Connect signals
-    connect(m_deviceLink, &KPilotLink::logMessage,
-            m_logWidget, &LogWidget::logInfo);
-    connect(m_deviceLink, &KPilotLink::errorOccurred,
-            m_logWidget, &LogWidget::logError);
-    connect(m_deviceLink, &KPilotLink::statusChanged,
-            this, &MainWindow::onDeviceStatusChanged);
-    connect(m_deviceLink, &KPilotLink::deviceReady,
-            this, &MainWindow::onDeviceReady);
-
-    // Connect async connection complete signal
-    connect(m_deviceLink, &KPilotDeviceLink::connectionComplete,
+    // Connect DeviceSession signals
+    connect(m_session, &DeviceSession::connectionComplete,
             this, &MainWindow::onConnectionComplete);
+    connect(m_session, &DeviceSession::deviceReady,
+            this, &MainWindow::onDeviceReady);
+    connect(m_session, &DeviceSession::logMessage,
+            m_logWidget, &LogWidget::logInfo);
+    connect(m_session, &DeviceSession::errorOccurred,
+            m_logWidget, &LogWidget::logError);
+    connect(m_session, &DeviceSession::progressUpdated,
+            this, &MainWindow::onSyncProgress);
+    connect(m_session, &DeviceSession::palmScreenMessage,
+            this, &MainWindow::onSessionPalmScreen);
+    connect(m_session, &DeviceSession::installFinished,
+            this, &MainWindow::onInstallFinished);
+    connect(m_session, &DeviceSession::syncFinished,
+            this, [this](bool success, const QString &summary) {
+                Q_UNUSED(summary);
+                statusBar()->showMessage(success ? "Sync complete" : "Sync failed");
+            });
+    connect(m_session, &DeviceSession::syncResultReady,
+            this, &MainWindow::onAsyncSyncResult);
 
     m_logWidget->logInfo(QString("Connecting to %1...").arg(devicePath));
     statusBar()->showMessage(QString("Waiting for device on %1...").arg(devicePath));
 
     // Start async connection
-    if (m_deviceLink->openConnection()) {
-        // Connection attempt started - update menu state
-        updateMenuState(false);
-        m_cancelConnectionAction->setEnabled(true);
-    } else {
-        m_logWidget->logError("Failed to start connection");
-        statusBar()->showMessage("Connection failed");
-    }
+    m_session->connectDevice(devicePath);
+
+    // Connection attempt started - update menu state
+    updateMenuState(false);
+    m_cancelConnectionAction->setEnabled(true);
 }
 
 void MainWindow::onConnectionComplete(bool success)
@@ -275,6 +277,13 @@ void MainWindow::onConnectionComplete(bool success)
 
     m_logWidget->logInfo("Connection established!");
     statusBar()->showMessage("Connected");
+
+    // Get device link from session for handlers
+    m_deviceLink = m_session->deviceLink();
+
+    // Update handlers with device link
+    m_exportHandler->setDeviceLink(m_deviceLink);
+    m_importHandler->setDeviceLink(m_deviceLink);
 
     // Read user info to identify device
     struct PilotUser user;
@@ -440,14 +449,16 @@ void MainWindow::registerDeviceWithCurrentProfile(const DeviceFingerprint &finge
 
 void MainWindow::onDisconnectDevice()
 {
-    if (m_deviceLink) {
+    if (m_session && m_session->isConnected()) {
         m_logWidget->logInfo("Disconnecting...");
-        if (m_deviceLink->isConnected()) {
+
+        // End sync if device link available
+        if (m_deviceLink && m_deviceLink->isConnected()) {
             m_logWidget->logInfo("Ending sync session...");
             m_deviceLink->endSync();
         }
-        m_deviceLink->closeConnection();
-        delete m_deviceLink;
+
+        m_session->disconnectDevice();
         m_deviceLink = nullptr;
 
         m_exportHandler->setDeviceLink(nullptr);
@@ -461,8 +472,8 @@ void MainWindow::onDisconnectDevice()
 
 void MainWindow::onCancelConnection()
 {
-    if (m_deviceLink && m_deviceLink->isConnecting()) {
-        m_deviceLink->cancelConnection();
+    if (m_session) {
+        m_session->requestCancel();
         m_logWidget->logInfo("Connection cancelled by user");
     }
     m_cancelConnectionAction->setEnabled(false);
@@ -725,7 +736,7 @@ void MainWindow::initializeSyncEngine()
 
 void MainWindow::runInstallConduit()
 {
-    if (!m_installConduit || !m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_installConduit || !m_session || !m_session->isConnected()) {
         return;
     }
 
@@ -1026,7 +1037,7 @@ void MainWindow::onHotSync()
         m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
         return;
     }
-    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_session || !m_session->isConnected()) {
         m_logWidget->logError("No device connected");
         return;
     }
@@ -1034,8 +1045,8 @@ void MainWindow::onHotSync()
     m_logWidget->logInfo("=== Starting HotSync ===");
     runInstallConduit();
 
-    Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::HotSync);
-    showSyncResult(result, "HotSync");
+    m_pendingSyncOperationName = "HotSync";
+    m_session->requestSync(Sync::SyncMode::HotSync, m_syncEngine);
 }
 
 void MainWindow::onFullSync()
@@ -1044,7 +1055,7 @@ void MainWindow::onFullSync()
         m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
         return;
     }
-    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_session || !m_session->isConnected()) {
         m_logWidget->logError("No device connected");
         return;
     }
@@ -1059,8 +1070,8 @@ void MainWindow::onFullSync()
     m_logWidget->logInfo("=== Starting Full Sync ===");
     runInstallConduit();
 
-    Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::FullSync);
-    showSyncResult(result, "Full Sync");
+    m_pendingSyncOperationName = "Full Sync";
+    m_session->requestSync(Sync::SyncMode::FullSync, m_syncEngine);
 }
 
 void MainWindow::onCopyPalmToPC()
@@ -1069,7 +1080,7 @@ void MainWindow::onCopyPalmToPC()
         m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
         return;
     }
-    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_session || !m_session->isConnected()) {
         m_logWidget->logError("No device connected");
         return;
     }
@@ -1082,8 +1093,8 @@ void MainWindow::onCopyPalmToPC()
     if (ret != QMessageBox::Yes) return;
 
     m_logWidget->logInfo("=== Copying Palm → PC ===");
-    Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::CopyPalmToPC);
-    showSyncResult(result, "Copy Palm → PC");
+    m_pendingSyncOperationName = "Copy Palm → PC";
+    m_session->requestSync(Sync::SyncMode::CopyPalmToPC, m_syncEngine);
 }
 
 void MainWindow::onCopyPCToPalm()
@@ -1092,7 +1103,7 @@ void MainWindow::onCopyPCToPalm()
         m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
         return;
     }
-    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_session || !m_session->isConnected()) {
         m_logWidget->logError("No device connected");
         return;
     }
@@ -1107,8 +1118,8 @@ void MainWindow::onCopyPCToPalm()
     m_logWidget->logInfo("=== Copying PC → Palm ===");
     runInstallConduit();
 
-    Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::CopyPCToPalm);
-    showSyncResult(result, "Copy PC → Palm");
+    m_pendingSyncOperationName = "Copy PC → Palm";
+    m_session->requestSync(Sync::SyncMode::CopyPCToPalm, m_syncEngine);
 }
 
 void MainWindow::onBackup()
@@ -1117,7 +1128,7 @@ void MainWindow::onBackup()
         m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
         return;
     }
-    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_session || !m_session->isConnected()) {
         m_logWidget->logError("No device connected");
         return;
     }
@@ -1131,8 +1142,8 @@ void MainWindow::onBackup()
     if (ret != QMessageBox::Yes) return;
 
     m_logWidget->logInfo("=== Backing up Palm → PC ===");
-    Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::Backup);
-    showSyncResult(result, "Backup");
+    m_pendingSyncOperationName = "Backup";
+    m_session->requestSync(Sync::SyncMode::Backup, m_syncEngine);
 }
 
 void MainWindow::onRestore()
@@ -1141,7 +1152,7 @@ void MainWindow::onRestore()
         m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
         return;
     }
-    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+    if (!m_session || !m_session->isConnected()) {
         m_logWidget->logError("No device connected");
         return;
     }
@@ -1158,8 +1169,8 @@ void MainWindow::onRestore()
     m_logWidget->logInfo("=== Restoring PC → Palm ===");
     runInstallConduit();
 
-    Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::Restore);
-    showSyncResult(result, "Restore");
+    m_pendingSyncOperationName = "Restore";
+    m_session->requestSync(Sync::SyncMode::Restore, m_syncEngine);
 }
 
 void MainWindow::onChangeSyncFolder()
@@ -1174,6 +1185,75 @@ void MainWindow::onOpenSyncFolder()
         return;
     }
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_syncPath));
+}
+
+void MainWindow::onInstallFiles()
+{
+    if (!m_currentProfile) {
+        m_logWidget->logWarning("No profile loaded");
+        return;
+    }
+
+    // Open file dialog for .prc/.pdb files
+    QStringList files = QFileDialog::getOpenFileNames(
+        this,
+        "Select Palm Files to Install",
+        QString(),
+        "Palm Files (*.prc *.pdb *.PRC *.PDB);;All Files (*)");
+
+    if (files.isEmpty()) {
+        return;
+    }
+
+    bool connected = m_session && m_session->isConnected();
+
+    if (connected) {
+        // Install asynchronously via DeviceSession
+        m_logWidget->logInfo("--- Installing files to Palm ---");
+        statusBar()->showMessage("Installing files...");
+        m_session->requestInstall(files);
+        // Results will come via onInstallFinished() slot
+    } else {
+        // Copy to install folder for next sync
+        QString installFolder = m_currentProfile->installFolderPath();
+        QDir installDir(installFolder);
+        if (!installDir.exists()) {
+            installDir.mkpath(".");
+        }
+
+        int copiedCount = 0;
+        int failCount = 0;
+
+        for (const QString &filePath : files) {
+            QFileInfo fileInfo(filePath);
+            QString destPath = installDir.filePath(fileInfo.fileName());
+
+            if (QFile::exists(destPath)) {
+                // Remove existing file first
+                QFile::remove(destPath);
+            }
+
+            if (QFile::copy(filePath, destPath)) {
+                m_logWidget->logInfo(QString("Queued for install: %1").arg(fileInfo.fileName()));
+                copiedCount++;
+            } else {
+                m_logWidget->logError(QString("Failed to copy %1 to install folder")
+                    .arg(fileInfo.fileName()));
+                failCount++;
+            }
+        }
+
+        if (failCount == 0) {
+            QMessageBox::information(this, "Files Queued",
+                QString("%1 file(s) queued for installation.\n\n"
+                        "They will be installed on the next HotSync.")
+                    .arg(copiedCount));
+        } else {
+            QMessageBox::warning(this, "Files Queued",
+                QString("%1 file(s) queued, %2 failed to copy.\nCheck the log for details.")
+                    .arg(copiedCount).arg(failCount));
+        }
+    }
 }
 
 void MainWindow::onSyncStarted()
@@ -1222,6 +1302,45 @@ void MainWindow::showSyncResult(const Sync::SyncResult &result, const QString &o
 
     m_logWidget->logInfo(QString("=== %1 Complete: %2 records, %3 errors ===")
         .arg(operationName).arg(totalRecords).arg(errorCount));
+}
+
+// ========== DeviceSession Callbacks ==========
+
+void MainWindow::onSessionPalmScreen(const QString &message)
+{
+    // The Palm screen message has changed (e.g., "Syncing...", "Installing...")
+    m_logWidget->logInfo(QString("[Palm Screen] %1").arg(message));
+}
+
+void MainWindow::onInstallFinished(bool success, int successCount, int failCount)
+{
+    statusBar()->showMessage("Install complete");
+
+    m_logWidget->logInfo(QString("Installation complete: %1 succeeded, %2 failed")
+        .arg(successCount).arg(failCount));
+
+    if (success && failCount == 0) {
+        QMessageBox::information(this, "Install Complete",
+            QString("Successfully installed %1 file(s) to Palm.").arg(successCount));
+    } else {
+        QMessageBox::warning(this, "Install Complete",
+            QString("Installed %1 file(s), %2 failed.\nCheck the log for details.")
+                .arg(successCount).arg(failCount));
+    }
+}
+
+void MainWindow::onAsyncSyncResult(const Sync::SyncResult &result)
+{
+    // Get the operation name that was pending
+    QString operationName = m_pendingSyncOperationName;
+    m_pendingSyncOperationName.clear();
+
+    if (operationName.isEmpty()) {
+        operationName = "Sync";
+    }
+
+    // Show the result dialog
+    showSyncResult(result, operationName);
 }
 
 // ========== Misc ==========
@@ -1305,6 +1424,15 @@ void MainWindow::updateMenuState(bool connected)
     m_toolbarFullSyncAction->setEnabled(canSync);
     m_toolbarBackupAction->setEnabled(canSync);
     m_toolbarRestoreAction->setEnabled(canSync);
+
+    // Install files - enabled when profile is loaded, label changes based on connection
+    bool hasProfile = m_currentProfile != nullptr;
+    m_installFilesAction->setEnabled(hasProfile);
+    if (connected) {
+        m_installFilesAction->setText("Install Files Now...");
+    } else {
+        m_installFilesAction->setText("Install Files on Next Sync...");
+    }
 
     // Export/Import
     m_exportMemosAction->setEnabled(connected);
@@ -1421,6 +1549,12 @@ void MainWindow::createMenus()
     m_openSyncFolderAction = syncMenu->addAction("Open Sync Folder");
     m_openSyncFolderAction->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
     connect(m_openSyncFolderAction, &QAction::triggered, this, &MainWindow::onOpenSyncFolder);
+
+    syncMenu->addSeparator();
+
+    m_installFilesAction = syncMenu->addAction("Install Files...");
+    m_installFilesAction->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+    connect(m_installFilesAction, &QAction::triggered, this, &MainWindow::onInstallFiles);
 
     // Data menu
     QMenu *dataMenu = menuBar()->addMenu("D&ata");

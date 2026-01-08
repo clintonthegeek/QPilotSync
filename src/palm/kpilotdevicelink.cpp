@@ -758,12 +758,33 @@ bool KPilotDeviceLink::readAppBlock(int dbHandle, unsigned char *buffer, size_t 
 
 bool KPilotDeviceLink::writeAppBlock(int dbHandle, const unsigned char *buffer, size_t size)
 {
-    qDebug() << "[KPilotDeviceLink] writeAppBlock() - not implemented in Phase 2";
-    Q_UNUSED(dbHandle);
-    Q_UNUSED(buffer);
-    Q_UNUSED(size);
-    setError("Write operations not implemented in Phase 2");
-    return false;
+    qDebug() << "[KPilotDeviceLink] writeAppBlock() called for handle:" << dbHandle
+             << "size:" << size;
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] writeAppBlock() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    if (!buffer || size == 0) {
+        qWarning() << "[KPilotDeviceLink] writeAppBlock() - invalid buffer";
+        setError("Invalid buffer");
+        return false;
+    }
+
+    int result = dlp_WriteAppBlock(m_socket, dbHandle,
+                                   reinterpret_cast<const void*>(buffer), size);
+
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_WriteAppBlock() failed, result:" << result;
+        setError(QString("Failed to write AppInfo block: error %1").arg(result));
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] AppInfo block written successfully";
+    emit logMessage(QString("AppInfo block written (%1 bytes)").arg(size));
+    return true;
 }
 
 bool KPilotDeviceLink::beginSync()

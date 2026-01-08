@@ -152,7 +152,8 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
 
     int conduitIndex = 0;
     for (const QString &id : enabledConduits) {
-        if (m_cancelled) {
+        // Check both internal flag and external cancel callback
+        if (m_cancelled || (m_cancelCheck && m_cancelCheck())) {
             emit logMessage("Sync cancelled by user");
             break;
         }
@@ -235,8 +236,16 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     // For now, use conduit ID as collection ID
     context.collectionId = conduitId;
 
+    // Pass cancellation check to conduit
+    if (m_cancelCheck) {
+        cond->setCancelCheck(m_cancelCheck);
+    }
+
     // Run the sync
     result = cond->sync(&context);
+
+    // Clear cancellation check
+    cond->setCancelCheck(nullptr);
 
     result.endTime = QDateTime::currentDateTime();
     m_currentConduit.clear();
@@ -250,6 +259,16 @@ void SyncEngine::cancelSync()
 {
     m_cancelled = true;
     emit logMessage("Cancel requested...");
+}
+
+void SyncEngine::setProgressCallback(std::function<void(int, int, const QString&)> callback)
+{
+    m_progressCallback = callback;
+}
+
+void SyncEngine::setCancelCheck(std::function<bool()> callback)
+{
+    m_cancelCheck = callback;
 }
 
 // ========== Configuration ==========
@@ -298,6 +317,11 @@ void SyncEngine::connectConduitSignals(Conduit *conduit)
 void SyncEngine::onConduitProgress(int current, int total, const QString &message)
 {
     emit progressUpdated(current, total, message);
+
+    // Also call external callback if set (for worker thread integration)
+    if (m_progressCallback) {
+        m_progressCallback(current, total, message);
+    }
 }
 
 void SyncEngine::onConduitLog(const QString &message)

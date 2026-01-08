@@ -10,6 +10,7 @@ class QMenu;
 class QAction;
 class LogWidget;
 class KPilotDeviceLink;
+class DeviceSession;
 class ExportHandler;
 class ImportHandler;
 class Profile;
@@ -64,9 +65,15 @@ private slots:
     void onRestore();
     void onChangeSyncFolder();
     void onOpenSyncFolder();
+    void onInstallFiles();
     void onSyncStarted();
     void onSyncFinished(const Sync::SyncResult &result);
     void onSyncProgress(int current, int total, const QString &message);
+
+    // DeviceSession callbacks
+    void onSessionPalmScreen(const QString &message);
+    void onInstallFinished(bool success, int successCount, int failCount);
+    void onAsyncSyncResult(const Sync::SyncResult &result);
 
     // Misc
     void onQuit();
@@ -105,7 +112,8 @@ private:
     LogWidget *m_logWidget;
 
     // Device connection
-    KPilotDeviceLink *m_deviceLink;
+    DeviceSession *m_session;
+    KPilotDeviceLink *m_deviceLink;  // Kept for export/import handlers compatibility
 
     // Sync engine and conduits
     Sync::SyncEngine *m_syncEngine;
@@ -119,6 +127,9 @@ private:
     // Last used connection settings (for passing to new profiles)
     QString m_lastUsedDevicePath;
     QString m_lastUsedBaudRate;
+
+    // Current async operation
+    QString m_pendingSyncOperationName;
 
     // Profile
     Profile *m_currentProfile;
@@ -142,6 +153,7 @@ private:
     QAction *m_restoreAction;
     QAction *m_changeSyncFolderAction;
     QAction *m_openSyncFolderAction;
+    QAction *m_installFilesAction;
 
     // Toolbar actions (some duplicated for independent enable/disable)
     QAction *m_toolbarDisconnectAction;

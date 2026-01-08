@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QList>
+#include <functional>
 #include "synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
@@ -118,6 +119,14 @@ public:
      * Called before sync() to verify prerequisites.
      */
     virtual bool canSync(const SyncContext *context) const;
+
+    /**
+     * @brief Set external cancel check callback
+     *
+     * When set, this function will be called to check if sync
+     * should be cancelled. Returns true if cancellation requested.
+     */
+    void setCancelCheck(std::function<bool()> callback) { m_cancelCheck = callback; }
 
     // ========== Record Conversion ==========
 
@@ -274,7 +283,24 @@ protected:
      */
     void saveBaseline(SyncContext *context);
 
+    /**
+     * @brief Write modified categories back to Palm
+     *
+     * Called before closing the database if categories were added/modified
+     * during PC→Palm sync. Override in derived classes that handle categories.
+     *
+     * @param context Sync context with device link
+     * @return true if categories were written or no changes needed
+     */
+    virtual bool writeModifiedCategories(SyncContext *context);
+
+    /**
+     * @brief Check if cancellation was requested
+     */
+    bool isCancelled() const { return m_cancelCheck && m_cancelCheck(); }
+
     int m_dbHandle = -1;  ///< Open Palm database handle
+    std::function<bool()> m_cancelCheck;  ///< External cancellation check
 };
 
 } // namespace Sync

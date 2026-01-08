@@ -3,6 +3,7 @@
 
 #include "../conduit.h"
 #include "../../palm/categoryinfo.h"
+#include <QByteArray>
 
 namespace Sync {
 
@@ -14,6 +15,7 @@ namespace Sync {
  *   - Local .ics files (iCalendar VTODO format)
  *
  * Uses TodoMapper for format conversion.
+ * Supports bidirectional category sync.
  */
 class TodoConduit : public Conduit
 {
@@ -21,7 +23,7 @@ class TodoConduit : public Conduit
 
 public:
     explicit TodoConduit(QObject *parent = nullptr);
-    ~TodoConduit() override = default;
+    ~TodoConduit() override;
 
     // ========== Conduit Identity ==========
 
@@ -42,8 +44,12 @@ public:
 
     QString palmRecordDescription(PilotRecord *record) const override;
 
+protected:
+    bool writeModifiedCategories(SyncContext *context) override;
+
 private:
     CategoryInfo *m_categories = nullptr;
+    QByteArray m_originalAppInfo;  // Store original AppInfo block for write-back
 
     void loadCategories(SyncContext *context);
     QString categoryName(int categoryIndex) const;

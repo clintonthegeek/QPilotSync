@@ -3,6 +3,7 @@
 
 #include "../conduit.h"
 #include "../../palm/categoryinfo.h"
+#include <QByteArray>
 
 namespace Sync {
 
@@ -14,7 +15,7 @@ namespace Sync {
  *   - Local .ics files (iCalendar VEVENT format)
  *
  * Uses CalendarMapper for format conversion.
- * For complex iCalendar parsing, will integrate KCalendarCore.
+ * Supports bidirectional category sync.
  */
 class CalendarConduit : public Conduit
 {
@@ -22,7 +23,7 @@ class CalendarConduit : public Conduit
 
 public:
     explicit CalendarConduit(QObject *parent = nullptr);
-    ~CalendarConduit() override = default;
+    ~CalendarConduit() override;
 
     // ========== Conduit Identity ==========
 
@@ -43,8 +44,12 @@ public:
 
     QString palmRecordDescription(PilotRecord *record) const override;
 
+protected:
+    bool writeModifiedCategories(SyncContext *context) override;
+
 private:
     CategoryInfo *m_categories = nullptr;
+    QByteArray m_originalAppInfo;  // Store original AppInfo block for write-back
 
     void loadCategories(SyncContext *context);
     QString categoryName(int categoryIndex) const;

@@ -173,4 +173,8 @@ struct CollectionInfo {
 
 } // namespace Sync
 
+// Register types for Qt metatype system (needed for cross-thread signals)
+Q_DECLARE_METATYPE(Sync::SyncResult)
+Q_DECLARE_METATYPE(Sync::SyncStats)
+
 #endif // SYNCTYPES_H

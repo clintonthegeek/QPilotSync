@@ -14,12 +14,18 @@ TodoConduit::TodoConduit(QObject *parent)
 {
 }
 
+TodoConduit::~TodoConduit()
+{
+    delete m_categories;
+}
+
 void TodoConduit::loadCategories(SyncContext *context)
 {
     if (m_categories) {
         delete m_categories;
         m_categories = nullptr;
     }
+    m_originalAppInfo.clear();
 
     if (!context || !context->deviceLink || m_dbHandle < 0) {
         return;
@@ -31,8 +37,11 @@ void TodoConduit::loadCategories(SyncContext *context)
     size_t appInfoSize = sizeof(appInfoBuf);
 
     if (context->deviceLink->readAppBlock(m_dbHandle, appInfoBuf, &appInfoSize)) {
+        // Store original AppInfo block for later write-back
+        m_originalAppInfo = QByteArray(reinterpret_cast<const char*>(appInfoBuf), appInfoSize);
+
         m_categories->parse(appInfoBuf, appInfoSize);
-        emit logMessage("Loaded todo categories");
+        emit logMessage(QString("Loaded %1 categories").arg(m_categories->usedCategories().size()));
     }
 }
 
@@ -101,9 +110,10 @@ PilotRecord* TodoConduit::backendToPalm(BackendRecord *backendRecord,
              << "complete:" << todo.isComplete
              << "hasDue:" << !todo.hasIndefiniteDue;
 
-    // Look up category index from name if available
+    // Look up or create category from name
     if (!todo.categoryName.isEmpty() && m_categories) {
-        todo.category = m_categories->categoryIndex(todo.categoryName);
+        todo.category = m_categories->getOrCreateCategory(todo.categoryName);
+        qDebug() << "[TodoConduit] Category" << todo.categoryName << "-> index" << todo.category;
     }
 
     // Pack to Palm record
@@ -160,6 +170,67 @@ QString TodoConduit::palmRecordDescription(PilotRecord *record) const
     }
 
     return desc;
+}
+
+bool TodoConduit::writeModifiedCategories(SyncContext *context)
+{
+    // Check if we have categories that were modified
+    if (!m_categories || !m_categories->isDirty()) {
+        return true;  // Nothing to write
+    }
+
+    if (!context || !context->deviceLink || m_dbHandle < 0) {
+        emit logMessage("Warning: Cannot write categories - no device connection");
+        return false;
+    }
+
+    emit logMessage("Writing modified categories back to Palm...");
+
+    // The AppInfo block contains more than just categories for ToDoDB
+    // We need to preserve the app-specific portion and only update categories
+
+    // For ToDoDB, the AppInfo structure is:
+    //   - CategoryAppInfo_t (276 bytes typically)
+    //   - App-specific data (dirty flag, sort order, etc.)
+
+    size_t catSize = m_categories->packSize();
+
+    if (m_originalAppInfo.isEmpty()) {
+        // No original - just write categories
+        QByteArray buffer(catSize, 0);
+        int packed = m_categories->pack(reinterpret_cast<unsigned char*>(buffer.data()), buffer.size());
+        if (packed < 0) {
+            emit logMessage("Warning: Failed to pack categories");
+            return false;
+        }
+
+        if (!context->deviceLink->writeAppBlock(m_dbHandle,
+                reinterpret_cast<const unsigned char*>(buffer.constData()), packed)) {
+            emit logMessage("Warning: Failed to write categories to Palm");
+            return false;
+        }
+    } else {
+        // We have original AppInfo - update category portion and preserve the rest
+        QByteArray buffer = m_originalAppInfo;
+
+        // Pack categories into the beginning of the buffer
+        int packed = m_categories->pack(reinterpret_cast<unsigned char*>(buffer.data()),
+                                         qMin(static_cast<size_t>(buffer.size()), catSize));
+        if (packed < 0) {
+            emit logMessage("Warning: Failed to pack categories");
+            return false;
+        }
+
+        if (!context->deviceLink->writeAppBlock(m_dbHandle,
+                reinterpret_cast<const unsigned char*>(buffer.constData()), buffer.size())) {
+            emit logMessage("Warning: Failed to write AppInfo block to Palm");
+            return false;
+        }
+    }
+
+    m_categories->clearDirty();
+    emit logMessage("Categories updated on Palm");
+    return true;
 }
 
 } // namespace Sync

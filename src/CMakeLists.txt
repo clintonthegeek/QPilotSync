@@ -31,6 +31,10 @@ add_library(QPilotCore STATIC
     palm/kpilotdevicelink.h
     palm/categoryinfo.cpp
     palm/categoryinfo.h
+    palm/deviceworker.cpp
+    palm/deviceworker.h
+    palm/devicesession.cpp
+    palm/devicesession.h
 
     # Data format mappers
     mappers/memomapper.cpp

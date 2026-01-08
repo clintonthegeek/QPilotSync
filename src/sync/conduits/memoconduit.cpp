@@ -14,12 +14,18 @@ MemoConduit::MemoConduit(QObject *parent)
 {
 }
 
+MemoConduit::~MemoConduit()
+{
+    delete m_categories;
+}
+
 void MemoConduit::loadCategories(SyncContext *context)
 {
     if (m_categories) {
         delete m_categories;
         m_categories = nullptr;
     }
+    m_originalAppInfo.clear();
 
     if (!context || !context->deviceLink || m_dbHandle < 0) {
         return;
@@ -31,8 +37,11 @@ void MemoConduit::loadCategories(SyncContext *context)
     size_t appInfoSize = sizeof(appInfoBuf);
 
     if (context->deviceLink->readAppBlock(m_dbHandle, appInfoBuf, &appInfoSize)) {
+        // Store original AppInfo block for later write-back
+        m_originalAppInfo = QByteArray(reinterpret_cast<const char*>(appInfoBuf), appInfoSize);
+
         m_categories->parse(appInfoBuf, appInfoSize);
-        emit logMessage("Loaded memo categories");
+        emit logMessage(QString("Loaded %1 categories").arg(m_categories->usedCategories().size()));
     }
 }
 
@@ -96,9 +105,10 @@ PilotRecord* MemoConduit::backendToPalm(BackendRecord *backendRecord,
     QString content = QString::fromUtf8(backendRecord->data);
     MemoMapper::Memo memo = MemoMapper::markdownToMemo(content);
 
-    // Look up category index from name if available
+    // Look up or create category from name
     if (!memo.categoryName.isEmpty() && m_categories) {
-        memo.category = m_categories->categoryIndex(memo.categoryName);
+        memo.category = m_categories->getOrCreateCategory(memo.categoryName);
+        qDebug() << "[MemoConduit] Category" << memo.categoryName << "-> index" << memo.category;
     }
 
     // Pack to Palm record
@@ -144,6 +154,60 @@ QString MemoConduit::palmRecordDescription(PilotRecord *record) const
     }
 
     return text;
+}
+
+bool MemoConduit::writeModifiedCategories(SyncContext *context)
+{
+    // Check if we have categories that were modified
+    if (!m_categories || !m_categories->isDirty()) {
+        return true;  // Nothing to write
+    }
+
+    if (!context || !context->deviceLink || m_dbHandle < 0) {
+        emit logMessage("Warning: Cannot write categories - no device connection");
+        return false;
+    }
+
+    emit logMessage("Writing modified categories back to Palm...");
+
+    size_t catSize = m_categories->packSize();
+
+    if (m_originalAppInfo.isEmpty()) {
+        // No original - just write categories
+        QByteArray buffer(catSize, 0);
+        int packed = m_categories->pack(reinterpret_cast<unsigned char*>(buffer.data()), buffer.size());
+        if (packed < 0) {
+            emit logMessage("Warning: Failed to pack categories");
+            return false;
+        }
+
+        if (!context->deviceLink->writeAppBlock(m_dbHandle,
+                reinterpret_cast<const unsigned char*>(buffer.constData()), packed)) {
+            emit logMessage("Warning: Failed to write categories to Palm");
+            return false;
+        }
+    } else {
+        // We have original AppInfo - update category portion and preserve the rest
+        QByteArray buffer = m_originalAppInfo;
+
+        // Pack categories into the beginning of the buffer
+        int packed = m_categories->pack(reinterpret_cast<unsigned char*>(buffer.data()),
+                                         qMin(static_cast<size_t>(buffer.size()), catSize));
+        if (packed < 0) {
+            emit logMessage("Warning: Failed to pack categories");
+            return false;
+        }
+
+        if (!context->deviceLink->writeAppBlock(m_dbHandle,
+                reinterpret_cast<const unsigned char*>(buffer.constData()), buffer.size())) {
+            emit logMessage("Warning: Failed to write AppInfo block to Palm");
+            return false;
+        }
+    }
+
+    m_categories->clearDirty();
+    emit logMessage("Categories updated on Palm");
+    return true;
 }
 
 } // namespace Sync

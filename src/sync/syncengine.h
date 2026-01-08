@@ -5,6 +5,7 @@
 #include <QString>
 #include <QList>
 #include <QMap>
+#include <functional>
 #include "synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
@@ -141,6 +142,24 @@ public:
      */
     bool isSyncing() const { return m_syncing; }
 
+    // ========== Worker Thread Callbacks ==========
+
+    /**
+     * @brief Set external progress callback (for worker thread use)
+     *
+     * When set, progress updates will be sent through this callback
+     * in addition to the progressUpdated signal.
+     */
+    void setProgressCallback(std::function<void(int, int, const QString&)> callback);
+
+    /**
+     * @brief Set external cancel check (for worker thread use)
+     *
+     * When set, this function will be called to check if sync
+     * should be cancelled. Returns true if cancellation requested.
+     */
+    void setCancelCheck(std::function<bool()> callback);
+
     // ========== Configuration ==========
 
     /**
@@ -198,6 +217,10 @@ private:
     bool m_syncing = false;
     bool m_cancelled = false;
     QString m_currentConduit;
+
+    // External callbacks for worker thread integration
+    std::function<void(int, int, const QString&)> m_progressCallback;
+    std::function<bool()> m_cancelCheck;
 };
 
 } // namespace Sync

@@ -75,6 +75,11 @@ SyncResult Conduit::sync(SyncContext *context)
     // If sync was successful, clean up and reset flags
     // Skip this for Backup mode - backup shouldn't modify Palm state
     if (result.success && context->mode != SyncMode::Backup) {
+        // Write modified categories back to Palm (if any were added)
+        if (!writeModifiedCategories(context)) {
+            emit logMessage("Warning: Failed to write modified categories");
+        }
+
         // Clean up deleted records from Palm database
         context->deviceLink->cleanUpDatabase(m_dbHandle);
 
@@ -126,7 +131,7 @@ SyncResult Conduit::hotSync(SyncContext *context)
 
     // Process modified Palm records
     for (PilotRecord *palmRecord : palmRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
 
         QString palmId = QString::number(palmRecord->id());
         QString pcId = context->state->pcIdForPalm(palmId);
@@ -152,7 +157,7 @@ SyncResult Conduit::hotSync(SyncContext *context)
     // Process modified backend records that weren't already handled
     emit logMessage(QString("Processing %1 backend records for changes...").arg(backendRecords.size()));
     for (BackendRecord *backendRecord : backendRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (processedBackendIds.contains(backendRecord->id)) continue;
 
         // Check if this record has been modified since baseline
@@ -205,7 +210,7 @@ SyncResult Conduit::hotSync(SyncContext *context)
 
     QStringList allMappedPcIds = context->state->allPCIds();
     for (const QString &pcId : allMappedPcIds) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (existingPcIds.contains(pcId)) continue;
 
         // PC file was deleted - find and delete corresponding Palm record
@@ -248,7 +253,7 @@ SyncResult Conduit::fullSync(SyncContext *context)
     // Process all Palm records
     int count = 0;
     for (PilotRecord *palmRecord : palmRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
 
         QString palmId = QString::number(palmRecord->id());
         QString pcId = context->state->pcIdForPalm(palmId);
@@ -278,7 +283,7 @@ SyncResult Conduit::fullSync(SyncContext *context)
 
     // Process backend records without Palm mappings (new on PC)
     for (BackendRecord *backendRecord : backendRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (processedBackendIds.contains(backendRecord->id)) continue;
 
         syncRecord(nullptr, backendRecord, context, result.palmStats, result.pcStats);
@@ -312,7 +317,7 @@ SyncResult Conduit::firstSync(SyncContext *context)
     // Try to match Palm records to existing backend records
     int count = 0;
     for (PilotRecord *palmRecord : palmRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (palmRecord->isDeleted()) {
             result.palmStats.deleted++;
             continue;
@@ -361,7 +366,7 @@ SyncResult Conduit::firstSync(SyncContext *context)
 
     // Handle unmatched backend records (new on PC, need to create on Palm)
     for (BackendRecord *backendRecord : backendRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (matchedBackendIds.contains(backendRecord->id)) continue;
         if (backendRecord->isDeleted) continue;
 
@@ -398,7 +403,7 @@ SyncResult Conduit::copyPalmToPC(SyncContext *context)
 
     int count = 0;
     for (PilotRecord *palmRecord : palmRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (palmRecord->isDeleted()) continue;
 
         QString palmId = QString::number(palmRecord->id());
@@ -464,7 +469,7 @@ SyncResult Conduit::copyPCToPalm(SyncContext *context)
 
     int count = 0;
     for (BackendRecord *backendRecord : backendRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (backendRecord->isDeleted) continue;
 
         QString palmId = context->state->palmIdForPC(backendRecord->id);
@@ -512,7 +517,7 @@ SyncResult Conduit::backup(SyncContext *context)
 
     int count = 0;
     for (PilotRecord *palmRecord : palmRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (palmRecord->isDeleted()) continue;
 
         QString palmId = QString::number(palmRecord->id());
@@ -573,7 +578,7 @@ SyncResult Conduit::restore(SyncContext *context)
 
     int count = 0;
     for (BackendRecord *backendRecord : backendRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         if (backendRecord->isDeleted) continue;
 
         QString palmId = context->state->palmIdForPC(backendRecord->id);
@@ -604,7 +609,7 @@ SyncResult Conduit::restore(SyncContext *context)
 
     // Delete Palm records that no longer exist on PC
     for (PilotRecord *existingRecord : existingPalmRecords) {
-        if (context->cancelled) break;
+        if (context->cancelled || isCancelled()) break;
         QString palmId = QString::number(existingRecord->id());
 
         if (!restoredPalmIds.contains(palmId)) {
@@ -898,6 +903,14 @@ void Conduit::saveBaseline(SyncContext *context)
     context->state->saveBaseline(hashes);
 
     qDeleteAll(records);
+}
+
+bool Conduit::writeModifiedCategories(SyncContext *context)
+{
+    // Default implementation - no categories to write
+    // Override in derived classes that handle categories
+    Q_UNUSED(context);
+    return true;
 }
 
 } // namespace Sync
