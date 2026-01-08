@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QStatusBar>
+#include <QToolBar>
 #include <QTextEdit>
 #include <QMessageBox>
 #include <QVBoxLayout>
@@ -19,6 +20,12 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
+#include <QCoreApplication>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QMdiArea>
+#include <QMdiSubWindow>
+#include <QStyle>
 #include <cstring>
 
 // pilot-link headers for PilotUser and SysInfo
@@ -33,6 +40,14 @@
 #include "mappers/todomapper.h"
 #include "palm/categoryinfo.h"
 #include "settings.h"
+
+// Sync engine
+#include "sync/syncengine.h"
+#include "sync/localfilebackend.h"
+#include "sync/conduits/memoconduit.h"
+#include "sync/conduits/contactconduit.h"
+#include "sync/conduits/calendarconduit.h"
+#include "sync/conduits/todoconduit.h"
 
 // Simple log widget for now
 class LogWidget : public QTextEdit {
@@ -62,7 +77,7 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr) : QMainWindow(parent), m_deviceLink(nullptr) {
+    MainWindow(QWidget *parent = nullptr) : QMainWindow(parent), m_deviceLink(nullptr), m_syncEngine(nullptr) {
         setWindowTitle("QPilotSync - Palm Pilot Synchronization");
         setMinimumSize(900, 600);
 
@@ -72,12 +87,23 @@ public:
             restoreGeometry(savedGeometry);
         }
 
-        // Create central widget with log viewer
-        m_logWidget = new LogWidget(this);
-        setCentralWidget(m_logWidget);
+        // Create MDI area as central widget
+        m_mdiArea = new QMdiArea(this);
+        m_mdiArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        m_mdiArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        m_mdiArea->setViewMode(QMdiArea::SubWindowView);
+        m_mdiArea->setDocumentMode(true);
+        setCentralWidget(m_mdiArea);
 
-        // Create menu bar
+        // Create log widget as MDI subwindow
+        createLogWindow();
+
+        // Initialize sync engine
+        initializeSyncEngine();
+
+        // Create menu bar and toolbar
         createMenus();
+        createToolBar();
 
         // Status bar
         statusBar()->showMessage("Ready - No device connected");
@@ -86,6 +112,7 @@ public:
         m_logWidget->logInfo("QPilotSync " + QString(QPILOTSYNC_VERSION_STRING) + " initialized");
         m_logWidget->logInfo("Ready to connect to Palm device");
         m_logWidget->logInfo("Go to Device → Connect to Device to start");
+        m_logWidget->logInfo(QString("Sync folder: %1").arg(m_syncPath));
     }
 
     ~MainWindow() {
@@ -97,6 +124,8 @@ public:
             m_deviceLink->closeConnection();
             delete m_deviceLink;
         }
+
+        delete m_syncEngine;
     }
 
 private slots:
@@ -162,11 +191,11 @@ private slots:
         // Create device link
         m_deviceLink = new KPilotDeviceLink(devicePath, this);
 
-        // Connect signals
+        // Connect signals - use lambdas so log widget can be recreated
         connect(m_deviceLink, &KPilotLink::logMessage,
-                m_logWidget, &LogWidget::logInfo);
+                this, [this](const QString &msg) { if (m_logWidget) m_logWidget->logInfo(msg); });
         connect(m_deviceLink, &KPilotLink::errorOccurred,
-                m_logWidget, &LogWidget::logError);
+                this, [this](const QString &msg) { if (m_logWidget) m_logWidget->logError(msg); });
         connect(m_deviceLink, &KPilotLink::statusChanged,
                 this, &MainWindow::onDeviceStatusChanged);
         connect(m_deviceLink, &KPilotLink::deviceReady,
@@ -257,6 +286,9 @@ private slots:
                 m_logWidget->logInfo(QString("Product ID: %1")
                     .arg(QString::fromUtf8(sysInfo.prodID)));
             }
+
+            // Set device link on sync engine
+            m_syncEngine->setDeviceLink(m_deviceLink);
 
             // Enable device-dependent menu items
             updateMenuState(true);
@@ -1552,48 +1584,92 @@ private:
         connect(m_deviceInfoAction, &QAction::triggered, this, &MainWindow::onDeviceInfo);
         m_deviceInfoAction->setEnabled(false);
 
-        // Sync menu
+        // Sync menu - new sync engine operations
         QMenu *syncMenu = menuBar()->addMenu("&Sync");
 
-        m_exportMemosAction = syncMenu->addAction("Export &Memos...");
-        connect(m_exportMemosAction, &QAction::triggered, this, &MainWindow::onExportMemos);
-        m_exportMemosAction->setEnabled(false);
+        m_hotSyncAction = syncMenu->addAction("&HotSync");
+        m_hotSyncAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_H));
+        connect(m_hotSyncAction, &QAction::triggered, this, &MainWindow::onHotSync);
+        m_hotSyncAction->setEnabled(false);
 
-        m_exportContactsAction = syncMenu->addAction("Export &Contacts...");
-        connect(m_exportContactsAction, &QAction::triggered, this, &MainWindow::onExportContacts);
-        m_exportContactsAction->setEnabled(false);
-
-        m_exportCalendarAction = syncMenu->addAction("Export C&alendar...");
-        connect(m_exportCalendarAction, &QAction::triggered, this, &MainWindow::onExportCalendar);
-        m_exportCalendarAction->setEnabled(false);
-
-        m_exportTodosAction = syncMenu->addAction("Export &ToDos...");
-        connect(m_exportTodosAction, &QAction::triggered, this, &MainWindow::onExportTodos);
-        m_exportTodosAction->setEnabled(false);
+        m_fullSyncAction = syncMenu->addAction("&Full Sync");
+        m_fullSyncAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H));
+        connect(m_fullSyncAction, &QAction::triggered, this, &MainWindow::onFullSync);
+        m_fullSyncAction->setEnabled(false);
 
         syncMenu->addSeparator();
 
-        m_exportAllAction = syncMenu->addAction("Export &All...");
+        m_copyPalmToPCAction = syncMenu->addAction("Copy &Palm → PC");
+        connect(m_copyPalmToPCAction, &QAction::triggered, this, &MainWindow::onCopyPalmToPC);
+        m_copyPalmToPCAction->setEnabled(false);
+
+        m_copyPCToPalmAction = syncMenu->addAction("Copy P&C → Palm");
+        connect(m_copyPCToPalmAction, &QAction::triggered, this, &MainWindow::onCopyPCToPalm);
+        m_copyPCToPalmAction->setEnabled(false);
+
+        syncMenu->addSeparator();
+
+        m_backupAction = syncMenu->addAction("&Backup Palm → PC");
+        m_backupAction->setToolTip("Backup Palm data to PC (preserves old files)");
+        connect(m_backupAction, &QAction::triggered, this, &MainWindow::onBackup);
+        m_backupAction->setEnabled(false);
+
+        m_restoreAction = syncMenu->addAction("&Restore PC → Palm");
+        m_restoreAction->setToolTip("Restore Palm from PC backup (full restore)");
+        connect(m_restoreAction, &QAction::triggered, this, &MainWindow::onRestore);
+        m_restoreAction->setEnabled(false);
+
+        syncMenu->addSeparator();
+
+        m_changeSyncFolderAction = syncMenu->addAction("Change Sync &Folder...");
+        connect(m_changeSyncFolderAction, &QAction::triggered, this, &MainWindow::onChangeSyncFolder);
+
+        m_openSyncFolderAction = syncMenu->addAction("&Open Sync Folder");
+        connect(m_openSyncFolderAction, &QAction::triggered, this, &MainWindow::onOpenSyncFolder);
+
+        // Legacy Export submenu (kept for compatibility during development)
+        syncMenu->addSeparator();
+        QMenu *legacyExportMenu = syncMenu->addMenu("Legacy Export");
+
+        m_exportMemosAction = legacyExportMenu->addAction("Export &Memos...");
+        connect(m_exportMemosAction, &QAction::triggered, this, &MainWindow::onExportMemos);
+        m_exportMemosAction->setEnabled(false);
+
+        m_exportContactsAction = legacyExportMenu->addAction("Export &Contacts...");
+        connect(m_exportContactsAction, &QAction::triggered, this, &MainWindow::onExportContacts);
+        m_exportContactsAction->setEnabled(false);
+
+        m_exportCalendarAction = legacyExportMenu->addAction("Export C&alendar...");
+        connect(m_exportCalendarAction, &QAction::triggered, this, &MainWindow::onExportCalendar);
+        m_exportCalendarAction->setEnabled(false);
+
+        m_exportTodosAction = legacyExportMenu->addAction("Export &ToDos...");
+        connect(m_exportTodosAction, &QAction::triggered, this, &MainWindow::onExportTodos);
+        m_exportTodosAction->setEnabled(false);
+
+        legacyExportMenu->addSeparator();
+
+        m_exportAllAction = legacyExportMenu->addAction("Export &All...");
         m_exportAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E));
         connect(m_exportAllAction, &QAction::triggered, this, &MainWindow::onExportAll);
         m_exportAllAction->setEnabled(false);
 
-        syncMenu->addSeparator();
+        // Legacy Import submenu
+        QMenu *legacyImportMenu = syncMenu->addMenu("Legacy Import");
 
-        // Import actions for testing write operations
-        m_importMemoAction = syncMenu->addAction("Import Memo (Markdown)...");
+        m_importMemoAction = legacyImportMenu->addAction("Import Memo (Markdown)...");
         connect(m_importMemoAction, &QAction::triggered, this, &MainWindow::onImportMemo);
         m_importMemoAction->setEnabled(false);
 
-        m_importContactAction = syncMenu->addAction("Import Contact (vCard)...");
+        m_importContactAction = legacyImportMenu->addAction("Import Contact (vCard)...");
         connect(m_importContactAction, &QAction::triggered, this, &MainWindow::onImportContact);
         m_importContactAction->setEnabled(false);
 
-        m_importEventAction = syncMenu->addAction("Import Event (iCal)...");
+        m_importEventAction = legacyImportMenu->addAction("Import Event (iCal)...");
         connect(m_importEventAction, &QAction::triggered, this, &MainWindow::onImportEvent);
         m_importEventAction->setEnabled(false);
 
-        m_importTodoAction = syncMenu->addAction("Import ToDo (iCal)...");
+        m_importTodoAction = legacyImportMenu->addAction("Import ToDo (iCal)...");
         connect(m_importTodoAction, &QAction::triggered, this, &MainWindow::onImportTodo);
         m_importTodoAction->setEnabled(false);
 
@@ -1613,11 +1689,132 @@ private:
         connect(aboutQtAction, &QAction::triggered, qApp, &QApplication::aboutQt);
     }
 
+    void createToolBar() {
+        // Main toolbar
+        QToolBar *mainToolBar = addToolBar("Main");
+        mainToolBar->setObjectName("MainToolBar");
+        mainToolBar->setMovable(false);
+        mainToolBar->setIconSize(QSize(24, 24));
+        mainToolBar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+
+        // === Device Group ===
+        QAction *connectAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_ComputerIcon),
+            "Connect");
+        connectAction->setToolTip("Connect to Palm device (Ctrl+D)");
+        connect(connectAction, &QAction::triggered, this, &MainWindow::onConnectDevice);
+
+        m_toolbarDisconnectAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_DialogCloseButton),
+            "Disconnect");
+        m_toolbarDisconnectAction->setToolTip("Disconnect from device");
+        m_toolbarDisconnectAction->setEnabled(false);
+        connect(m_toolbarDisconnectAction, &QAction::triggered, this, &MainWindow::onDisconnectDevice);
+
+        mainToolBar->addSeparator();
+
+        // === Sync Group ===
+        m_toolbarHotSyncAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_BrowserReload),
+            "HotSync");
+        m_toolbarHotSyncAction->setToolTip("Sync modified records (Ctrl+H)");
+        m_toolbarHotSyncAction->setEnabled(false);
+        connect(m_toolbarHotSyncAction, &QAction::triggered, this, &MainWindow::onHotSync);
+
+        m_toolbarFullSyncAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_DialogApplyButton),
+            "Full Sync");
+        m_toolbarFullSyncAction->setToolTip("Compare all records");
+        m_toolbarFullSyncAction->setEnabled(false);
+        connect(m_toolbarFullSyncAction, &QAction::triggered, this, &MainWindow::onFullSync);
+
+        mainToolBar->addSeparator();
+
+        // === Backup/Restore Group ===
+        m_toolbarBackupAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_DialogSaveButton),
+            "Backup");
+        m_toolbarBackupAction->setToolTip("Backup Palm → PC (preserves old files)");
+        m_toolbarBackupAction->setEnabled(false);
+        connect(m_toolbarBackupAction, &QAction::triggered, this, &MainWindow::onBackup);
+
+        m_toolbarRestoreAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_DialogOpenButton),
+            "Restore");
+        m_toolbarRestoreAction->setToolTip("Restore PC → Palm (full restore)");
+        m_toolbarRestoreAction->setEnabled(false);
+        connect(m_toolbarRestoreAction, &QAction::triggered, this, &MainWindow::onRestore);
+
+        mainToolBar->addSeparator();
+
+        // === Folder Group ===
+        QAction *openFolderAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_DirOpenIcon),
+            "Open Folder");
+        openFolderAction->setToolTip("Open sync folder in file manager");
+        connect(openFolderAction, &QAction::triggered, this, &MainWindow::onOpenSyncFolder);
+
+        // Add stretch to push remaining items to the right (if any)
+        QWidget *spacer = new QWidget();
+        spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        mainToolBar->addWidget(spacer);
+
+        // === View Group (right side) ===
+        QAction *showLogAction = mainToolBar->addAction(
+            style()->standardIcon(QStyle::SP_FileDialogDetailedView),
+            "Log");
+        showLogAction->setToolTip("Show/maximize sync log window");
+        connect(showLogAction, &QAction::triggered, this, &MainWindow::showLogWindow);
+    }
+
+    void createLogWindow() {
+        m_logWidget = new LogWidget();
+        m_logSubWindow = m_mdiArea->addSubWindow(m_logWidget);
+        m_logSubWindow->setWindowTitle("Sync Log");
+        m_logSubWindow->setWindowIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+        m_logSubWindow->showMaximized();
+
+        // When the subwindow is closed/destroyed, null our pointers
+        connect(m_logSubWindow, &QObject::destroyed, this, [this]() {
+            m_logSubWindow = nullptr;
+            m_logWidget = nullptr;
+        });
+    }
+
+    void showLogWindow() {
+        if (!m_logSubWindow) {
+            // Recreate the log window if it was closed
+            createLogWindow();
+            m_logWidget->logInfo("Log window reopened");
+        } else {
+            m_logSubWindow->show();
+            m_logSubWindow->showMaximized();
+        }
+        m_mdiArea->setActiveSubWindow(m_logSubWindow);
+    }
+
     void updateMenuState(bool connected) {
         m_disconnectAction->setEnabled(connected);
         m_listDatabasesAction->setEnabled(connected);
         m_setUserInfoAction->setEnabled(connected);
         m_deviceInfoAction->setEnabled(connected);
+
+        // New sync operations
+        m_hotSyncAction->setEnabled(connected);
+        m_fullSyncAction->setEnabled(connected);
+        m_copyPalmToPCAction->setEnabled(connected);
+        m_copyPCToPalmAction->setEnabled(connected);
+        m_backupAction->setEnabled(connected);
+        m_restoreAction->setEnabled(connected);
+
+        // Toolbar actions
+        m_toolbarDisconnectAction->setEnabled(connected);
+        m_toolbarHotSyncAction->setEnabled(connected);
+        m_toolbarFullSyncAction->setEnabled(connected);
+        m_toolbarBackupAction->setEnabled(connected);
+        m_toolbarRestoreAction->setEnabled(connected);
+
+        // Legacy export/import operations
         m_exportMemosAction->setEnabled(connected);
         m_exportContactsAction->setEnabled(connected);
         m_exportCalendarAction->setEnabled(connected);
@@ -1629,8 +1826,16 @@ private:
         m_importTodoAction->setEnabled(connected);
     }
 
+    // MDI area and log window
+    QMdiArea *m_mdiArea;
+    QMdiSubWindow *m_logSubWindow;
     LogWidget *m_logWidget;
+
     KPilotDeviceLink *m_deviceLink;
+
+    // Sync engine
+    Sync::SyncEngine *m_syncEngine;
+    QString m_syncPath;
 
     // Menu actions that need to be enabled/disabled
     QAction *m_disconnectAction;
@@ -1638,6 +1843,25 @@ private:
     QAction *m_listDatabasesAction;
     QAction *m_setUserInfoAction;
     QAction *m_deviceInfoAction;
+
+    // Sync menu actions
+    QAction *m_hotSyncAction;
+    QAction *m_fullSyncAction;
+    QAction *m_copyPalmToPCAction;
+    QAction *m_copyPCToPalmAction;
+    QAction *m_backupAction;
+    QAction *m_restoreAction;
+    QAction *m_changeSyncFolderAction;
+    QAction *m_openSyncFolderAction;
+
+    // Toolbar actions
+    QAction *m_toolbarDisconnectAction;
+    QAction *m_toolbarHotSyncAction;
+    QAction *m_toolbarFullSyncAction;
+    QAction *m_toolbarBackupAction;
+    QAction *m_toolbarRestoreAction;
+
+    // Legacy export/import actions
     QAction *m_exportMemosAction;
     QAction *m_exportContactsAction;
     QAction *m_exportCalendarAction;
@@ -1647,6 +1871,237 @@ private:
     QAction *m_importContactAction;
     QAction *m_importEventAction;
     QAction *m_importTodoAction;
+
+    // ========== Private Methods ==========
+
+    void initializeSyncEngine() {
+        // Use ./PalmSync/ relative to project root for development testing
+        // In production, this would be ~/PalmSync/ or configurable
+        QString appDir = QCoreApplication::applicationDirPath();
+        m_syncPath = QDir(appDir).filePath("../PalmSync");
+
+        // Normalize path
+        m_syncPath = QDir::cleanPath(m_syncPath);
+
+        // Ensure directories exist
+        QDir syncDir(m_syncPath);
+        syncDir.mkpath("memos");
+        syncDir.mkpath("contacts");
+        syncDir.mkpath("calendar");
+        syncDir.mkpath("todos");
+
+        // Create sync engine
+        m_syncEngine = new Sync::SyncEngine(this);
+
+        // Set state directory within PalmSync (hidden .state folder)
+        QString stateDir = QDir(m_syncPath).filePath(".state");
+        QDir().mkpath(stateDir);
+        m_syncEngine->setStateDirectory(stateDir);
+
+        // Create and set backend
+        Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
+        m_syncEngine->setBackend(backend);
+
+        // Register conduits
+        m_syncEngine->registerConduit(new Sync::MemoConduit());
+        m_syncEngine->registerConduit(new Sync::ContactConduit());
+        m_syncEngine->registerConduit(new Sync::CalendarConduit());
+        m_syncEngine->registerConduit(new Sync::TodoConduit());
+
+        // Connect signals - use lambdas so log widget can be recreated
+        connect(m_syncEngine, &Sync::SyncEngine::logMessage,
+                this, [this](const QString &msg) { if (m_logWidget) m_logWidget->logInfo(msg); });
+        connect(m_syncEngine, &Sync::SyncEngine::errorOccurred,
+                this, [this](const QString &msg) { if (m_logWidget) m_logWidget->logError(msg); });
+        connect(m_syncEngine, &Sync::SyncEngine::syncStarted,
+                this, &MainWindow::onSyncStarted);
+        connect(m_syncEngine, &Sync::SyncEngine::syncFinished,
+                this, &MainWindow::onSyncFinished);
+        connect(m_syncEngine, &Sync::SyncEngine::progressUpdated,
+                this, &MainWindow::onSyncProgress);
+    }
+
+private slots:
+    // ========== Sync Slots ==========
+
+    void onHotSync() {
+        if (!m_deviceLink || !m_deviceLink->isConnected()) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        m_logWidget->logInfo("=== Starting HotSync ===");
+        Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::HotSync);
+        showSyncResult(result, "HotSync");
+    }
+
+    void onFullSync() {
+        if (!m_deviceLink || !m_deviceLink->isConnected()) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        int ret = QMessageBox::question(this, "Full Sync",
+            "Full Sync will compare all records on both sides.\n"
+            "This may take longer than HotSync.\n\nProceed?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+        if (ret != QMessageBox::Yes) return;
+
+        m_logWidget->logInfo("=== Starting Full Sync ===");
+        Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::FullSync);
+        showSyncResult(result, "Full Sync");
+    }
+
+    void onCopyPalmToPC() {
+        if (!m_deviceLink || !m_deviceLink->isConnected()) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        int ret = QMessageBox::warning(this, "Copy Palm → PC",
+            "This will overwrite PC data with Palm data.\n"
+            "Any changes on the PC will be lost.\n\nProceed?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+        if (ret != QMessageBox::Yes) return;
+
+        m_logWidget->logInfo("=== Copying Palm → PC ===");
+        Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::CopyPalmToPC);
+        showSyncResult(result, "Copy Palm → PC");
+    }
+
+    void onCopyPCToPalm() {
+        if (!m_deviceLink || !m_deviceLink->isConnected()) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        int ret = QMessageBox::warning(this, "Copy PC → Palm",
+            "This will overwrite Palm data with PC data.\n"
+            "Any changes on the Palm will be lost.\n\nProceed?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+        if (ret != QMessageBox::Yes) return;
+
+        m_logWidget->logInfo("=== Copying PC → Palm ===");
+        Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::CopyPCToPalm);
+        showSyncResult(result, "Copy PC → Palm");
+    }
+
+    void onBackup() {
+        if (!m_deviceLink || !m_deviceLink->isConnected()) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        int ret = QMessageBox::question(this, "Backup Palm → PC",
+            "This will backup all Palm data to your PC.\n"
+            "Existing backup files will be updated.\n"
+            "Old files not on Palm will be preserved.\n\nProceed?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+        if (ret != QMessageBox::Yes) return;
+
+        m_logWidget->logInfo("=== Backing up Palm → PC ===");
+        Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::Backup);
+        showSyncResult(result, "Backup");
+    }
+
+    void onRestore() {
+        if (!m_deviceLink || !m_deviceLink->isConnected()) {
+            m_logWidget->logError("No device connected");
+            return;
+        }
+
+        int ret = QMessageBox::warning(this, "Restore PC → Palm",
+            "⚠️ FULL RESTORE\n\n"
+            "This will completely overwrite your Palm with PC backup data.\n"
+            "Palm records not in the backup WILL BE DELETED.\n\n"
+            "Are you sure you want to restore?",
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+        if (ret != QMessageBox::Yes) return;
+
+        m_logWidget->logInfo("=== Restoring PC → Palm ===");
+        Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::Restore);
+        showSyncResult(result, "Restore");
+    }
+
+    void onChangeSyncFolder() {
+        QString newPath = QFileDialog::getExistingDirectory(this,
+            "Select Sync Folder",
+            m_syncPath,
+            QFileDialog::ShowDirsOnly);
+
+        if (newPath.isEmpty()) return;
+
+        m_syncPath = newPath;
+
+        // Create subdirectories
+        QDir syncDir(m_syncPath);
+        syncDir.mkpath("memos");
+        syncDir.mkpath("contacts");
+        syncDir.mkpath("calendar");
+        syncDir.mkpath("todos");
+
+        // Update backend
+        Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
+        m_syncEngine->setBackend(backend);
+
+        m_logWidget->logInfo(QString("Sync folder changed to: %1").arg(m_syncPath));
+    }
+
+    void onOpenSyncFolder() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(m_syncPath));
+    }
+
+    void onSyncStarted() {
+        statusBar()->showMessage("Syncing...");
+        // Could disable menu items during sync
+    }
+
+    void onSyncFinished(const Sync::SyncResult &result) {
+        Q_UNUSED(result)
+        statusBar()->showMessage("Sync complete");
+    }
+
+    void onSyncProgress(int current, int total, const QString &message) {
+        statusBar()->showMessage(QString("[%1/%2] %3").arg(current).arg(total).arg(message));
+    }
+
+    void showSyncResult(const Sync::SyncResult &result, const QString &operationName) {
+        int totalRecords = result.palmStats.total() + result.pcStats.total();
+        int errorCount = result.palmStats.errors + result.pcStats.errors;
+
+        QString summary = QString("%1 Complete!\n\n"
+                                  "Palm: %2\n"
+                                  "PC: %3\n"
+                                  "Errors: %4")
+            .arg(operationName)
+            .arg(result.palmStats.summary())
+            .arg(result.pcStats.summary())
+            .arg(errorCount);
+
+        if (result.success && errorCount == 0) {
+            QMessageBox::information(this, operationName + " Complete", summary);
+        } else {
+            if (!result.errorMessage.isEmpty()) {
+                summary += "\n\nError: " + result.errorMessage;
+            }
+            for (const auto &warning : result.warnings) {
+                if (warning.severity == Sync::WarningSeverity::Error) {
+                    summary += "\n• " + warning.message;
+                }
+            }
+            QMessageBox::warning(this, operationName + " Complete", summary);
+        }
+
+        m_logWidget->logInfo(QString("=== %1 Complete: %2 records, %3 errors ===")
+            .arg(operationName)
+            .arg(totalRecords)
+            .arg(errorCount));
+    }
 };
 
 int main(int argc, char *argv[]) {

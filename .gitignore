@@ -131,3 +131,4 @@ kdepim-*/
 # pilot-link source (external dependency - built via ExternalProject)
 pilot-link/
 pilot-link-git/
+PalmSync/

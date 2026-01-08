@@ -17,7 +17,7 @@ namespace Sync {
  * and designed for integration with git-based state tracking.
  *
  * State is stored in:
- *   ~/.qpilotsync/<username>/<conduit>/
+ *   <stateBaseDir>/<username>/<conduit>/
  *     ├── mappings.json    - ID mappings between Palm and PC
  *     ├── baseline/        - Snapshot of PC data after last sync
  *     └── sync.log         - Audit log of sync operations
@@ -184,6 +184,14 @@ public:
      * @brief Get the state directory path
      */
     QString statePath() const;
+
+    /**
+     * @brief Set the base directory for state storage
+     * @param baseDir Base directory (state will be in baseDir/userName/conduitId/)
+     *
+     * Must be called before load() or save().
+     */
+    void setStateDirectory(const QString &baseDir);
 
 signals:
     void stateChanged();

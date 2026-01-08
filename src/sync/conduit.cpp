@@ -60,10 +60,28 @@ SyncResult Conduit::sync(SyncContext *context)
             case SyncMode::CopyPCToPalm:
                 result = copyPCToPalm(context);
                 break;
+            case SyncMode::Backup:
+                result = backup(context);
+                break;
+            case SyncMode::Restore:
+                result = restore(context);
+                break;
             default:
                 result = hotSync(context);
                 break;
         }
+    }
+
+    // If sync was successful, clean up and reset flags
+    // Skip this for Backup mode - backup shouldn't modify Palm state
+    if (result.success && context->mode != SyncMode::Backup) {
+        // Clean up deleted records from Palm database
+        context->deviceLink->cleanUpDatabase(m_dbHandle);
+
+        // Reset dirty flags on Palm records
+        context->deviceLink->resetSyncFlags(m_dbHandle);
+
+        emit logMessage("Cleared Palm sync flags");
     }
 
     // Close Palm database
@@ -72,6 +90,9 @@ SyncResult Conduit::sync(SyncContext *context)
 
     // Update sync state
     if (result.success) {
+        // Save baseline hashes for all current backend records
+        saveBaseline(context);
+
         context->state->setLastSyncTime(QDateTime::currentDateTime());
         context->state->save();
     }
@@ -128,8 +149,68 @@ SyncResult Conduit::hotSync(SyncContext *context)
         }
     }
 
-    // TODO: Process modified backend records that weren't already handled
-    // This requires change detection on the backend side
+    // Process modified backend records that weren't already handled
+    for (BackendRecord *backendRecord : backendRecords) {
+        if (context->cancelled) break;
+        if (processedBackendIds.contains(backendRecord->id)) continue;
+
+        // Check if this record has been modified since baseline
+        QString currentHash = backendRecord->contentHash;
+        QString baselineHash = context->state->baselineHash(backendRecord->id);
+
+        // If no baseline, check if it's a new file (not in mappings)
+        QString palmId = context->state->palmIdForPC(backendRecord->id);
+        bool isNew = palmId.isEmpty();
+        bool isModified = !baselineHash.isEmpty() && (currentHash != baselineHash);
+
+        if (isNew || isModified) {
+            PilotRecord *palmRecord = nullptr;
+            bool ownsPalmRecord = false;
+
+            if (!palmId.isEmpty()) {
+                // palmRecords only contains dirty records, so we need to read
+                // the Palm record directly if we want to update it
+                palmRecord = context->deviceLink->readRecordById(m_dbHandle, palmId.toUInt());
+                ownsPalmRecord = true;
+
+                if (palmRecord) {
+                    emit logMessage(QString("PC modified: %1 → updating Palm")
+                        .arg(backendRecord->description()));
+                }
+            } else {
+                emit logMessage(QString("New on PC: %1 → creating on Palm")
+                    .arg(backendRecord->description()));
+            }
+
+            syncRecord(palmRecord, backendRecord, context, result.palmStats, result.pcStats);
+
+            if (ownsPalmRecord) {
+                delete palmRecord;
+            }
+        }
+    }
+
+    // Detect deleted PC files (have mapping but file no longer exists)
+    QSet<QString> existingPcIds;
+    for (BackendRecord *rec : backendRecords) {
+        existingPcIds.insert(rec->id);
+    }
+
+    QStringList allMappedPcIds = context->state->allPCIds();
+    for (const QString &pcId : allMappedPcIds) {
+        if (context->cancelled) break;
+        if (existingPcIds.contains(pcId)) continue;
+
+        // PC file was deleted - find and delete corresponding Palm record
+        QString palmId = context->state->palmIdForPC(pcId);
+        if (!palmId.isEmpty()) {
+            emit logMessage(QString("PC file deleted, removing from Palm: %1").arg(pcId));
+            if (deletePalmRecord(palmId, context)) {
+                context->state->removePCMapping(pcId);
+                result.palmStats.deleted++;
+            }
+        }
+    }
 
     // Cleanup
     qDeleteAll(palmRecords);
@@ -411,6 +492,136 @@ SyncResult Conduit::copyPCToPalm(SyncContext *context)
     return result;
 }
 
+SyncResult Conduit::backup(SyncContext *context)
+{
+    emit logMessage("Backing up Palm → PC (preserving old files)...");
+
+    SyncResult result;
+    result.success = true;
+
+    // Load all Palm records
+    QList<PilotRecord*> palmRecords = readPalmRecords(context, false);
+    emit logMessage(QString("Found %1 Palm records to backup").arg(palmRecords.size()));
+
+    int count = 0;
+    for (PilotRecord *palmRecord : palmRecords) {
+        if (context->cancelled) break;
+        if (palmRecord->isDeleted()) continue;
+
+        QString palmId = QString::number(palmRecord->id());
+
+        // Convert to backend format
+        BackendRecord *backendRecord = palmToBackend(palmRecord, context);
+        if (backendRecord) {
+            QString existingId = context->state->pcIdForPalm(palmId);
+
+            if (existingId.isEmpty()) {
+                // Create new backup file
+                QString newId = context->backend->createRecord(context->collectionId, *backendRecord);
+                if (!newId.isEmpty()) {
+                    context->state->mapIds(palmId, newId);
+                    result.pcStats.created++;
+                }
+            } else {
+                // Update existing backup file
+                backendRecord->id = existingId;
+                if (context->backend->updateRecord(*backendRecord)) {
+                    result.pcStats.updated++;
+                }
+            }
+            delete backendRecord;
+        }
+
+        count++;
+        if (count % 50 == 0) {
+            emit progressUpdated(count, palmRecords.size(), "Backing up...");
+        }
+    }
+
+    // Note: Unlike copyPalmToPC, we do NOT delete PC files
+    // This preserves old backups even if records are deleted on Palm
+
+    qDeleteAll(palmRecords);
+
+    emit logMessage(QString("Backup complete: %1 created, %2 updated")
+        .arg(result.pcStats.created).arg(result.pcStats.updated));
+
+    return result;
+}
+
+SyncResult Conduit::restore(SyncContext *context)
+{
+    emit logMessage("Restoring PC → Palm (full restore)...");
+
+    SyncResult result;
+    result.success = true;
+
+    // Load all backend records
+    QList<BackendRecord*> backendRecords = context->backend->loadRecords(context->collectionId);
+    emit logMessage(QString("Found %1 PC records to restore").arg(backendRecords.size()));
+
+    // Load all existing Palm records (to find ones to delete)
+    QList<PilotRecord*> existingPalmRecords = readPalmRecords(context, false);
+    QSet<QString> restoredPalmIds;
+
+    int count = 0;
+    for (BackendRecord *backendRecord : backendRecords) {
+        if (context->cancelled) break;
+        if (backendRecord->isDeleted) continue;
+
+        QString palmId = context->state->palmIdForPC(backendRecord->id);
+
+        PilotRecord *palmRecord = backendToPalm(backendRecord, context);
+        if (palmRecord) {
+            if (!palmId.isEmpty()) {
+                palmRecord->setId(palmId.toUInt());
+            }
+
+            if (writePalmRecord(palmRecord, context)) {
+                if (palmId.isEmpty()) {
+                    context->state->mapIds(QString::number(palmRecord->id()), backendRecord->id);
+                    result.palmStats.created++;
+                } else {
+                    result.palmStats.updated++;
+                }
+                restoredPalmIds.insert(QString::number(palmRecord->id()));
+            }
+            delete palmRecord;
+        }
+
+        count++;
+        if (count % 50 == 0) {
+            emit progressUpdated(count, backendRecords.size(), "Restoring...");
+        }
+    }
+
+    // Delete Palm records that no longer exist on PC
+    for (PilotRecord *existingRecord : existingPalmRecords) {
+        if (context->cancelled) break;
+        QString palmId = QString::number(existingRecord->id());
+
+        if (!restoredPalmIds.contains(palmId)) {
+            // This Palm record has no corresponding PC file - delete it
+            if (deletePalmRecord(palmId, context)) {
+                context->state->removePalmMapping(palmId);
+                result.palmStats.deleted++;
+                emit logMessage(QString("Deleted from Palm: %1")
+                    .arg(palmRecordDescription(existingRecord)));
+            }
+        }
+    }
+
+    qDeleteAll(backendRecords);
+    qDeleteAll(existingPalmRecords);
+
+    emit logMessage(QString("Restore complete: %1 created, %2 updated, %3 deleted")
+        .arg(result.palmStats.created)
+        .arg(result.palmStats.updated)
+        .arg(result.palmStats.deleted));
+
+    return result;
+}
+
 void Conduit::syncRecord(PilotRecord *palmRecord,
                           BackendRecord *backendRecord,
                           SyncContext *context,
@@ -423,8 +634,10 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
         bool palmDeleted = palmRecord->isDeleted();
         bool backendDeleted = backendRecord->isDeleted;
 
-        // TODO: Detect backend modifications using baseline hash
-        bool backendModified = false;
+        // Detect backend modifications using baseline hash comparison
+        QString currentHash = backendRecord->contentHash;
+        QString baselineHash = context->state->baselineHash(backendRecord->id);
+        bool backendModified = !baselineHash.isEmpty() && (currentHash != baselineHash);
 
         if (palmDeleted && backendDeleted) {
             // Both deleted - remove mapping
@@ -648,6 +861,21 @@ bool Conduit::checkVolatility(const SyncStats &stats, int totalRecords, int thre
     }
 
     return true;
+}
+
+void Conduit::saveBaseline(SyncContext *context)
+{
+    // Load all current backend records and save their hashes
+    QList<BackendRecord*> records = context->backend->loadRecords(context->collectionId);
+
+    QMap<QString, QString> hashes;
+    for (BackendRecord *record : records) {
+        hashes[record->id] = record->contentHash;
+    }
+
+    context->state->saveBaseline(hashes);
+
+    qDeleteAll(records);
 }
 
 } // namespace Sync

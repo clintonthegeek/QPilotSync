@@ -20,6 +20,7 @@ public:
     struct Contact {
         int recordId;
         int category;
+        QString categoryName;  // Category name parsed from file
 
         QString lastName;
         QString firstName;

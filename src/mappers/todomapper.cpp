@@ -421,6 +421,12 @@ TodoMapper::Todo TodoMapper::iCalToTodo(const QString &ical)
                 int id = value.mid(10).toInt(&ok);
                 if (ok) todo.recordId = id;
             }
+        } else if (propertyName == "CATEGORIES") {
+            // Store first category name for lookup by conduit
+            QStringList cats = value.split(',');
+            if (!cats.isEmpty()) {
+                todo.categoryName = cats.first().trimmed();
+            }
         }
     }
 

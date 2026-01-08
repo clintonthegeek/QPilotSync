@@ -36,6 +36,7 @@ public:
     struct Event {
         int recordId;
         int category;
+        QString categoryName;  // Category name parsed from file
 
         bool isUntimed;           // All-day event flag
         QDateTime begin;

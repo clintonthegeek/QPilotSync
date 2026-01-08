@@ -91,6 +91,22 @@ public:
     bool beginSync() override;
     bool endSync() override;
 
+    /**
+     * @brief Clean up deleted records in the database
+     *
+     * Removes records marked for deletion from the Palm database.
+     * Should be called after sync to finalize deletions.
+     */
+    bool cleanUpDatabase(int dbHandle);
+
+    /**
+     * @brief Reset sync flags (dirty bits) on all records
+     *
+     * Clears the "modified" flag on all records in the database.
+     * Should be called after a successful sync.
+     */
+    bool resetSyncFlags(int dbHandle);
+
 signals:
     void connectionComplete(bool success);
 

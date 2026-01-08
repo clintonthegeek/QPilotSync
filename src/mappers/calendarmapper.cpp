@@ -743,6 +743,12 @@ CalendarMapper::Event CalendarMapper::iCalToEvent(const QString &ical)
                 int id = value.mid(14).toInt(&ok);
                 if (ok) event.recordId = id;
             }
+        } else if (propertyName == "CATEGORIES") {
+            // Store first category name for lookup by conduit
+            QStringList cats = value.split(',');
+            if (!cats.isEmpty()) {
+                event.categoryName = cats.first().trimmed();
+            }
         }
     }
 

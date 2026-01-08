@@ -20,6 +20,7 @@ public:
     struct Todo {
         int recordId;
         int category;
+        QString categoryName;  // Category name parsed from file
 
         QString description;      // Task title
         QString note;            // Detailed notes

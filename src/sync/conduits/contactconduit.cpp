@@ -68,19 +68,40 @@ BackendRecord* ContactConduit::palmToBackend(PilotRecord *palmRecord,
     record->contentHash = LocalFileBackend::calculateHash(record->data);
     record->lastModified = QDateTime::currentDateTime();
 
+    // Set display name from contact name
+    QStringList parts;
+    if (!contact.firstName.isEmpty()) parts << contact.firstName;
+    if (!contact.lastName.isEmpty()) parts << contact.lastName;
+    QString name = parts.join(" ");
+    if (name.isEmpty() && !contact.company.isEmpty()) {
+        name = contact.company;
+    }
+    if (name.isEmpty()) {
+        name = contact.phone1;
+    }
+    record->displayName = name;
+
     return record;
 }
 
 PilotRecord* ContactConduit::backendToPalm(BackendRecord *backendRecord,
                                             SyncContext *context)
 {
-    Q_UNUSED(context)
-
     if (!backendRecord) return nullptr;
+
+    // Ensure categories are loaded
+    if (!m_categories) {
+        loadCategories(context);
+    }
 
     // Parse vCard content
     QString content = QString::fromUtf8(backendRecord->data);
     ContactMapper::Contact contact = ContactMapper::vCardToContact(content);
+
+    // Look up category index from name if available
+    if (!contact.categoryName.isEmpty() && m_categories) {
+        contact.category = m_categories->categoryIndex(contact.categoryName);
+    }
 
     // Pack to Palm record
     PilotRecord *record = ContactMapper::packContact(contact);

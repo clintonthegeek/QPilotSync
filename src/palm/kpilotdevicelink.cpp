@@ -822,3 +822,47 @@ bool KPilotDeviceLink::endSync()
 
     return true;
 }
+
+bool KPilotDeviceLink::cleanUpDatabase(int dbHandle)
+{
+    qDebug() << "[KPilotDeviceLink] cleanUpDatabase() called for handle:" << dbHandle;
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] cleanUpDatabase() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Calling dlp_CleanUpDatabase()";
+    int result = dlp_CleanUpDatabase(m_socket, dbHandle);
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_CleanUpDatabase() failed, result:" << result;
+        setError("Failed to clean up database");
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Database cleanup complete";
+    return true;
+}
+
+bool KPilotDeviceLink::resetSyncFlags(int dbHandle)
+{
+    qDebug() << "[KPilotDeviceLink] resetSyncFlags() called for handle:" << dbHandle;
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] resetSyncFlags() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Calling dlp_ResetSyncFlags()";
+    int result = dlp_ResetSyncFlags(m_socket, dbHandle);
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_ResetSyncFlags() failed, result:" << result;
+        setError("Failed to reset sync flags");
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Sync flags reset complete";
+    return true;
+}

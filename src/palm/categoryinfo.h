@@ -32,6 +32,13 @@ public:
     QString categoryName(int index) const;
 
     /**
+     * @brief Get category index by name
+     * @param name Category name (case-insensitive)
+     * @return Category index (0-15), or 0 (Unfiled) if not found
+     */
+    int categoryIndex(const QString &name) const;
+
+    /**
      * @brief Get all category names
      * @return List of 16 category names (some may be empty)
      */

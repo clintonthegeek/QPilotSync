@@ -23,6 +23,7 @@ public:
 
     QString id;             ///< Unique identifier (file path, UID, etc.)
     QString type;           ///< Record type: "memo", "contact", "event", "todo"
+    QString displayName;    ///< Human-readable name for filenames/display
     QByteArray data;        ///< Raw data content
     QString contentHash;    ///< Hash of data for change detection
     QDateTime lastModified;
@@ -31,7 +32,10 @@ public:
     /**
      * @brief Get a displayable description of this record
      */
-    virtual QString description() const { return id; }
+    virtual QString description() const {
+        if (!displayName.isEmpty()) return displayName;
+        return id;
+    }
 };
 
 /**

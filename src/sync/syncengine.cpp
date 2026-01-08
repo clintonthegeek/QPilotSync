@@ -269,6 +269,12 @@ SyncState* SyncEngine::stateForConduit(const QString &conduitId)
     if (!m_states.contains(conduitId)) {
         QString userName = m_palmUserName.isEmpty() ? "default" : m_palmUserName;
         SyncState *state = new SyncState(userName, conduitId, this);
+
+        // Use the configured state directory (within PalmSync/.state/)
+        if (!m_stateDirectory.isEmpty()) {
+            state->setStateDirectory(m_stateDirectory);
+        }
+
         state->load();
         m_states[conduitId] = state;
     }

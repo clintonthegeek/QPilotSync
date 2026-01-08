@@ -387,6 +387,7 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
     QStringList lines = content.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
 
     int phoneIndex = 0;
+    QString fullName;  // Store FN for fallback
 
     for (const QString &line : lines) {
         if (line.startsWith("BEGIN:") || line.startsWith("END:") || line.startsWith("VERSION:")) {
@@ -413,8 +414,8 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
         }
 
         if (propertyName == "FN") {
-            // Full name - we'll use this if N is not present
-            // But N is preferred, so we only use FN as fallback
+            // Store full name for fallback use
+            fullName = value;
         } else if (propertyName == "N") {
             // Structured name: Family;Given;Middle;Prefix;Suffix
             QStringList nameParts = value.split(';');
@@ -480,6 +481,43 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
                 int id = value.mid(5).toInt(&ok);
                 if (ok) contact.recordId = id;
             }
+        } else if (propertyName == "CATEGORIES") {
+            // Store first category name for lookup by conduit
+            QStringList cats = value.split(',');
+            if (!cats.isEmpty()) {
+                contact.categoryName = cats.first().trimmed();
+            }
+        }
+    }
+
+    // Fallback: If N field produced empty or suspicious results, use FN
+    // This handles malformed vCards where N is wrong but FN is correct
+    if (!fullName.isEmpty()) {
+        bool needFallback = false;
+
+        // Check if N parsing produced empty name
+        if (contact.firstName.isEmpty() && contact.lastName.isEmpty()) {
+            needFallback = true;
+        }
+        // Check if firstName is empty but lastName is multi-word (likely FN was put in lastName)
+        else if (contact.firstName.isEmpty() && contact.lastName.contains(' ')) {
+            needFallback = true;
+        }
+        // Check if the "lastName" looks like it's just a suffix (Rd, St, Ave, etc.)
+        else if (contact.lastName.length() <= 3 && !contact.firstName.isEmpty()) {
+            // Short lastName with longer firstName - might be malformed
+            QStringList addressSuffixes = {"Rd", "St", "Ave", "Dr", "Ln", "Blvd", "Ct", "Pl", "Way"};
+            if (addressSuffixes.contains(contact.lastName, Qt::CaseInsensitive)) {
+                needFallback = true;
+            }
+        }
+
+        if (needFallback) {
+            // Use FN to populate name fields
+            // For business/place names, just use the full name as lastName
+            // (Palm displays lastName in the main list, so this works well)
+            contact.lastName = fullName;
+            contact.firstName.clear();
         }
     }
 

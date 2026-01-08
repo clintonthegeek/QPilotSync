@@ -68,19 +68,37 @@ BackendRecord* TodoConduit::palmToBackend(PilotRecord *palmRecord,
     record->contentHash = LocalFileBackend::calculateHash(record->data);
     record->lastModified = QDateTime::currentDateTime();
 
+    // Set display name from task description
+    QString displayName = todo.description;
+    if (displayName.isEmpty()) {
+        displayName = "Task";
+    }
+    if (displayName.length() > 50) {
+        displayName = displayName.left(50);
+    }
+    record->displayName = displayName;
+
     return record;
 }
 
 PilotRecord* TodoConduit::backendToPalm(BackendRecord *backendRecord,
                                          SyncContext *context)
 {
-    Q_UNUSED(context)
-
     if (!backendRecord) return nullptr;
+
+    // Ensure categories are loaded
+    if (!m_categories) {
+        loadCategories(context);
+    }
 
     // Parse iCalendar content
     QString content = QString::fromUtf8(backendRecord->data);
     TodoMapper::Todo todo = TodoMapper::iCalToTodo(content);
+
+    // Look up category index from name if available
+    if (!todo.categoryName.isEmpty() && m_categories) {
+        todo.category = m_categories->categoryIndex(todo.categoryName);
+    }
 
     // Pack to Palm record
     PilotRecord *record = TodoMapper::packTodo(todo);

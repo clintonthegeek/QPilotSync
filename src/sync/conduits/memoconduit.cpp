@@ -68,19 +68,38 @@ BackendRecord* MemoConduit::palmToBackend(PilotRecord *palmRecord,
     record->contentHash = LocalFileBackend::calculateHash(record->data);
     record->lastModified = QDateTime::currentDateTime();
 
+    // Set display name from first line of memo
+    QString text = memo.text.trimmed();
+    int newlinePos = text.indexOf('\n');
+    if (newlinePos > 0) {
+        text = text.left(newlinePos).trimmed();
+    }
+    if (text.length() > 50) {
+        text = text.left(50);
+    }
+    record->displayName = text;
+
     return record;
 }
 
 PilotRecord* MemoConduit::backendToPalm(BackendRecord *backendRecord,
                                          SyncContext *context)
 {
-    Q_UNUSED(context)
-
     if (!backendRecord) return nullptr;
+
+    // Ensure categories are loaded
+    if (!m_categories) {
+        loadCategories(context);
+    }
 
     // Parse Markdown content
     QString content = QString::fromUtf8(backendRecord->data);
     MemoMapper::Memo memo = MemoMapper::markdownToMemo(content);
+
+    // Look up category index from name if available
+    if (!memo.categoryName.isEmpty() && m_categories) {
+        memo.category = m_categories->categoryIndex(memo.categoryName);
+    }
 
     // Pack to Palm record
     PilotRecord *record = MemoMapper::packMemo(memo);

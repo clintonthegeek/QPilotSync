@@ -16,11 +16,8 @@ SyncState::SyncState(const QString &userName,
     , m_userName(userName)
     , m_conduitId(conduitId)
 {
-    // State directory: ~/.qpilotsync/<username>/<conduit>/
-    QString baseDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    m_stateDir = QDir(baseDir).filePath(m_userName + "/" + m_conduitId);
-
-    ensureStateDir();
+    // State directory will be set by setStateDirectory()
+    // Default to empty - must be configured before use
 }
 
 SyncState::~SyncState()
@@ -321,6 +318,12 @@ void SyncState::clear()
 QString SyncState::statePath() const
 {
     return m_stateDir;
+}
+
+void SyncState::setStateDirectory(const QString &baseDir)
+{
+    m_stateDir = QDir(baseDir).filePath(m_userName + "/" + m_conduitId);
+    ensureStateDir();
 }
 
 QJsonObject SyncState::mappingToJson(const IDMapping &mapping) const

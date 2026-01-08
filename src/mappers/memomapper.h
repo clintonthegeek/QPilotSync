@@ -19,6 +19,7 @@ public:
     struct Memo {
         int recordId;
         int category;
+        QString categoryName;  // Category name parsed from file
         QString text;
         bool isPrivate;
         bool isDirty;

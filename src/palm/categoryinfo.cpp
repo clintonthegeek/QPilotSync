@@ -66,6 +66,23 @@ QString CategoryInfo::categoryName(int index) const
     return decodePalmText(m_categories.name[index]);
 }
 
+int CategoryInfo::categoryIndex(const QString &name) const
+{
+    if (!m_valid || name.isEmpty()) {
+        return 0;  // Unfiled
+    }
+
+    // Search for matching category name (case-insensitive)
+    for (int i = 0; i < 16; i++) {
+        QString catName = categoryName(i);
+        if (!catName.isEmpty() && catName.compare(name, Qt::CaseInsensitive) == 0) {
+            return i;
+        }
+    }
+
+    return 0;  // Not found, return Unfiled
+}
+
 QStringList CategoryInfo::allCategories() const
 {
     QStringList list;

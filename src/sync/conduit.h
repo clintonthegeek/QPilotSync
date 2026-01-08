@@ -197,6 +197,22 @@ protected:
     virtual SyncResult copyPCToPalm(SyncContext *context);
 
     /**
+     * @brief Backup Palm to PC (preserve old PC files)
+     *
+     * Like copyPalmToPC but doesn't delete PC files that
+     * don't have Palm counterparts (preserves old backups).
+     */
+    virtual SyncResult backup(SyncContext *context);
+
+    /**
+     * @brief Restore PC to Palm (full restore)
+     *
+     * Completely overwrites Palm with PC data, including
+     * deleting Palm records that don't exist on PC.
+     */
+    virtual SyncResult restore(SyncContext *context);
+
+    /**
      * @brief Sync a single record pair
      *
      * Core sync logic for comparing and updating records.
@@ -249,6 +265,14 @@ protected:
      * @return true if changes are acceptable
      */
     bool checkVolatility(const SyncStats &stats, int totalRecords, int threshold = 70);
+
+    /**
+     * @brief Save current backend file hashes as baseline
+     *
+     * Called after successful sync to record the current state
+     * for change detection in the next sync.
+     */
+    void saveBaseline(SyncContext *context);
 
     int m_dbHandle = -1;  ///< Open Palm database handle
 };

@@ -68,19 +68,40 @@ BackendRecord* CalendarConduit::palmToBackend(PilotRecord *palmRecord,
     record->contentHash = LocalFileBackend::calculateHash(record->data);
     record->lastModified = QDateTime::currentDateTime();
 
+    // Set display name: "Title YYYY-MM-DD" or just date if no title
+    QString displayName = event.description;
+    if (displayName.isEmpty()) {
+        displayName = "Event";
+    }
+    if (displayName.length() > 40) {
+        displayName = displayName.left(40);
+    }
+    if (event.begin.isValid()) {
+        displayName += " " + event.begin.toString("yyyy-MM-dd");
+    }
+    record->displayName = displayName;
+
     return record;
 }
 
 PilotRecord* CalendarConduit::backendToPalm(BackendRecord *backendRecord,
                                              SyncContext *context)
 {
-    Q_UNUSED(context)
-
     if (!backendRecord) return nullptr;
+
+    // Ensure categories are loaded
+    if (!m_categories) {
+        loadCategories(context);
+    }
 
     // Parse iCalendar content
     QString content = QString::fromUtf8(backendRecord->data);
     CalendarMapper::Event event = CalendarMapper::iCalToEvent(content);
+
+    // Look up category index from name if available
+    if (!event.categoryName.isEmpty() && m_categories) {
+        event.category = m_categories->categoryIndex(event.categoryName);
+    }
 
     // Pack to Palm record
     PilotRecord *record = CalendarMapper::packEvent(event);

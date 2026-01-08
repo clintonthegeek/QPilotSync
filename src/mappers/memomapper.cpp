@@ -225,8 +225,10 @@ MemoMapper::Memo MemoMapper::markdownToMemo(const QString &markdown)
                     int catNum = value.toInt(&ok);
                     if (ok) {
                         memo.category = catNum;
+                    } else {
+                        // Store category name for lookup by conduit
+                        memo.categoryName = value;
                     }
-                    // Category name handling would require category lookup
                 } else if (key == "private") {
                     memo.isPrivate = (value.toLower() == "true");
                 } else if (key == "modified") {
