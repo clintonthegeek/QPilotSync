@@ -6,9 +6,14 @@
 #include <QTextEdit>
 #include <QMessageBox>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFormLayout>
+#include <QGroupBox>
 #include <QWidget>
 #include <QLabel>
 #include <QPushButton>
+#include <QLineEdit>
+#include <QCheckBox>
 #include <QInputDialog>
 #include <QDialog>
 #include <QComboBox>
@@ -18,6 +23,7 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTextStream>
 #include <QDebug>
 #include <QCoreApplication>
@@ -40,6 +46,8 @@
 #include "mappers/todomapper.h"
 #include "palm/categoryinfo.h"
 #include "settings.h"
+#include "settingsdialog.h"
+#include "profile.h"
 
 // Sync engine
 #include "sync/syncengine.h"
@@ -48,6 +56,7 @@
 #include "sync/conduits/contactconduit.h"
 #include "sync/conduits/calendarconduit.h"
 #include "sync/conduits/todoconduit.h"
+#include "sync/conduits/installconduit.h"
 
 // Simple log widget for now
 class LogWidget : public QTextEdit {
@@ -77,7 +86,7 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr) : QMainWindow(parent), m_deviceLink(nullptr), m_syncEngine(nullptr) {
+    MainWindow(QWidget *parent = nullptr) : QMainWindow(parent), m_deviceLink(nullptr), m_syncEngine(nullptr), m_currentProfile(nullptr) {
         setWindowTitle("QPilotSync - Palm Pilot Synchronization");
         setMinimumSize(900, 600);
 
@@ -111,8 +120,15 @@ public:
         // Log initial message
         m_logWidget->logInfo("QPilotSync " + QString(QPILOTSYNC_VERSION_STRING) + " initialized");
         m_logWidget->logInfo("Ready to connect to Palm device");
-        m_logWidget->logInfo("Go to Device → Connect to Device to start");
-        m_logWidget->logInfo(QString("Sync folder: %1").arg(m_syncPath));
+
+        // Load default profile if set
+        QString defaultProfile = Settings::instance().defaultProfilePath();
+        if (!defaultProfile.isEmpty() && QDir(defaultProfile).exists()) {
+            loadProfile(defaultProfile);
+        } else {
+            m_logWidget->logInfo("No profile loaded. Use File → Open Profile to select a sync folder.");
+            updateWindowTitle();
+        }
     }
 
     ~MainWindow() {
@@ -126,27 +142,49 @@ public:
         }
 
         delete m_syncEngine;
+        delete m_currentProfile;
     }
 
 private slots:
     void onConnectDevice() {
+        // Get default device settings from current profile or use fallbacks
+        QString defaultDevice = "/dev/ttyUSB0";
+        QString defaultBaud = "115200";
+
+        if (m_currentProfile) {
+            defaultDevice = m_currentProfile->devicePath();
+            defaultBaud = m_currentProfile->baudRate();
+        }
+
         // Create a dialog for connection settings
         QDialog dialog(this);
         dialog.setWindowTitle("Connect to Palm Device");
         QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
-        // Device path - use saved settings as default
+        // Profile info
+        if (m_currentProfile) {
+            QLabel *profileLabel = new QLabel(QString("Profile: <b>%1</b>").arg(m_currentProfile->name()), &dialog);
+            profileLabel->setTextFormat(Qt::RichText);
+            layout->addWidget(profileLabel);
+        } else {
+            QLabel *noProfileLabel = new QLabel("<i>No profile loaded - device will not be registered</i>", &dialog);
+            noProfileLabel->setTextFormat(Qt::RichText);
+            noProfileLabel->setStyleSheet("color: orange;");
+            layout->addWidget(noProfileLabel);
+        }
+
+        // Device path - use profile settings as default
         QLabel *pathLabel = new QLabel("Device:", &dialog);
         QComboBox *pathCombo = new QComboBox(&dialog);
         pathCombo->setEditable(true);
         pathCombo->addItems({"/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyS0", "usb:"});
-        pathCombo->setCurrentText(Settings::instance().devicePath());
+        pathCombo->setCurrentText(defaultDevice);
 
-        // Baud rate - use saved settings as default
+        // Baud rate - use profile settings as default
         QLabel *baudLabel = new QLabel("Baud Rate:", &dialog);
         QComboBox *baudCombo = new QComboBox(&dialog);
         baudCombo->addItems({"115200", "57600", "38400", "19200", "9600"});
-        baudCombo->setCurrentText(Settings::instance().baudRate());
+        baudCombo->setCurrentText(defaultBaud);
 
         // Flow control info
         QLabel *flowLabel = new QLabel("Flow Control: Automatic (hardware/software)", &dialog);
@@ -173,10 +211,16 @@ private slots:
         QString devicePath = pathCombo->currentText();
         QString baudRate = baudCombo->currentText();
 
-        // Save settings for next time
-        Settings::instance().setDevicePath(devicePath);
-        Settings::instance().setBaudRate(baudRate);
-        Settings::instance().sync();
+        // Store for later (in case user creates a new profile after connecting)
+        m_lastUsedDevicePath = devicePath;
+        m_lastUsedBaudRate = baudRate;
+
+        // Save settings to profile if loaded
+        if (m_currentProfile) {
+            m_currentProfile->setDevicePath(devicePath);
+            m_currentProfile->setBaudRate(baudRate);
+            m_currentProfile->save();
+        }
 
         // Log the settings being used
         m_logWidget->logInfo(QString("Using device: %1 at %2 bps").arg(devicePath, baudRate));
@@ -272,6 +316,18 @@ private slots:
             }
             m_logWidget->logInfo(QString("Connected to: %1").arg(username));
 
+            // Create device fingerprint from connected Palm
+            DeviceFingerprint connectedDevice;
+            connectedDevice.userId = user.userID;
+            connectedDevice.userName = QString::fromUtf8(user.username);
+
+            // Check device fingerprint against current profile and registry
+            if (!handleDeviceFingerprint(connectedDevice)) {
+                // User chose to abort or switch profiles - disconnect
+                onDisconnectDevice();
+                return;
+            }
+
             // Read system info
             SysInfo sysInfo;
             if (m_deviceLink->readSysInfo(sysInfo)) {
@@ -297,6 +353,132 @@ private slots:
             m_logWidget->logError("Failed to read user info from device");
             statusBar()->showMessage("Connection error");
         }
+    }
+
+    // Returns true to continue, false to abort connection
+    bool handleDeviceFingerprint(const DeviceFingerprint &connectedDevice) {
+        if (connectedDevice.isEmpty()) {
+            // No fingerprint - can't verify
+            return true;
+        }
+
+        // If no profile loaded, just inform and continue
+        if (!m_currentProfile) {
+            QString registeredProfile = Settings::instance().findProfileForDevice(connectedDevice);
+            if (!registeredProfile.isEmpty()) {
+                // Device is registered with a profile - suggest loading it
+                int ret = QMessageBox::question(this, "Known Device Detected",
+                    QString("This device (%1) is registered with profile:\n%2\n\n"
+                            "Would you like to load that profile?")
+                        .arg(connectedDevice.displayString())
+                        .arg(QFileInfo(registeredProfile).fileName()),
+                    QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,
+                    QMessageBox::Yes);
+
+                if (ret == QMessageBox::Yes) {
+                    loadProfile(registeredProfile);
+                    return true;
+                } else if (ret == QMessageBox::Cancel) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Profile is loaded - check if device matches
+        DeviceFingerprint expectedDevice = m_currentProfile->deviceFingerprint();
+
+        if (expectedDevice.isEmpty()) {
+            // Profile has no registered device - offer to register this one
+            int ret = QMessageBox::question(this, "Register Device",
+                QString("This profile (%1) has no registered device.\n\n"
+                        "Register '%2' as this profile's device?")
+                    .arg(m_currentProfile->name())
+                    .arg(connectedDevice.displayString()),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+            if (ret == QMessageBox::Yes) {
+                registerDeviceWithCurrentProfile(connectedDevice);
+            }
+            return true;
+        }
+
+        // Check if fingerprints match
+        if (expectedDevice.matches(connectedDevice)) {
+            m_logWidget->logInfo(QString("Device verified: %1").arg(connectedDevice.displayString()));
+            return true;
+        }
+
+        // MISMATCH! Wrong device connected to this profile
+        m_logWidget->logWarning(QString("Device mismatch! Expected: %1, Got: %2")
+            .arg(expectedDevice.displayString())
+            .arg(connectedDevice.displayString()));
+
+        // Check if this device belongs to another profile
+        QString correctProfile = Settings::instance().findProfileForDevice(connectedDevice);
+
+        if (!correctProfile.isEmpty() && correctProfile != m_currentProfile->syncFolderPath()) {
+            // Device belongs to a different profile
+            int ret = QMessageBox::warning(this, "Wrong Device for Profile",
+                QString("This device (%1) belongs to a different profile:\n\n"
+                        "Current profile: %2\n"
+                        "Device's profile: %3\n\n"
+                        "What would you like to do?")
+                    .arg(connectedDevice.displayString())
+                    .arg(m_currentProfile->name())
+                    .arg(QFileInfo(correctProfile).fileName()),
+                QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+            // Yes = Switch to correct profile, No = Continue anyway, Cancel = Abort
+
+            if (ret == QMessageBox::Yes) {
+                // Disconnect and switch profiles
+                loadProfile(correctProfile);
+                m_logWidget->logInfo(QString("Switched to profile: %1").arg(QFileInfo(correctProfile).fileName()));
+                // Return false to disconnect, user should reconnect
+                return false;
+            } else if (ret == QMessageBox::Cancel) {
+                return false;
+            }
+            // No = continue with warning
+            m_logWidget->logWarning("Continuing with mismatched device - sync may cause data issues!");
+            return true;
+        } else {
+            // Unknown device
+            int ret = QMessageBox::warning(this, "Unknown Device",
+                QString("This device (%1) is not recognized.\n\n"
+                        "This profile expects: %2\n\n"
+                        "Do you want to:\n"
+                        "- Yes: Register this device with current profile (replaces old device)\n"
+                        "- No: Continue without registering\n"
+                        "- Cancel: Abort connection")
+                    .arg(connectedDevice.displayString())
+                    .arg(expectedDevice.displayString()),
+                QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+
+            if (ret == QMessageBox::Yes) {
+                registerDeviceWithCurrentProfile(connectedDevice);
+                return true;
+            } else if (ret == QMessageBox::Cancel) {
+                return false;
+            }
+            m_logWidget->logWarning("Continuing with unregistered device");
+            return true;
+        }
+    }
+
+    void registerDeviceWithCurrentProfile(const DeviceFingerprint &fingerprint) {
+        if (!m_currentProfile) return;
+
+        m_currentProfile->setDeviceFingerprint(fingerprint);
+        m_currentProfile->save();
+
+        // Also register in global registry
+        Settings::instance().registerDevice(fingerprint, m_currentProfile->syncFolderPath());
+        Settings::instance().sync();
+
+        m_logWidget->logInfo(QString("Registered device '%1' with profile '%2'")
+            .arg(fingerprint.displayString())
+            .arg(m_currentProfile->name()));
     }
 
     void onDisconnectDevice() {
@@ -1310,6 +1492,14 @@ private slots:
                 .arg(QT_VERSION_STR));
     }
 
+    void onSettings() {
+        SettingsDialog dialog(this);
+        connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
+            m_logWidget->logInfo("Settings updated");
+        });
+        dialog.exec();
+    }
+
     void onClearLog() {
         m_logWidget->clear();
         m_logWidget->logInfo("Log cleared");
@@ -1550,9 +1740,46 @@ private:
         // File menu
         QMenu *fileMenu = menuBar()->addMenu("&File");
 
+        QAction *newProfileAction = fileMenu->addAction("&New Profile...");
+        newProfileAction->setShortcut(QKeySequence::New);
+        newProfileAction->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+        connect(newProfileAction, &QAction::triggered, this, &MainWindow::onNewProfile);
+
+        QAction *openProfileAction = fileMenu->addAction("&Open Profile...");
+        openProfileAction->setShortcut(QKeySequence::Open);
+        openProfileAction->setIcon(style()->standardIcon(QStyle::SP_DirOpenIcon));
+        connect(openProfileAction, &QAction::triggered, this, &MainWindow::onOpenProfile);
+
+        // Recent profiles submenu
+        m_recentProfilesMenu = fileMenu->addMenu("Recent Profiles");
+        m_recentProfilesMenu->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
+        updateRecentProfilesMenu();
+
+        m_closeProfileAction = fileMenu->addAction("&Close Profile");
+        m_closeProfileAction->setIcon(style()->standardIcon(QStyle::SP_DialogCloseButton));
+        connect(m_closeProfileAction, &QAction::triggered, this, &MainWindow::onCloseProfile);
+        m_closeProfileAction->setEnabled(false);
+
+        fileMenu->addSeparator();
+
+        m_profileSettingsAction = fileMenu->addAction("Profile &Settings...");
+        m_profileSettingsAction->setIcon(style()->standardIcon(QStyle::SP_FileDialogContentsView));
+        connect(m_profileSettingsAction, &QAction::triggered, this, &MainWindow::onProfileSettings);
+        m_profileSettingsAction->setEnabled(false);
+
+        fileMenu->addSeparator();
+
         QAction *quitAction = fileMenu->addAction("&Quit");
         quitAction->setShortcut(QKeySequence::Quit);
         connect(quitAction, &QAction::triggered, this, &MainWindow::onQuit);
+
+        // Edit menu
+        QMenu *editMenu = menuBar()->addMenu("&Edit");
+
+        QAction *settingsAction = editMenu->addAction("&Settings...");
+        settingsAction->setShortcut(QKeySequence::Preferences);
+        settingsAction->setIcon(style()->standardIcon(QStyle::SP_DialogApplyButton));
+        connect(settingsAction, &QAction::triggered, this, &MainWindow::onSettings);
 
         // Device menu
         QMenu *deviceMenu = menuBar()->addMenu("&Device");
@@ -1835,7 +2062,18 @@ private:
 
     // Sync engine
     Sync::SyncEngine *m_syncEngine;
+    Sync::InstallConduit *m_installConduit;
     QString m_syncPath;
+
+    // Last used connection settings (for passing to new profiles)
+    QString m_lastUsedDevicePath;
+    QString m_lastUsedBaudRate;
+
+    // Profile
+    Profile *m_currentProfile;
+    QMenu *m_recentProfilesMenu;
+    QAction *m_closeProfileAction;
+    QAction *m_profileSettingsAction;
 
     // Menu actions that need to be enabled/disabled
     QAction *m_disconnectAction;
@@ -1875,38 +2113,26 @@ private:
     // ========== Private Methods ==========
 
     void initializeSyncEngine() {
-        // Use ./PalmSync/ relative to project root for development testing
-        // In production, this would be ~/PalmSync/ or configurable
-        QString appDir = QCoreApplication::applicationDirPath();
-        m_syncPath = QDir(appDir).filePath("../PalmSync");
-
-        // Normalize path
-        m_syncPath = QDir::cleanPath(m_syncPath);
-
-        // Ensure directories exist
-        QDir syncDir(m_syncPath);
-        syncDir.mkpath("memos");
-        syncDir.mkpath("contacts");
-        syncDir.mkpath("calendar");
-        syncDir.mkpath("todos");
-
-        // Create sync engine
+        // Create sync engine (backend and conduits registered when profile is loaded)
         m_syncEngine = new Sync::SyncEngine(this);
-
-        // Set state directory within PalmSync (hidden .state folder)
-        QString stateDir = QDir(m_syncPath).filePath(".state");
-        QDir().mkpath(stateDir);
-        m_syncEngine->setStateDirectory(stateDir);
-
-        // Create and set backend
-        Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
-        m_syncEngine->setBackend(backend);
 
         // Register conduits
         m_syncEngine->registerConduit(new Sync::MemoConduit());
         m_syncEngine->registerConduit(new Sync::ContactConduit());
         m_syncEngine->registerConduit(new Sync::CalendarConduit());
         m_syncEngine->registerConduit(new Sync::TodoConduit());
+
+        // Create install conduit (handled separately from sync engine)
+        m_installConduit = new Sync::InstallConduit(this);
+        connect(m_installConduit, &Sync::InstallConduit::logMessage,
+                this, [this](const QString &msg) { if (m_logWidget) m_logWidget->logInfo(msg); });
+        connect(m_installConduit, &Sync::InstallConduit::errorOccurred,
+                this, [this](const QString &msg) { if (m_logWidget) m_logWidget->logError(msg); });
+        connect(m_installConduit, &Sync::InstallConduit::progressUpdated,
+                this, [this](int current, int total, const QString &fileName) {
+                    statusBar()->showMessage(QString("Installing %1 (%2/%3)")
+                        .arg(fileName).arg(current).arg(total));
+                });
 
         // Connect signals - use lambdas so log widget can be recreated
         connect(m_syncEngine, &Sync::SyncEngine::logMessage,
@@ -1921,21 +2147,380 @@ private:
                 this, &MainWindow::onSyncProgress);
     }
 
+    // ========== Profile Management ==========
+
+    void loadProfile(const QString &path) {
+        // Clean up old profile
+        if (m_currentProfile) {
+            m_currentProfile->save();
+            delete m_currentProfile;
+            m_currentProfile = nullptr;
+        }
+
+        // Create and load new profile
+        m_currentProfile = new Profile(path);
+
+        if (!m_currentProfile->isValid()) {
+            m_logWidget->logError(QString("Invalid profile path: %1").arg(path));
+            delete m_currentProfile;
+            m_currentProfile = nullptr;
+            updateWindowTitle();
+            updateProfileMenuState();
+            return;
+        }
+
+        bool isNewProfile = !m_currentProfile->exists();
+
+        // Initialize profile if needed (creates directories and default config)
+        if (isNewProfile) {
+            m_currentProfile->initialize();
+            m_logWidget->logInfo(QString("Created new profile at: %1").arg(path));
+
+            // For new profiles, use last used connection settings if available
+            if (!m_lastUsedDevicePath.isEmpty()) {
+                m_currentProfile->setDevicePath(m_lastUsedDevicePath);
+                m_currentProfile->setBaudRate(m_lastUsedBaudRate);
+                m_currentProfile->save();
+                m_logWidget->logInfo(QString("Using device settings: %1 at %2 bps")
+                    .arg(m_lastUsedDevicePath).arg(m_lastUsedBaudRate));
+            }
+        }
+
+        m_syncPath = path;
+
+        // Update sync engine with profile settings
+        m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
+
+        Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
+        m_syncEngine->setBackend(backend);
+
+        // Configure install conduit with profile's install folder
+        m_installConduit->setInstallFolder(m_currentProfile->installFolderPath());
+
+        // Add to recent profiles
+        Settings::instance().addRecentProfile(path);
+
+        // Auto-set as default if no default profile exists
+        if (Settings::instance().defaultProfilePath().isEmpty()) {
+            Settings::instance().setDefaultProfilePath(path);
+            m_logWidget->logInfo("Set as default profile");
+        }
+
+        Settings::instance().sync();
+
+        // Update UI
+        updateWindowTitle();
+        updateProfileMenuState();
+        updateRecentProfilesMenu();
+
+        m_logWidget->logInfo(QString("Loaded profile: %1").arg(m_currentProfile->name()));
+        m_logWidget->logInfo(QString("Sync folder: %1").arg(m_syncPath));
+    }
+
+    void closeProfile() {
+        if (m_currentProfile) {
+            m_currentProfile->save();
+            delete m_currentProfile;
+            m_currentProfile = nullptr;
+        }
+
+        m_syncPath.clear();
+
+        updateWindowTitle();
+        updateProfileMenuState();
+
+        m_logWidget->logInfo("Profile closed");
+    }
+
+    void updateWindowTitle() {
+        QString title = "QPilotSync";
+        if (m_currentProfile) {
+            title += " - " + m_currentProfile->name();
+        }
+        setWindowTitle(title);
+    }
+
+    void updateProfileMenuState() {
+        bool hasProfile = (m_currentProfile != nullptr);
+        m_closeProfileAction->setEnabled(hasProfile);
+        m_profileSettingsAction->setEnabled(hasProfile);
+
+        // Sync operations require a profile
+        m_changeSyncFolderAction->setEnabled(hasProfile);
+        m_openSyncFolderAction->setEnabled(hasProfile);
+    }
+
+    void updateRecentProfilesMenu() {
+        m_recentProfilesMenu->clear();
+
+        QStringList recent = Settings::instance().recentProfiles();
+
+        if (recent.isEmpty()) {
+            QAction *emptyAction = m_recentProfilesMenu->addAction("(No recent profiles)");
+            emptyAction->setEnabled(false);
+            return;
+        }
+
+        for (const QString &path : recent) {
+            QFileInfo info(path);
+            QString displayName = info.fileName();
+            QAction *action = m_recentProfilesMenu->addAction(displayName);
+            action->setToolTip(path);
+            action->setData(path);
+            connect(action, &QAction::triggered, this, [this, path]() {
+                loadProfile(path);
+            });
+        }
+
+        m_recentProfilesMenu->addSeparator();
+        QAction *clearAction = m_recentProfilesMenu->addAction("Clear Recent");
+        connect(clearAction, &QAction::triggered, this, [this]() {
+            Settings::instance().clearRecentProfiles();
+            Settings::instance().sync();
+            updateRecentProfilesMenu();
+        });
+    }
+
 private slots:
+    // ========== Profile Slots ==========
+
+    void onNewProfile() {
+        QString path = QFileDialog::getExistingDirectory(this,
+            "Select Folder for New Profile",
+            QDir::homePath(),
+            QFileDialog::ShowDirsOnly);
+
+        if (path.isEmpty()) return;
+
+        // Check if it already has a profile
+        Profile testProfile(path);
+        if (testProfile.exists()) {
+            int ret = QMessageBox::question(this, "Profile Exists",
+                QString("A profile already exists in:\n%1\n\nDo you want to load it instead?").arg(path),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+            if (ret == QMessageBox::Yes) {
+                loadProfile(path);
+            }
+            return;
+        }
+
+        // Create new profile
+        loadProfile(path);
+    }
+
+    void onOpenProfile() {
+        QString path = QFileDialog::getExistingDirectory(this,
+            "Select Profile Folder",
+            QDir::homePath(),
+            QFileDialog::ShowDirsOnly);
+
+        if (path.isEmpty()) return;
+
+        loadProfile(path);
+    }
+
+    void onCloseProfile() {
+        closeProfile();
+    }
+
+    void onProfileSettings() {
+        if (!m_currentProfile) {
+            m_logWidget->logWarning("No profile loaded");
+            return;
+        }
+
+        // Create a dialog for profile-specific settings
+        QDialog dialog(this);
+        dialog.setWindowTitle(QString("Profile Settings - %1").arg(m_currentProfile->name()));
+        dialog.setMinimumWidth(500);
+
+        QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+        // Profile info
+        QGroupBox *infoGroup = new QGroupBox("Profile Information");
+        QFormLayout *infoLayout = new QFormLayout(infoGroup);
+
+        QLineEdit *nameEdit = new QLineEdit(m_currentProfile->name());
+        infoLayout->addRow("Profile Name:", nameEdit);
+
+        QLabel *pathLabel = new QLabel(m_currentProfile->syncFolderPath());
+        pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        infoLayout->addRow("Sync Folder:", pathLabel);
+
+        layout->addWidget(infoGroup);
+
+        // Device settings
+        QGroupBox *deviceGroup = new QGroupBox("Device Connection");
+        QFormLayout *deviceLayout = new QFormLayout(deviceGroup);
+
+        // Device path
+        QComboBox *devicePathCombo = new QComboBox();
+        devicePathCombo->setEditable(true);
+        devicePathCombo->addItems({"/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyS0", "usb:"});
+        devicePathCombo->setCurrentText(m_currentProfile->devicePath());
+        deviceLayout->addRow("Device Port:", devicePathCombo);
+
+        // Baud rate
+        QComboBox *baudRateCombo = new QComboBox();
+        baudRateCombo->addItems({"115200", "57600", "38400", "19200", "9600"});
+        baudRateCombo->setCurrentText(m_currentProfile->baudRate());
+        deviceLayout->addRow("Baud Rate:", baudRateCombo);
+
+        // Registered device info
+        DeviceFingerprint fp = m_currentProfile->deviceFingerprint();
+        QString deviceInfo = fp.isEmpty() ? "(No device registered)" : fp.displayString();
+        QLabel *registeredDeviceLabel = new QLabel(deviceInfo);
+        registeredDeviceLabel->setStyleSheet(fp.isEmpty() ? "color: gray;" : "");
+        deviceLayout->addRow("Registered Device:", registeredDeviceLabel);
+
+        // Clear device registration button
+        QPushButton *clearDeviceBtn = new QPushButton("Clear Device Registration");
+        clearDeviceBtn->setEnabled(!fp.isEmpty());
+        connect(clearDeviceBtn, &QPushButton::clicked, this, [this, registeredDeviceLabel, clearDeviceBtn]() {
+            DeviceFingerprint oldFp = m_currentProfile->deviceFingerprint();
+            if (!oldFp.isEmpty()) {
+                Settings::instance().unregisterDevice(oldFp);
+                Settings::instance().sync();
+            }
+            m_currentProfile->setDeviceFingerprint(DeviceFingerprint());
+            m_currentProfile->save();
+            registeredDeviceLabel->setText("(No device registered)");
+            registeredDeviceLabel->setStyleSheet("color: gray;");
+            clearDeviceBtn->setEnabled(false);
+            m_logWidget->logInfo("Device registration cleared");
+        });
+        deviceLayout->addRow("", clearDeviceBtn);
+
+        layout->addWidget(deviceGroup);
+
+        // Conflict resolution
+        QGroupBox *conflictGroup = new QGroupBox("Conflict Resolution");
+        QFormLayout *conflictLayout = new QFormLayout(conflictGroup);
+
+        QComboBox *conflictCombo = new QComboBox();
+        conflictCombo->addItem("Ask for each conflict", "ask");
+        conflictCombo->addItem("Palm always wins", "palm-wins");
+        conflictCombo->addItem("PC always wins", "pc-wins");
+        conflictCombo->addItem("Keep both (duplicate)", "duplicate");
+        conflictCombo->addItem("Newest wins", "newest");
+        conflictCombo->addItem("Skip conflicts", "skip");
+
+        QString currentPolicy = m_currentProfile->conflictPolicy();
+        for (int i = 0; i < conflictCombo->count(); i++) {
+            if (conflictCombo->itemData(i).toString() == currentPolicy) {
+                conflictCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+        conflictLayout->addRow("When conflicts occur:", conflictCombo);
+
+        layout->addWidget(conflictGroup);
+
+        // Enabled conduits
+        QGroupBox *conduitsGroup = new QGroupBox("Enabled Conduits");
+        QVBoxLayout *conduitsLayout = new QVBoxLayout(conduitsGroup);
+
+        QCheckBox *memosCheck = new QCheckBox("Memos (MemoDB → Markdown files)");
+        QCheckBox *contactsCheck = new QCheckBox("Contacts (AddressDB → vCard files)");
+        QCheckBox *calendarCheck = new QCheckBox("Calendar (DatebookDB → iCalendar files)");
+        QCheckBox *todosCheck = new QCheckBox("ToDos (ToDoDB → iCalendar VTODO files)");
+
+        memosCheck->setChecked(m_currentProfile->conduitEnabled("memos"));
+        contactsCheck->setChecked(m_currentProfile->conduitEnabled("contacts"));
+        calendarCheck->setChecked(m_currentProfile->conduitEnabled("calendar"));
+        todosCheck->setChecked(m_currentProfile->conduitEnabled("todos"));
+
+        conduitsLayout->addWidget(memosCheck);
+        conduitsLayout->addWidget(contactsCheck);
+        conduitsLayout->addWidget(calendarCheck);
+        conduitsLayout->addWidget(todosCheck);
+
+        layout->addWidget(conduitsGroup);
+
+        // Button box
+        QDialogButtonBox *buttonBox = new QDialogButtonBox(
+            QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        layout->addWidget(buttonBox);
+
+        if (dialog.exec() == QDialog::Accepted) {
+            // Save profile settings
+            m_currentProfile->setName(nameEdit->text());
+            m_currentProfile->setDevicePath(devicePathCombo->currentText());
+            m_currentProfile->setBaudRate(baudRateCombo->currentText());
+            m_currentProfile->setConflictPolicy(conflictCombo->currentData().toString());
+            m_currentProfile->setConduitEnabled("memos", memosCheck->isChecked());
+            m_currentProfile->setConduitEnabled("contacts", contactsCheck->isChecked());
+            m_currentProfile->setConduitEnabled("calendar", calendarCheck->isChecked());
+            m_currentProfile->setConduitEnabled("todos", todosCheck->isChecked());
+            m_currentProfile->save();
+
+            updateWindowTitle();
+            m_logWidget->logInfo("Profile settings saved");
+        }
+    }
+
+    // ========== Install Conduit ==========
+
+    void runInstallConduit() {
+        if (!m_installConduit || !m_deviceLink || !m_deviceLink->isConnected()) {
+            return;
+        }
+
+        if (!m_installConduit->hasPendingFiles()) {
+            return;
+        }
+
+        m_logWidget->logInfo("--- Installing pending files ---");
+
+        int socket = m_deviceLink->socketDescriptor();
+        QList<Sync::InstallResult> results = m_installConduit->installAll(socket);
+
+        // Count successes/failures
+        int successCount = 0;
+        int failCount = 0;
+        for (const Sync::InstallResult &r : results) {
+            if (r.success) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+
+        if (successCount > 0 || failCount > 0) {
+            m_logWidget->logInfo(QString("Install complete: %1 succeeded, %2 failed")
+                .arg(successCount).arg(failCount));
+        }
+    }
+
     // ========== Sync Slots ==========
 
     void onHotSync() {
+        if (!m_currentProfile) {
+            m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
+            return;
+        }
         if (!m_deviceLink || !m_deviceLink->isConnected()) {
             m_logWidget->logError("No device connected");
             return;
         }
 
         m_logWidget->logInfo("=== Starting HotSync ===");
+
+        // Install any pending files first
+        runInstallConduit();
+
         Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::HotSync);
         showSyncResult(result, "HotSync");
     }
 
     void onFullSync() {
+        if (!m_currentProfile) {
+            m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
+            return;
+        }
         if (!m_deviceLink || !m_deviceLink->isConnected()) {
             m_logWidget->logError("No device connected");
             return;
@@ -1949,11 +2534,19 @@ private slots:
         if (ret != QMessageBox::Yes) return;
 
         m_logWidget->logInfo("=== Starting Full Sync ===");
+
+        // Install any pending files first
+        runInstallConduit();
+
         Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::FullSync);
         showSyncResult(result, "Full Sync");
     }
 
     void onCopyPalmToPC() {
+        if (!m_currentProfile) {
+            m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
+            return;
+        }
         if (!m_deviceLink || !m_deviceLink->isConnected()) {
             m_logWidget->logError("No device connected");
             return;
@@ -1972,6 +2565,10 @@ private slots:
     }
 
     void onCopyPCToPalm() {
+        if (!m_currentProfile) {
+            m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
+            return;
+        }
         if (!m_deviceLink || !m_deviceLink->isConnected()) {
             m_logWidget->logError("No device connected");
             return;
@@ -1985,11 +2582,19 @@ private slots:
         if (ret != QMessageBox::Yes) return;
 
         m_logWidget->logInfo("=== Copying PC → Palm ===");
+
+        // Install any pending files first
+        runInstallConduit();
+
         Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::CopyPCToPalm);
         showSyncResult(result, "Copy PC → Palm");
     }
 
     void onBackup() {
+        if (!m_currentProfile) {
+            m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
+            return;
+        }
         if (!m_deviceLink || !m_deviceLink->isConnected()) {
             m_logWidget->logError("No device connected");
             return;
@@ -2009,6 +2614,10 @@ private slots:
     }
 
     void onRestore() {
+        if (!m_currentProfile) {
+            m_logWidget->logError("No profile loaded. Use File → Open Profile first.");
+            return;
+        }
         if (!m_deviceLink || !m_deviceLink->isConnected()) {
             m_logWidget->logError("No device connected");
             return;
@@ -2024,35 +2633,24 @@ private slots:
         if (ret != QMessageBox::Yes) return;
 
         m_logWidget->logInfo("=== Restoring PC → Palm ===");
+
+        // Install any pending files first
+        runInstallConduit();
+
         Sync::SyncResult result = m_syncEngine->syncAll(Sync::SyncMode::Restore);
         showSyncResult(result, "Restore");
     }
 
     void onChangeSyncFolder() {
-        QString newPath = QFileDialog::getExistingDirectory(this,
-            "Select Sync Folder",
-            m_syncPath,
-            QFileDialog::ShowDirsOnly);
-
-        if (newPath.isEmpty()) return;
-
-        m_syncPath = newPath;
-
-        // Create subdirectories
-        QDir syncDir(m_syncPath);
-        syncDir.mkpath("memos");
-        syncDir.mkpath("contacts");
-        syncDir.mkpath("calendar");
-        syncDir.mkpath("todos");
-
-        // Update backend
-        Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
-        m_syncEngine->setBackend(backend);
-
-        m_logWidget->logInfo(QString("Sync folder changed to: %1").arg(m_syncPath));
+        // Now handled through profiles - redirect to Open Profile
+        onOpenProfile();
     }
 
     void onOpenSyncFolder() {
+        if (!m_currentProfile) {
+            m_logWidget->logWarning("No profile loaded");
+            return;
+        }
         QDesktopServices::openUrl(QUrl::fromLocalFile(m_syncPath));
     }
 

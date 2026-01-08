@@ -4,6 +4,14 @@ add_library(QPilotCore STATIC
     qpilotsync_core.cpp
     qpilotsync_version.h
 
+    # Settings and dialogs
+    settings.cpp
+    settings.h
+    settingsdialog.cpp
+    settingsdialog.h
+    profile.cpp
+    profile.h
+
     # Palm device communication
     palm/kpilotlink.cpp
     palm/kpilotlink.h
@@ -45,6 +53,8 @@ add_library(QPilotCore STATIC
     sync/conduits/calendarconduit.h
     sync/conduits/todoconduit.cpp
     sync/conduits/todoconduit.h
+    sync/conduits/installconduit.cpp
+    sync/conduits/installconduit.h
 )
 
 target_link_libraries(QPilotCore

@@ -68,6 +68,9 @@ public:
     // Check if connection attempt is in progress
     bool isConnecting() const { return m_workerThread != nullptr && m_workerThread->isRunning(); }
 
+    // Get the raw pilot-link socket descriptor (for pi_file_install, etc.)
+    int socketDescriptor() const { return m_socket; }
+
     // Cancel a pending connection attempt
     void cancelConnection();
 
