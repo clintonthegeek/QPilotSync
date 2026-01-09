@@ -2,6 +2,8 @@
 
 Modern Palm Pilot synchronization for Linux using Qt6 and KDE Frameworks 6.
 
+Be sure to check the *USB Permissions* section below for help getting set up!
+
 ![QPilotSync Screenshot](docs/screenshot.png)
 
 ## About
@@ -123,6 +125,12 @@ make -j$(nproc)
 ### USB Device Permissions
 
 In Manjaro (and so, likely Arch), I have had to add my user to the `uucp` group in order to get establish a USB connection.
+```bash
+sudo groupmod -aG uucp *username*
+```
+Then restart (a logout/login didn't actually work for me for some reason).
+
+Run `sudo dmesg --follow` in an open terminal the first time you press HotSync to figure out what block device(s) to try and connect with. For me it was `/dev/ttyUSB1`, but yours could be different!
 
 Another trick is to make a udev rule to allow non-root access to Palm devices:
 
