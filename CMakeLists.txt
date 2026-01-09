@@ -23,8 +23,13 @@ add_subdirectory(lib)
 # Main source library
 add_subdirectory(src)
 
-# Tests (optional for now)
-# add_subdirectory(tests)
+# Testing support
+option(BUILD_TESTS "Build the test suite" ON)
+if(BUILD_TESTS)
+    enable_testing()
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_subdirectory(tests)
+endif()
 
 # Main executable
 qt_add_executable(qpilotsync
