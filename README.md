@@ -151,6 +151,7 @@ sudo udevadm trigger
 1. Launch QPilotSync, create a new profile, and configure your sync folder
 2. Select your device path (usually `/dev/ttyUSB0` or `/dev/ttyUSB1`) in profile.
 3. Both click "Connect" in QPilotSync and the HotSync button on your Palm cradle within a few seconds. 
+4. By default, nothing will happen once your connection is made. You can now choose various sorts of syncs, or to upload a `.prc` or `.pdb` file. You will then have to manually disconnect. **If you want the familiar HotSync Experience, you can enable automatic HotSync and auto disconnection in the Profile Settings.**
 
 ### Supported Devices
 
