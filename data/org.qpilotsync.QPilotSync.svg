@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#3daee9"/>
+
+  <!-- Palm device body -->
+  <rect x="38" y="24" width="52" height="80" rx="6" ry="6" fill="#232629"/>
+
+  <!-- Screen -->
+  <rect x="44" y="30" width="40" height="50" rx="2" ry="2" fill="#93cee9"/>
+
+  <!-- Screen content lines -->
+  <rect x="48" y="38" width="32" height="3" fill="#232629" opacity="0.3"/>
+  <rect x="48" y="46" width="28" height="3" fill="#232629" opacity="0.3"/>
+  <rect x="48" y="54" width="30" height="3" fill="#232629" opacity="0.3"/>
+  <rect x="48" y="62" width="24" height="3" fill="#232629" opacity="0.3"/>
+
+  <!-- Graffiti area -->
+  <rect x="44" y="84" width="40" height="14" rx="2" ry="2" fill="#4d4d4d"/>
+  <line x1="64" y1="86" x2="64" y2="96" stroke="#666" stroke-width="1"/>
+
+  <!-- Sync arrows - left arrow (down) -->
+  <path d="M24 54 L24 74 L16 66 M24 74 L32 66"
+        stroke="#fcfcfc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Sync arrows - right arrow (up) -->
+  <path d="M104 74 L104 54 L96 62 M104 54 L112 62"
+        stroke="#fcfcfc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=QPilotSync
+GenericName=Palm Pilot Sync
+Comment=Synchronize data with Palm Pilot devices
+Exec=qpilotsync
+Icon=org.qpilotsync.QPilotSync
+Terminal=false
+Categories=Utility;PDA;Qt;KDE;
+Keywords=palm;pilot;sync;pda;hotsync;
+StartupNotify=true

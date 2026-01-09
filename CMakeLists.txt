@@ -55,3 +55,11 @@ install(TARGETS qpilotsync
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
+
+# Install desktop file and icon for AppImage/Linux desktop integration
+install(FILES data/org.qpilotsync.QPilotSync.desktop
+    DESTINATION share/applications
+)
+install(FILES data/org.qpilotsync.QPilotSync.svg
+    DESTINATION share/icons/hicolor/scalable/apps
+)

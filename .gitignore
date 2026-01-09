@@ -1,7 +1,11 @@
 # Build directories
 build/
+build-appimage/
 cmake-build-*/
 pilot-link-install/
+
+# AppImage build tools (downloaded automatically)
+tools/
 
 # Compiled Object files
 *.o
