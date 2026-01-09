@@ -184,6 +184,9 @@ private:
     QAction *m_importContactAction;
     QAction *m_importEventAction;
     QAction *m_importTodoAction;
+
+    // View actions
+    QAction *m_tabbedViewAction;
 };
 
 #endif // MAINWINDOW_H

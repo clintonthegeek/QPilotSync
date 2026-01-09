@@ -1970,6 +1970,22 @@ void MainWindow::createMenus()
     // View menu
     QMenu *viewMenu = menuBar()->addMenu("&View");
 
+    m_tabbedViewAction = viewMenu->addAction("&Tabbed View");
+    m_tabbedViewAction->setCheckable(true);
+    m_tabbedViewAction->setChecked(false);
+    connect(m_tabbedViewAction, &QAction::toggled, this, [this](bool checked) {
+        if (checked) {
+            m_mdiArea->setViewMode(QMdiArea::TabbedView);
+            m_mdiArea->setTabPosition(QTabWidget::West);
+            m_mdiArea->setTabsClosable(true);
+            m_mdiArea->setTabsMovable(true);
+        } else {
+            m_mdiArea->setViewMode(QMdiArea::SubWindowView);
+        }
+    });
+
+    viewMenu->addSeparator();
+
     QAction *showLogAction = viewMenu->addAction("Show &Log");
     connect(showLogAction, &QAction::triggered, this, &MainWindow::showLogWindow);
 
@@ -1991,7 +2007,22 @@ void MainWindow::createToolBar()
     QToolBar *toolbar = addToolBar("Main");
     toolbar->setObjectName("MainToolBar");
     toolbar->setMovable(false);
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
+    // Profile actions
+    QAction *newProfileAction = toolbar->addAction("New Profile");
+    newProfileAction->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+    newProfileAction->setToolTip("Create a new sync profile");
+    connect(newProfileAction, &QAction::triggered, this, &MainWindow::onNewProfile);
+
+    QAction *openProfileAction = toolbar->addAction("Open Profile");
+    openProfileAction->setIcon(style()->standardIcon(QStyle::SP_DirOpenIcon));
+    openProfileAction->setToolTip("Open an existing sync profile");
+    connect(openProfileAction, &QAction::triggered, this, &MainWindow::onOpenProfile);
+
+    toolbar->addSeparator();
+
+    // Connection actions
     QAction *connectAction = toolbar->addAction("Connect");
     connectAction->setIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
     connectAction->setToolTip("Connect to Palm device");
@@ -2005,6 +2036,7 @@ void MainWindow::createToolBar()
 
     toolbar->addSeparator();
 
+    // Sync actions
     m_toolbarHotSyncAction = toolbar->addAction("HotSync");
     m_toolbarHotSyncAction->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
     m_toolbarHotSyncAction->setToolTip("Perform HotSync (sync modified records)");
@@ -2030,4 +2062,17 @@ void MainWindow::createToolBar()
     m_toolbarRestoreAction->setToolTip("Restore PC backup to Palm");
     m_toolbarRestoreAction->setEnabled(false);
     connect(m_toolbarRestoreAction, &QAction::triggered, this, &MainWindow::onRestore);
+
+    toolbar->addSeparator();
+
+    // Utility actions
+    QAction *installAction = toolbar->addAction("Install Files");
+    installAction->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+    installAction->setToolTip("Install .prc/.pdb files to Palm");
+    connect(installAction, &QAction::triggered, this, &MainWindow::onInstallFiles);
+
+    QAction *openFolderAction = toolbar->addAction("Sync Folder");
+    openFolderAction->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
+    openFolderAction->setToolTip("Open sync folder in file manager");
+    connect(openFolderAction, &QAction::triggered, this, &MainWindow::onOpenSyncFolder);
 }
