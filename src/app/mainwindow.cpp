@@ -1769,6 +1769,10 @@ void MainWindow::createLogWindow()
     m_logSubWindow = m_mdiArea->addSubWindow(m_logWidget);
     m_logSubWindow->setWindowTitle("Log");
     m_logSubWindow->resize(800, 300);
+
+    // Prevent the log window from being deleted when closed - just hide it
+    m_logSubWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+
     m_logSubWindow->show();
 }
 
