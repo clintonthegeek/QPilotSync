@@ -145,6 +145,26 @@ void Profile::setConflictPolicy(const QString &policy)
     m_conflictPolicy = policy;
 }
 
+QString Profile::conflictAutoResolve() const
+{
+    return m_conflictAutoResolve;
+}
+
+void Profile::setConflictAutoResolve(const QString &strategy)
+{
+    m_conflictAutoResolve = strategy;
+}
+
+QString Profile::conflictFallback() const
+{
+    return m_conflictFallback;
+}
+
+void Profile::setConflictFallback(const QString &fallback)
+{
+    m_conflictFallback = fallback;
+}
+
 bool Profile::conduitEnabled(const QString &conduitId) const
 {
     return m_conduitEnabled.value(conduitId, true);
@@ -208,6 +228,8 @@ bool Profile::load()
 
     // Sync settings
     m_conflictPolicy = settings.value("sync/conflictPolicy", DEFAULT_CONFLICT_POLICY).toString();
+    m_conflictAutoResolve = settings.value("sync/conflictAutoResolve", "none").toString();
+    m_conflictFallback = settings.value("sync/conflictFallback", "defer").toString();
 
     // Conduit settings
     for (const QString &conduit : ALL_CONDUITS) {
@@ -270,6 +292,8 @@ bool Profile::save()
 
     // Sync settings
     settings.setValue("sync/conflictPolicy", m_conflictPolicy);
+    settings.setValue("sync/conflictAutoResolve", m_conflictAutoResolve);
+    settings.setValue("sync/conflictFallback", m_conflictFallback);
 
     // Conduit settings
     for (const QString &conduit : ALL_CONDUITS) {

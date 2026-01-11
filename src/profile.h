@@ -141,9 +141,17 @@ public:
 
     // ========== Sync Settings ==========
 
-    // Conflict resolution policy
+    // Conflict resolution policy (legacy - maps to autoResolve)
     QString conflictPolicy() const;
     void setConflictPolicy(const QString &policy);
+
+    // Auto-resolve strategy: "none", "palm_wins", "pc_wins", "newer_wins", "older_wins", "duplicate"
+    QString conflictAutoResolve() const;
+    void setConflictAutoResolve(const QString &strategy);
+
+    // Fallback behavior: "defer", "skip", "use_default", "abort"
+    QString conflictFallback() const;
+    void setConflictFallback(const QString &fallback);
 
     // Conduit enable/disable
     bool conduitEnabled(const QString &conduitId) const;
@@ -188,6 +196,8 @@ private:
 
     // Sync settings
     QString m_conflictPolicy;
+    QString m_conflictAutoResolve = "none";
+    QString m_conflictFallback = "defer";
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, QJsonObject> m_conduitSettings;
 

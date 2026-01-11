@@ -7,20 +7,25 @@
 #include <QMap>
 #include <QJsonObject>
 #include "synctypes.h"
+#include "qsynccore/idmappingstore.h"
+#include "qsynccore/baselinestore.h"
+#include "qsynccore/conflictstore.h"
 
 namespace Sync {
 
 /**
  * @brief Manages sync state including ID mappings and baseline tracking
  *
- * Inspired by KPilot's IDMapping class, but using JSON for persistence
- * and designed for integration with git-based state tracking.
+ * This class composes QSyncCore components (IdMappingStore, BaselineStore)
+ * with QPilotSync-specific persistence and metadata.
  *
  * State is stored in:
  *   <stateBaseDir>/<username>/<conduit>/
- *     ├── mappings.json    - ID mappings between Palm and PC
- *     ├── baseline/        - Snapshot of PC data after last sync
+ *     ├── mappings.json    - ID mappings and baseline hashes
  *     └── sync.log         - Audit log of sync operations
+ *
+ * The underlying ID mapping and baseline stores are from the shared
+ * QSyncCore library, enabling future reuse in PlanStanLite.
  */
 class SyncState : public QObject
 {
@@ -39,6 +44,7 @@ public:
     ~SyncState();
 
     // ========== ID Mapping Operations ==========
+    // These delegate to the underlying IdMappingStore
 
     /**
      * @brief Create a mapping between Palm and PC records
@@ -102,6 +108,7 @@ public:
                           const QStringList &pcCategories);
 
     // ========== Baseline Operations ==========
+    // These delegate to the underlying BaselineStore
 
     /**
      * @brief Get the baseline directory path
@@ -193,6 +200,54 @@ public:
      */
     void setStateDirectory(const QString &baseDir);
 
+    // ========== Access to Underlying Stores ==========
+
+    /**
+     * @brief Get the underlying ID mapping store
+     *
+     * Provides direct access for advanced use cases.
+     */
+    QSyncCore::IdMappingStore* idMappingStore() { return m_idMappings; }
+    const QSyncCore::IdMappingStore* idMappingStore() const { return m_idMappings; }
+
+    /**
+     * @brief Get the underlying baseline store
+     *
+     * Provides direct access for advanced use cases.
+     */
+    QSyncCore::BaselineStore* baselineStore() { return m_baseline; }
+    const QSyncCore::BaselineStore* baselineStore() const { return m_baseline; }
+
+    /**
+     * @brief Get the conflict store for deferred resolution
+     *
+     * Provides direct access for managing pending conflicts.
+     */
+    QSyncCore::ConflictStore* conflictStore() { return m_conflicts; }
+    const QSyncCore::ConflictStore* conflictStore() const { return m_conflicts; }
+
+    // ========== Conflict Operations ==========
+
+    /**
+     * @brief Check if there are pending conflicts to review
+     */
+    bool hasPendingConflicts() const;
+
+    /**
+     * @brief Get count of pending conflicts
+     */
+    int pendingConflictCount() const;
+
+    /**
+     * @brief Get all pending conflicts for this conduit
+     */
+    QList<QSyncCore::ConflictRecord> pendingConflicts() const;
+
+    /**
+     * @brief Clear all pending conflicts (after batch resolution)
+     */
+    void clearPendingConflicts();
+
 signals:
     void stateChanged();
     void errorOccurred(const QString &error);
@@ -202,22 +257,16 @@ private:
     QString m_conduitId;
     QString m_stateDir;
 
-    // ID mappings: Palm ID → full mapping info
-    QMap<QString, IDMapping> m_mappings;
-
-    // Reverse lookup: PC ID → Palm ID
-    QMap<QString, QString> m_pcToPalmMap;
-
-    // Baseline hashes: PC ID → content hash
-    QMap<QString, QString> m_baselineHashes;
+    // Composed QSyncCore components
+    QSyncCore::IdMappingStore *m_idMappings;
+    QSyncCore::BaselineStore *m_baseline;
+    QSyncCore::ConflictStore *m_conflicts;
 
     // Sync metadata
     QDateTime m_lastSyncTime;
     QString m_lastSyncPC;
 
     void ensureStateDir();
-    QJsonObject mappingToJson(const IDMapping &mapping) const;
-    IDMapping mappingFromJson(const QJsonObject &json) const;
 };
 
 } // namespace Sync

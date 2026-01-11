@@ -22,6 +22,10 @@
 #include "../sync/conduits/installconduit.h"
 #include "../sync/conduits/webcalendarconduit.h"
 
+#include "conflictreviewwidget.h"
+#include "interactiveconflicthandler.h"
+#include "../sync/syncstate.h"
+
 #include <QApplication>
 #include <QMenuBar>
 #include <QStatusBar>
@@ -65,6 +69,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_exportHandler(nullptr)
     , m_importHandler(nullptr)
     , m_currentProfile(nullptr)
+    , m_conflictSubWindow(nullptr)
+    , m_conflictReviewWidget(nullptr)
+    , m_conflictHandler(nullptr)
+    , m_conflictStore(nullptr)
 {
     setWindowTitle("QPilotSync - Palm Pilot Synchronization");
     setMinimumSize(900, 600);
@@ -1116,6 +1124,8 @@ void MainWindow::loadProfile(const QString &path)
 
     // Configure sync engine
     m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
+    m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
+    m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
 
     Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
     m_syncEngine->setBackend(backend);
@@ -1191,6 +1201,29 @@ void MainWindow::updateProfileMenuState()
     bool hasProfile = m_currentProfile != nullptr;
     m_closeProfileAction->setEnabled(hasProfile);
     m_profileSettingsAction->setEnabled(hasProfile);
+    m_showConflictsAction->setEnabled(hasProfile);
+
+    // Update conflicts menu with count
+    if (hasProfile && m_showConflictsAction) {
+        // Count pending conflicts
+        int totalConflicts = 0;
+        QString userName = m_currentProfile->deviceFingerprint().userName;
+        QString statePath = m_currentProfile->stateDirectoryPath();
+        QStringList conduits = {"memos", "contacts", "calendar", "todos"};
+
+        for (const QString &conduitId : conduits) {
+            Sync::SyncState state(userName, conduitId);
+            state.setStateDirectory(statePath);
+            state.load();
+            totalConflicts += state.pendingConflictCount();
+        }
+
+        if (totalConflicts > 0) {
+            m_showConflictsAction->setText(QString("Review &Conflicts... (%1)").arg(totalConflicts));
+        } else {
+            m_showConflictsAction->setText("Review &Conflicts...");
+        }
+    }
 }
 
 void MainWindow::updateRecentProfilesMenu()
@@ -1360,6 +1393,35 @@ void MainWindow::onProfileSettings()
 
     layout->addWidget(conduitsGroup);
 
+    // Conflict Resolution group
+    QGroupBox *conflictGroup = new QGroupBox("Conflict Resolution");
+    QFormLayout *conflictLayout = new QFormLayout(conflictGroup);
+
+    QComboBox *autoResolveCombo = new QComboBox();
+    autoResolveCombo->addItem("Save for later review", "none");
+    autoResolveCombo->addItem("Palm Always Wins", "palm_wins");
+    autoResolveCombo->addItem("PC Always Wins", "pc_wins");
+    autoResolveCombo->addItem("Newer Version Wins", "newer_wins");
+    autoResolveCombo->addItem("Older Version Wins", "older_wins");
+    autoResolveCombo->addItem("Duplicate Both (never lose data)", "duplicate");
+
+    // Set current value
+    QString currentAutoResolve = m_currentProfile->conflictAutoResolve();
+    for (int i = 0; i < autoResolveCombo->count(); ++i) {
+        if (autoResolveCombo->itemData(i).toString() == currentAutoResolve) {
+            autoResolveCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+    conflictLayout->addRow("When conflicts occur:", autoResolveCombo);
+
+    QLabel *conflictHint = new QLabel(
+        "<small>Deferred conflicts can be reviewed via View → Review Conflicts.</small>");
+    conflictHint->setWordWrap(true);
+    conflictLayout->addRow("", conflictHint);
+
+    layout->addWidget(conflictGroup);
+
     // Sync folder info
     QGroupBox *infoGroup = new QGroupBox("Sync Folder");
     QVBoxLayout *infoLayout = new QVBoxLayout(infoGroup);
@@ -1390,7 +1452,11 @@ void MainWindow::onProfileSettings()
         m_currentProfile->setConduitEnabled("calendar", calendarCheck->isChecked());
         m_currentProfile->setConduitEnabled("todos", todosCheck->isChecked());
         m_currentProfile->setConduitEnabled("webcalendar", webCalCheck->isChecked());
+        m_currentProfile->setConflictAutoResolve(autoResolveCombo->currentData().toString());
         m_currentProfile->save();
+
+        // Update sync engine with new conflict settings
+        m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
 
         // Update sync engine with new conduit settings
         for (const QString &conduitId : m_syncEngine->registeredConduits()) {
@@ -1739,7 +1805,8 @@ void MainWindow::onAbout()
                 "<li>KDE Frameworks 6</li>"
                 "<li>pilot-link</li>"
                 "</ul>"
-                "<p>Bringing classic Palm Pilots into the modern era!</p>")
+                "<p>Bringing classic Palm Pilots into the modern era!</p>"
+                "<p>Licensed with the <a href=https://www.gnu.org/licenses/gpl-3.0.txt>GPL version 3.0</a> or later.</p>")
             .arg(QPILOTSYNC_VERSION_STRING)
             .arg(QT_VERSION_STR));
 }
@@ -1996,6 +2063,13 @@ void MainWindow::createMenus()
     QAction *clearLogAction = viewMenu->addAction("&Clear Log");
     connect(clearLogAction, &QAction::triggered, this, &MainWindow::onClearLog);
 
+    viewMenu->addSeparator();
+
+    m_showConflictsAction = viewMenu->addAction("Review &Conflicts...");
+    m_showConflictsAction->setIcon(style()->standardIcon(QStyle::SP_MessageBoxWarning));
+    m_showConflictsAction->setEnabled(false);  // Enabled when profile loaded with conflicts
+    connect(m_showConflictsAction, &QAction::triggered, this, &MainWindow::onShowConflicts);
+
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
 
@@ -2079,4 +2153,138 @@ void MainWindow::createToolBar()
     openFolderAction->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
     openFolderAction->setToolTip("Open sync folder in file manager");
     connect(openFolderAction, &QAction::triggered, this, &MainWindow::onOpenSyncFolder);
+}
+
+void MainWindow::onShowConflicts()
+{
+    if (!m_currentProfile) {
+        QMessageBox::information(this, "No Profile",
+            "Please load a profile first to review conflicts.");
+        return;
+    }
+
+    // Create the consolidated conflict store if needed
+    if (!m_conflictStore) {
+        m_conflictStore = new QSyncCore::ConflictStore(this);
+    }
+    m_conflictStore->clear();
+
+    // Collect conflicts from all conduit sync states
+    QString userName = m_currentProfile->deviceFingerprint().userName;
+    QString statePath = m_currentProfile->stateDirectoryPath();
+    int totalConflicts = 0;
+
+    QStringList conduits = {"memos", "contacts", "calendar", "todos"};
+    for (const QString &conduitId : conduits) {
+        Sync::SyncState state(userName, conduitId);
+        state.setStateDirectory(statePath);
+        state.load();
+
+        QList<QSyncCore::ConflictRecord> conduitConflicts = state.pendingConflicts();
+        for (const QSyncCore::ConflictRecord &conflict : conduitConflicts) {
+            m_conflictStore->addConflict(conflict);
+        }
+        totalConflicts += conduitConflicts.size();
+    }
+
+    // Create conflict review widget if needed
+    if (!m_conflictReviewWidget) {
+        m_conflictReviewWidget = new ConflictReviewWidget(m_conflictStore, this);
+        connect(m_conflictReviewWidget, &ConflictReviewWidget::applyResolutionsRequested,
+                this, &MainWindow::onApplyConflictResolutions);
+        connect(m_conflictReviewWidget, &ConflictReviewWidget::conflictsChanged,
+                this, [this]() {
+                    // Update menu text when conflicts change
+                    updateProfileMenuState();
+                });
+        // Reset pointer when widget is destroyed
+        connect(m_conflictReviewWidget, &QObject::destroyed,
+                this, [this]() {
+                    m_conflictReviewWidget = nullptr;
+                });
+    } else {
+        m_conflictReviewWidget->refresh();
+    }
+
+    // Show in MDI subwindow
+    if (!m_conflictSubWindow) {
+        m_conflictSubWindow = m_mdiArea->addSubWindow(m_conflictReviewWidget);
+        m_conflictSubWindow->setWindowTitle("Conflict Review");
+        m_conflictSubWindow->setWindowIcon(style()->standardIcon(QStyle::SP_MessageBoxWarning));
+        m_conflictSubWindow->resize(900, 600);
+
+        // Prevent the conflict window from being deleted when closed - just hide it
+        m_conflictSubWindow->setAttribute(Qt::WA_DeleteOnClose, false);
+
+        // Reset pointer when subwindow is destroyed
+        connect(m_conflictSubWindow, &QObject::destroyed,
+                this, [this]() {
+                    m_conflictSubWindow = nullptr;
+                });
+    }
+
+    m_conflictSubWindow->show();
+    m_conflictSubWindow->raise();
+    m_mdiArea->setActiveSubWindow(m_conflictSubWindow);
+
+    if (totalConflicts == 0) {
+        m_logWidget->logInfo("No pending conflicts to review");
+    } else {
+        m_logWidget->logInfo(QString("Found %1 pending conflicts to review").arg(totalConflicts));
+    }
+}
+
+void MainWindow::onApplyConflictResolutions()
+{
+    if (!m_currentProfile || !m_conflictReviewWidget || !m_conflictStore) {
+        return;
+    }
+
+    int resolvedCount = m_conflictReviewWidget->resolvedCount();
+    if (resolvedCount == 0) {
+        QMessageBox::information(this, "No Resolutions",
+            "No conflicts have been resolved yet. Please select conflicts and choose resolutions.");
+        return;
+    }
+
+    m_logWidget->logInfo(QString("Saving %1 conflict resolutions...").arg(resolvedCount));
+
+    // Copy resolved conflicts from consolidated store back to individual conduit stores
+    QString userName = m_currentProfile->deviceFingerprint().userName;
+    QString statePath = m_currentProfile->stateDirectoryPath();
+    QStringList conduits = {"memos", "contacts", "calendar", "todos"};
+
+    int totalSaved = 0;
+    for (const QString &conduitId : conduits) {
+        Sync::SyncState state(userName, conduitId);
+        state.setStateDirectory(statePath);
+        state.load();
+
+        // Get resolved conflicts for this conduit from the consolidated store
+        QList<QSyncCore::ConflictRecord> resolvedConflicts =
+            m_conflictStore->resolvedUnappliedConflictsForConduit(conduitId);
+
+        if (!resolvedConflicts.isEmpty()) {
+            // Clear old conflicts and add the resolved ones
+            // addConflict preserves all fields including decision status
+            state.conflictStore()->clear();
+            for (const QSyncCore::ConflictRecord &conflict : resolvedConflicts) {
+                state.conflictStore()->addConflict(conflict);
+            }
+            totalSaved += resolvedConflicts.size();
+
+            m_logWidget->logInfo(QString("  Saved %1 resolutions for %2")
+                .arg(resolvedConflicts.size()).arg(conduitId));
+        }
+
+        state.save();
+    }
+
+    QMessageBox::information(this, "Resolutions Saved",
+        QString("Saved %1 conflict resolutions.\n\n"
+                "The resolutions will be applied during the next sync with the Palm device.")
+            .arg(totalSaved));
+
+    // Update the menu state
+    updateProfileMenuState();
 }

@@ -163,14 +163,36 @@ public:
     // ========== Configuration ==========
 
     /**
-     * @brief Set the conflict resolution policy
+     * @brief Set the conflict resolution policy (legacy)
      */
     void setConflictPolicy(ConflictResolution policy);
 
     /**
-     * @brief Get the current conflict resolution policy
+     * @brief Get the current conflict resolution policy (legacy)
      */
     ConflictResolution conflictPolicy() const { return m_conflictPolicy; }
+
+    /**
+     * @brief Set the auto-resolve strategy
+     * @param strategy One of: "none", "palm_wins", "pc_wins", "newer_wins", "older_wins", "duplicate"
+     */
+    void setConflictAutoResolve(const QString &strategy);
+
+    /**
+     * @brief Get the current auto-resolve strategy
+     */
+    QString conflictAutoResolve() const { return m_conflictAutoResolve; }
+
+    /**
+     * @brief Set the fallback behavior
+     * @param fallback One of: "defer", "skip", "use_default"
+     */
+    void setConflictFallback(const QString &fallback);
+
+    /**
+     * @brief Get the current fallback behavior
+     */
+    QString conflictFallback() const { return m_conflictFallback; }
 
     /**
      * @brief Set the sync state directory
@@ -231,6 +253,8 @@ private:
     QString m_palmUserName;
     QString m_stateDirectory;
     ConflictResolution m_conflictPolicy = ConflictResolution::AskUser;
+    QString m_conflictAutoResolve = "none";
+    QString m_conflictFallback = "defer";
 
     bool m_syncing = false;
     bool m_cancelled = false;

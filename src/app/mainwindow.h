@@ -15,11 +15,17 @@ class DeviceSession;
 class ExportHandler;
 class ImportHandler;
 class Profile;
+class ConflictReviewWidget;
+class InteractiveConflictHandler;
 
 namespace Sync {
 class SyncEngine;
 class SyncResult;
 class InstallConduit;
+}
+
+namespace QSyncCore {
+class ConflictStore;
 }
 
 /**
@@ -86,6 +92,10 @@ private slots:
     void onAbout();
     void onSettings();
     void onClearLog();
+
+    // Conflict review
+    void onShowConflicts();
+    void onApplyConflictResolutions();
 
 private:
     // UI setup
@@ -187,6 +197,13 @@ private:
 
     // View actions
     QAction *m_tabbedViewAction;
+    QAction *m_showConflictsAction;
+
+    // Conflict review
+    QMdiSubWindow *m_conflictSubWindow;
+    ConflictReviewWidget *m_conflictReviewWidget;
+    InteractiveConflictHandler *m_conflictHandler;
+    QSyncCore::ConflictStore *m_conflictStore;
 };
 
 #endif // MAINWINDOW_H

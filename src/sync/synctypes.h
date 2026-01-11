@@ -130,6 +130,17 @@ struct SyncStats {
         return QString("Created: %1, Updated: %2, Deleted: %3, Unchanged: %4, Conflicts: %5, Errors: %6")
             .arg(created).arg(updated).arg(deleted).arg(unchanged).arg(conflicts).arg(errors);
     }
+
+    SyncStats operator+(const SyncStats &other) const {
+        SyncStats result;
+        result.created = created + other.created;
+        result.updated = updated + other.updated;
+        result.deleted = deleted + other.deleted;
+        result.unchanged = unchanged + other.unchanged;
+        result.conflicts = conflicts + other.conflicts;
+        result.errors = errors + other.errors;
+        return result;
+    }
 };
 
 /**

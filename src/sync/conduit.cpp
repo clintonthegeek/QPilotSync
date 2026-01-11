@@ -42,6 +42,17 @@ SyncResult Conduit::sync(SyncContext *context)
     // Determine if this is a first sync
     context->isFirstSync = context->state->isFirstSync();
 
+    // Apply any pre-resolved conflicts from previous sessions
+    if (!context->isFirstSync) {
+        SyncStats conflictPalmStats, conflictPcStats;
+        int appliedConflicts = applyResolvedConflicts(context, conflictPalmStats, conflictPcStats);
+        if (appliedConflicts > 0) {
+            // Merge conflict resolution stats into result
+            result.palmStats = result.palmStats + conflictPalmStats;
+            result.pcStats = result.pcStats + conflictPcStats;
+        }
+    }
+
     // Run appropriate sync algorithm
     if (context->isFirstSync) {
         emit logMessage("First sync detected - matching records by content");
@@ -762,6 +773,216 @@ bool Conduit::resolveConflict(PilotRecord *palmRecord,
         backendRecord->description()
     );
 
+    // Use new conflict handler if available
+    if (context->conflictHandler) {
+        return resolveConflictWithHandler(palmRecord, backendRecord, context, palmStats, pcStats);
+    }
+
+    // Legacy conflict resolution
+    return resolveConflictLegacy(palmRecord, backendRecord, context, palmStats, pcStats);
+}
+
+bool Conduit::resolveConflictWithHandler(PilotRecord *palmRecord,
+                                          BackendRecord *backendRecord,
+                                          SyncContext *context,
+                                          SyncStats &palmStats,
+                                          SyncStats &pcStats)
+{
+    using namespace QSyncCore;
+
+    // Build conflict record with snapshots
+    ConflictRecord conflict;
+    conflict.conflictId = ConflictRecord::generateId();
+    conflict.conduitId = conduitId();
+    conflict.detectedAt = QDateTime::currentDateTime();
+    conflict.syncSessionId = context->syncSessionId;
+
+    // Determine conflict type
+    bool palmDeleted = palmRecord && palmRecord->isDeleted();
+    bool backendDeleted = backendRecord && backendRecord->isDeleted;
+
+    if (palmDeleted && !backendDeleted) {
+        conflict.type = ConflictType::DeletedVsModified;
+    } else if (!palmDeleted && backendDeleted) {
+        conflict.type = ConflictType::ModifiedVsDeleted;
+    } else {
+        conflict.type = ConflictType::BothModified;
+    }
+
+    // Create source snapshot (Palm)
+    if (palmRecord && !palmRecord->isDeleted()) {
+        conflict.source.id = QString::number(palmRecord->id());
+        conflict.source.description = palmRecordDescription(palmRecord);
+        conflict.source.content = palmRecord->data();
+        conflict.source.contentType = "application/octet-stream";
+        // Palm doesn't track modification time well, use current time
+        conflict.source.lastModified = QDateTime::currentDateTime();
+    }
+
+    // Create target snapshot (PC/Backend)
+    if (backendRecord && !backendRecord->isDeleted) {
+        conflict.target.id = backendRecord->id;
+        conflict.target.description = backendRecord->description();
+        conflict.target.content = backendRecord->data;
+        conflict.target.contentHash = backendRecord->contentHash;
+        conflict.target.contentType = backendRecord->type;  // Use type (memo, contact, etc.)
+        conflict.target.lastModified = backendRecord->lastModified;
+    }
+
+    // Assess complexity
+    conflict.assessComplexity();
+
+    emit logMessage(QString("Conflict detected: %1 [%2]")
+        .arg(conflict.summary())
+        .arg(conflict.complexity == ConflictComplexity::Simple ? "Simple" :
+             conflict.complexity == ConflictComplexity::Moderate ? "Moderate" : "Complex"));
+
+    // Ask handler to resolve
+    ConflictDecision decision = context->conflictHandler->handleConflict(
+        conflict, context->conflictSettings);
+
+    // Apply the decision
+    return applyConflictDecision(conflict, decision, palmRecord, backendRecord,
+                                  context, palmStats, pcStats);
+}
+
+bool Conduit::applyConflictDecision(const QSyncCore::ConflictRecord &conflict,
+                                     QSyncCore::ConflictDecision decision,
+                                     PilotRecord *palmRecord,
+                                     BackendRecord *backendRecord,
+                                     SyncContext *context,
+                                     SyncStats &palmStats,
+                                     SyncStats &pcStats)
+{
+    using namespace QSyncCore;
+
+    switch (decision) {
+        case ConflictDecision::UseSource: {
+            // Palm wins - update backend
+            if (palmRecord && !palmRecord->isDeleted()) {
+                BackendRecord *updated = palmToBackend(palmRecord, context);
+                if (updated) {
+                    updated->id = backendRecord->id;
+                    context->backend->updateRecord(*updated);
+                    delete updated;
+                    pcStats.updated++;
+                    emit logMessage(QString("Resolved: Using source (Palm) for %1")
+                        .arg(conflict.source.description));
+                }
+            } else {
+                // Source was deleted - delete target
+                context->backend->deleteRecord(backendRecord->id);
+                context->state->removePCMapping(backendRecord->id);
+                pcStats.deleted++;
+            }
+            return true;
+        }
+
+        case ConflictDecision::UseTarget: {
+            // PC wins - update Palm
+            if (backendRecord && !backendRecord->isDeleted) {
+                PilotRecord *updated = backendToPalm(backendRecord, context);
+                if (updated) {
+                    updated->setId(palmRecord->id());
+                    writePalmRecord(updated, context);
+                    delete updated;
+                    palmStats.updated++;
+                    emit logMessage(QString("Resolved: Using target (PC) for %1")
+                        .arg(conflict.target.description));
+                }
+            } else {
+                // Target was deleted - delete source
+                deletePalmRecord(QString::number(palmRecord->id()), context);
+                context->state->removePalmMapping(QString::number(palmRecord->id()));
+                palmStats.deleted++;
+            }
+            return true;
+        }
+
+        case ConflictDecision::UseBoth: {
+            // Duplicate - keep both
+            // Create Palm version on backend with new ID
+            if (palmRecord && !palmRecord->isDeleted()) {
+                BackendRecord *newBackend = palmToBackend(palmRecord, context);
+                if (newBackend) {
+                    QString newId = context->backend->createRecord(context->collectionId, *newBackend);
+                    if (!newId.isEmpty()) {
+                        context->state->mapIds(QString::number(palmRecord->id()), newId);
+                        pcStats.created++;
+                    }
+                    delete newBackend;
+                }
+            }
+
+            // Create backend version on Palm with new ID
+            if (backendRecord && !backendRecord->isDeleted) {
+                PilotRecord *newPalm = backendToPalm(backendRecord, context);
+                if (newPalm) {
+                    newPalm->setId(0);  // Force new ID
+                    if (writePalmRecord(newPalm, context)) {
+                        context->state->mapIds(QString::number(newPalm->id()), backendRecord->id);
+                        palmStats.created++;
+                    }
+                    delete newPalm;
+                }
+            }
+            emit logMessage(QString("Resolved: Keeping both versions for %1")
+                .arg(conflict.summary()));
+            return true;
+        }
+
+        case ConflictDecision::Skip:
+            emit logMessage(QString("Resolved: Skipping conflict for %1")
+                .arg(conflict.summary()));
+            pcStats.conflicts++;
+            return false;
+
+        case ConflictDecision::Pending:
+            // Deferred - save to conflict store for batch review
+            if (context->state && context->state->conflictStore()) {
+                context->state->conflictStore()->addConflict(conflict);
+                emit logMessage(QString("Deferred: %1 saved for later review")
+                    .arg(conflict.summary()));
+            } else {
+                emit logMessage(QString("Warning: No conflict store available, cannot defer %1")
+                    .arg(conflict.summary()));
+            }
+            pcStats.conflicts++;
+            return false;
+
+        case ConflictDecision::DeleteBoth:
+            // Delete from both sides
+            if (palmRecord) {
+                deletePalmRecord(QString::number(palmRecord->id()), context);
+                context->state->removePalmMapping(QString::number(palmRecord->id()));
+                palmStats.deleted++;
+            }
+            if (backendRecord) {
+                context->backend->deleteRecord(backendRecord->id);
+                context->state->removePCMapping(backendRecord->id);
+                pcStats.deleted++;
+            }
+            emit logMessage(QString("Resolved: Deleted both versions of %1")
+                .arg(conflict.summary()));
+            return true;
+
+        case ConflictDecision::Merge:
+            // Merge not yet implemented - fall through to skip
+            emit logMessage("Merge not implemented, skipping conflict");
+            pcStats.conflicts++;
+            return false;
+    }
+
+    return false;
+}
+
+bool Conduit::resolveConflictLegacy(PilotRecord *palmRecord,
+                                     BackendRecord *backendRecord,
+                                     SyncContext *context,
+                                     SyncStats &palmStats,
+                                     SyncStats &pcStats)
+{
+    // Original legacy implementation for backwards compatibility
     switch (context->conflictPolicy) {
         case ConflictResolution::PalmWins: {
             BackendRecord *updated = palmToBackend(palmRecord, context);
@@ -791,7 +1012,6 @@ bool Conduit::resolveConflict(PilotRecord *palmRecord,
             if (newBackend) {
                 QString newId = context->backend->createRecord(context->collectionId, *newBackend);
                 if (!newId.isEmpty()) {
-                    // Update mapping to point to new record
                     context->state->mapIds(QString::number(palmRecord->id()), newId);
                     pcStats.created++;
                 }
@@ -816,14 +1036,218 @@ bool Conduit::resolveConflict(PilotRecord *palmRecord,
             return false;
 
         case ConflictResolution::AskUser:
-            // TODO: Emit signal and wait for user response
-            emit logMessage("Conflict requires user resolution - skipping for now");
+            emit logMessage("Conflict requires user resolution - skipping (no handler configured)");
             pcStats.conflicts++;
             return false;
 
         default:
             return false;
     }
+}
+
+int Conduit::applyResolvedConflicts(SyncContext *context,
+                                     SyncStats &palmStats,
+                                     SyncStats &pcStats)
+{
+    if (!context->state || !context->state->conflictStore()) {
+        return 0;
+    }
+
+    QSyncCore::ConflictStore *store = context->state->conflictStore();
+    QList<QSyncCore::ConflictRecord> conflicts =
+        store->resolvedUnappliedConflictsForConduit(conduitId());
+
+    if (conflicts.isEmpty()) {
+        return 0;
+    }
+
+    emit logMessage(QString("Applying %1 pre-resolved conflicts...").arg(conflicts.size()));
+
+    int appliedCount = 0;
+
+    for (const QSyncCore::ConflictRecord &conflict : conflicts) {
+        if (context->cancelled || isCancelled()) break;
+
+        emit logMessage(QString("  Applying resolution for: %1 [%2]")
+            .arg(conflict.summary())
+            .arg(QSyncCore::conflictDecisionToString(conflict.decision)));
+
+        bool success = false;
+        QString errorMsg;
+
+        // Load current records based on stored IDs
+        PilotRecord *palmRecord = nullptr;
+        BackendRecord *backendRecord = nullptr;
+        bool ownsPalmRecord = false;
+        bool ownsBackendRecord = false;
+
+        // Load Palm record if source ID is available
+        if (!conflict.source.id.isEmpty()) {
+            bool ok;
+            quint32 palmId = conflict.source.id.toUInt(&ok);
+            if (ok) {
+                palmRecord = context->deviceLink->readRecordById(m_dbHandle, palmId);
+                ownsPalmRecord = true;
+            }
+        }
+
+        // Load backend record if target ID is available
+        if (!conflict.target.id.isEmpty()) {
+            QList<BackendRecord*> allRecords = context->backend->loadRecords(context->collectionId);
+            for (BackendRecord *rec : allRecords) {
+                if (rec->id == conflict.target.id) {
+                    backendRecord = rec;
+                } else {
+                    delete rec;
+                }
+            }
+            ownsBackendRecord = true;
+        }
+
+        // Apply the decision
+        switch (conflict.decision) {
+            case QSyncCore::ConflictDecision::UseSource:
+                // Palm wins - copy Palm to PC
+                if (palmRecord) {
+                    BackendRecord *updated = palmToBackend(palmRecord, context);
+                    if (updated) {
+                        if (backendRecord) {
+                            // Update existing record
+                            updated->id = backendRecord->id;
+                            context->backend->updateRecord(*updated);
+                            pcStats.updated++;
+                        } else {
+                            // Create new record (target was deleted)
+                            QString newId = context->backend->createRecord(context->collectionId, *updated);
+                            if (!newId.isEmpty()) {
+                                context->state->mapIds(conflict.source.id, newId);
+                                pcStats.created++;
+                            }
+                        }
+                        delete updated;
+                        success = true;
+                    }
+                } else if (conflict.source.isDeleted()) {
+                    // Source was deleted - delete target too
+                    if (backendRecord) {
+                        context->backend->deleteRecord(backendRecord->id);
+                        context->state->removePCMapping(backendRecord->id);
+                        pcStats.deleted++;
+                        success = true;
+                    }
+                }
+                break;
+
+            case QSyncCore::ConflictDecision::UseTarget:
+                // PC wins - copy PC to Palm
+                if (backendRecord) {
+                    PilotRecord *updated = backendToPalm(backendRecord, context);
+                    if (updated) {
+                        if (palmRecord) {
+                            // Update existing record
+                            updated->setId(palmRecord->id());
+                            writePalmRecord(updated, context);
+                            palmStats.updated++;
+                        } else {
+                            // Create new record (source was deleted)
+                            updated->setId(0);
+                            if (writePalmRecord(updated, context)) {
+                                context->state->mapIds(QString::number(updated->id()), backendRecord->id);
+                                palmStats.created++;
+                            }
+                        }
+                        delete updated;
+                        success = true;
+                    }
+                } else if (conflict.target.isDeleted()) {
+                    // Target was deleted - delete source too
+                    if (palmRecord) {
+                        deletePalmRecord(QString::number(palmRecord->id()), context);
+                        context->state->removePalmMapping(QString::number(palmRecord->id()));
+                        palmStats.deleted++;
+                        success = true;
+                    }
+                }
+                break;
+
+            case QSyncCore::ConflictDecision::UseBoth:
+                // Keep both - duplicate the records
+                if (palmRecord) {
+                    BackendRecord *newBackend = palmToBackend(palmRecord, context);
+                    if (newBackend) {
+                        QString newId = context->backend->createRecord(context->collectionId, *newBackend);
+                        if (!newId.isEmpty()) {
+                            context->state->mapIds(conflict.source.id, newId);
+                            pcStats.created++;
+                        }
+                        delete newBackend;
+                    }
+                }
+                if (backendRecord && palmRecord) {
+                    // Create backend record on Palm
+                    PilotRecord *newPalm = backendToPalm(backendRecord, context);
+                    if (newPalm) {
+                        newPalm->setId(0);
+                        if (writePalmRecord(newPalm, context)) {
+                            context->state->mapIds(QString::number(newPalm->id()), backendRecord->id);
+                            palmStats.created++;
+                        }
+                        delete newPalm;
+                    }
+                }
+                success = true;
+                break;
+
+            case QSyncCore::ConflictDecision::DeleteBoth:
+                // Delete from both sides
+                if (palmRecord) {
+                    deletePalmRecord(QString::number(palmRecord->id()), context);
+                    context->state->removePalmMapping(QString::number(palmRecord->id()));
+                    palmStats.deleted++;
+                }
+                if (backendRecord) {
+                    context->backend->deleteRecord(backendRecord->id);
+                    context->state->removePCMapping(backendRecord->id);
+                    pcStats.deleted++;
+                }
+                success = true;
+                break;
+
+            case QSyncCore::ConflictDecision::Skip:
+                // Skip - do nothing, just mark as applied
+                success = true;
+                break;
+
+            case QSyncCore::ConflictDecision::Pending:
+            case QSyncCore::ConflictDecision::Merge:
+                // These shouldn't be in resolved-unapplied list
+                errorMsg = "Unexpected decision state";
+                break;
+        }
+
+        // Mark the conflict as applied
+        store->markApplied(conflict.conflictId, success, errorMsg);
+
+        if (success) {
+            appliedCount++;
+            emit logMessage(QString("    Applied successfully"));
+        } else {
+            emit logMessage(QString("    Failed to apply: %1").arg(errorMsg.isEmpty() ? "Unknown error" : errorMsg));
+        }
+
+        // Cleanup
+        if (ownsPalmRecord && palmRecord) {
+            delete palmRecord;
+        }
+        if (ownsBackendRecord && backendRecord) {
+            delete backendRecord;
+        }
+    }
+
+    emit logMessage(QString("Applied %1 of %2 conflict resolutions")
+        .arg(appliedCount).arg(conflicts.size()));
+
+    return appliedCount;
 }
 
 BackendRecord* Conduit::findMatch(PilotRecord *palmRecord,

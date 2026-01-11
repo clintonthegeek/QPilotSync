@@ -15,9 +15,17 @@ SyncState::SyncState(const QString &userName,
     : QObject(parent)
     , m_userName(userName)
     , m_conduitId(conduitId)
+    , m_idMappings(new QSyncCore::IdMappingStore(this))
+    , m_baseline(new QSyncCore::BaselineStore(this))
+    , m_conflicts(new QSyncCore::ConflictStore(this))
 {
-    // State directory will be set by setStateDirectory()
-    // Default to empty - must be configured before use
+    // Forward change signals
+    connect(m_idMappings, &QSyncCore::IdMappingStore::mappingsChanged,
+            this, &SyncState::stateChanged);
+    connect(m_baseline, &QSyncCore::BaselineStore::baselineChanged,
+            this, &SyncState::stateChanged);
+    connect(m_conflicts, &QSyncCore::ConflictStore::conflictsChanged,
+            this, &SyncState::stateChanged);
 }
 
 SyncState::~SyncState()
@@ -44,95 +52,70 @@ void SyncState::ensureStateDir()
 
 void SyncState::mapIds(const QString &palmId, const QString &pcId)
 {
-    // Remove any existing mappings for these IDs
-    if (m_mappings.contains(palmId)) {
-        QString oldPcId = m_mappings[palmId].pcId;
-        m_pcToPalmMap.remove(oldPcId);
-    }
-    if (m_pcToPalmMap.contains(pcId)) {
-        QString oldPalmId = m_pcToPalmMap[pcId];
-        m_mappings.remove(oldPalmId);
-    }
-
-    // Create new mapping
-    IDMapping mapping;
-    mapping.palmId = palmId;
-    mapping.pcId = pcId;
-    mapping.lastSynced = QDateTime::currentDateTime();
-
-    m_mappings[palmId] = mapping;
-    m_pcToPalmMap[pcId] = palmId;
-
-    emit stateChanged();
+    m_idMappings->mapIds(palmId, pcId);
 }
 
 void SyncState::removePalmMapping(const QString &palmId)
 {
-    if (m_mappings.contains(palmId)) {
-        QString pcId = m_mappings[palmId].pcId;
-        m_pcToPalmMap.remove(pcId);
-        m_mappings.remove(palmId);
-        emit stateChanged();
-    }
+    m_idMappings->removeBySource(palmId);
 }
 
 void SyncState::removePCMapping(const QString &pcId)
 {
-    if (m_pcToPalmMap.contains(pcId)) {
-        QString palmId = m_pcToPalmMap[pcId];
-        m_mappings.remove(palmId);
-        m_pcToPalmMap.remove(pcId);
-        emit stateChanged();
-    }
+    m_idMappings->removeByTarget(pcId);
 }
 
 QString SyncState::pcIdForPalm(const QString &palmId) const
 {
-    if (m_mappings.contains(palmId)) {
-        return m_mappings[palmId].pcId;
-    }
-    return QString();
+    return m_idMappings->targetForSource(palmId);
 }
 
 QString SyncState::palmIdForPC(const QString &pcId) const
 {
-    return m_pcToPalmMap.value(pcId);
+    return m_idMappings->sourceForTarget(pcId);
 }
 
 bool SyncState::hasPalmMapping(const QString &palmId) const
 {
-    return m_mappings.contains(palmId);
+    return m_idMappings->hasSourceMapping(palmId);
 }
 
 bool SyncState::hasPCMapping(const QString &pcId) const
 {
-    return m_pcToPalmMap.contains(pcId);
+    return m_idMappings->hasTargetMapping(pcId);
 }
 
 QStringList SyncState::allPalmIds() const
 {
-    return m_mappings.keys();
+    return m_idMappings->allSourceIds();
 }
 
 QStringList SyncState::allPCIds() const
 {
-    return m_pcToPalmMap.keys();
+    return m_idMappings->allTargetIds();
 }
 
 IDMapping SyncState::getMapping(const QString &palmId) const
 {
-    return m_mappings.value(palmId);
+    // Convert from QSyncCore::IdMapping to Sync::IDMapping
+    QSyncCore::IdMapping coreMapping = m_idMappings->getMapping(palmId);
+
+    IDMapping mapping;
+    mapping.palmId = coreMapping.sourceId;
+    mapping.pcId = coreMapping.targetId;
+    mapping.palmCategory = coreMapping.sourceCategory;
+    mapping.pcCategories = coreMapping.targetCategories;
+    mapping.lastSynced = coreMapping.lastSynced;
+    mapping.archived = coreMapping.archived;
+
+    return mapping;
 }
 
 void SyncState::updateCategories(const QString &palmId,
                                   const QString &palmCategory,
                                   const QStringList &pcCategories)
 {
-    if (m_mappings.contains(palmId)) {
-        m_mappings[palmId].palmCategory = palmCategory;
-        m_mappings[palmId].pcCategories = pcCategories;
-        emit stateChanged();
-    }
+    m_idMappings->updateCategories(palmId, palmCategory, pcCategories);
 }
 
 // ========== Baseline Operations ==========
@@ -144,21 +127,17 @@ QString SyncState::baselinePath() const
 
 void SyncState::saveBaseline(const QMap<QString, QString> &pcFileHashes)
 {
-    m_baselineHashes = pcFileHashes;
-    emit stateChanged();
+    m_baseline->saveBaseline(pcFileHashes);
 }
 
 QString SyncState::baselineHash(const QString &pcId) const
 {
-    return m_baselineHashes.value(pcId);
+    return m_baseline->hash(pcId);
 }
 
 bool SyncState::hasFileChanged(const QString &pcId, const QString &currentHash) const
 {
-    if (!m_baselineHashes.contains(pcId)) {
-        return true;  // New file
-    }
-    return m_baselineHashes[pcId] != currentHash;
+    return m_baseline->hasChanged(pcId, currentHash);
 }
 
 // ========== Sync Metadata ==========
@@ -187,24 +166,46 @@ void SyncState::setLastSyncPC(const QString &pcName)
 
 bool SyncState::isFirstSync() const
 {
-    return m_mappings.isEmpty() && !m_lastSyncTime.isValid();
+    return m_idMappings->isEmpty() && !m_lastSyncTime.isValid();
 }
 
 bool SyncState::validateMappings(const QStringList &palmIds) const
 {
     // All Palm IDs should have mappings
     for (const QString &id : palmIds) {
-        if (!m_mappings.contains(id)) {
+        if (!m_idMappings->hasSourceMapping(id)) {
             return false;
         }
     }
 
     // Mapping count should match
-    if (m_mappings.size() != palmIds.size()) {
+    if (m_idMappings->count() != palmIds.size()) {
         return false;
     }
 
     return true;
+}
+
+// ========== Conflict Operations ==========
+
+bool SyncState::hasPendingConflicts() const
+{
+    return m_conflicts->hasPendingConflicts();
+}
+
+int SyncState::pendingConflictCount() const
+{
+    return m_conflicts->pendingCount();
+}
+
+QList<QSyncCore::ConflictRecord> SyncState::pendingConflicts() const
+{
+    return m_conflicts->pendingConflicts();
+}
+
+void SyncState::clearPendingConflicts()
+{
+    m_conflicts->clear();
 }
 
 // ========== Persistence ==========
@@ -239,25 +240,40 @@ bool SyncState::load()
     m_lastSyncTime = QDateTime::fromString(root["lastSyncTime"].toString(), Qt::ISODate);
     m_lastSyncPC = root["lastSyncPC"].toString();
 
-    // Load mappings
-    m_mappings.clear();
-    m_pcToPalmMap.clear();
-
+    // Load mappings via IdMappingStore
+    // Need to convert from legacy format to new format
     QJsonArray mappingsArray = root["mappings"].toArray();
-    for (const QJsonValue &val : mappingsArray) {
-        IDMapping mapping = mappingFromJson(val.toObject());
-        m_mappings[mapping.palmId] = mapping;
-        m_pcToPalmMap[mapping.pcId] = mapping.palmId;
+    if (!mappingsArray.isEmpty()) {
+        // Convert legacy format (palmId/pcId) to new format (sourceId/targetId)
+        QJsonArray convertedArray;
+        for (const QJsonValue &val : mappingsArray) {
+            QJsonObject oldObj = val.toObject();
+            QJsonObject newObj;
+            newObj["sourceId"] = oldObj["palmId"];
+            newObj["targetId"] = oldObj["pcId"];
+            newObj["sourceCategory"] = oldObj["palmCategory"];
+            newObj["targetCategories"] = oldObj["pcCategories"];
+            newObj["lastSynced"] = oldObj["lastSynced"];
+            newObj["archived"] = oldObj["archived"];
+            convertedArray.append(newObj);
+        }
+        m_idMappings->fromJson(convertedArray);
     }
 
-    // Load baseline hashes
-    m_baselineHashes.clear();
+    // Load baseline hashes via BaselineStore
     QJsonObject baselineObj = root["baseline"].toObject();
-    for (auto it = baselineObj.begin(); it != baselineObj.end(); ++it) {
-        m_baselineHashes[it.key()] = it.value().toString();
+    if (!baselineObj.isEmpty()) {
+        m_baseline->fromJson(baselineObj);
     }
 
-    qDebug() << "[SyncState] Loaded" << m_mappings.size() << "mappings for" << m_conduitId;
+    // Load pending conflicts via ConflictStore
+    QJsonArray conflictsArray = root["conflicts"].toArray();
+    if (!conflictsArray.isEmpty()) {
+        m_conflicts->fromJson(conflictsArray);
+    }
+
+    qDebug() << "[SyncState] Loaded" << m_idMappings->count() << "mappings,"
+             << m_conflicts->pendingCount() << "pending conflicts for" << m_conduitId;
     return true;
 }
 
@@ -274,21 +290,29 @@ bool SyncState::save()
     root["conduitId"] = m_conduitId;
     root["lastSyncTime"] = m_lastSyncTime.toString(Qt::ISODate);
     root["lastSyncPC"] = m_lastSyncPC;
-    root["version"] = 1;
+    root["version"] = 2;  // Version 2 uses QSyncCore format
 
-    // Save mappings
-    QJsonArray mappingsArray;
-    for (const IDMapping &mapping : m_mappings) {
-        mappingsArray.append(mappingToJson(mapping));
+    // Save mappings - convert from QSyncCore format to legacy format for compatibility
+    QJsonArray coreArray = m_idMappings->toJson();
+    QJsonArray legacyArray;
+    for (const QJsonValue &val : coreArray) {
+        QJsonObject coreObj = val.toObject();
+        QJsonObject legacyObj;
+        legacyObj["palmId"] = coreObj["sourceId"];
+        legacyObj["pcId"] = coreObj["targetId"];
+        legacyObj["palmCategory"] = coreObj["sourceCategory"];
+        legacyObj["pcCategories"] = coreObj["targetCategories"];
+        legacyObj["lastSynced"] = coreObj["lastSynced"];
+        legacyObj["archived"] = coreObj["archived"];
+        legacyArray.append(legacyObj);
     }
-    root["mappings"] = mappingsArray;
+    root["mappings"] = legacyArray;
 
-    // Save baseline hashes
-    QJsonObject baselineObj;
-    for (auto it = m_baselineHashes.begin(); it != m_baselineHashes.end(); ++it) {
-        baselineObj[it.key()] = it.value();
-    }
-    root["baseline"] = baselineObj;
+    // Save baseline hashes via BaselineStore
+    root["baseline"] = m_baseline->toJson();
+
+    // Save pending conflicts via ConflictStore
+    root["conflicts"] = m_conflicts->toJson();
 
     // Write to file
     QFile file(mappingsFile);
@@ -301,15 +325,16 @@ bool SyncState::save()
     file.write(doc.toJson(QJsonDocument::Indented));
     file.close();
 
-    qDebug() << "[SyncState] Saved" << m_mappings.size() << "mappings for" << m_conduitId;
+    qDebug() << "[SyncState] Saved" << m_idMappings->count() << "mappings,"
+             << m_conflicts->pendingCount() << "pending conflicts for" << m_conduitId;
     return true;
 }
 
 void SyncState::clear()
 {
-    m_mappings.clear();
-    m_pcToPalmMap.clear();
-    m_baselineHashes.clear();
+    m_idMappings->clear();
+    m_baseline->clear();
+    m_conflicts->clear();
     m_lastSyncTime = QDateTime();
     m_lastSyncPC.clear();
     emit stateChanged();
@@ -324,35 +349,6 @@ void SyncState::setStateDirectory(const QString &baseDir)
 {
     m_stateDir = QDir(baseDir).filePath(m_userName + "/" + m_conduitId);
     ensureStateDir();
-}
-
-QJsonObject SyncState::mappingToJson(const IDMapping &mapping) const
-{
-    QJsonObject obj;
-    obj["palmId"] = mapping.palmId;
-    obj["pcId"] = mapping.pcId;
-    obj["palmCategory"] = mapping.palmCategory;
-    obj["pcCategories"] = QJsonArray::fromStringList(mapping.pcCategories);
-    obj["lastSynced"] = mapping.lastSynced.toString(Qt::ISODate);
-    obj["archived"] = mapping.archived;
-    return obj;
-}
-
-IDMapping SyncState::mappingFromJson(const QJsonObject &json) const
-{
-    IDMapping mapping;
-    mapping.palmId = json["palmId"].toString();
-    mapping.pcId = json["pcId"].toString();
-    mapping.palmCategory = json["palmCategory"].toString();
-
-    QJsonArray catArray = json["pcCategories"].toArray();
-    for (const QJsonValue &val : catArray) {
-        mapping.pcCategories << val.toString();
-    }
-
-    mapping.lastSynced = QDateTime::fromString(json["lastSynced"].toString(), Qt::ISODate);
-    mapping.archived = json["archived"].toBool();
-    return mapping;
 }
 
 } // namespace Sync

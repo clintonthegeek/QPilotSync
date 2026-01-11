@@ -1,5 +1,6 @@
 #include "syncengine.h"
 #include "../palm/kpilotdevicelink.h"
+#include "qsynccore/conflictpolicy.h"
 
 #include <QStandardPaths>
 #include <QDir>
@@ -266,6 +267,40 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     // For now, use conduit ID as collection ID
     context.collectionId = conduitId;
 
+    // Set up new conflict handling system
+    // Create a handler that defers conflicts to the state's conflict store
+    QSyncCore::AutomaticConflictHandler conflictHandler(state->conflictStore());
+
+    // Configure conflict policy from engine settings
+    QSyncCore::ConflictPolicy conflictSettings;
+
+    // Auto-resolve strategy
+    if (m_conflictAutoResolve == "palm_wins") {
+        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::SourceAlwaysWins;
+    } else if (m_conflictAutoResolve == "pc_wins") {
+        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::TargetAlwaysWins;
+    } else if (m_conflictAutoResolve == "newer_wins") {
+        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::NewerWins;
+    } else if (m_conflictAutoResolve == "older_wins") {
+        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::OlderWins;
+    } else if (m_conflictAutoResolve == "duplicate") {
+        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::DuplicateAll;
+    } else {
+        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::None;
+    }
+
+    // Fallback behavior
+    if (m_conflictFallback == "skip") {
+        conflictSettings.fallback = QSyncCore::FallbackBehavior::Skip;
+    } else if (m_conflictFallback == "use_default") {
+        conflictSettings.fallback = QSyncCore::FallbackBehavior::UseDefault;
+    } else {
+        conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
+    }
+
+    context.conflictHandler = &conflictHandler;
+    context.conflictSettings = conflictSettings;
+
     // Pass cancellation check to conduit
     if (m_cancelCheck) {
         cond->setCancelCheck(m_cancelCheck);
@@ -306,6 +341,16 @@ void SyncEngine::setCancelCheck(std::function<bool()> callback)
 void SyncEngine::setConflictPolicy(ConflictResolution policy)
 {
     m_conflictPolicy = policy;
+}
+
+void SyncEngine::setConflictAutoResolve(const QString &strategy)
+{
+    m_conflictAutoResolve = strategy;
+}
+
+void SyncEngine::setConflictFallback(const QString &fallback)
+{
+    m_conflictFallback = fallback;
 }
 
 void SyncEngine::setStateDirectory(const QString &path)

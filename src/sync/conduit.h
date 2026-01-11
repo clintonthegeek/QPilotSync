@@ -12,6 +12,8 @@
 #include "synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
+#include "qsynccore/conflictpolicy.h"
+#include "qsynccore/conflictstore.h"
 
 class QWidget;
 
@@ -33,11 +35,19 @@ public:
     SyncBackend *backend = nullptr;          ///< PC-side storage
     SyncState *state = nullptr;              ///< ID mappings and baseline
     SyncMode mode = SyncMode::HotSync;       ///< Current sync mode
+
+    // Legacy conflict resolution (for backwards compatibility)
     ConflictResolution conflictPolicy = ConflictResolution::AskUser;
+
+    // New conflict handling system
+    QSyncCore::ConflictHandler *conflictHandler = nullptr;  ///< Handler for conflicts
+    QSyncCore::ConflictStore *conflictStore = nullptr;      ///< Store for deferred conflicts
+    QSyncCore::ConflictPolicy conflictSettings;             ///< Conflict resolution settings
 
     QString palmDatabase;    ///< Palm database name (e.g., "MemoDB")
     QString collectionId;    ///< Backend collection ID
     QString userName;        ///< Palm username
+    QString syncSessionId;   ///< Unique ID for this sync session
 
     bool isFirstSync = false;
     bool cancelled = false;
@@ -360,6 +370,50 @@ protected:
                                   SyncContext *context,
                                   SyncStats &palmStats,
                                   SyncStats &pcStats);
+
+    /**
+     * @brief Resolve conflict using the new handler system
+     */
+    bool resolveConflictWithHandler(PilotRecord *palmRecord,
+                                     BackendRecord *backendRecord,
+                                     SyncContext *context,
+                                     SyncStats &palmStats,
+                                     SyncStats &pcStats);
+
+    /**
+     * @brief Apply a conflict decision
+     */
+    bool applyConflictDecision(const QSyncCore::ConflictRecord &conflict,
+                                QSyncCore::ConflictDecision decision,
+                                PilotRecord *palmRecord,
+                                BackendRecord *backendRecord,
+                                SyncContext *context,
+                                SyncStats &palmStats,
+                                SyncStats &pcStats);
+
+    /**
+     * @brief Legacy conflict resolution (for backwards compatibility)
+     */
+    bool resolveConflictLegacy(PilotRecord *palmRecord,
+                                BackendRecord *backendRecord,
+                                SyncContext *context,
+                                SyncStats &palmStats,
+                                SyncStats &pcStats);
+
+    /**
+     * @brief Apply previously resolved conflicts from the conflict store
+     *
+     * Called at the start of sync to apply user-resolved conflicts
+     * before the main sync algorithm runs.
+     *
+     * @param context Sync context
+     * @param palmStats Stats for Palm-side changes
+     * @param pcStats Stats for PC-side changes
+     * @return Number of conflicts applied
+     */
+    int applyResolvedConflicts(SyncContext *context,
+                               SyncStats &palmStats,
+                               SyncStats &pcStats);
 
     // ========== Helper Methods ==========
 

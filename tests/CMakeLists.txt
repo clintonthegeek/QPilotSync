@@ -71,6 +71,10 @@ add_qpilotsync_test(test_syncstate
     test_syncstate.cpp
 )
 
+add_qpilotsync_test(test_conflict
+    test_conflict.cpp
+)
+
 add_qpilotsync_test(test_localfilebackend
     test_localfilebackend.cpp
 )

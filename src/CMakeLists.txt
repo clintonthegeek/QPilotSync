@@ -13,6 +13,12 @@ add_library(QPilotCore STATIC
     app/exporthandler.h
     app/importhandler.cpp
     app/importhandler.h
+    app/conflictdialog.cpp
+    app/conflictdialog.h
+    app/conflictreviewwidget.cpp
+    app/conflictreviewwidget.h
+    app/interactiveconflicthandler.cpp
+    app/interactiveconflicthandler.h
 
     # Settings and dialogs
     settings.cpp
@@ -47,6 +53,19 @@ add_library(QPilotCore STATIC
     mappers/calendarmapper.h
     mappers/todomapper.cpp
     mappers/todomapper.h
+
+    # QSyncCore - Shared sync library components (for future PlanStanLite integration)
+    sync/qsynccore/synccommon.h
+    sync/qsynccore/idmappingstore.cpp
+    sync/qsynccore/idmappingstore.h
+    sync/qsynccore/baselinestore.cpp
+    sync/qsynccore/baselinestore.h
+    sync/qsynccore/conflictrecord.cpp
+    sync/qsynccore/conflictrecord.h
+    sync/qsynccore/conflictstore.cpp
+    sync/qsynccore/conflictstore.h
+    sync/qsynccore/conflictpolicy.cpp
+    sync/qsynccore/conflictpolicy.h
 
     # Sync engine (Phase 4)
     sync/synctypes.h
@@ -87,6 +106,7 @@ target_link_libraries(QPilotCore
 target_include_directories(QPilotCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/sync
 )
 
 # Ensure pilot-link is built before QPilotCore
