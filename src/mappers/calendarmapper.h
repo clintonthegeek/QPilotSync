@@ -5,6 +5,8 @@
 #include <QStringList>
 #include <QDateTime>
 #include <QObject>
+#include <KCalendarCore/Event>
+#include <KCalendarCore/Calendar>
 #include "../palm/pilotrecord.h"
 
 /**
@@ -83,6 +85,21 @@ public:
     static QString eventToICal(const Event &event, const QString &categoryName = QString());
 
     /**
+     * @brief Convert an Event to a KCalendarCore::Event
+     * @param event The internal event structure
+     * @param categoryName Optional category name
+     * @return KCalendarCore::Event::Ptr
+     */
+    static KCalendarCore::Event::Ptr eventToKCalEvent(const Event &event, const QString &categoryName = QString());
+
+    /**
+     * @brief Convert a KCalendarCore::Event to an internal Event structure
+     * @param kcalEvent The KCalendarCore event
+     * @return Event structure with parsed data
+     */
+    static Event kCalEventToEvent(const KCalendarCore::Event::Ptr &kcalEvent);
+
+    /**
      * @brief Generate a safe filename from event description
      * @param event The event
      * @return Safe filename for the .ics file
@@ -105,7 +122,7 @@ public:
      */
     static PilotRecord* packEvent(const Event &event);
 
-signals:
+Q_SIGNALS:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);
 };

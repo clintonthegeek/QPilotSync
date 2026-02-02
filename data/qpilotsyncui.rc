@@ -1,0 +1,100 @@
+<!DOCTYPE gui SYSTEM "kpartgui.dtd">
+<gui name="qpilotsync" version="1">
+    <MenuBar>
+        <Menu name="file">
+            <text>&amp;File</text>
+            <Action name="file_new_profile"/>
+            <Action name="file_open_profile"/>
+            <Action name="file_recent_profiles"/>
+            <Action name="file_close_profile"/>
+            <Separator/>
+            <Action name="file_profile_settings"/>
+            <Separator/>
+            <Action name="options_configure"/>
+            <Separator/>
+            <Action name="file_quit"/>
+        </Menu>
+
+        <Menu name="device">
+            <text>&amp;Device</text>
+            <Action name="device_connect"/>
+            <Action name="device_disconnect"/>
+            <Action name="device_cancel_connection"/>
+            <Separator/>
+            <Action name="device_list_databases"/>
+            <Action name="device_set_user_info"/>
+            <Action name="device_info"/>
+        </Menu>
+
+        <Menu name="sync">
+            <text>&amp;Sync</text>
+            <Action name="sync_hotsync"/>
+            <Action name="sync_fullsync"/>
+            <Separator/>
+            <Action name="sync_copy_palm_to_pc"/>
+            <Action name="sync_copy_pc_to_palm"/>
+            <Separator/>
+            <Action name="sync_backup"/>
+            <Action name="sync_restore"/>
+            <Separator/>
+            <Action name="sync_change_folder"/>
+            <Action name="sync_open_folder"/>
+            <Separator/>
+            <Action name="sync_install_files"/>
+        </Menu>
+
+        <Menu name="data">
+            <text>D&amp;ata</text>
+            <Menu name="export">
+                <text>&amp;Export</text>
+                <Action name="export_memos"/>
+                <Action name="export_contacts"/>
+                <Action name="export_calendar"/>
+                <Action name="export_todos"/>
+                <Separator/>
+                <Action name="export_all"/>
+            </Menu>
+            <Menu name="import">
+                <text>&amp;Import</text>
+                <Action name="import_memo"/>
+                <Action name="import_contact"/>
+                <Action name="import_event"/>
+                <Action name="import_todo"/>
+            </Menu>
+        </Menu>
+
+        <Menu name="view">
+            <text>&amp;View</text>
+            <Action name="view_tabbed"/>
+            <Separator/>
+            <Action name="view_show_log"/>
+            <Action name="view_clear_log"/>
+            <Separator/>
+            <Action name="view_show_conflicts"/>
+        </Menu>
+
+        <Menu name="help">
+            <text>&amp;Help</text>
+        </Menu>
+    </MenuBar>
+
+    <ToolBar name="mainToolBar" noMerge="1">
+        <text>Main Toolbar</text>
+        <Action name="file_new_profile"/>
+        <Action name="file_open_profile"/>
+        <Separator/>
+        <Action name="device_connect"/>
+        <Action name="device_disconnect"/>
+        <Separator/>
+        <Action name="sync_hotsync"/>
+        <Action name="sync_fullsync"/>
+        <Separator/>
+        <Action name="sync_backup"/>
+        <Action name="sync_restore"/>
+        <Separator/>
+        <Action name="sync_install_files"/>
+        <Action name="sync_open_folder"/>
+    </ToolBar>
+
+    <StatusBar/>
+</gui>

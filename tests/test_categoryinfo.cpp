@@ -261,10 +261,11 @@ void TestCategoryInfo::testPackSizeConsistent()
 {
     CategoryInfo catInfo;
 
-    // Pack size should always be the size of CategoryAppInfo_t
+    // Pack size is the wire format size, NOT sizeof(CategoryAppInfo_t)
+    // Wire format: 2 (renamed bits) + 256 (16 names × 16 bytes) + 16 (IDs) + 4 (lastUniqueID + gap) = 278
     size_t size = catInfo.packSize();
     QVERIFY(size > 0);
-    QCOMPARE(size, sizeof(CategoryAppInfo_t));
+    QCOMPARE(size, static_cast<size_t>(278));
 }
 
 // ========== Dirty Flag Defaults ==========

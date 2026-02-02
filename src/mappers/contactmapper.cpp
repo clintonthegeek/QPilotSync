@@ -214,7 +214,7 @@ QString ContactMapper::contactToVCard(const Contact &contact, const QString &cat
     // Full name (FN) - required field
     QString fullName;
     if (!contact.firstName.isEmpty() && !contact.lastName.isEmpty()) {
-        fullName = QString("%1 %2").arg(contact.firstName, contact.lastName);
+        fullName = QStringLiteral("%1 %2").arg(contact.firstName, contact.lastName);
     } else if (!contact.firstName.isEmpty()) {
         fullName = contact.firstName;
     } else if (!contact.lastName.isEmpty()) {
@@ -224,21 +224,21 @@ QString ContactMapper::contactToVCard(const Contact &contact, const QString &cat
     } else {
         fullName = "Unknown";
     }
-    vcard += foldLine(QString("FN:%1").arg(fullName));
+    vcard += foldLine(QStringLiteral("FN:%1").arg(fullName));
 
     // Structured name (N) - Family;Given;Middle;Prefix;Suffix
-    vcard += foldLine(QString("N:%1;%2;;;")
+    vcard += foldLine(QStringLiteral("N:%1;%2;;;")
         .arg(contact.lastName.isEmpty() ? "" : contact.lastName)
         .arg(contact.firstName.isEmpty() ? "" : contact.firstName));
 
     // Organization
     if (!contact.company.isEmpty()) {
-        vcard += foldLine(QString("ORG:%1").arg(contact.company));
+        vcard += foldLine(QStringLiteral("ORG:%1").arg(contact.company));
     }
 
     // Title
     if (!contact.title.isEmpty()) {
-        vcard += foldLine(QString("TITLE:%1").arg(contact.title));
+        vcard += foldLine(QStringLiteral("TITLE:%1").arg(contact.title));
     }
 
     // Phone numbers with type labels
@@ -254,9 +254,9 @@ QString ContactMapper::contactToVCard(const Contact &contact, const QString &cat
 
                 // Handle email separately
                 if (labelIndex == 4) {
-                    vcard += foldLine(QString("EMAIL;TYPE=internet:%1").arg(phones[i]));
+                    vcard += foldLine(QStringLiteral("EMAIL;TYPE=internet:%1").arg(phones[i]));
                 } else {
-                    vcard += foldLine(QString("TEL;TYPE=%1:%2").arg(phoneType, phones[i]));
+                    vcard += foldLine(QStringLiteral("TEL;TYPE=%1:%2").arg(phoneType, phones[i]));
                 }
             }
         }
@@ -266,36 +266,36 @@ QString ContactMapper::contactToVCard(const Contact &contact, const QString &cat
     if (!contact.address.isEmpty() || !contact.city.isEmpty() ||
         !contact.state.isEmpty() || !contact.zip.isEmpty() || !contact.country.isEmpty()) {
         // ADR format: ;;street;city;state;postal;country
-        vcard += foldLine(QString("ADR;TYPE=work:;;%1;%2;%3;%4;%5")
+        vcard += foldLine(QStringLiteral("ADR;TYPE=work:;;%1;%2;%3;%4;%5")
             .arg(contact.address, contact.city, contact.state, contact.zip, contact.country));
     }
 
     // Custom fields as X- properties
     if (!contact.custom1.isEmpty()) {
-        vcard += foldLine(QString("X-PALM-CUSTOM1:%1").arg(contact.custom1));
+        vcard += foldLine(QStringLiteral("X-PALM-CUSTOM1:%1").arg(contact.custom1));
     }
     if (!contact.custom2.isEmpty()) {
-        vcard += foldLine(QString("X-PALM-CUSTOM2:%1").arg(contact.custom2));
+        vcard += foldLine(QStringLiteral("X-PALM-CUSTOM2:%1").arg(contact.custom2));
     }
     if (!contact.custom3.isEmpty()) {
-        vcard += foldLine(QString("X-PALM-CUSTOM3:%1").arg(contact.custom3));
+        vcard += foldLine(QStringLiteral("X-PALM-CUSTOM3:%1").arg(contact.custom3));
     }
     if (!contact.custom4.isEmpty()) {
-        vcard += foldLine(QString("X-PALM-CUSTOM4:%1").arg(contact.custom4));
+        vcard += foldLine(QStringLiteral("X-PALM-CUSTOM4:%1").arg(contact.custom4));
     }
 
     // Note
     if (!contact.note.isEmpty()) {
-        vcard += foldLine(QString("NOTE:%1").arg(contact.note));
+        vcard += foldLine(QStringLiteral("NOTE:%1").arg(contact.note));
     }
 
     // Category
     if (!categoryName.isEmpty()) {
-        vcard += foldLine(QString("CATEGORIES:%1").arg(categoryName));
+        vcard += foldLine(QStringLiteral("CATEGORIES:%1").arg(categoryName));
     }
 
     // UID using Palm record ID
-    vcard += foldLine(QString("UID:palm-%1").arg(contact.recordId));
+    vcard += foldLine(QStringLiteral("UID:palm-%1").arg(contact.recordId));
 
     vcard += "END:VCARD\r\n";
 
@@ -308,7 +308,7 @@ QString ContactMapper::generateFilename(const Contact &contact)
 
     // Use name as base filename
     if (!contact.firstName.isEmpty() && !contact.lastName.isEmpty()) {
-        filename = QString("%1_%2").arg(contact.firstName, contact.lastName);
+        filename = QStringLiteral("%1_%2").arg(contact.firstName, contact.lastName);
     } else if (!contact.firstName.isEmpty()) {
         filename = contact.firstName;
     } else if (!contact.lastName.isEmpty()) {
@@ -316,7 +316,7 @@ QString ContactMapper::generateFilename(const Contact &contact)
     } else if (!contact.company.isEmpty()) {
         filename = contact.company;
     } else {
-        filename = QString("contact_%1").arg(contact.recordId);
+        filename = QStringLiteral("contact_%1").arg(contact.recordId);
     }
 
     // Sanitize filename
@@ -358,12 +358,12 @@ static QString unfoldVCardContent(const QString &content)
 static int phoneTypeToLabelIndex(const QString &type)
 {
     QString t = type.toLower();
-    if (t.contains("cell") || t.contains("mobile")) return 7;
-    if (t.contains("fax")) return 2;
-    if (t.contains("pager")) return 6;
-    if (t.contains("home")) return 1;
-    if (t.contains("work")) return 0;
-    if (t.contains("pref") || t.contains("main")) return 5;
+    if (t.contains(QStringLiteral("cell")) || t.contains(QStringLiteral("mobile"))) return 7;
+    if (t.contains(QStringLiteral("fax"))) return 2;
+    if (t.contains(QStringLiteral("pager"))) return 6;
+    if (t.contains(QStringLiteral("home"))) return 1;
+    if (t.contains(QStringLiteral("work"))) return 0;
+    if (t.contains(QStringLiteral("pref")) || t.contains(QStringLiteral("main"))) return 5;
     return 3; // Other
 }
 
@@ -390,12 +390,12 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
     QString fullName;  // Store FN for fallback
 
     for (const QString &line : lines) {
-        if (line.startsWith("BEGIN:") || line.startsWith("END:") || line.startsWith("VERSION:")) {
+        if (line.startsWith(QStringLiteral("BEGIN:")) || line.startsWith(QStringLiteral("END:")) || line.startsWith(QStringLiteral("VERSION:"))) {
             continue;
         }
 
         // Parse property and value
-        int colonPos = line.indexOf(':');
+        int colonPos = line.indexOf(QLatin1Char(':'));
         if (colonPos == -1) continue;
 
         QString propertyPart = line.left(colonPos);
@@ -408,24 +408,24 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
         // Parse parameters
         QString typeParam;
         for (int i = 1; i < propertyParts.size(); i++) {
-            if (propertyParts[i].toUpper().startsWith("TYPE=")) {
+            if (propertyParts[i].toUpper().startsWith(QStringLiteral("TYPE="))) {
                 typeParam = propertyParts[i].mid(5);
             }
         }
 
-        if (propertyName == "FN") {
+        if (propertyName == QStringLiteral("FN")) {
             // Store full name for fallback use
             fullName = value;
-        } else if (propertyName == "N") {
+        } else if (propertyName == QStringLiteral("N")) {
             // Structured name: Family;Given;Middle;Prefix;Suffix
             QStringList nameParts = value.split(';');
             if (nameParts.size() > 0) contact.lastName = nameParts[0];
             if (nameParts.size() > 1) contact.firstName = nameParts[1];
-        } else if (propertyName == "ORG") {
+        } else if (propertyName == QStringLiteral("ORG")) {
             contact.company = value;
-        } else if (propertyName == "TITLE") {
+        } else if (propertyName == QStringLiteral("TITLE")) {
             contact.title = value;
-        } else if (propertyName == "TEL") {
+        } else if (propertyName == QStringLiteral("TEL")) {
             // Phone number
             if (phoneIndex < 5) {
                 int labelIndex = phoneTypeToLabelIndex(typeParam);
@@ -441,7 +441,7 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
                 }
                 phoneIndex++;
             }
-        } else if (propertyName == "EMAIL") {
+        } else if (propertyName == QStringLiteral("EMAIL")) {
             // Email stored as phone with label 4 (E-mail)
             if (phoneIndex < 5) {
                 switch (phoneIndex) {
@@ -456,7 +456,7 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
                 }
                 phoneIndex++;
             }
-        } else if (propertyName == "ADR") {
+        } else if (propertyName == QStringLiteral("ADR")) {
             // Address: PO;Ext;Street;City;State;ZIP;Country
             QStringList addrParts = value.split(';');
             if (addrParts.size() > 2) contact.address = addrParts[2];
@@ -464,24 +464,24 @@ ContactMapper::Contact ContactMapper::vCardToContact(const QString &vcard)
             if (addrParts.size() > 4) contact.state = addrParts[4];
             if (addrParts.size() > 5) contact.zip = addrParts[5];
             if (addrParts.size() > 6) contact.country = addrParts[6];
-        } else if (propertyName == "NOTE") {
+        } else if (propertyName == QStringLiteral("NOTE")) {
             contact.note = value;
-        } else if (propertyName == "X-PALM-CUSTOM1") {
+        } else if (propertyName == QStringLiteral("X-PALM-CUSTOM1")) {
             contact.custom1 = value;
-        } else if (propertyName == "X-PALM-CUSTOM2") {
+        } else if (propertyName == QStringLiteral("X-PALM-CUSTOM2")) {
             contact.custom2 = value;
-        } else if (propertyName == "X-PALM-CUSTOM3") {
+        } else if (propertyName == QStringLiteral("X-PALM-CUSTOM3")) {
             contact.custom3 = value;
-        } else if (propertyName == "X-PALM-CUSTOM4") {
+        } else if (propertyName == QStringLiteral("X-PALM-CUSTOM4")) {
             contact.custom4 = value;
-        } else if (propertyName == "UID") {
+        } else if (propertyName == QStringLiteral("UID")) {
             // Extract record ID from UID if it's in palm-XXXX format
-            if (value.startsWith("palm-")) {
+            if (value.startsWith(QStringLiteral("palm-"))) {
                 bool ok;
                 int id = value.mid(5).toInt(&ok);
                 if (ok) contact.recordId = id;
             }
-        } else if (propertyName == "CATEGORIES") {
+        } else if (propertyName == QStringLiteral("CATEGORIES")) {
             // Store first category name for lookup by conduit
             QStringList cats = value.split(',');
             if (!cats.isEmpty()) {

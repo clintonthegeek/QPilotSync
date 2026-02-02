@@ -67,7 +67,7 @@ public:
      */
     static PilotRecord* packMemo(const Memo &memo);
 
-signals:
+Q_SIGNALS:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);
 };

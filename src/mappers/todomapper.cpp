@@ -4,58 +4,9 @@
 #include <QDate>
 #include <QTime>
 #include <QStringConverter>
-
-// Helper function to fold iCalendar lines to 75 octets as per RFC 5545 section 3.1
-static QString foldLine(const QString &line)
-{
-    const int MAX_LINE_LENGTH = 75;  // octets, excluding CRLF
-
-    QByteArray utf8 = line.toUtf8();
-    if (utf8.length() <= MAX_LINE_LENGTH) {
-        return line + "\r\n";
-    }
-
-    QString result;
-    int pos = 0;
-
-    while (pos < utf8.length()) {
-        int chunkSize = MAX_LINE_LENGTH;
-
-        // For first line, use full 75 octets
-        // For continuation lines, use 74 octets (to account for leading space)
-        if (pos > 0) {
-            chunkSize = MAX_LINE_LENGTH - 1;
-        }
-
-        // Don't split in the middle of a UTF-8 multi-byte character
-        // UTF-8 continuation bytes have the form 10xxxxxx (0x80-0xBF)
-        while (chunkSize > 0 && pos + chunkSize < utf8.length() &&
-               (utf8[pos + chunkSize] & 0xC0) == 0x80) {
-            chunkSize--;
-        }
-
-        // Extract chunk and convert back to QString
-        QByteArray chunk = utf8.mid(pos, chunkSize);
-        QString chunkStr = QString::fromUtf8(chunk);
-
-        if (pos == 0) {
-            result += chunkStr + "\r\n";
-        } else {
-            result += " " + chunkStr + "\r\n";  // Continuation line starts with space
-        }
-
-        pos += chunkSize;
-    }
-
-    return result;
-}
-
-// Helper to format QDateTime as iCalendar date (DATE format only, no time)
-static QString formatDate(const QDateTime &dt)
-{
-    // DATE format: YYYYMMDD
-    return dt.toString("yyyyMMdd");
-}
+#include <QTimeZone>
+#include <KCalendarCore/ICalFormat>
+#include <KCalendarCore/MemoryCalendar>
 
 // Windows-1252 to Unicode mapping table for 0x80-0x9F
 static const unsigned short cp1252_to_unicode[] = {
@@ -178,52 +129,29 @@ TodoMapper::Todo TodoMapper::unpackTodo(const PilotRecord *record)
     return todo;
 }
 
-QString TodoMapper::todoToICal(const Todo &todo, const QString &categoryName)
+KCalendarCore::Todo::Ptr TodoMapper::todoToKCalTodo(const Todo &todo, const QString &categoryName)
 {
-    QString ical;
-
-    // iCalendar 2.0 format (RFC 5545)
-    ical += "BEGIN:VCALENDAR\r\n";
-    ical += "VERSION:2.0\r\n";
-    ical += "PRODID:-//QPilotSync//NONSGML v0.1//EN\r\n";
-    ical += "BEGIN:VTODO\r\n";
+    auto kcalTodo = KCalendarCore::Todo::Ptr::create();
 
     // UID - using Palm record ID
-    ical += foldLine(QString("UID:palm-todo-%1").arg(todo.recordId));
+    kcalTodo->setUid(QStringLiteral("palm-todo-%1").arg(todo.recordId));
 
-    // DTSTAMP - current time as creation time
-    QString dtstamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd'T'HHmmss'Z'");
-    ical += foldLine(QString("DTSTAMP:%1").arg(dtstamp));
-
-    // SUMMARY - task title
+    // SUMMARY and DESCRIPTION
     if (!todo.description.isEmpty()) {
-        // Escape special characters per RFC 5545 section 3.3.11
-        QString summary = todo.description;
-        summary.replace("\\", "\\\\");
-        summary.replace(";", "\\;");
-        summary.replace(",", "\\,");
-        summary.replace("\n", "\\n");
-        ical += foldLine(QString("SUMMARY:%1").arg(summary));
+        kcalTodo->setSummary(todo.description);
     }
-
-    // DESCRIPTION - detailed notes
     if (!todo.note.isEmpty()) {
-        QString description = todo.note;
-        description.replace("\\", "\\\\");
-        description.replace(";", "\\;");
-        description.replace(",", "\\,");
-        description.replace("\n", "\\n");
-        ical += foldLine(QString("DESCRIPTION:%1").arg(description));
+        kcalTodo->setDescription(todo.note);
     }
 
     // CATEGORIES
     if (!categoryName.isEmpty()) {
-        ical += foldLine(QString("CATEGORIES:%1").arg(categoryName));
+        kcalTodo->setCategories(QStringList() << categoryName);
     }
 
     // CLASS - privacy
     if (todo.isPrivate) {
-        ical += "CLASS:PRIVATE\r\n";
+        kcalTodo->setSecrecy(KCalendarCore::Incidence::SecrecyPrivate);
     }
 
     // PRIORITY
@@ -232,32 +160,43 @@ QString TodoMapper::todoToICal(const Todo &todo, const QString &categoryName)
     // Mapping: Palm 1->iCal 1, Palm 2->iCal 3, Palm 3->iCal 5, Palm 4->iCal 7, Palm 5->iCal 9
     if (todo.priority >= 1 && todo.priority <= 5) {
         int icalPriority = (todo.priority - 1) * 2 + 1;  // Maps 1,2,3,4,5 to 1,3,5,7,9
-        ical += foldLine(QString("PRIORITY:%1").arg(icalPriority));
+        kcalTodo->setPriority(icalPriority);
     }
 
     // DUE - due date (if not indefinite)
     if (!todo.hasIndefiniteDue && todo.due.isValid()) {
-        // Use DATE format (not DATE-TIME) for todos
-        ical += foldLine(QString("DUE;VALUE=DATE:%1").arg(formatDate(todo.due)));
+        // Use DATE only for todos (all-day due date)
+        kcalTodo->setDtDue(QDateTime(todo.due.date(), QTime()), true);  // true = allDay
     }
 
     // STATUS and COMPLETED
     if (todo.isComplete) {
-        ical += "STATUS:COMPLETED\r\n";
-        // COMPLETED timestamp - we don't have actual completion time, use current time
-        QString completed = QDateTime::currentDateTimeUtc().toString("yyyyMMdd'T'HHmmss'Z'");
-        ical += foldLine(QString("COMPLETED:%1").arg(completed));
-        // PERCENT-COMPLETE
-        ical += "PERCENT-COMPLETE:100\r\n";
+        kcalTodo->setStatus(KCalendarCore::Incidence::StatusCompleted);
+        kcalTodo->setCompleted(QDateTime::currentDateTimeUtc());
+        kcalTodo->setPercentComplete(100);
     } else {
-        ical += "STATUS:NEEDS-ACTION\r\n";
-        ical += "PERCENT-COMPLETE:0\r\n";
+        kcalTodo->setStatus(KCalendarCore::Incidence::StatusNeedsAction);
+        kcalTodo->setPercentComplete(0);
     }
 
-    ical += "END:VTODO\r\n";
-    ical += "END:VCALENDAR\r\n";
+    return kcalTodo;
+}
 
-    return ical;
+QString TodoMapper::todoToICal(const Todo &todo, const QString &categoryName)
+{
+    // Convert to KCalendarCore todo
+    KCalendarCore::Todo::Ptr kcalTodo = todoToKCalTodo(todo, categoryName);
+
+    // Create a calendar and add the todo
+    KCalendarCore::MemoryCalendar::Ptr calendar(
+        new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
+    calendar->addTodo(kcalTodo);
+
+    // Use ICalFormat to serialize
+    KCalendarCore::ICalFormat icalFormat;
+    QString icalString = icalFormat.toString(calendar);
+
+    return icalString;
 }
 
 QString TodoMapper::generateFilename(const Todo &todo)
@@ -284,7 +223,7 @@ QString TodoMapper::generateFilename(const Todo &todo)
 
     // If empty after sanitization, use priority + record ID
     if (filename.isEmpty()) {
-        filename = QString("todo_p%1_%2")
+        filename = QStringLiteral("todo_p%1_%2")
             .arg(todo.priority)
             .arg(todo.recordId);
     }
@@ -297,55 +236,7 @@ QString TodoMapper::generateFilename(const Todo &todo)
 
 // ========== Reverse mapping: iCalendar VTODO → Palm ==========
 
-// Helper to unfold iCalendar content
-static QString unfoldICalContent(const QString &content)
-{
-    QString result = content;
-    result.replace("\r\n ", "");
-    result.replace("\r\n\t", "");
-    result.replace("\n ", "");
-    result.replace("\n\t", "");
-    return result;
-}
-
-// Helper to parse iCalendar date string (YYYYMMDD)
-static QDateTime parseICalDate(const QString &str)
-{
-    QString value = str;
-
-    // Handle UTC marker 'Z' at end
-    if (value.endsWith('Z')) {
-        value.chop(1);
-    }
-
-    // Parse based on format
-    if (value.length() == 8) {
-        // DATE only: YYYYMMDD
-        QDate date = QDate::fromString(value, "yyyyMMdd");
-        return QDateTime(date, QTime(0, 0, 0));
-    } else if (value.length() >= 15) {
-        // DATE-TIME: YYYYMMDDTHHMMSS
-        QString dateStr = value.left(8);
-        QDate date = QDate::fromString(dateStr, "yyyyMMdd");
-        return QDateTime(date, QTime(0, 0, 0));
-    }
-
-    return QDateTime();
-}
-
-// Helper to unescape iCalendar text values
-static QString unescapeICalText(const QString &text)
-{
-    QString result = text;
-    result.replace("\\n", "\n");
-    result.replace("\\N", "\n");
-    result.replace("\\,", ",");
-    result.replace("\\;", ";");
-    result.replace("\\\\", "\\");
-    return result;
-}
-
-TodoMapper::Todo TodoMapper::iCalToTodo(const QString &ical)
+TodoMapper::Todo TodoMapper::kCalTodoToTodo(const KCalendarCore::Todo::Ptr &kcalTodo)
 {
     Todo todo;
     todo.recordId = 0;
@@ -357,80 +248,92 @@ TodoMapper::Todo TodoMapper::iCalToTodo(const QString &ical)
     todo.isDirty = false;
     todo.isDeleted = false;
 
-    // Unfold the content
-    QString content = unfoldICalContent(ical);
-
-    // Split into lines
-    QStringList lines = content.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
-
-    bool inVTodo = false;
-
-    for (const QString &line : lines) {
-        if (line.startsWith("BEGIN:VTODO")) {
-            inVTodo = true;
-            continue;
-        }
-        if (line.startsWith("END:VTODO")) {
-            inVTodo = false;
-            continue;
-        }
-
-        if (!inVTodo) continue;
-
-        // Parse property and value
-        int colonPos = line.indexOf(':');
-        if (colonPos == -1) continue;
-
-        QString propertyPart = line.left(colonPos);
-        QString value = line.mid(colonPos + 1);
-
-        // Split property name from parameters
-        QString propertyName = propertyPart.split(';').first().toUpper();
-
-        if (propertyName == "SUMMARY") {
-            todo.description = unescapeICalText(value);
-        } else if (propertyName == "DESCRIPTION") {
-            todo.note = unescapeICalText(value);
-        } else if (propertyName == "DUE") {
-            todo.due = parseICalDate(value);
-            if (todo.due.isValid()) {
-                todo.hasIndefiniteDue = false;
-            }
-        } else if (propertyName == "PRIORITY") {
-            // iCalendar: 1 (highest) to 9 (lowest), 0 = undefined
-            // Palm: 1 (highest) to 5 (lowest)
-            // Mapping: iCal 1-2->Palm 1, 3-4->2, 5->3, 6-7->4, 8-9->5
-            int icalPriority = value.toInt();
-            if (icalPriority >= 1 && icalPriority <= 9) {
-                todo.priority = (icalPriority + 1) / 2;  // Maps 1,2->1, 3,4->2, 5,6->3, 7,8->4, 9->5
-                if (todo.priority > 5) todo.priority = 5;
-                if (todo.priority < 1) todo.priority = 1;
-            }
-        } else if (propertyName == "STATUS") {
-            todo.isComplete = (value.toUpper() == "COMPLETED");
-        } else if (propertyName == "PERCENT-COMPLETE") {
-            if (value == "100") {
-                todo.isComplete = true;
-            }
-        } else if (propertyName == "CLASS") {
-            todo.isPrivate = (value.toUpper() == "PRIVATE");
-        } else if (propertyName == "UID") {
-            // Extract record ID from UID if it's in palm-todo-XXXX format
-            if (value.startsWith("palm-todo-")) {
-                bool ok;
-                int id = value.mid(10).toInt(&ok);
-                if (ok) todo.recordId = id;
-            }
-        } else if (propertyName == "CATEGORIES") {
-            // Store first category name for lookup by conduit
-            QStringList cats = value.split(',');
-            if (!cats.isEmpty()) {
-                todo.categoryName = cats.first().trimmed();
-            }
-        }
+    if (!kcalTodo) {
+        return todo;
     }
 
+    // UID - extract record ID if it's in palm-todo-XXXX format
+    QString uid = kcalTodo->uid();
+    if (uid.startsWith(QLatin1String("palm-todo-"))) {
+        bool ok;
+        int id = uid.mid(10).toInt(&ok);
+        if (ok) todo.recordId = id;
+    }
+
+    // SUMMARY and DESCRIPTION
+    todo.description = kcalTodo->summary();
+    todo.note = kcalTodo->description();
+
+    // CATEGORIES
+    QStringList categories = kcalTodo->categories();
+    if (!categories.isEmpty()) {
+        todo.categoryName = categories.first();
+    }
+
+    // CLASS - privacy
+    todo.isPrivate = (kcalTodo->secrecy() == KCalendarCore::Incidence::SecrecyPrivate);
+
+    // PRIORITY
+    // iCalendar: 1 (highest) to 9 (lowest), 0 = undefined
+    // Palm: 1 (highest) to 5 (lowest)
+    // Mapping: iCal 1-2->Palm 1, 3-4->2, 5->3, 6-7->4, 8-9->5
+    int icalPriority = kcalTodo->priority();
+    if (icalPriority >= 1 && icalPriority <= 9) {
+        todo.priority = (icalPriority + 1) / 2;  // Maps 1,2->1, 3,4->2, 5,6->3, 7,8->4, 9->5
+        if (todo.priority > 5) todo.priority = 5;
+        if (todo.priority < 1) todo.priority = 1;
+    }
+
+    // DUE - due date
+    if (kcalTodo->hasDueDate()) {
+        todo.due = kcalTodo->dtDue();
+        todo.hasIndefiniteDue = false;
+    }
+
+    // STATUS and COMPLETED
+    todo.isComplete = kcalTodo->isCompleted();
+
     return todo;
+}
+
+TodoMapper::Todo TodoMapper::iCalToTodo(const QString &ical)
+{
+    // Use KCalendarCore to parse the iCalendar data
+    KCalendarCore::MemoryCalendar::Ptr calendar(
+        new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
+
+    KCalendarCore::ICalFormat icalFormat;
+    if (!icalFormat.fromString(calendar, ical)) {
+        // Parse failed, return empty todo
+        Todo todo;
+        todo.recordId = 0;
+        todo.category = 0;
+        todo.priority = 3;
+        todo.isComplete = false;
+        todo.hasIndefiniteDue = true;
+        todo.isPrivate = false;
+        todo.isDirty = false;
+        todo.isDeleted = false;
+        return todo;
+    }
+
+    // Get the first todo from the calendar
+    KCalendarCore::Todo::List todos = calendar->todos();
+    if (todos.isEmpty()) {
+        // No todos found, return empty todo
+        Todo todo;
+        todo.recordId = 0;
+        todo.category = 0;
+        todo.priority = 3;
+        todo.isComplete = false;
+        todo.hasIndefiniteDue = true;
+        todo.isPrivate = false;
+        todo.isDirty = false;
+        todo.isDeleted = false;
+        return todo;
+    }
+
+    return kCalTodoToTodo(todos.first());
 }
 
 PilotRecord* TodoMapper::packTodo(const Todo &todo)

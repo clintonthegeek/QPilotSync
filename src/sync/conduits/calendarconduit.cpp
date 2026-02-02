@@ -136,6 +136,24 @@ bool CalendarConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend) co
     if (palmEvent.end != backendEvent.end) return false;
     if (palmEvent.isUntimed != backendEvent.isUntimed) return false;
 
+    // Compare categories
+    QString palmCategoryName = categoryName(palmEvent.category);
+
+    // Normalize: "Unfiled" (index 0) and empty string are equivalent
+    QString normalizedPalmCat = palmCategoryName;
+    QString normalizedBackendCat = backendEvent.categoryName;
+
+    if (normalizedPalmCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedPalmCat.clear();
+    }
+    if (normalizedBackendCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedBackendCat.clear();
+    }
+
+    if (normalizedPalmCat.compare(normalizedBackendCat, Qt::CaseInsensitive) != 0) {
+        return false;
+    }
+
     return true;
 }
 

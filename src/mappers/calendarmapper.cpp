@@ -4,6 +4,12 @@
 #include <QDate>
 #include <QTime>
 #include <QStringConverter>
+#include <QBitArray>
+#include <QTimeZone>
+#include <KCalendarCore/ICalFormat>
+#include <KCalendarCore/MemoryCalendar>
+#include <KCalendarCore/Alarm>
+#include <KCalendarCore/Recurrence>
 
 // Windows-1252 to Unicode mapping table for 0x80-0x9F
 static const unsigned short cp1252_to_unicode[] = {
@@ -66,63 +72,6 @@ static QByteArray encodePalmText(const QString &text)
     }
 
     return result;
-}
-
-// Helper function to fold iCalendar lines to 75 octets as per RFC 5545 section 3.1
-static QString foldLine(const QString &line)
-{
-    const int MAX_LINE_LENGTH = 75;  // octets, excluding CRLF
-
-    QByteArray utf8 = line.toUtf8();
-    if (utf8.length() <= MAX_LINE_LENGTH) {
-        return line + "\r\n";
-    }
-
-    QString result;
-    int pos = 0;
-
-    while (pos < utf8.length()) {
-        int chunkSize = MAX_LINE_LENGTH;
-
-        // For first line, use full 75 octets
-        // For continuation lines, use 74 octets (to account for leading space)
-        if (pos > 0) {
-            chunkSize = MAX_LINE_LENGTH - 1;
-        }
-
-        // Don't split in the middle of a UTF-8 multi-byte character
-        // UTF-8 continuation bytes have the form 10xxxxxx (0x80-0xBF)
-        while (chunkSize > 0 && pos + chunkSize < utf8.length() &&
-               (utf8[pos + chunkSize] & 0xC0) == 0x80) {
-            chunkSize--;
-        }
-
-        // Extract chunk and convert back to QString
-        QByteArray chunk = utf8.mid(pos, chunkSize);
-        QString chunkStr = QString::fromUtf8(chunk);
-
-        if (pos == 0) {
-            result += chunkStr + "\r\n";
-        } else {
-            result += " " + chunkStr + "\r\n";  // Continuation line starts with space
-        }
-
-        pos += chunkSize;
-    }
-
-    return result;
-}
-
-// Helper to format QDateTime as iCalendar date-time (floating time, no timezone)
-static QString formatDateTime(const QDateTime &dt, bool dateOnly = false)
-{
-    if (dateOnly) {
-        // DATE format: YYYYMMDD
-        return dt.toString("yyyyMMdd");
-    } else {
-        // DATE-TIME format: YYYYMMDDTHHMMSS (floating time)
-        return dt.toString("yyyyMMdd'T'HHmmss");
-    }
 }
 
 CalendarMapper::CalendarMapper(QObject *parent)
@@ -216,220 +165,150 @@ CalendarMapper::Event CalendarMapper::unpackEvent(const PilotRecord *record)
     return event;
 }
 
-QString CalendarMapper::eventToICal(const Event &event, const QString &categoryName)
+// Helper function to convert Qt day of week to QBitArray for that day
+static QBitArray makeDayBitArray(short dayOfWeek)
 {
-    QString ical;
+    QBitArray result(7);
+    // Qt dayOfWeek: 1=Monday, 7=Sunday
+    // QBitArray: 0=Monday, 6=Sunday
+    result.setBit(dayOfWeek - 1);
+    return result;
+}
 
-    // iCalendar 2.0 format (RFC 5545)
-    ical += "BEGIN:VCALENDAR\r\n";
-    ical += "VERSION:2.0\r\n";
-    ical += "PRODID:-//QPilotSync//NONSGML v0.1//EN\r\n";
-    ical += "BEGIN:VEVENT\r\n";
+KCalendarCore::Event::Ptr CalendarMapper::eventToKCalEvent(const Event &event, const QString &categoryName)
+{
+    auto kcalEvent = KCalendarCore::Event::Ptr::create();
 
     // UID - using Palm record ID
-    ical += foldLine(QString("UID:palm-datebook-%1").arg(event.recordId));
+    kcalEvent->setUid(QStringLiteral("palm-datebook-%1").arg(event.recordId));
 
-    // DTSTAMP - current time as creation time
-    QString dtstamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd'T'HHmmss'Z'");
-    ical += foldLine(QString("DTSTAMP:%1").arg(dtstamp));
-
-    // DTSTART - start date/time
+    // DTSTART and DTEND
     if (event.isUntimed) {
-        // All-day event - use DATE format
-        ical += foldLine(QString("DTSTART;VALUE=DATE:%1").arg(formatDateTime(event.begin, true)));
+        // All-day event
+        kcalEvent->setDtStart(QDateTime(event.begin.date(), QTime()));
+        kcalEvent->setAllDay(true);
+        // KCalendarCore handles all-day event end dates correctly
+        kcalEvent->setDtEnd(QDateTime(event.end.date(), QTime()));
     } else {
-        // Timed event - use DATE-TIME format (floating time)
-        ical += foldLine(QString("DTSTART:%1").arg(formatDateTime(event.begin, false)));
+        // Timed event (floating time - no timezone)
+        kcalEvent->setDtStart(event.begin);
+        kcalEvent->setDtEnd(event.end);
     }
 
-    // DTEND - end date/time
-    if (event.isUntimed) {
-        // For all-day events, DTEND is non-inclusive, so add 1 day
-        QDateTime endDate = event.end.addDays(1);
-        ical += foldLine(QString("DTEND;VALUE=DATE:%1").arg(formatDateTime(endDate, true)));
-    } else {
-        ical += foldLine(QString("DTEND:%1").arg(formatDateTime(event.end, false)));
-    }
-
-    // SUMMARY - event title/description
+    // SUMMARY and DESCRIPTION
     if (!event.description.isEmpty()) {
-        // Escape special characters per RFC 5545 section 3.3.11
-        QString summary = event.description;
-        summary.replace("\\", "\\\\");
-        summary.replace(";", "\\;");
-        summary.replace(",", "\\,");
-        summary.replace("\n", "\\n");
-        ical += foldLine(QString("SUMMARY:%1").arg(summary));
+        kcalEvent->setSummary(event.description);
     }
-
-    // DESCRIPTION - detailed notes
     if (!event.note.isEmpty()) {
-        QString description = event.note;
-        description.replace("\\", "\\\\");
-        description.replace(";", "\\;");
-        description.replace(",", "\\,");
-        description.replace("\n", "\\n");
-        ical += foldLine(QString("DESCRIPTION:%1").arg(description));
+        kcalEvent->setDescription(event.note);
     }
 
     // CATEGORIES
     if (!categoryName.isEmpty()) {
-        ical += foldLine(QString("CATEGORIES:%1").arg(categoryName));
+        kcalEvent->setCategories(QStringList() << categoryName);
     }
 
     // CLASS - privacy
     if (event.isPrivate) {
-        ical += "CLASS:PRIVATE\r\n";
+        kcalEvent->setSecrecy(KCalendarCore::Incidence::SecrecyPrivate);
     }
 
     // RRULE - recurrence rule
     if (event.repeatType != RepeatNone) {
-        QString rrule = "RRULE:";
+        KCalendarCore::Recurrence *recurrence = kcalEvent->recurrence();
 
         switch (event.repeatType) {
             case RepeatDaily:
-                rrule += "FREQ=DAILY";
+                recurrence->setDaily(event.repeatFrequency > 0 ? event.repeatFrequency : 1);
                 break;
-            case RepeatWeekly:
-                rrule += "FREQ=WEEKLY";
+            case RepeatWeekly: {
+                // Build days of week bitfield
+                QBitArray days(7);
+                for (int i = 0; i < 7; i++) {
+                    // Palm: 0=Sunday, KCalendarCore: 0=Monday
+                    // Convert: Palm Sunday(0) -> Qt Sunday(6), Palm Mon(1) -> Qt Mon(0), etc.
+                    int qtDay = (i == 0) ? 6 : i - 1;
+                    days.setBit(qtDay, event.repeatDays[i]);
+                }
+                recurrence->setWeekly(event.repeatFrequency > 0 ? event.repeatFrequency : 1, days);
                 break;
+            }
             case RepeatMonthlyByDay:
-                rrule += "FREQ=MONTHLY";
+                // Repeat on same day of month
+                recurrence->setMonthly(event.repeatFrequency > 0 ? event.repeatFrequency : 1);
+                recurrence->addMonthlyDate(event.begin.date().day());
                 break;
-            case RepeatMonthlyByDate:
-                rrule += "FREQ=MONTHLY";
+            case RepeatMonthlyByDate: {
+                // Repeat on same weekday position (e.g., "2nd Monday")
+                recurrence->setMonthly(event.repeatFrequency > 0 ? event.repeatFrequency : 1);
+                int weekOfMonth = (event.begin.date().day() - 1) / 7 + 1;
+                // Qt dayOfWeek(): 1=Monday, 7=Sunday
+                short dayOfWeek = event.begin.date().dayOfWeek();
+                recurrence->addMonthlyPos(weekOfMonth, makeDayBitArray(dayOfWeek));
                 break;
+            }
             case RepeatYearly:
-                rrule += "FREQ=YEARLY";
+                recurrence->setYearly(event.repeatFrequency > 0 ? event.repeatFrequency : 1);
                 break;
             default:
                 break;
         }
 
-        // INTERVAL
-        if (event.repeatFrequency > 1) {
-            rrule += QString(";INTERVAL=%1").arg(event.repeatFrequency);
-        }
-
-        // BYDAY for weekly repeats
-        if (event.repeatType == RepeatWeekly) {
-            QStringList days;
-            QStringList dayNames = {"SU", "MO", "TU", "WE", "TH", "FR", "SA"};
-            for (int i = 0; i < 7; i++) {
-                if (event.repeatDays[i]) {
-                    days.append(dayNames[i]);
-                }
-            }
-            if (!days.isEmpty()) {
-                rrule += QString(";BYDAY=%1").arg(days.join(","));
-            }
-
-            // WKST - week start
-            if (event.repeatWeekstart > 0 && event.repeatWeekstart < 7) {
-                rrule += QString(";WKST=%1").arg(dayNames[event.repeatWeekstart]);
-            }
-        }
-
-        // BYMONTHDAY for monthly by day
-        if (event.repeatType == RepeatMonthlyByDay) {
-            rrule += QString(";BYMONTHDAY=%1").arg(event.begin.date().day());
-        }
-
-        // BYDAY for monthly by date (e.g., "2nd Monday")
-        if (event.repeatType == RepeatMonthlyByDate) {
-            int weekOfMonth = (event.begin.date().day() - 1) / 7 + 1;
-            QStringList dayNames = {"SU", "MO", "TU", "WE", "TH", "FR", "SA"};
-            int dayOfWeek = event.begin.date().dayOfWeek() % 7;  // Qt: 1=Monday, convert to 0=Sunday
-            rrule += QString(";BYDAY=%1%2").arg(weekOfMonth).arg(dayNames[dayOfWeek]);
-        }
-
         // UNTIL - repeat end date
         if (!event.repeatForever && event.repeatEnd.isValid()) {
-            if (event.isUntimed) {
-                rrule += QString(";UNTIL=%1").arg(formatDateTime(event.repeatEnd, true));
-            } else {
-                rrule += QString(";UNTIL=%1").arg(formatDateTime(event.repeatEnd, false));
-            }
+            recurrence->setEndDate(event.repeatEnd.date());
         }
-
-        ical += foldLine(rrule);
     }
 
     // EXDATE - exception dates
-    if (!event.exceptions.isEmpty()) {
-        QStringList exdates;
-        for (const QDateTime &exDate : event.exceptions) {
-            if (event.isUntimed) {
-                exdates.append(formatDateTime(exDate, true));
-            } else {
-                exdates.append(formatDateTime(exDate, false));
-            }
-        }
-
+    for (const QDateTime &exDate : event.exceptions) {
         if (event.isUntimed) {
-            ical += foldLine(QString("EXDATE;VALUE=DATE:%1").arg(exdates.join(",")));
+            // For all-day events, use date-only exceptions
+            kcalEvent->recurrence()->addExDate(exDate.date());
         } else {
-            ical += foldLine(QString("EXDATE:%1").arg(exdates.join(",")));
+            // For timed events, use date-time exceptions
+            kcalEvent->recurrence()->addExDateTime(exDate);
         }
     }
 
     // VALARM - alarm/reminder
     if (event.hasAlarm) {
-        ical += "BEGIN:VALARM\r\n";
-        ical += "ACTION:DISPLAY\r\n";
-        ical += foldLine("DESCRIPTION:Event Reminder");
+        KCalendarCore::Alarm::Ptr alarm = kcalEvent->newAlarm();
+        alarm->setEnabled(true);
+        alarm->setType(KCalendarCore::Alarm::Display);
+        alarm->setText(QStringLiteral("Event Reminder"));
 
-        // Calculate trigger time
-        int minutes = event.alarmAdvance;
-        if (event.alarmUnits == AlarmHours) {
-            minutes *= 60;
+        // Calculate trigger time in seconds
+        int seconds = event.alarmAdvance;
+        if (event.alarmUnits == AlarmMinutes) {
+            seconds *= 60;
+        } else if (event.alarmUnits == AlarmHours) {
+            seconds *= 60 * 60;
         } else if (event.alarmUnits == AlarmDays) {
-            minutes *= 60 * 24;
+            seconds *= 60 * 60 * 24;
         }
 
-        // TRIGGER in ISO 8601 duration format: -P[n]D[T[n]H[n]M]
-        // Examples: -PT15M, -PT2H, -P1D, -P1DT2H30M
-        QString trigger = "TRIGGER:-P";
-
-        if (minutes >= 1440) {  // Has days component
-            int days = minutes / 1440;
-            int remainingMins = minutes % 1440;
-            trigger += QString("%1D").arg(days);
-
-            // Add time components if any
-            if (remainingMins > 0) {
-                trigger += "T";  // Time separator
-                if (remainingMins >= 60) {
-                    int hours = remainingMins / 60;
-                    trigger += QString("%1H").arg(hours);
-                    if (remainingMins % 60 > 0) {
-                        trigger += QString("%1M").arg(remainingMins % 60);
-                    }
-                } else {
-                    trigger += QString("%1M").arg(remainingMins);
-                }
-            }
-        } else if (minutes >= 60) {  // Hours only (no days)
-            trigger += "T";  // Time separator
-            int hours = minutes / 60;
-            int remainingMins = minutes % 60;
-            trigger += QString("%1H").arg(hours);
-            if (remainingMins > 0) {
-                trigger += QString("%1M").arg(remainingMins);
-            }
-        } else {  // Minutes only
-            trigger += "T";  // Time separator
-            trigger += QString("%1M").arg(minutes);
-        }
-
-        ical += foldLine(trigger);
-        ical += "END:VALARM\r\n";
+        alarm->setStartOffset(KCalendarCore::Duration(-seconds));
     }
 
-    ical += "END:VEVENT\r\n";
-    ical += "END:VCALENDAR\r\n";
+    return kcalEvent;
+}
 
-    return ical;
+QString CalendarMapper::eventToICal(const Event &event, const QString &categoryName)
+{
+    // Convert to KCalendarCore event
+    KCalendarCore::Event::Ptr kcalEvent = eventToKCalEvent(event, categoryName);
+
+    // Create a calendar and add the event
+    KCalendarCore::MemoryCalendar::Ptr calendar(
+        new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
+    calendar->addEvent(kcalEvent);
+
+    // Use ICalFormat to serialize
+    KCalendarCore::ICalFormat icalFormat;
+    QString icalString = icalFormat.toString(calendar);
+
+    return icalString;
 }
 
 QString CalendarMapper::generateFilename(const Event &event)
@@ -456,7 +335,7 @@ QString CalendarMapper::generateFilename(const Event &event)
 
     // If empty after sanitization, use date + record ID
     if (filename.isEmpty()) {
-        filename = QString("%1_event_%2")
+        filename = QStringLiteral("%1_event_%2")
             .arg(event.begin.toString("yyyyMMdd"))
             .arg(event.recordId);
     }
@@ -469,167 +348,7 @@ QString CalendarMapper::generateFilename(const Event &event)
 
 // ========== Reverse mapping: iCalendar → Palm ==========
 
-// Helper to unfold iCalendar content (reverse of foldLine)
-static QString unfoldICalContent(const QString &content)
-{
-    QString result = content;
-    result.replace("\r\n ", "");
-    result.replace("\r\n\t", "");
-    result.replace("\n ", "");
-    result.replace("\n\t", "");
-    return result;
-}
-
-// Helper to parse iCalendar date-time string (YYYYMMDDTHHMMSS or YYYYMMDD)
-static QDateTime parseICalDateTime(const QString &str)
-{
-    QString value = str;
-
-    // Remove any VALUE=DATE prefix
-    if (value.contains("VALUE=DATE:")) {
-        value = value.section("VALUE=DATE:", 1);
-    }
-
-    // Handle UTC marker 'Z' at end
-    bool isUtc = value.endsWith('Z');
-    if (isUtc) {
-        value.chop(1);
-    }
-
-    // Parse based on format
-    if (value.length() == 8) {
-        // DATE only: YYYYMMDD
-        QDate date = QDate::fromString(value, "yyyyMMdd");
-        return QDateTime(date, QTime(0, 0, 0));
-    } else if (value.length() >= 15) {
-        // DATE-TIME: YYYYMMDDTHHMMSS
-        QString dateStr = value.left(8);
-        QString timeStr = value.mid(9, 6);
-        QDate date = QDate::fromString(dateStr, "yyyyMMdd");
-        QTime time = QTime::fromString(timeStr, "HHmmss");
-        return QDateTime(date, time);
-    }
-
-    return QDateTime();
-}
-
-// Helper to unescape iCalendar text values
-static QString unescapeICalText(const QString &text)
-{
-    QString result = text;
-    result.replace("\\n", "\n");
-    result.replace("\\N", "\n");
-    result.replace("\\,", ",");
-    result.replace("\\;", ";");
-    result.replace("\\\\", "\\");
-    return result;
-}
-
-// Helper to parse RRULE into event repeat fields
-static void parseRRule(const QString &rrule, CalendarMapper::Event &event)
-{
-    QStringList parts = rrule.split(';', Qt::SkipEmptyParts);
-
-    for (const QString &part : parts) {
-        int eqPos = part.indexOf('=');
-        if (eqPos == -1) continue;
-
-        QString key = part.left(eqPos).toUpper();
-        QString value = part.mid(eqPos + 1);
-
-        if (key == "FREQ") {
-            if (value == "DAILY") {
-                event.repeatType = CalendarMapper::RepeatDaily;
-            } else if (value == "WEEKLY") {
-                event.repeatType = CalendarMapper::RepeatWeekly;
-            } else if (value == "MONTHLY") {
-                event.repeatType = CalendarMapper::RepeatMonthlyByDate;  // Default, may be overridden
-            } else if (value == "YEARLY") {
-                event.repeatType = CalendarMapper::RepeatYearly;
-            }
-        } else if (key == "INTERVAL") {
-            event.repeatFrequency = value.toInt();
-            if (event.repeatFrequency < 1) event.repeatFrequency = 1;
-        } else if (key == "UNTIL") {
-            event.repeatEnd = parseICalDateTime(value);
-            event.repeatForever = false;
-        } else if (key == "COUNT") {
-            // COUNT not directly supported by Palm, leave as forever
-            event.repeatForever = true;
-        } else if (key == "BYDAY") {
-            // Weekly: SU,MO,TU,WE,TH,FR,SA
-            QMap<QString, int> dayMap = {
-                {"SU", 0}, {"MO", 1}, {"TU", 2}, {"WE", 3},
-                {"TH", 4}, {"FR", 5}, {"SA", 6}
-            };
-
-            QStringList days = value.split(',');
-            for (const QString &day : days) {
-                // Handle positional days like "2MO" (second Monday)
-                QString dayCode = day.right(2).toUpper();
-                if (dayMap.contains(dayCode)) {
-                    int dayIndex = dayMap[dayCode];
-                    event.repeatDays[dayIndex] = true;
-                }
-            }
-        } else if (key == "BYMONTHDAY") {
-            event.repeatType = CalendarMapper::RepeatMonthlyByDay;
-            event.repeatDay = value.toInt();
-        } else if (key == "WKST") {
-            QMap<QString, int> dayMap = {
-                {"SU", 0}, {"MO", 1}, {"TU", 2}, {"WE", 3},
-                {"TH", 4}, {"FR", 5}, {"SA", 6}
-            };
-            if (dayMap.contains(value.toUpper())) {
-                event.repeatWeekstart = dayMap[value.toUpper()];
-            }
-        }
-    }
-}
-
-// Helper to parse TRIGGER duration into minutes
-static int parseTriggerDuration(const QString &trigger)
-{
-    QString value = trigger;
-
-    // Remove leading '-' if present
-    bool negative = value.startsWith('-');
-    if (negative) value = value.mid(1);
-
-    // Remove 'P' for period
-    if (value.startsWith('P')) value = value.mid(1);
-
-    int minutes = 0;
-
-    // Parse days
-    int dPos = value.indexOf('D');
-    if (dPos > 0) {
-        minutes += value.left(dPos).toInt() * 24 * 60;
-        value = value.mid(dPos + 1);
-    }
-
-    // Parse time portion after 'T'
-    if (value.startsWith('T')) {
-        value = value.mid(1);
-    }
-
-    // Parse hours
-    int hPos = value.indexOf('H');
-    if (hPos > 0) {
-        minutes += value.left(hPos).toInt() * 60;
-        value = value.mid(hPos + 1);
-    }
-
-    // Parse minutes
-    int mPos = value.indexOf('M');
-    if (mPos > 0) {
-        minutes += value.left(mPos).toInt();
-    }
-
-    return minutes;
-}
-
-CalendarMapper::Event CalendarMapper::iCalToEvent(const QString &ical)
+CalendarMapper::Event CalendarMapper::kCalEventToEvent(const KCalendarCore::Event::Ptr &kcalEvent)
 {
     Event event;
     event.recordId = 0;
@@ -648,116 +367,211 @@ CalendarMapper::Event CalendarMapper::iCalToEvent(const QString &ical)
     event.isDirty = false;
     event.isDeleted = false;
 
-    // Unfold the content
-    QString content = unfoldICalContent(ical);
+    if (!kcalEvent) {
+        return event;
+    }
 
-    // Split into lines
-    QStringList lines = content.split(QRegularExpression("\r?\n"), Qt::SkipEmptyParts);
+    // UID - extract record ID if it's in palm-datebook-XXXX format
+    QString uid = kcalEvent->uid();
+    if (uid.startsWith(QLatin1String("palm-datebook-"))) {
+        bool ok;
+        int id = uid.mid(14).toInt(&ok);
+        if (ok) event.recordId = id;
+    }
 
-    bool inVEvent = false;
-    bool inVAlarm = false;
+    // All-day event check
+    event.isUntimed = kcalEvent->allDay();
 
-    for (const QString &line : lines) {
-        if (line.startsWith("BEGIN:VEVENT")) {
-            inVEvent = true;
-            continue;
-        }
-        if (line.startsWith("END:VEVENT")) {
-            inVEvent = false;
-            continue;
-        }
-        if (line.startsWith("BEGIN:VALARM")) {
-            inVAlarm = true;
-            continue;
-        }
-        if (line.startsWith("END:VALARM")) {
-            inVAlarm = false;
-            continue;
-        }
+    // DTSTART and DTEND
+    event.begin = kcalEvent->dtStart();
+    event.end = kcalEvent->dtEnd();
 
-        if (!inVEvent) continue;
-
-        // Parse property and value
-        int colonPos = line.indexOf(':');
-        if (colonPos == -1) continue;
-
-        QString propertyPart = line.left(colonPos);
-        QString value = line.mid(colonPos + 1);
-
-        // Split property name from parameters
-        QString propertyName = propertyPart.split(';').first().toUpper();
-
-        if (inVAlarm) {
-            if (propertyName == "TRIGGER") {
-                event.hasAlarm = true;
-                int minutes = parseTriggerDuration(value);
-
-                // Convert to Palm alarm units
-                if (minutes >= 24 * 60) {
-                    event.alarmAdvance = minutes / (24 * 60);
-                    event.alarmUnits = AlarmDays;
-                } else if (minutes >= 60) {
-                    event.alarmAdvance = minutes / 60;
-                    event.alarmUnits = AlarmHours;
-                } else {
-                    event.alarmAdvance = minutes;
-                    event.alarmUnits = AlarmMinutes;
-                }
-            }
-            continue;
-        }
-
-        if (propertyName == "DTSTART") {
-            // Check if VALUE=DATE (all-day event)
-            if (propertyPart.contains("VALUE=DATE") && !propertyPart.contains("VALUE=DATE-TIME")) {
-                event.isUntimed = true;
-            }
-            event.begin = parseICalDateTime(value);
-        } else if (propertyName == "DTEND") {
-            event.end = parseICalDateTime(value);
-            // For all-day events, DTEND is non-inclusive, so subtract 1 day
-            if (event.isUntimed && event.end.isValid()) {
-                event.end = event.end.addDays(-1);
-            }
-        } else if (propertyName == "SUMMARY") {
-            event.description = unescapeICalText(value);
-        } else if (propertyName == "DESCRIPTION") {
-            event.note = unescapeICalText(value);
-        } else if (propertyName == "CLASS") {
-            event.isPrivate = (value.toUpper() == "PRIVATE");
-        } else if (propertyName == "RRULE") {
-            parseRRule(value, event);
-        } else if (propertyName == "EXDATE") {
-            // Parse exception dates
-            QStringList exDates = value.split(',');
-            for (const QString &exDateStr : exDates) {
-                QDateTime exDate = parseICalDateTime(exDateStr);
-                if (exDate.isValid()) {
-                    event.exceptions.append(exDate);
-                }
-            }
-        } else if (propertyName == "UID") {
-            // Extract record ID from UID if it's in palm-datebook-XXXX format
-            if (value.startsWith("palm-datebook-")) {
-                bool ok;
-                int id = value.mid(14).toInt(&ok);
-                if (ok) event.recordId = id;
-            }
-        } else if (propertyName == "CATEGORIES") {
-            // Store first category name for lookup by conduit
-            QStringList cats = value.split(',');
-            if (!cats.isEmpty()) {
-                event.categoryName = cats.first().trimmed();
-            }
+    // For all-day events, KCalendarCore may give us the exclusive end date
+    // Verify by checking if times are both midnight
+    if (event.isUntimed && event.end.isValid() && event.begin.isValid()) {
+        // If end is after begin and both are at midnight, end is exclusive
+        if (event.end > event.begin &&
+            event.begin.time() == QTime(0, 0, 0) &&
+            event.end.time() == QTime(0, 0, 0)) {
+            event.end = event.end.addDays(-1);
         }
     }
 
-    // If no end time, set it to start time (instant event)
+    // If no end time, set it to start time
     if (!event.end.isValid()) {
         event.end = event.begin;
     }
 
+    // SUMMARY and DESCRIPTION
+    event.description = kcalEvent->summary();
+    event.note = kcalEvent->description();
+
+    // CATEGORIES
+    QStringList categories = kcalEvent->categories();
+    if (!categories.isEmpty()) {
+        event.categoryName = categories.first();
+    }
+
+    // CLASS - privacy
+    event.isPrivate = (kcalEvent->secrecy() == KCalendarCore::Incidence::SecrecyPrivate);
+
+    // Recurrence
+    if (kcalEvent->recurs()) {
+        KCalendarCore::Recurrence *recurrence = kcalEvent->recurrence();
+
+        switch (recurrence->recurrenceType()) {
+            case KCalendarCore::Recurrence::rDaily:
+                event.repeatType = RepeatDaily;
+                event.repeatFrequency = recurrence->frequency();
+                break;
+
+            case KCalendarCore::Recurrence::rWeekly: {
+                event.repeatType = RepeatWeekly;
+                event.repeatFrequency = recurrence->frequency();
+
+                // Get days of week
+                QBitArray weekDays = recurrence->days();
+                for (int i = 0; i < 7; i++) {
+                    // KCalendarCore: 0=Monday, 6=Sunday
+                    // Palm: 0=Sunday, 1=Monday, etc.
+                    int palmDay = (i + 1) % 7;  // Convert: Mon(0)->1, Tue(1)->2, ..., Sun(6)->0
+                    event.repeatDays[palmDay] = weekDays.testBit(i);
+                }
+                break;
+            }
+
+            case KCalendarCore::Recurrence::rMonthlyDay:
+                event.repeatType = RepeatMonthlyByDay;
+                event.repeatFrequency = recurrence->frequency();
+                // The day of month is in the monthDays list
+                if (!recurrence->monthDays().isEmpty()) {
+                    event.repeatDay = recurrence->monthDays().first();
+                }
+                break;
+
+            case KCalendarCore::Recurrence::rMonthlyPos:
+                event.repeatType = RepeatMonthlyByDate;
+                event.repeatFrequency = recurrence->frequency();
+                break;
+
+            case KCalendarCore::Recurrence::rYearlyDay:
+            case KCalendarCore::Recurrence::rYearlyMonth:
+            case KCalendarCore::Recurrence::rYearlyPos:
+                event.repeatType = RepeatYearly;
+                event.repeatFrequency = recurrence->frequency();
+                break;
+
+            default:
+                event.repeatType = RepeatNone;
+                break;
+        }
+
+        // End date
+        QDate endDate = recurrence->endDate();
+        if (endDate.isValid()) {
+            event.repeatEnd = QDateTime(endDate, QTime(23, 59, 59));
+            event.repeatForever = false;
+        } else if (recurrence->duration() > 0) {
+            // COUNT-based recurrence - Palm doesn't support this directly
+            event.repeatForever = true;
+        } else {
+            event.repeatForever = true;
+        }
+
+        // Exception dates - check both date-only and date-time exceptions
+        QList<QDate> exDates = recurrence->exDates();
+        for (const QDate &date : exDates) {
+            event.exceptions.append(QDateTime(date, QTime(0, 0, 0)));
+        }
+
+        // Also get date-time exceptions
+        QList<QDateTime> exDateTimes = recurrence->exDateTimes();
+        for (const QDateTime &dt : exDateTimes) {
+            event.exceptions.append(dt);
+        }
+    }
+
+    // Alarms
+    KCalendarCore::Alarm::List alarms = kcalEvent->alarms();
+    if (!alarms.isEmpty()) {
+        KCalendarCore::Alarm::Ptr alarm = alarms.first();
+        if (alarm->enabled()) {
+            event.hasAlarm = true;
+
+            // Get offset in seconds (negative means before event)
+            KCalendarCore::Duration offset = alarm->startOffset();
+            int seconds = qAbs(offset.asSeconds());
+            int minutes = seconds / 60;
+
+            // Convert to Palm alarm units
+            if (minutes >= 24 * 60) {
+                event.alarmAdvance = minutes / (24 * 60);
+                event.alarmUnits = AlarmDays;
+            } else if (minutes >= 60) {
+                event.alarmAdvance = minutes / 60;
+                event.alarmUnits = AlarmHours;
+            } else {
+                event.alarmAdvance = minutes;
+                event.alarmUnits = AlarmMinutes;
+            }
+        }
+    }
+
     return event;
+}
+
+CalendarMapper::Event CalendarMapper::iCalToEvent(const QString &ical)
+{
+    // Use KCalendarCore to parse the iCalendar data
+    KCalendarCore::MemoryCalendar::Ptr calendar(
+        new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
+
+    KCalendarCore::ICalFormat icalFormat;
+    if (!icalFormat.fromString(calendar, ical)) {
+        // Parse failed, return empty event
+        Event event;
+        event.recordId = 0;
+        event.category = 0;
+        event.isUntimed = false;
+        event.hasAlarm = false;
+        event.alarmAdvance = 0;
+        event.alarmUnits = AlarmMinutes;
+        event.repeatType = RepeatNone;
+        event.repeatForever = true;
+        event.repeatFrequency = 1;
+        event.repeatDay = 0;
+        event.repeatWeekstart = 0;
+        for (int i = 0; i < 7; i++) event.repeatDays[i] = false;
+        event.isPrivate = false;
+        event.isDirty = false;
+        event.isDeleted = false;
+        return event;
+    }
+
+    // Get the first event from the calendar
+    KCalendarCore::Event::List events = calendar->events();
+    if (events.isEmpty()) {
+        // No events found, return empty event
+        Event event;
+        event.recordId = 0;
+        event.category = 0;
+        event.isUntimed = false;
+        event.hasAlarm = false;
+        event.alarmAdvance = 0;
+        event.alarmUnits = AlarmMinutes;
+        event.repeatType = RepeatNone;
+        event.repeatForever = true;
+        event.repeatFrequency = 1;
+        event.repeatDay = 0;
+        event.repeatWeekstart = 0;
+        for (int i = 0; i < 7; i++) event.repeatDays[i] = false;
+        event.isPrivate = false;
+        event.isDirty = false;
+        event.isDeleted = false;
+        return event;
+    }
+
+    return kCalEventToEvent(events.first());
 }
 
 PilotRecord* CalendarMapper::packEvent(const Event &event)

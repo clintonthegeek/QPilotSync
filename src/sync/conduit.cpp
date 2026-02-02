@@ -137,6 +137,8 @@ SyncResult Conduit::hotSync(SyncContext *context)
     QList<BackendRecord*> backendRecords = context->backend->loadRecords(context->collectionId);
     emit logMessage(QString("Loaded %1 backend records").arg(backendRecords.size()));
 
+    // Track which Palm records we've processed (by ID)
+    QSet<QString> processedPalmIds;
     // Track which backend records we've processed
     QSet<QString> processedBackendIds;
 
@@ -145,6 +147,7 @@ SyncResult Conduit::hotSync(SyncContext *context)
         if (context->cancelled || isCancelled()) break;
 
         QString palmId = QString::number(palmRecord->id());
+        processedPalmIds.insert(palmId);
         QString pcId = context->state->pcIdForPalm(palmId);
 
         BackendRecord *backendRecord = nullptr;
@@ -160,9 +163,89 @@ SyncResult Conduit::hotSync(SyncContext *context)
 
         syncRecord(palmRecord, backendRecord, context, result.palmStats, result.pcStats);
 
+        // Update category tracking after sync
+        if (!palmRecord->isDeleted()) {
+            QString categoryName = categoryNameForIndex(palmRecord->category());
+            context->state->updateCategories(palmId, categoryName, {});
+        }
+
         if (backendRecord) {
             processedBackendIds.insert(backendRecord->id);
         }
+    }
+
+    // IMPORTANT: Check for category-only changes on Palm
+    // Palm doesn't set the dirty flag when only the category changes,
+    // so we need to explicitly check all mapped records for category differences
+    QList<PilotRecord*> allPalmRecords = readPalmRecords(context, false);
+    int categoryChanges = 0;
+    for (PilotRecord *palmRecord : allPalmRecords) {
+        if (context->cancelled || isCancelled()) break;
+
+        QString palmId = QString::number(palmRecord->id());
+
+        // Skip if already processed (was dirty)
+        if (processedPalmIds.contains(palmId)) continue;
+
+        // Skip deleted records
+        if (palmRecord->isDeleted()) continue;
+
+        // Check if we have a mapping for this record
+        QString pcId = context->state->pcIdForPalm(palmId);
+        if (pcId.isEmpty()) continue;  // No mapping, skip
+
+        // Get stored category from mapping
+        IDMapping mapping = context->state->getMapping(palmId);
+        QString storedCategory = mapping.palmCategory;
+        QString currentCategory = categoryNameForIndex(palmRecord->category());
+
+        // Compare categories (case-insensitive, treating empty/"Unfiled" as equivalent)
+        QString normalizedStored = storedCategory;
+        QString normalizedCurrent = currentCategory;
+        if (normalizedStored.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+            normalizedStored.clear();
+        }
+        if (normalizedCurrent.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+            normalizedCurrent.clear();
+        }
+
+        if (normalizedStored.compare(normalizedCurrent, Qt::CaseInsensitive) != 0) {
+            // Category changed! Sync this record
+            emit logMessage(QString("Category changed on Palm: %1 (%2 → %3)")
+                .arg(palmRecordDescription(palmRecord))
+                .arg(storedCategory.isEmpty() ? "Unfiled" : storedCategory)
+                .arg(currentCategory.isEmpty() ? "Unfiled" : currentCategory));
+
+            BackendRecord *backendRecord = nullptr;
+            for (BackendRecord *rec : backendRecords) {
+                if (rec->id == pcId) {
+                    backendRecord = rec;
+                    break;
+                }
+            }
+
+            if (backendRecord) {
+                // Update PC with new category from Palm
+                BackendRecord *updated = palmToBackend(palmRecord, context);
+                if (updated) {
+                    updated->id = backendRecord->id;
+                    context->backend->updateRecord(*updated);
+                    delete updated;
+                    result.pcStats.updated++;
+                    categoryChanges++;
+                    processedBackendIds.insert(backendRecord->id);
+                }
+            }
+
+            // Update category tracking
+            context->state->updateCategories(palmId, currentCategory, {});
+            processedPalmIds.insert(palmId);
+        }
+    }
+    qDeleteAll(allPalmRecords);
+
+    if (categoryChanges > 0) {
+        emit logMessage(QString("Synced %1 category-only changes from Palm").arg(categoryChanges));
     }
 
     // Process modified backend records that weren't already handled
@@ -354,6 +437,9 @@ SyncResult Conduit::firstSync(SyncContext *context)
                 .arg(match->description()));
 
             context->state->mapIds(palmId, match->id);
+            // Store initial category for change tracking
+            QString categoryName = categoryNameForIndex(palmRecord->category());
+            context->state->updateCategories(palmId, categoryName, {});
             matchedBackendIds.insert(match->id);
             result.palmStats.unchanged++;
         } else {
@@ -363,6 +449,9 @@ SyncResult Conduit::firstSync(SyncContext *context)
                 QString newId = context->backend->createRecord(context->collectionId, *newRecord);
                 if (!newId.isEmpty()) {
                     context->state->mapIds(palmId, newId);
+                    // Store initial category for change tracking
+                    QString categoryName = categoryNameForIndex(palmRecord->category());
+                    context->state->updateCategories(palmId, categoryName, {});
                     result.pcStats.created++;
                 }
                 delete newRecord;
@@ -385,7 +474,11 @@ SyncResult Conduit::firstSync(SyncContext *context)
         PilotRecord *palmRecord = backendToPalm(backendRecord, context);
         if (palmRecord) {
             if (writePalmRecord(palmRecord, context)) {
-                context->state->mapIds(QString::number(palmRecord->id()), backendRecord->id);
+                QString palmId = QString::number(palmRecord->id());
+                context->state->mapIds(palmId, backendRecord->id);
+                // Store initial category for change tracking
+                QString catName = categoryNameForIndex(palmRecord->category());
+                context->state->updateCategories(palmId, catName, {});
                 result.palmStats.created++;
             }
             delete palmRecord;
@@ -657,6 +750,13 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
         bool palmDeleted = palmRecord->isDeleted();
         bool backendDeleted = backendRecord->isDeleted;
 
+        // Debug: Log record state
+        qDebug() << "[Conduit::syncRecord] Palm ID:" << palmRecord->id()
+                 << "category:" << palmRecord->category()
+                 << "attr:" << Qt::hex << palmRecord->attributes() << Qt::dec
+                 << "dirty:" << palmModified
+                 << "deleted:" << palmDeleted;
+
         // Detect backend modifications using baseline hash comparison
         QString currentHash = backendRecord->contentHash;
         QString baselineHash = context->state->baselineHash(backendRecord->id);
@@ -706,8 +806,53 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
             }
         }
         else {
-            // Neither modified
-            palmStats.unchanged++;
+            // Neither content modified - but check for category-only changes
+            // Palm doesn't set dirty flag when only category changes
+            QString palmId = QString::number(palmRecord->id());
+            IDMapping mapping = context->state->getMapping(palmId);
+            QString storedCategory = mapping.palmCategory;
+            QString currentCategory = categoryNameForIndex(palmRecord->category());
+
+            // Normalize categories (empty and "Unfiled" are equivalent)
+            QString normalizedStored = storedCategory;
+            QString normalizedCurrent = currentCategory;
+            if (normalizedStored.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+                normalizedStored.clear();
+            }
+            if (normalizedCurrent.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+                normalizedCurrent.clear();
+            }
+
+            if (!normalizedStored.isEmpty() || !normalizedCurrent.isEmpty()) {
+                // Only check if at least one has a non-Unfiled category
+                if (normalizedStored.compare(normalizedCurrent, Qt::CaseInsensitive) != 0) {
+                    // Category changed on Palm - update backend
+                    emit logMessage(QString("Category changed: %1 (%2 → %3)")
+                        .arg(palmRecordDescription(palmRecord))
+                        .arg(storedCategory.isEmpty() ? "Unfiled" : storedCategory)
+                        .arg(currentCategory.isEmpty() ? "Unfiled" : currentCategory));
+
+                    BackendRecord *updated = palmToBackend(palmRecord, context);
+                    if (updated) {
+                        updated->id = backendRecord->id;
+                        context->backend->updateRecord(*updated);
+                        delete updated;
+                        pcStats.updated++;
+
+                        // Update category tracking
+                        context->state->updateCategories(palmId, currentCategory, {});
+                    }
+                } else {
+                    palmStats.unchanged++;
+                }
+            } else {
+                palmStats.unchanged++;
+            }
+
+            // Always update category tracking if not already set
+            if (storedCategory.isEmpty() && !currentCategory.isEmpty()) {
+                context->state->updateCategories(palmId, currentCategory, {});
+            }
         }
     }
     // Only Palm record exists (new or orphaned)
@@ -725,7 +870,11 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
                 QString newId = context->backend->createRecord(context->collectionId, *newRecord);
                 if (!newId.isEmpty()) {
                     emit logMessage(QString("  Created file: %1").arg(newId));
-                    context->state->mapIds(QString::number(palmRecord->id()), newId);
+                    QString palmId = QString::number(palmRecord->id());
+                    context->state->mapIds(palmId, newId);
+                    // Store category for change tracking
+                    QString catName = categoryNameForIndex(palmRecord->category());
+                    context->state->updateCategories(palmId, catName, {});
                     pcStats.created++;
                 } else {
                     emit logMessage("  ERROR: Failed to create file on PC!");
@@ -749,7 +898,11 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
                 emit logMessage(QString("  Converted to Palm record, size=%1 bytes").arg(newRecord->size()));
                 if (writePalmRecord(newRecord, context)) {
                     emit logMessage(QString("  Written successfully, new Palm ID: %1").arg(newRecord->id()));
-                    context->state->mapIds(QString::number(newRecord->id()), backendRecord->id);
+                    QString palmId = QString::number(newRecord->id());
+                    context->state->mapIds(palmId, backendRecord->id);
+                    // Store category for change tracking
+                    QString catName = categoryNameForIndex(newRecord->category());
+                    context->state->updateCategories(palmId, catName, {});
                     palmStats.created++;
                 } else {
                     emit logMessage("  ERROR: Failed to write Palm record!");

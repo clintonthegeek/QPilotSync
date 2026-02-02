@@ -138,6 +138,24 @@ bool ContactConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend) con
     // Compare phone numbers (at least first one)
     if (palmContact.phone1 != backendContact.phone1) return false;
 
+    // Compare categories
+    QString palmCategoryName = categoryName(palmContact.category);
+
+    // Normalize: "Unfiled" (index 0) and empty string are equivalent
+    QString normalizedPalmCat = palmCategoryName;
+    QString normalizedBackendCat = backendContact.categoryName;
+
+    if (normalizedPalmCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedPalmCat.clear();
+    }
+    if (normalizedBackendCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedBackendCat.clear();
+    }
+
+    if (normalizedPalmCat.compare(normalizedBackendCat, Qt::CaseInsensitive) != 0) {
+        return false;
+    }
+
     return true;
 }
 

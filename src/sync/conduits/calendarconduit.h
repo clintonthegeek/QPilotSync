@@ -44,6 +44,10 @@ public:
 
     QString palmRecordDescription(PilotRecord *record) const override;
 
+    QString categoryNameForIndex(int categoryIndex) const override {
+        return categoryName(categoryIndex);
+    }
+
 protected:
     bool writeModifiedCategories(SyncContext *context) override;
 

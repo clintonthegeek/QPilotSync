@@ -294,7 +294,21 @@ public:
      */
     virtual QString palmRecordDescription(PilotRecord *record) const = 0;
 
-signals:
+    /**
+     * @brief Get category name for a Palm category index
+     *
+     * Override in derived classes that handle categories.
+     * Default returns empty string for all indices.
+     *
+     * @param categoryIndex Palm category index (0-15)
+     * @return Category name, or empty string if not available
+     */
+    virtual QString categoryNameForIndex(int categoryIndex) const {
+        Q_UNUSED(categoryIndex);
+        return QString();
+    }
+
+Q_SIGNALS:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);
     void progressUpdated(int current, int total, const QString &message);

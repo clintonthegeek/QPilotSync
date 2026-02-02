@@ -4,6 +4,8 @@
 #include <QString>
 #include <QDateTime>
 #include <QObject>
+#include <KCalendarCore/Todo>
+#include <KCalendarCore/Calendar>
 #include "../palm/pilotrecord.h"
 
 /**
@@ -55,6 +57,21 @@ public:
     static QString todoToICal(const Todo &todo, const QString &categoryName = QString());
 
     /**
+     * @brief Convert a Todo to a KCalendarCore::Todo
+     * @param todo The internal todo structure
+     * @param categoryName Optional category name
+     * @return KCalendarCore::Todo::Ptr
+     */
+    static KCalendarCore::Todo::Ptr todoToKCalTodo(const Todo &todo, const QString &categoryName = QString());
+
+    /**
+     * @brief Convert a KCalendarCore::Todo to an internal Todo structure
+     * @param kcalTodo The KCalendarCore todo
+     * @return Todo structure with parsed data
+     */
+    static Todo kCalTodoToTodo(const KCalendarCore::Todo::Ptr &kcalTodo);
+
+    /**
      * @brief Generate a safe filename from todo description
      * @param todo The todo
      * @return Safe filename for the .ics file
@@ -77,7 +94,7 @@ public:
      */
     static PilotRecord* packTodo(const Todo &todo);
 
-signals:
+Q_SIGNALS:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);
 };

@@ -1,0 +1,80 @@
+[Global]
+IconName=qpilotsync
+Name=QPilotSync
+Name[en]=QPilotSync
+Comment=Palm Pilot Synchronization
+Comment[en]=Palm Pilot Synchronization
+
+[Event/deviceConnected]
+Name=Device Connected
+Name[en]=Device Connected
+Comment=A Palm device has been connected
+Comment[en]=A Palm device has been connected
+Action=Popup
+Urgency=Normal
+
+[Event/deviceDisconnected]
+Name=Device Disconnected
+Name[en]=Device Disconnected
+Comment=The Palm device has been disconnected
+Comment[en]=The Palm device has been disconnected
+Action=Popup
+Urgency=Low
+
+[Event/syncStarted]
+Name=Sync Started
+Name[en]=Sync Started
+Comment=Synchronization has started
+Comment[en]=Synchronization has started
+Action=Popup
+Urgency=Low
+
+[Event/syncComplete]
+Name=Sync Complete
+Name[en]=Sync Complete
+Comment=Synchronization has completed successfully
+Comment[en]=Synchronization has completed successfully
+Action=Popup|Sound
+Sound=complete.ogg
+Urgency=Normal
+
+[Event/syncError]
+Name=Sync Error
+Name[en]=Sync Error
+Comment=An error occurred during synchronization
+Comment[en]=An error occurred during synchronization
+Action=Popup|Sound
+Sound=error.ogg
+Urgency=Critical
+
+[Event/conflictsDetected]
+Name=Conflicts Detected
+Name[en]=Conflicts Detected
+Comment=Conflicts were detected during synchronization
+Comment[en]=Conflicts were detected during synchronization
+Action=Popup
+Urgency=Normal
+
+[Event/backupComplete]
+Name=Backup Complete
+Name[en]=Backup Complete
+Comment=Palm backup has completed
+Comment[en]=Palm backup has completed
+Action=Popup
+Urgency=Normal
+
+[Event/restoreComplete]
+Name=Restore Complete
+Name[en]=Restore Complete
+Comment=Palm restore has completed
+Comment[en]=Palm restore has completed
+Action=Popup
+Urgency=Normal
+
+[Event/installComplete]
+Name=Install Complete
+Name[en]=Install Complete
+Comment=File installation has completed
+Comment[en]=File installation has completed
+Action=Popup
+Urgency=Normal

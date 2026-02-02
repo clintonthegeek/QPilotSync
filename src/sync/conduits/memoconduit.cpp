@@ -21,6 +21,8 @@ MemoConduit::~MemoConduit()
 
 void MemoConduit::loadCategories(SyncContext *context)
 {
+    qDebug() << "[MemoConduit::loadCategories] called, m_categories was:" << (m_categories ? "valid" : "null");
+
     if (m_categories) {
         delete m_categories;
         m_categories = nullptr;
@@ -28,6 +30,9 @@ void MemoConduit::loadCategories(SyncContext *context)
     m_originalAppInfo.clear();
 
     if (!context || !context->deviceLink || m_dbHandle < 0) {
+        qDebug() << "[MemoConduit::loadCategories] early return - context:" << (context != nullptr)
+                 << "deviceLink:" << (context && context->deviceLink != nullptr)
+                 << "dbHandle:" << m_dbHandle;
         return;
     }
 
@@ -40,8 +45,17 @@ void MemoConduit::loadCategories(SyncContext *context)
         // Store original AppInfo block for later write-back
         m_originalAppInfo = QByteArray(reinterpret_cast<const char*>(appInfoBuf), appInfoSize);
 
-        m_categories->parse(appInfoBuf, appInfoSize);
-        emit logMessage(QString("Loaded %1 categories").arg(m_categories->usedCategories().size()));
+        bool parseOk = m_categories->parse(appInfoBuf, appInfoSize);
+        qDebug() << "[MemoConduit::loadCategories] parse result:" << parseOk
+                 << "appInfoSize:" << appInfoSize
+                 << "isValid:" << m_categories->isValid();
+
+        QStringList cats = m_categories->usedCategories();
+        qDebug() << "[MemoConduit::loadCategories] categories:" << cats;
+
+        emit logMessage(QString("Loaded %1 categories").arg(cats.size()));
+    } else {
+        qDebug() << "[MemoConduit::loadCategories] readAppBlock failed";
     }
 }
 
@@ -60,6 +74,7 @@ BackendRecord* MemoConduit::palmToBackend(PilotRecord *palmRecord,
 
     // Ensure categories are loaded
     if (!m_categories) {
+        qDebug() << "[MemoConduit::palmToBackend] m_categories is null, calling loadCategories";
         loadCategories(context);
     }
 
@@ -68,6 +83,11 @@ BackendRecord* MemoConduit::palmToBackend(PilotRecord *palmRecord,
 
     // Convert to Markdown
     QString catName = categoryName(memo.category);
+    qDebug() << "[MemoConduit::palmToBackend] Palm ID:" << palmRecord->id()
+             << "category index:" << memo.category
+             << "-> name:" << catName
+             << "m_categories valid:" << (m_categories != nullptr)
+             << "m_categories->isValid():" << (m_categories ? m_categories->isValid() : false);
     QString markdown = MemoMapper::memoToMarkdown(memo, catName);
 
     // Create backend record
@@ -132,7 +152,29 @@ bool MemoConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend) const
     QString palmText = palmMemo.text.trimmed();
     QString backendText = backendMemo.text.trimmed();
 
-    return palmText == backendText;
+    if (palmText != backendText) {
+        return false;
+    }
+
+    // Compare categories
+    QString palmCategoryName = categoryName(palmMemo.category);
+
+    // Normalize: "Unfiled" (index 0) and empty string are equivalent
+    QString normalizedPalmCat = palmCategoryName;
+    QString normalizedBackendCat = backendMemo.categoryName;
+
+    if (normalizedPalmCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedPalmCat.clear();
+    }
+    if (normalizedBackendCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedBackendCat.clear();
+    }
+
+    if (normalizedPalmCat.compare(normalizedBackendCat, Qt::CaseInsensitive) != 0) {
+        return false;
+    }
+
+    return true;
 }
 
 QString MemoConduit::palmRecordDescription(PilotRecord *record) const

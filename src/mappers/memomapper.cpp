@@ -113,15 +113,15 @@ QString MemoMapper::memoToMarkdown(const Memo &memo, const QString &categoryName
 
     // YAML frontmatter
     markdown += "---\n";
-    markdown += QString("id: %1\n").arg(memo.recordId);
+    markdown += QStringLiteral("id: %1\n").arg(memo.recordId);
 
     if (!categoryName.isEmpty()) {
-        markdown += QString("category: %1\n").arg(categoryName);
+        markdown += QStringLiteral("category: %1\n").arg(categoryName);
     } else if (memo.category > 0) {
-        markdown += QString("category: %1\n").arg(memo.category);
+        markdown += QStringLiteral("category: %1\n").arg(memo.category);
     }
 
-    markdown += QString("created: %1\n").arg(QDateTime::currentDateTime().toString(Qt::ISODate));
+    markdown += QStringLiteral("created: %1\n").arg(QDateTime::currentDateTime().toString(Qt::ISODate));
 
     if (memo.isPrivate) {
         markdown += "private: true\n";
@@ -151,7 +151,7 @@ QString MemoMapper::generateFilename(const Memo &memo)
     // Use first line or first 50 chars of memo as base filename
     QString firstLine = memo.text.split('\n').first().trimmed();
     if (firstLine.isEmpty()) {
-        filename = QString("memo_%1").arg(memo.recordId);
+        filename = QStringLiteral("memo_%1").arg(memo.recordId);
     } else {
         // Take first 50 chars
         filename = firstLine.left(50);
@@ -171,7 +171,7 @@ QString MemoMapper::generateFilename(const Memo &memo)
 
         // If sanitization left nothing useful, fall back to ID
         if (filename.isEmpty()) {
-            filename = QString("memo_%1").arg(memo.recordId);
+            filename = QStringLiteral("memo_%1").arg(memo.recordId);
         }
     }
 
@@ -196,7 +196,7 @@ MemoMapper::Memo MemoMapper::markdownToMemo(const QString &markdown)
     QString body;
 
     // Check for YAML frontmatter (starts with "---")
-    if (content.startsWith("---")) {
+    if (content.startsWith(QStringLiteral("---"))) {
         // Find the closing "---"
         int endFrontmatter = content.indexOf("\n---", 3);
         if (endFrontmatter != -1) {
@@ -211,15 +211,15 @@ MemoMapper::Memo MemoMapper::markdownToMemo(const QString &markdown)
             // Parse YAML frontmatter (simple key: value parsing)
             QStringList lines = frontmatter.split('\n');
             for (const QString &line : lines) {
-                int colonPos = line.indexOf(':');
+                int colonPos = line.indexOf(QLatin1Char(':'));
                 if (colonPos == -1) continue;
 
                 QString key = line.left(colonPos).trimmed().toLower();
                 QString value = line.mid(colonPos + 1).trimmed();
 
-                if (key == "id") {
+                if (key == QStringLiteral("id")) {
                     memo.recordId = value.toInt();
-                } else if (key == "category") {
+                } else if (key == QStringLiteral("category")) {
                     // Try to parse as number first
                     bool ok;
                     int catNum = value.toInt(&ok);
@@ -229,10 +229,10 @@ MemoMapper::Memo MemoMapper::markdownToMemo(const QString &markdown)
                         // Store category name for lookup by conduit
                         memo.categoryName = value;
                     }
-                } else if (key == "private") {
-                    memo.isPrivate = (value.toLower() == "true");
-                } else if (key == "modified") {
-                    memo.isDirty = (value.toLower() == "true");
+                } else if (key == QStringLiteral("private")) {
+                    memo.isPrivate = (value.toLower() == QStringLiteral("true"));
+                } else if (key == QStringLiteral("modified")) {
+                    memo.isDirty = (value.toLower() == QStringLiteral("true"));
                 }
             }
         } else {

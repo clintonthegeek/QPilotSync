@@ -94,7 +94,7 @@ public:
      */
     static PilotRecord* packContact(const Contact &contact);
 
-signals:
+Q_SIGNALS:
     void logMessage(const QString &message);
     void errorOccurred(const QString &error);
 };

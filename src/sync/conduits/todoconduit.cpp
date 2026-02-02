@@ -68,6 +68,10 @@ BackendRecord* TodoConduit::palmToBackend(PilotRecord *palmRecord,
 
     // Convert to iCalendar VTODO
     QString catName = categoryName(todo.category);
+    qDebug() << "[TodoConduit::palmToBackend] Palm ID:" << palmRecord->id()
+             << "category index:" << todo.category
+             << "-> name:" << catName
+             << "m_categories valid:" << (m_categories != nullptr);
     QString ical = TodoMapper::todoToICal(todo, catName);
 
     // Create backend record
@@ -139,12 +143,25 @@ bool TodoConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend) const
     // Compare key fields
     if (palmTodo.description != backendTodo.description) return false;
     if (palmTodo.isComplete != backendTodo.isComplete) return false;
-    if (palmTodo.priority != backendTodo.priority) return false;
+    if (palmTodo.priority != backendTodo.priority) {
+        return false;
+    }
 
-    // Compare due date (if both have one)
-    if (!palmTodo.hasIndefiniteDue && !backendTodo.hasIndefiniteDue) {
-        if (palmTodo.due.date() != backendTodo.due.date()) return false;
-    } else if (palmTodo.hasIndefiniteDue != backendTodo.hasIndefiniteDue) {
+    // Compare categories
+    QString palmCategoryName = categoryName(palmTodo.category);
+
+    // Normalize: "Unfiled" (index 0) and empty string are equivalent
+    QString normalizedPalmCat = palmCategoryName;
+    QString normalizedBackendCat = backendTodo.categoryName;
+
+    if (normalizedPalmCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedPalmCat.clear();
+    }
+    if (normalizedBackendCat.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        normalizedBackendCat.clear();
+    }
+
+    if (normalizedPalmCat.compare(normalizedBackendCat, Qt::CaseInsensitive) != 0) {
         return false;
     }
 
