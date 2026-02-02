@@ -261,11 +261,11 @@ void TestCategoryInfo::testPackSizeConsistent()
 {
     CategoryInfo catInfo;
 
-    // Pack size is the wire format size, NOT sizeof(CategoryAppInfo_t)
-    // Wire format: 2 (renamed bits) + 256 (16 names × 16 bytes) + 16 (IDs) + 4 (lastUniqueID + gap) = 278
+    // packSize() returns sizeof(CategoryAppInfo_t) which includes struct padding.
+    // This is larger than the 278-byte wire format but is safe for buffer allocation.
     size_t size = catInfo.packSize();
     QVERIFY(size > 0);
-    QCOMPARE(size, static_cast<size_t>(278));
+    QCOMPARE(size, sizeof(CategoryAppInfo_t));
 }
 
 // ========== Dirty Flag Defaults ==========

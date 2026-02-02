@@ -147,6 +147,13 @@ bool TodoConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend) const
         return false;
     }
 
+    // Compare due date (if both have one)
+    if (!palmTodo.hasIndefiniteDue && !backendTodo.hasIndefiniteDue) {
+        if (palmTodo.due.date() != backendTodo.due.date()) return false;
+    } else if (palmTodo.hasIndefiniteDue != backendTodo.hasIndefiniteDue) {
+        return false;
+    }
+
     // Compare categories
     QString palmCategoryName = categoryName(palmTodo.category);
 
