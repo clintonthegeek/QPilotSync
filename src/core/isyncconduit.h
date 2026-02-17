@@ -1,0 +1,41 @@
+#pragma once
+
+#include "iconduit.h"
+#include <QList>
+
+class PilotRecord;
+
+namespace Sync {
+class BackendRecord;
+class SyncContext;
+}
+
+using Sync::BackendRecord;
+using Sync::SyncContext;
+
+class ISyncConduit : public IConduit
+{
+public:
+    // Palm database identity
+    virtual QString palmDatabaseName() const = 0;
+    virtual QString fileExtension() const = 0;
+    virtual bool canSyncToPalm() const = 0;
+    virtual bool canSyncFromPalm() const = 0;
+
+    // Record conversion (bidirectional)
+    virtual BackendRecord *palmToBackend(PilotRecord *record,
+                                         SyncContext *context) = 0;
+    virtual PilotRecord *backendToPalm(BackendRecord *record,
+                                        SyncContext *context) = 0;
+    virtual bool recordsEqual(PilotRecord *palmRecord,
+                               BackendRecord *backendRecord) const = 0;
+    virtual QString palmRecordDescription(PilotRecord *record) const = 0;
+    virtual BackendRecord *findMatch(PilotRecord *palmRecord,
+                                      const QList<BackendRecord *> &candidates) = 0;
+
+    // Category support
+    virtual QString categoryNameForIndex(int categoryIndex) const = 0;
+    virtual bool writeModifiedCategories(SyncContext *context) = 0;
+};
+
+Q_DECLARE_INTERFACE(ISyncConduit, "org.qpilotsync.ISyncConduit/1.0")
