@@ -78,6 +78,8 @@ add_library(QPilotCore SHARED
     # KF6 integration
     kf6/actionmanager.cpp
     kf6/actionmanager.h
+    kf6/autosyncorchestrator.cpp
+    kf6/autosyncorchestrator.h
     kf6/conduitmanager.cpp
     kf6/conduitmanager.h
     kf6/kf6mainwindow.cpp
