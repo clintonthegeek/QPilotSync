@@ -31,46 +31,61 @@ enum class ConnectionMode
 /**
  * @brief Device fingerprint for identifying a specific Palm device
  *
- * A fingerprint uniquely identifies a Palm device using its User ID
- * (a 32-bit value set on first sync) and username. This allows us to
- * detect when the wrong device is connected to a profile.
+ * A fingerprint uniquely identifies a Palm device using its USB serial number
+ * (most reliable), User ID (a 32-bit value set on first sync), and username.
+ * This allows us to detect when the wrong device is connected to a profile.
  */
 struct DeviceFingerprint
 {
     quint32 userId = 0;
     QString userName;
+    QString usbSerialNumber;  // USB descriptor serial (e.g. "L0JG14I11398")
 
-    bool isValid() const { return userId != 0 || !userName.isEmpty(); }
-    bool isEmpty() const { return userId == 0 && userName.isEmpty(); }
+    bool isValid() const { return userId != 0 || !userName.isEmpty() || !usbSerialNumber.isEmpty(); }
+    bool isEmpty() const { return userId == 0 && userName.isEmpty() && usbSerialNumber.isEmpty(); }
 
-    // Match another fingerprint (userId takes priority if both are set)
+    // Match another fingerprint (USB serial takes priority, then userId, then userName)
     bool matches(const DeviceFingerprint &other) const {
+        // USB serial number is the most reliable identifier
+        if (!usbSerialNumber.isEmpty() && !other.usbSerialNumber.isEmpty()) {
+            return usbSerialNumber == other.usbSerialNumber;
+        }
         if (userId != 0 && other.userId != 0) {
             return userId == other.userId;
         }
-        // Fall back to username match if no userId
         return !userName.isEmpty() && userName == other.userName;
     }
 
     // Create a display string for the fingerprint
     QString displayString() const {
         if (isEmpty()) return QString();
+        if (!usbSerialNumber.isEmpty()) {
+            if (userName.isEmpty()) return QString("S/N: %1").arg(usbSerialNumber);
+            if (userId == 0) return QString("%1 (S/N: %2)").arg(userName, usbSerialNumber);
+            return QString("%1 (ID: %2, S/N: %3)").arg(userName).arg(userId).arg(usbSerialNumber);
+        }
         if (userName.isEmpty()) return QString("ID: %1").arg(userId);
         if (userId == 0) return userName;
         return QString("%1 (ID: %2)").arg(userName).arg(userId);
     }
 
-    // Create a unique key for registry lookups
+    // Create a unique key for registry lookups (format: userId:userName:serial)
     QString registryKey() const {
-        return QString("%1:%2").arg(userId).arg(userName);
+        return QString("%1:%2:%3").arg(userId).arg(userName, usbSerialNumber);
     }
 
     static DeviceFingerprint fromRegistryKey(const QString &key) {
         DeviceFingerprint fp;
-        int colonPos = key.indexOf(':');
-        if (colonPos > 0) {
-            fp.userId = key.left(colonPos).toUInt();
-            fp.userName = key.mid(colonPos + 1);
+        int firstColon = key.indexOf(':');
+        if (firstColon > 0) {
+            fp.userId = key.left(firstColon).toUInt();
+            int secondColon = key.indexOf(':', firstColon + 1);
+            if (secondColon > 0) {
+                fp.userName = key.mid(firstColon + 1, secondColon - firstColon - 1);
+                fp.usbSerialNumber = key.mid(secondColon + 1);
+            } else {
+                fp.userName = key.mid(firstColon + 1);
+            }
         }
         return fp;
     }

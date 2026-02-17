@@ -213,6 +213,7 @@ bool Profile::load()
     m_baudRate = settings.value("device/baudRate", DEFAULT_BAUD_RATE).toString();
     m_deviceFingerprint.userId = settings.value("device/userId", 0).toUInt();
     m_deviceFingerprint.userName = settings.value("device/userName", QString()).toString();
+    m_deviceFingerprint.usbSerialNumber = settings.value("device/usbSerialNumber", QString()).toString();
 
     // Connection mode (default to KeepAlive for development)
     QString modeStr = settings.value("device/connectionMode", "keepalive").toString();
@@ -280,6 +281,9 @@ bool Profile::save()
     }
     if (!m_deviceFingerprint.userName.isEmpty()) {
         settings.setValue("device/userName", m_deviceFingerprint.userName);
+    }
+    if (!m_deviceFingerprint.usbSerialNumber.isEmpty()) {
+        settings.setValue("device/usbSerialNumber", m_deviceFingerprint.usbSerialNumber);
     }
 
     // Connection mode
