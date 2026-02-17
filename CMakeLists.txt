@@ -31,6 +31,10 @@ find_package(KF6ConfigWidgets REQUIRED)
 find_package(KF6Crash REQUIRED)
 find_package(KF6Notifications REQUIRED)
 
+# System libraries
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(UDEV REQUIRED libudev)
+
 # Build pilot-link first
 add_subdirectory(lib)
 

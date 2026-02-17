@@ -120,6 +120,7 @@ target_link_libraries(QPilotCore
         KF6::ConfigWidgets
         KF6::Notifications
         pisock
+        ${UDEV_LIBRARIES}
 )
 
 target_include_directories(QPilotCore PUBLIC
@@ -129,6 +130,7 @@ target_include_directories(QPilotCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/sync
     ${CMAKE_CURRENT_SOURCE_DIR}/kf6
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets
+    ${UDEV_INCLUDE_DIRS}
 )
 
 # For development builds: tell the app where to find qpilotsyncui.rc
