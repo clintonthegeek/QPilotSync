@@ -47,6 +47,16 @@ KConfigGroup KF6Settings::advancedGroup() const
     return m_config->group(QStringLiteral("Advanced"));
 }
 
+KConfigGroup KF6Settings::systemTrayGroup() const
+{
+    return KConfigGroup(m_config, QStringLiteral("SystemTray"));
+}
+
+KConfigGroup KF6Settings::deviceSerialsGroup() const
+{
+    return KConfigGroup(m_config, QStringLiteral("DeviceSerials"));
+}
+
 // ========== Profile Settings ==========
 
 QString KF6Settings::defaultProfilePath() const
@@ -272,6 +282,38 @@ int KF6Settings::sidebarWidth() const
 void KF6Settings::setSidebarWidth(int width)
 {
     viewGroup().writeEntry("SidebarWidth", width);
+}
+
+// ========== System Tray ==========
+
+bool KF6Settings::minimizeToTray() const
+{
+    return systemTrayGroup().readEntry("MinimizeToTray", true);
+}
+
+void KF6Settings::setMinimizeToTray(bool enabled)
+{
+    systemTrayGroup().writeEntry("MinimizeToTray", enabled);
+    m_config->sync();
+}
+
+// ========== Device Registry by USB Serial ==========
+
+void KF6Settings::registerDeviceBySerial(const QString &usbSerial, const QString &profilePath)
+{
+    deviceSerialsGroup().writeEntry(usbSerial, profilePath);
+    m_config->sync();
+}
+
+QString KF6Settings::findProfileBySerial(const QString &usbSerial) const
+{
+    return deviceSerialsGroup().readEntry(usbSerial, QString());
+}
+
+void KF6Settings::unregisterDeviceBySerial(const QString &usbSerial)
+{
+    deviceSerialsGroup().deleteEntry(usbSerial);
+    m_config->sync();
 }
 
 void KF6Settings::sync()

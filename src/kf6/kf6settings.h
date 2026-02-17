@@ -87,6 +87,15 @@ public:
     int logPanelHeight() const;
     void setLogPanelHeight(int height);
 
+    // ========== System Tray ==========
+    bool minimizeToTray() const;
+    void setMinimizeToTray(bool enabled);
+
+    // ========== Device Registry by USB Serial ==========
+    void registerDeviceBySerial(const QString &usbSerial, const QString &profilePath);
+    QString findProfileBySerial(const QString &usbSerial) const;
+    void unregisterDeviceBySerial(const QString &usbSerial);
+
     // ========== Advanced Settings ==========
     bool debugLogging() const;
     void setDebugLogging(bool enabled);
@@ -118,6 +127,8 @@ private:
     KConfigGroup windowGroup() const;
     KConfigGroup viewGroup() const;
     KConfigGroup advancedGroup() const;
+    KConfigGroup systemTrayGroup() const;
+    KConfigGroup deviceSerialsGroup() const;
 };
 
 #endif // KF6SETTINGS_H
