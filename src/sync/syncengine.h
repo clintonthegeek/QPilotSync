@@ -9,11 +9,14 @@
 #include "synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
-#include "conduit.h"
+#include "../core/iconduit.h"
+#include "../core/isyncconduit.h"
 
 class KPilotDeviceLink;
 
 namespace Sync {
+
+class SyncConduitBase;
 
 /**
  * @brief Main sync orchestrator
@@ -90,8 +93,9 @@ public:
      * @brief Register a conduit for a data type
      *
      * The engine takes ownership of the conduit.
+     * Accepts any IConduit implementation (ISyncConduit, IToolConduit, etc.)
      */
-    void registerConduit(SyncConduitBase *conduit);
+    void registerConduit(IConduit *conduit);
 
     /**
      * @brief Unregister a conduit by ID
@@ -101,7 +105,7 @@ public:
     /**
      * @brief Get a registered conduit by ID
      */
-    SyncConduitBase* conduit(const QString &conduitId) const;
+    IConduit* conduit(const QString &conduitId) const;
 
     /**
      * @brief Get list of all registered conduit IDs
@@ -123,9 +127,22 @@ public:
     /**
      * @brief Sync all enabled conduits
      *
-     * Runs each conduit in order, collecting results.
+     * Runs each conduit in order (computing dependency order internally).
      */
     SyncResult syncAll(SyncMode mode = SyncMode::HotSync);
+
+    /**
+     * @brief Sync conduits in a pre-ordered list
+     *
+     * Runs conduits in the exact order specified by @p orderedIds.
+     * This is intended for use with ConduitManager which handles
+     * dependency resolution externally.
+     *
+     * @param orderedIds Conduit IDs in the order they should run
+     * @param mode The sync mode to use
+     * @return Aggregated result from all conduit runs
+     */
+    SyncResult syncAllOrdered(const QStringList &orderedIds, SyncMode mode = SyncMode::HotSync);
 
     /**
      * @brief Sync a specific conduit
@@ -223,7 +240,7 @@ private slots:
     void onConduitConflict(const QString &palmDesc, const QString &pcDesc);
 
 private:
-    void connectConduitSignals(SyncConduitBase *conduit);
+    void connectConduitSignals(IConduit *conduit);
 
     /**
      * @brief Get conduits in dependency-resolved order
@@ -246,7 +263,7 @@ private:
     KPilotDeviceLink *m_deviceLink = nullptr;
     SyncBackend *m_backend = nullptr;
 
-    QMap<QString, SyncConduitBase*> m_conduits;
+    QMap<QString, IConduit*> m_conduits;
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, SyncState*> m_states;
 

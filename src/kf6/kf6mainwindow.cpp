@@ -672,7 +672,7 @@ void KF6MainWindow::loadProfile(const QString &path)
 
         QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
         if (!conduitSettings.isEmpty()) {
-            Sync::SyncConduitBase *conduit = m_syncEngine->conduit(conduitId);
+            auto *conduit = dynamic_cast<Sync::SyncConduitBase*>(m_syncEngine->conduit(conduitId));
             if (conduit) {
                 conduit->loadSettings(conduitSettings);
             }

@@ -1,4 +1,5 @@
 #include "syncengine.h"
+#include "conduit.h"
 #include "localfilebackend.h"
 #include "../palm/kpilotdevicelink.h"
 #include "qsynccore/conflictpolicy.h"
@@ -21,7 +22,19 @@ SyncEngine::SyncEngine(QObject *parent)
 SyncEngine::~SyncEngine()
 {
     // Clean up owned objects
-    qDeleteAll(m_conduits);
+    // IConduit has a virtual destructor, so delete through the interface pointer is safe.
+    // However, for conduits that are QObjects with a parent (this), Qt will also
+    // try to delete them. To avoid double-delete, only delete non-QObject conduits manually.
+    for (auto it = m_conduits.begin(); it != m_conduits.end(); ++it) {
+        QObject *obj = dynamic_cast<QObject*>(it.value());
+        if (!obj) {
+            // Not a QObject — must delete manually via IConduit*
+            delete it.value();
+        }
+        // QObject conduits are parented to 'this' and will be deleted by Qt
+    }
+    m_conduits.clear();
+
     qDeleteAll(m_states);
     delete m_backend;
     // Note: m_deviceLink may be shared, so don't delete it
@@ -56,7 +69,7 @@ void SyncEngine::setBackend(SyncBackend *backend)
 
 // ========== Conduit Management ==========
 
-void SyncEngine::registerConduit(SyncConduitBase *conduit)
+void SyncEngine::registerConduit(IConduit *conduit)
 {
     if (!conduit) return;
 
@@ -64,12 +77,23 @@ void SyncEngine::registerConduit(SyncConduitBase *conduit)
 
     // Remove existing conduit with same ID
     if (m_conduits.contains(id)) {
-        delete m_conduits[id];
+        IConduit *old = m_conduits[id];
+        QObject *oldObj = dynamic_cast<QObject*>(old);
+        if (oldObj) {
+            delete oldObj;
+        } else {
+            delete old;
+        }
     }
 
     m_conduits[id] = conduit;
     m_conduitEnabled[id] = true;
-    conduit->setParent(this);
+
+    // If the conduit is a QObject, parent it to this engine
+    QObject *obj = dynamic_cast<QObject*>(conduit);
+    if (obj) {
+        obj->setParent(this);
+    }
 
     connectConduitSignals(conduit);
 
@@ -79,13 +103,19 @@ void SyncEngine::registerConduit(SyncConduitBase *conduit)
 void SyncEngine::unregisterConduit(const QString &conduitId)
 {
     if (m_conduits.contains(conduitId)) {
-        delete m_conduits[conduitId];
+        IConduit *cond = m_conduits[conduitId];
+        QObject *obj = dynamic_cast<QObject*>(cond);
+        if (obj) {
+            delete obj;
+        } else {
+            delete cond;
+        }
         m_conduits.remove(conduitId);
         m_conduitEnabled.remove(conduitId);
     }
 }
 
-SyncConduitBase* SyncEngine::conduit(const QString &conduitId) const
+IConduit* SyncEngine::conduit(const QString &conduitId) const
 {
     return m_conduits.value(conduitId);
 }
@@ -174,7 +204,7 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
             break;
         }
 
-        SyncConduitBase *cond = m_conduits[id];
+        IConduit *cond = m_conduits[id];
 
         // Check if conduit should run (interval-based conduits may skip)
         SyncContext preCheckContext;
@@ -190,9 +220,126 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
 
         SyncResult conduitResult = syncConduit(id, mode);
 
-        // Update conduit's last run time on success
+        // Update conduit's last run time on success (SyncConduitBase only)
         if (conduitResult.success) {
-            cond->setLastRunTime(QDateTime::currentDateTime());
+            auto *syncBase = dynamic_cast<SyncConduitBase*>(cond);
+            if (syncBase) {
+                syncBase->setLastRunTime(QDateTime::currentDateTime());
+            }
+        }
+
+        // Accumulate results
+        totalResult.palmStats.created += conduitResult.palmStats.created;
+        totalResult.palmStats.updated += conduitResult.palmStats.updated;
+        totalResult.palmStats.deleted += conduitResult.palmStats.deleted;
+        totalResult.palmStats.unchanged += conduitResult.palmStats.unchanged;
+        totalResult.palmStats.conflicts += conduitResult.palmStats.conflicts;
+        totalResult.palmStats.errors += conduitResult.palmStats.errors;
+
+        totalResult.pcStats.created += conduitResult.pcStats.created;
+        totalResult.pcStats.updated += conduitResult.pcStats.updated;
+        totalResult.pcStats.deleted += conduitResult.pcStats.deleted;
+        totalResult.pcStats.unchanged += conduitResult.pcStats.unchanged;
+        totalResult.pcStats.conflicts += conduitResult.pcStats.conflicts;
+        totalResult.pcStats.errors += conduitResult.pcStats.errors;
+
+        totalResult.warnings.append(conduitResult.warnings);
+
+        if (!conduitResult.success) {
+            totalResult.success = false;
+            if (totalResult.errorMessage.isEmpty()) {
+                totalResult.errorMessage = conduitResult.errorMessage;
+            }
+        }
+
+        conduitIndex++;
+    }
+
+    totalResult.endTime = QDateTime::currentDateTime();
+    m_syncing = false;
+
+    emit syncFinished(totalResult);
+    emit logMessage(QString("Sync complete. Palm: %1. PC: %2. Duration: %3ms")
+        .arg(totalResult.palmStats.summary())
+        .arg(totalResult.pcStats.summary())
+        .arg(totalResult.durationMs()));
+
+    return totalResult;
+}
+
+SyncResult SyncEngine::syncAllOrdered(const QStringList &orderedIds, SyncMode mode)
+{
+    SyncResult totalResult;
+    totalResult.startTime = QDateTime::currentDateTime();
+    totalResult.success = true;
+
+    if (!m_deviceLink || !m_deviceLink->isConnected()) {
+        totalResult.success = false;
+        totalResult.errorMessage = "No device connected";
+        totalResult.endTime = QDateTime::currentDateTime();
+        emit errorOccurred(totalResult.errorMessage);
+        return totalResult;
+    }
+
+    if (!m_backend) {
+        totalResult.success = false;
+        totalResult.errorMessage = "No backend configured";
+        totalResult.endTime = QDateTime::currentDateTime();
+        emit errorOccurred(totalResult.errorMessage);
+        return totalResult;
+    }
+
+    // Get Palm username
+    PilotUser user;
+    if (m_deviceLink->readUserInfo(user)) {
+        m_palmUserName = QString::fromUtf8(user.username);
+    }
+
+    if (m_palmUserName.isEmpty()) {
+        m_palmUserName = "default";
+    }
+
+    m_syncing = true;
+    m_cancelled = false;
+    emit syncStarted();
+    emit logMessage(QString("Starting sync for user: %1").arg(m_palmUserName));
+    emit logMessage(QString("Conduit order: %1").arg(orderedIds.join(QStringLiteral(" \u2192 "))));
+
+    int conduitIndex = 0;
+    for (const QString &id : orderedIds) {
+        // Check both internal flag and external cancel callback
+        if (m_cancelled || (m_cancelCheck && m_cancelCheck())) {
+            emit logMessage("Sync cancelled by user");
+            break;
+        }
+
+        IConduit *cond = m_conduits.value(id);
+        if (!cond) {
+            emit logMessage(QString("Warning: Unknown conduit '%1' in ordered list, skipping").arg(id));
+            conduitIndex++;
+            continue;
+        }
+
+        // Check if conduit should run (interval-based conduits may skip)
+        SyncContext preCheckContext;
+        preCheckContext.mode = mode;
+        if (!cond->shouldRun(&preCheckContext)) {
+            emit logMessage(QString("Skipping %1 (not due yet)").arg(cond->displayName()));
+            conduitIndex++;
+            continue;
+        }
+
+        emit progressUpdated(conduitIndex, orderedIds.size(),
+            QString("Syncing %1...").arg(cond->displayName()));
+
+        SyncResult conduitResult = syncConduit(id, mode);
+
+        // Update conduit's last run time on success (SyncConduitBase only)
+        if (conduitResult.success) {
+            auto *syncBase = dynamic_cast<SyncConduitBase*>(cond);
+            if (syncBase) {
+                syncBase->setLastRunTime(QDateTime::currentDateTime());
+            }
         }
 
         // Accumulate results
@@ -239,7 +386,7 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     SyncResult result;
     result.startTime = QDateTime::currentDateTime();
 
-    SyncConduitBase *cond = m_conduits.value(conduitId);
+    IConduit *cond = m_conduits.value(conduitId);
     if (!cond) {
         result.success = false;
         result.errorMessage = QString("Unknown conduit: %1").arg(conduitId);
@@ -261,8 +408,13 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     context.state = state;
     context.mode = mode;
     context.conflictPolicy = m_conflictPolicy;
-    context.palmDatabase = cond->palmDatabaseName();
     context.userName = m_palmUserName;
+
+    // Only ISyncConduit-derived conduits have a Palm database name
+    ISyncConduit *syncCond = dynamic_cast<ISyncConduit*>(cond);
+    if (syncCond) {
+        context.palmDatabase = syncCond->palmDatabaseName();
+    }
 
     // Determine collection ID for this conduit
     // For now, use conduit ID as collection ID
@@ -307,16 +459,19 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     context.conflictHandler = &conflictHandler;
     context.conflictSettings = conflictSettings;
 
-    // Pass cancellation check to conduit
-    if (m_cancelCheck) {
-        cond->setCancelCheck(m_cancelCheck);
+    // Pass cancellation check to conduit (SyncConduitBase only)
+    auto *syncBase = dynamic_cast<SyncConduitBase*>(cond);
+    if (syncBase && m_cancelCheck) {
+        syncBase->setCancelCheck(m_cancelCheck);
     }
 
     // Run the sync
     result = cond->sync(&context);
 
     // Clear cancellation check
-    cond->setCancelCheck(nullptr);
+    if (syncBase) {
+        syncBase->setCancelCheck(nullptr);
+    }
 
     result.endTime = QDateTime::currentDateTime();
     m_currentConduit.clear();
@@ -383,16 +538,23 @@ SyncState* SyncEngine::stateForConduit(const QString &conduitId)
 
 // ========== Private Slots ==========
 
-void SyncEngine::connectConduitSignals(SyncConduitBase *conduit)
+void SyncEngine::connectConduitSignals(IConduit *conduit)
 {
-    connect(conduit, &SyncConduitBase::progressUpdated,
-            this, &SyncEngine::onConduitProgress);
-    connect(conduit, &SyncConduitBase::logMessage,
-            this, &SyncEngine::onConduitLog);
-    connect(conduit, &SyncConduitBase::errorOccurred,
-            this, &SyncEngine::onConduitError);
-    connect(conduit, &SyncConduitBase::conflictDetected,
-            this, &SyncEngine::onConduitConflict);
+    // Signals (logMessage, errorOccurred, progressUpdated, conflictDetected)
+    // are defined on SyncConduitBase, not IConduit. For SyncConduitBase-derived
+    // conduits, cast and connect. For IConduit-only conduits (tool conduits),
+    // skip signal connections for now.
+    auto *syncBase = dynamic_cast<SyncConduitBase*>(conduit);
+    if (syncBase) {
+        connect(syncBase, &SyncConduitBase::progressUpdated,
+                this, &SyncEngine::onConduitProgress);
+        connect(syncBase, &SyncConduitBase::logMessage,
+                this, &SyncEngine::onConduitLog);
+        connect(syncBase, &SyncConduitBase::errorOccurred,
+                this, &SyncEngine::onConduitError);
+        connect(syncBase, &SyncConduitBase::conflictDetected,
+                this, &SyncEngine::onConduitConflict);
+    }
 }
 
 void SyncEngine::onConduitProgress(int current, int total, const QString &message)
@@ -436,9 +598,10 @@ QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
     }
 
     // Build edges from runBefore() and runAfter()
+    // These methods are only available on SyncConduitBase
     for (const QString &id : conduitIds) {
-        SyncConduitBase *cond = m_conduits.value(id);
-        if (!cond) continue;
+        auto *cond = dynamic_cast<SyncConduitBase*>(m_conduits.value(id));
+        if (!cond) continue;  // IConduit-only conduits have no ordering constraints
 
         // "I must run before X" means edge: id -> X
         for (const QString &beforeId : cond->runBefore()) {
@@ -508,8 +671,8 @@ QString SyncEngine::checkCircularDependencies(const QStringList &conduitIds)
     }
 
     for (const QString &id : conduitIds) {
-        SyncConduitBase *cond = m_conduits.value(id);
-        if (!cond) continue;
+        auto *cond = dynamic_cast<SyncConduitBase*>(m_conduits.value(id));
+        if (!cond) continue;  // IConduit-only conduits have no ordering constraints
 
         // "I must run before X" means edge: id -> X
         for (const QString &beforeId : cond->runBefore()) {
