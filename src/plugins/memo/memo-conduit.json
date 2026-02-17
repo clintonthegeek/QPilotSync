@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Name": "Memo Conduit",
+        "Description": "Synchronizes Palm MemoDB with Markdown files",
+        "Icon": "view-pim-notes",
+        "Authors": [{ "Name": "QPilotSync contributors" }],
+        "License": "GPL",
+        "Version": "1.0.0",
+        "Category": "Sync"
+    },
+    "X-QPilotSync-ConduitId": "memos",
+    "X-QPilotSync-ConduitType": "sync",
+    "X-QPilotSync-PalmDatabase": "MemoDB",
+    "X-QPilotSync-RequiresDevice": true,
+    "X-QPilotSync-RunBefore": [],
+    "X-QPilotSync-RunAfter": [],
+    "X-QPilotSync-DefaultEnabled": true,
+    "X-QPilotSync-SortOrder": 0
+}
