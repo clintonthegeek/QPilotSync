@@ -81,6 +81,10 @@ ehthumbs.db
 Thumbs.db
 Desktop.ini
 
+# Python
+__pycache__/
+*.pyc
+
 # Logs
 *.log
 
