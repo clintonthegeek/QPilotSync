@@ -91,7 +91,7 @@ public:
      *
      * The engine takes ownership of the conduit.
      */
-    void registerConduit(Conduit *conduit);
+    void registerConduit(SyncConduitBase *conduit);
 
     /**
      * @brief Unregister a conduit by ID
@@ -101,7 +101,7 @@ public:
     /**
      * @brief Get a registered conduit by ID
      */
-    Conduit* conduit(const QString &conduitId) const;
+    SyncConduitBase* conduit(const QString &conduitId) const;
 
     /**
      * @brief Get list of all registered conduit IDs
@@ -223,7 +223,7 @@ private slots:
     void onConduitConflict(const QString &palmDesc, const QString &pcDesc);
 
 private:
-    void connectConduitSignals(Conduit *conduit);
+    void connectConduitSignals(SyncConduitBase *conduit);
 
     /**
      * @brief Get conduits in dependency-resolved order
@@ -246,7 +246,7 @@ private:
     KPilotDeviceLink *m_deviceLink = nullptr;
     SyncBackend *m_backend = nullptr;
 
-    QMap<QString, Conduit*> m_conduits;
+    QMap<QString, SyncConduitBase*> m_conduits;
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, SyncState*> m_states;
 

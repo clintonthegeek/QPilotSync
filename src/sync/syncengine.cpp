@@ -56,7 +56,7 @@ void SyncEngine::setBackend(SyncBackend *backend)
 
 // ========== Conduit Management ==========
 
-void SyncEngine::registerConduit(Conduit *conduit)
+void SyncEngine::registerConduit(SyncConduitBase *conduit)
 {
     if (!conduit) return;
 
@@ -85,7 +85,7 @@ void SyncEngine::unregisterConduit(const QString &conduitId)
     }
 }
 
-Conduit* SyncEngine::conduit(const QString &conduitId) const
+SyncConduitBase* SyncEngine::conduit(const QString &conduitId) const
 {
     return m_conduits.value(conduitId);
 }
@@ -174,7 +174,7 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
             break;
         }
 
-        Conduit *cond = m_conduits[id];
+        SyncConduitBase *cond = m_conduits[id];
 
         // Check if conduit should run (interval-based conduits may skip)
         SyncContext preCheckContext;
@@ -239,7 +239,7 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     SyncResult result;
     result.startTime = QDateTime::currentDateTime();
 
-    Conduit *cond = m_conduits.value(conduitId);
+    SyncConduitBase *cond = m_conduits.value(conduitId);
     if (!cond) {
         result.success = false;
         result.errorMessage = QString("Unknown conduit: %1").arg(conduitId);
@@ -383,15 +383,15 @@ SyncState* SyncEngine::stateForConduit(const QString &conduitId)
 
 // ========== Private Slots ==========
 
-void SyncEngine::connectConduitSignals(Conduit *conduit)
+void SyncEngine::connectConduitSignals(SyncConduitBase *conduit)
 {
-    connect(conduit, &Conduit::progressUpdated,
+    connect(conduit, &SyncConduitBase::progressUpdated,
             this, &SyncEngine::onConduitProgress);
-    connect(conduit, &Conduit::logMessage,
+    connect(conduit, &SyncConduitBase::logMessage,
             this, &SyncEngine::onConduitLog);
-    connect(conduit, &Conduit::errorOccurred,
+    connect(conduit, &SyncConduitBase::errorOccurred,
             this, &SyncEngine::onConduitError);
-    connect(conduit, &Conduit::conflictDetected,
+    connect(conduit, &SyncConduitBase::conflictDetected,
             this, &SyncEngine::onConduitConflict);
 }
 
@@ -437,7 +437,7 @@ QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
 
     // Build edges from runBefore() and runAfter()
     for (const QString &id : conduitIds) {
-        Conduit *cond = m_conduits.value(id);
+        SyncConduitBase *cond = m_conduits.value(id);
         if (!cond) continue;
 
         // "I must run before X" means edge: id -> X
@@ -508,7 +508,7 @@ QString SyncEngine::checkCircularDependencies(const QStringList &conduitIds)
     }
 
     for (const QString &id : conduitIds) {
-        Conduit *cond = m_conduits.value(id);
+        SyncConduitBase *cond = m_conduits.value(id);
         if (!cond) continue;
 
         // "I must run before X" means edge: id -> X

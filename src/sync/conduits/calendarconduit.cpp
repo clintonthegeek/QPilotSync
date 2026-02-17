@@ -10,7 +10,7 @@
 namespace Sync {
 
 CalendarConduit::CalendarConduit(QObject *parent)
-    : Conduit(parent)
+    : SyncConduitBase(parent)
 {
 }
 

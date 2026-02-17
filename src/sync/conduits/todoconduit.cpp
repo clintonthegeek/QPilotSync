@@ -10,7 +10,7 @@
 namespace Sync {
 
 TodoConduit::TodoConduit(QObject *parent)
-    : Conduit(parent)
+    : SyncConduitBase(parent)
 {
 }
 

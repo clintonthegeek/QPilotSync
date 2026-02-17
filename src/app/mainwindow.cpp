@@ -904,7 +904,7 @@ void MainWindow::runInstallConduit()
 void MainWindow::showWebCalendarSettings(QWidget *parent)
 {
     // Get the WebCalendarConduit from the sync engine
-    Sync::Conduit *conduit = m_syncEngine->conduit("webcalendar");
+    Sync::SyncConduitBase *conduit = m_syncEngine->conduit("webcalendar");
     Sync::WebCalendarConduit *webCal = dynamic_cast<Sync::WebCalendarConduit*>(conduit);
     if (!webCal) {
         QMessageBox::warning(parent, "Error", "WebCalendarConduit not found");
@@ -1137,7 +1137,7 @@ void MainWindow::loadProfile(const QString &path)
         // Load conduit-specific settings
         QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
         if (!conduitSettings.isEmpty()) {
-            Sync::Conduit *conduit = m_syncEngine->conduit(conduitId);
+            Sync::SyncConduitBase *conduit = m_syncEngine->conduit(conduitId);
             if (conduit) {
                 conduit->loadSettings(conduitSettings);
             }

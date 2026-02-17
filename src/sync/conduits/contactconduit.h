@@ -17,7 +17,7 @@ namespace Sync {
  * Uses ContactMapper for format conversion.
  * Supports bidirectional category sync.
  */
-class ContactConduit : public Conduit
+class ContactConduit : public SyncConduitBase
 {
     Q_OBJECT
 

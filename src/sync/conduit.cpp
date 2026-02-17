@@ -6,7 +6,7 @@
 
 namespace Sync {
 
-bool Conduit::canSync(const SyncContext *context) const
+bool SyncConduitBase::canSync(const SyncContext *context) const
 {
     if (!context) return false;
     if (!context->deviceLink) return false;
@@ -16,7 +16,7 @@ bool Conduit::canSync(const SyncContext *context) const
     return true;
 }
 
-SyncResult Conduit::sync(SyncContext *context)
+SyncResult SyncConduitBase::sync(SyncContext *context)
 {
     SyncResult result;
     result.startTime = QDateTime::currentDateTime();
@@ -122,7 +122,7 @@ SyncResult Conduit::sync(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::hotSync(SyncContext *context)
+SyncResult SyncConduitBase::hotSync(SyncContext *context)
 {
     emit logMessage("Performing HotSync (modified records only)...");
 
@@ -325,7 +325,7 @@ SyncResult Conduit::hotSync(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::fullSync(SyncContext *context)
+SyncResult SyncConduitBase::fullSync(SyncContext *context)
 {
     emit logMessage("Performing FullSync (all records)...");
 
@@ -390,7 +390,7 @@ SyncResult Conduit::fullSync(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::firstSync(SyncContext *context)
+SyncResult SyncConduitBase::firstSync(SyncContext *context)
 {
     emit logMessage("Performing FirstSync (matching by content)...");
 
@@ -492,7 +492,7 @@ SyncResult Conduit::firstSync(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::copyPalmToPC(SyncContext *context)
+SyncResult SyncConduitBase::copyPalmToPC(SyncContext *context)
 {
     emit logMessage("Copying Palm → PC...");
 
@@ -561,7 +561,7 @@ SyncResult Conduit::copyPalmToPC(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::copyPCToPalm(SyncContext *context)
+SyncResult SyncConduitBase::copyPCToPalm(SyncContext *context)
 {
     emit logMessage("Copying PC → Palm...");
 
@@ -608,7 +608,7 @@ SyncResult Conduit::copyPCToPalm(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::backup(SyncContext *context)
+SyncResult SyncConduitBase::backup(SyncContext *context)
 {
     emit logMessage("Backing up Palm → PC (preserving old files)...");
 
@@ -665,7 +665,7 @@ SyncResult Conduit::backup(SyncContext *context)
     return result;
 }
 
-SyncResult Conduit::restore(SyncContext *context)
+SyncResult SyncConduitBase::restore(SyncContext *context)
 {
     emit logMessage("Restoring PC → Palm (full restore)...");
 
@@ -738,7 +738,7 @@ SyncResult Conduit::restore(SyncContext *context)
     return result;
 }
 
-void Conduit::syncRecord(PilotRecord *palmRecord,
+void SyncConduitBase::syncRecord(PilotRecord *palmRecord,
                           BackendRecord *backendRecord,
                           SyncContext *context,
                           SyncStats &palmStats,
@@ -751,7 +751,7 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
         bool backendDeleted = backendRecord->isDeleted;
 
         // Debug: Log record state
-        qDebug() << "[Conduit::syncRecord] Palm ID:" << palmRecord->id()
+        qDebug() << "[SyncConduitBase::syncRecord] Palm ID:" << palmRecord->id()
                  << "category:" << palmRecord->category()
                  << "attr:" << Qt::hex << palmRecord->attributes() << Qt::dec
                  << "dirty:" << palmModified
@@ -915,7 +915,7 @@ void Conduit::syncRecord(PilotRecord *palmRecord,
     }
 }
 
-bool Conduit::resolveConflict(PilotRecord *palmRecord,
+bool SyncConduitBase::resolveConflict(PilotRecord *palmRecord,
                                BackendRecord *backendRecord,
                                SyncContext *context,
                                SyncStats &palmStats,
@@ -935,7 +935,7 @@ bool Conduit::resolveConflict(PilotRecord *palmRecord,
     return resolveConflictLegacy(palmRecord, backendRecord, context, palmStats, pcStats);
 }
 
-bool Conduit::resolveConflictWithHandler(PilotRecord *palmRecord,
+bool SyncConduitBase::resolveConflictWithHandler(PilotRecord *palmRecord,
                                           BackendRecord *backendRecord,
                                           SyncContext *context,
                                           SyncStats &palmStats,
@@ -999,7 +999,7 @@ bool Conduit::resolveConflictWithHandler(PilotRecord *palmRecord,
                                   context, palmStats, pcStats);
 }
 
-bool Conduit::applyConflictDecision(const QSyncCore::ConflictRecord &conflict,
+bool SyncConduitBase::applyConflictDecision(const QSyncCore::ConflictRecord &conflict,
                                      QSyncCore::ConflictDecision decision,
                                      PilotRecord *palmRecord,
                                      BackendRecord *backendRecord,
@@ -1129,7 +1129,7 @@ bool Conduit::applyConflictDecision(const QSyncCore::ConflictRecord &conflict,
     return false;
 }
 
-bool Conduit::resolveConflictLegacy(PilotRecord *palmRecord,
+bool SyncConduitBase::resolveConflictLegacy(PilotRecord *palmRecord,
                                      BackendRecord *backendRecord,
                                      SyncContext *context,
                                      SyncStats &palmStats,
@@ -1198,7 +1198,7 @@ bool Conduit::resolveConflictLegacy(PilotRecord *palmRecord,
     }
 }
 
-int Conduit::applyResolvedConflicts(SyncContext *context,
+int SyncConduitBase::applyResolvedConflicts(SyncContext *context,
                                      SyncStats &palmStats,
                                      SyncStats &pcStats)
 {
@@ -1403,7 +1403,7 @@ int Conduit::applyResolvedConflicts(SyncContext *context,
     return appliedCount;
 }
 
-BackendRecord* Conduit::findMatch(PilotRecord *palmRecord,
+BackendRecord* SyncConduitBase::findMatch(PilotRecord *palmRecord,
                                    const QList<BackendRecord*> &candidates)
 {
     QString palmDesc = palmRecordDescription(palmRecord).toLower().trimmed();
@@ -1419,7 +1419,7 @@ BackendRecord* Conduit::findMatch(PilotRecord *palmRecord,
     return nullptr;
 }
 
-QList<PilotRecord*> Conduit::readPalmRecords(SyncContext *context, bool modifiedOnly)
+QList<PilotRecord*> SyncConduitBase::readPalmRecords(SyncContext *context, bool modifiedOnly)
 {
     if (m_dbHandle < 0) return {};
 
@@ -1441,19 +1441,19 @@ QList<PilotRecord*> Conduit::readPalmRecords(SyncContext *context, bool modified
     return modifiedRecords;
 }
 
-bool Conduit::writePalmRecord(PilotRecord *record, SyncContext *context)
+bool SyncConduitBase::writePalmRecord(PilotRecord *record, SyncContext *context)
 {
     if (m_dbHandle < 0) return false;
     return context->deviceLink->writeRecord(m_dbHandle, record);
 }
 
-bool Conduit::deletePalmRecord(const QString &palmId, SyncContext *context)
+bool SyncConduitBase::deletePalmRecord(const QString &palmId, SyncContext *context)
 {
     if (m_dbHandle < 0) return false;
     return context->deviceLink->deleteRecord(m_dbHandle, palmId.toUInt());
 }
 
-bool Conduit::checkVolatility(const SyncStats &stats, int totalRecords, int threshold)
+bool SyncConduitBase::checkVolatility(const SyncStats &stats, int totalRecords, int threshold)
 {
     if (totalRecords == 0) return true;
 
@@ -1467,7 +1467,7 @@ bool Conduit::checkVolatility(const SyncStats &stats, int totalRecords, int thre
     return true;
 }
 
-void Conduit::saveBaseline(SyncContext *context)
+void SyncConduitBase::saveBaseline(SyncContext *context)
 {
     // Load all current backend records and save their hashes
     QList<BackendRecord*> records = context->backend->loadRecords(context->collectionId);
@@ -1482,7 +1482,7 @@ void Conduit::saveBaseline(SyncContext *context)
     qDeleteAll(records);
 }
 
-bool Conduit::writeModifiedCategories(SyncContext *context)
+bool SyncConduitBase::writeModifiedCategories(SyncContext *context)
 {
     // Default implementation - no categories to write
     // Override in derived classes that handle categories

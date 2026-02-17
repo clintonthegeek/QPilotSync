@@ -39,7 +39,7 @@ WebCalendarFeed WebCalendarFeed::fromJson(const QJsonObject &obj)
 // ========== WebCalendarConduit ==========
 
 WebCalendarConduit::WebCalendarConduit(QObject *parent)
-    : Conduit(parent)
+    : SyncConduitBase(parent)
 {
     // Note: QNetworkAccessManager is created lazily in sync() to ensure
     // it's created on the worker thread where it will be used
@@ -155,7 +155,7 @@ void WebCalendarConduit::removeFeed(int index)
 
 // ========== Pre-Sync Check ==========
 
-bool WebCalendarConduit::shouldRun(SyncContext *context) const
+bool WebCalendarConduit::shouldRun(const SyncContext *context) const
 {
     Q_UNUSED(context);
 

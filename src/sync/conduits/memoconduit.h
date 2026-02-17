@@ -17,7 +17,7 @@ namespace Sync {
  * Uses MemoMapper for format conversion.
  * Supports bidirectional category sync.
  */
-class MemoConduit : public Conduit
+class MemoConduit : public SyncConduitBase
 {
     Q_OBJECT
 

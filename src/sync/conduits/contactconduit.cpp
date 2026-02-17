@@ -10,7 +10,7 @@
 namespace Sync {
 
 ContactConduit::ContactConduit(QObject *parent)
-    : Conduit(parent)
+    : SyncConduitBase(parent)
 {
 }
 

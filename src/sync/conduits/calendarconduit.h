@@ -17,7 +17,7 @@ namespace Sync {
  * Uses CalendarMapper for format conversion.
  * Supports bidirectional category sync.
  */
-class CalendarConduit : public Conduit
+class CalendarConduit : public SyncConduitBase
 {
     Q_OBJECT
 

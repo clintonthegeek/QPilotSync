@@ -17,7 +17,7 @@ namespace Sync {
  * Uses TodoMapper for format conversion.
  * Supports bidirectional category sync.
  */
-class TodoConduit : public Conduit
+class TodoConduit : public SyncConduitBase
 {
     Q_OBJECT
 

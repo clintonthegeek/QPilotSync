@@ -14,6 +14,7 @@
 #include "syncbackend.h"
 #include "qsynccore/conflictpolicy.h"
 #include "qsynccore/conflictstore.h"
+#include "../core/isyncconduit.h"
 
 class QWidget;
 
@@ -58,7 +59,7 @@ public:
 };
 
 /**
- * @brief Abstract base class for sync conduits
+ * @brief Abstract base class for bidirectional sync conduits
  *
  * A conduit handles synchronization for one type of data (memos, contacts, etc.).
  * It knows how to:
@@ -68,8 +69,11 @@ public:
  *
  * Inspired by KPilot's RecordConduit pattern, but simplified.
  *
+ * Implements ISyncConduit (which extends IConduit) so that conduits
+ * can be managed uniformly through the plugin interface.
+ *
  * To create a new conduit:
- * 1. Subclass Conduit
+ * 1. Subclass SyncConduitBase
  * 2. Implement the pure virtual methods
  * 3. Register with SyncEngine
  *
@@ -79,13 +83,14 @@ public:
  *   - CalendarConduit: DatebookDB ↔ iCalendar files
  *   - TodoConduit: ToDoDB ↔ iCalendar VTODO files
  */
-class Conduit : public QObject
+class SyncConduitBase : public QObject, public ISyncConduit
 {
     Q_OBJECT
+    Q_INTERFACES(IConduit ISyncConduit)
 
 public:
-    explicit Conduit(QObject *parent = nullptr) : QObject(parent) {}
-    virtual ~Conduit() = default;
+    explicit SyncConduitBase(QObject *parent = nullptr) : QObject(parent) {}
+    ~SyncConduitBase() override = default;
 
     // ========== Conduit Identity ==========
 
@@ -94,26 +99,26 @@ public:
      *
      * Examples: "memos", "contacts", "calendar", "todos"
      */
-    virtual QString conduitId() const = 0;
+    QString conduitId() const override = 0;
 
     /**
      * @brief Human-readable name for display
      */
-    virtual QString displayName() const = 0;
+    QString displayName() const override = 0;
 
     /**
      * @brief Palm database name this conduit handles
      *
      * Examples: "MemoDB", "AddressDB", "DatebookDB", "ToDoDB"
      */
-    virtual QString palmDatabaseName() const = 0;
+    QString palmDatabaseName() const override = 0;
 
     /**
      * @brief File extension for this conduit's export format
      *
      * Examples: ".md", ".vcf", ".ics"
      */
-    virtual QString fileExtension() const = 0;
+    QString fileExtension() const override = 0;
 
     // ========== Conduit Metadata ==========
 
@@ -122,17 +127,17 @@ public:
      *
      * Default returns a null icon. Override to provide custom icon.
      */
-    virtual QIcon icon() const { return QIcon(); }
+    QIcon icon() const override { return QIcon(); }
 
     /**
      * @brief Description of what this conduit does
      */
-    virtual QString description() const { return QString(); }
+    QString description() const override { return QString(); }
 
     /**
      * @brief Version string for this conduit
      */
-    virtual QString version() const { return "1.0.0"; }
+    QString version() const override { return "1.0.0"; }
 
     // ========== Capabilities ==========
 
@@ -141,17 +146,17 @@ public:
      *
      * False for conduits like WebCalendar that fetch from web.
      */
-    virtual bool requiresDevice() const { return true; }
+    bool requiresDevice() const override { return true; }
 
     /**
      * @brief Whether this conduit can write to Palm
      */
-    virtual bool canSyncToPalm() const { return true; }
+    bool canSyncToPalm() const override { return true; }
 
     /**
      * @brief Whether this conduit can read from Palm
      */
-    virtual bool canSyncFromPalm() const { return true; }
+    bool canSyncFromPalm() const override { return true; }
 
     // ========== Dependency Ordering ==========
 
@@ -199,6 +204,68 @@ public:
      */
     virtual QJsonObject saveSettings() const { return QJsonObject(); }
 
+    // ========== IConduit UI Contribution (default stubs) ==========
+
+    /**
+     * @brief Whether this conduit provides a browser/editor view
+     *
+     * Default returns false. Override in conduits that provide a view.
+     */
+    bool hasView() const override { return false; }
+
+    /**
+     * @brief Create the conduit's main view widget (caller owns)
+     *
+     * Default returns nullptr. Override to provide a view.
+     */
+    QWidget *createView(QWidget *) override { return nullptr; }
+
+    /**
+     * @brief Display name for the view tab/page
+     *
+     * Default delegates to displayName().
+     */
+    QString viewName() const override { return displayName(); }
+
+    /**
+     * @brief Icon for the view tab/page
+     *
+     * Default delegates to icon().
+     */
+    QIcon viewIcon() const override { return icon(); }
+
+    // ========== IConduit Configuration (default stubs) ==========
+
+    /**
+     * @brief Number of config pages this conduit provides
+     */
+    int configPages() const override { return 0; }
+
+    /**
+     * @brief Create a config page widget (caller owns)
+     */
+    QWidget *createConfigPage(int index, QWidget *parent) override {
+        Q_UNUSED(index) Q_UNUSED(parent) return nullptr;
+    }
+
+    /**
+     * @brief Load conduit settings from persistent storage (IConduit interface)
+     *
+     * Note: The JSON-based loadSettings(QJsonObject) is the primary method.
+     * This no-arg version is the IConduit interface stub.
+     */
+    void loadSettings() override {}
+
+    /**
+     * @brief Save conduit settings to persistent storage (IConduit interface)
+     *
+     * Note: The JSON-based saveSettings() const is the primary method.
+     * This void version is the IConduit interface stub.
+     */
+    void saveSettings() override {}
+
+    // ========== Sync Conduit Specifics ==========
+
     /**
      * @brief Get the last time this conduit ran successfully
      */
@@ -220,7 +287,7 @@ public:
      * @param context Sync context
      * @return true if conduit should run, false to skip
      */
-    virtual bool shouldRun(SyncContext *context) const { Q_UNUSED(context); return true; }
+    bool shouldRun(const SyncContext *context) const override { Q_UNUSED(context); return true; }
 
     // ========== Core Sync Operation ==========
 
@@ -238,14 +305,14 @@ public:
      * @param context Sync context with all required objects
      * @return Result with statistics and any warnings
      */
-    virtual SyncResult sync(SyncContext *context);
+    SyncResult sync(SyncContext *context) override;
 
     /**
      * @brief Check if conduit can sync in the current state
      *
      * Called before sync() to verify prerequisites.
      */
-    virtual bool canSync(const SyncContext *context) const;
+    bool canSync(const SyncContext *context) const override;
 
     /**
      * @brief Set external cancel check callback
@@ -264,8 +331,8 @@ public:
      * @param context Sync context (for category lookup, etc.)
      * @return Backend record ready for storage
      */
-    virtual BackendRecord* palmToBackend(PilotRecord *palmRecord,
-                                          SyncContext *context) = 0;
+    BackendRecord* palmToBackend(PilotRecord *palmRecord,
+                                  SyncContext *context) override = 0;
 
     /**
      * @brief Convert a backend record to Palm format
@@ -274,15 +341,15 @@ public:
      * @param context Sync context
      * @return Palm record ready for writing (caller owns)
      */
-    virtual PilotRecord* backendToPalm(BackendRecord *backendRecord,
-                                        SyncContext *context) = 0;
+    PilotRecord* backendToPalm(BackendRecord *backendRecord,
+                                SyncContext *context) override = 0;
 
     /**
      * @brief Check if two records are equal (ignoring metadata)
      *
      * Used for conflict detection and duplicate matching.
      */
-    virtual bool recordsEqual(PilotRecord *palm, BackendRecord *backend) const = 0;
+    bool recordsEqual(PilotRecord *palm, BackendRecord *backend) const override = 0;
 
     /**
      * @brief Find a matching backend record for a Palm record
@@ -290,13 +357,13 @@ public:
      * Used during first sync when no ID mappings exist.
      * Default implementation uses description matching.
      */
-    virtual BackendRecord* findMatch(PilotRecord *palmRecord,
-                                      const QList<BackendRecord*> &candidates);
+    BackendRecord* findMatch(PilotRecord *palmRecord,
+                              const QList<BackendRecord*> &candidates) override;
 
     /**
      * @brief Get a description for a Palm record (for matching/display)
      */
-    virtual QString palmRecordDescription(PilotRecord *record) const = 0;
+    QString palmRecordDescription(PilotRecord *record) const override = 0;
 
     /**
      * @brief Get category name for a Palm category index
@@ -307,7 +374,7 @@ public:
      * @param categoryIndex Palm category index (0-15)
      * @return Category name, or empty string if not available
      */
-    virtual QString categoryNameForIndex(int categoryIndex) const {
+    QString categoryNameForIndex(int categoryIndex) const override {
         Q_UNUSED(categoryIndex);
         return QString();
     }
@@ -477,7 +544,7 @@ protected:
      * @param context Sync context with device link
      * @return true if categories were written or no changes needed
      */
-    virtual bool writeModifiedCategories(SyncContext *context);
+    bool writeModifiedCategories(SyncContext *context) override;
 
     /**
      * @brief Check if cancellation was requested
@@ -488,6 +555,9 @@ protected:
     std::function<bool()> m_cancelCheck;  ///< External cancellation check
     QDateTime m_lastRunTime;  ///< Last successful run time
 };
+
+// Backward compatibility alias
+using Conduit = SyncConduitBase;
 
 } // namespace Sync
 

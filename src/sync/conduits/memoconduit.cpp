@@ -10,7 +10,7 @@
 namespace Sync {
 
 MemoConduit::MemoConduit(QObject *parent)
-    : Conduit(parent)
+    : SyncConduitBase(parent)
 {
 }
 

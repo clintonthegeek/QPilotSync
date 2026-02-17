@@ -52,7 +52,7 @@ enum class FetchInterval
  * This conduit does NOT require a Palm device connection.
  * It runs BEFORE CalendarConduit to provide fresh data.
  */
-class WebCalendarConduit : public Conduit
+class WebCalendarConduit : public SyncConduitBase
 {
     Q_OBJECT
 
@@ -93,7 +93,7 @@ public:
 
     // ========== Pre-Sync Check ==========
 
-    bool shouldRun(SyncContext *context) const override;
+    bool shouldRun(const SyncContext *context) const override;
 
     // ========== Sync Operation ==========
 
