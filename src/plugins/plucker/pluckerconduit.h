@@ -55,6 +55,7 @@ private:
     bool spiderChannel(const PluckerChannel &channel, const QString &outputDir);
     QString findPython() const;
     QString parserPath() const;
+    QString viewerPath() const;
 
     PluckerConfig m_config;
     QString m_outputDir;

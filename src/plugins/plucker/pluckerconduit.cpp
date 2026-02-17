@@ -1,6 +1,7 @@
 #include "pluckerconduit.h"
 #include "pluckerview.h"
 #include "sync/conduit.h"
+#include "palm/kpilotdevicelink.h"
 
 #include <QIcon>
 #include <QProcess>
@@ -58,6 +59,20 @@ QString PluckerConduit::parserPath() const
         QStringLiteral("../../src/plugins/plucker/parser/PyPlucker/Spider.py"));
     if (QFile::exists(devPath)) return QFileInfo(devPath).canonicalFilePath();
 
+    return QString();
+}
+
+QString PluckerConduit::viewerPath() const
+{
+    QDir appDir(QCoreApplication::applicationDirPath());
+
+    // Development path: build/bin -> src/plugins/plucker/viewer
+    QString devPath = appDir.absoluteFilePath(
+        QStringLiteral("../../src/plugins/plucker/viewer"));
+    if (QDir(devPath).exists()) return QFileInfo(devPath).canonicalFilePath();
+
+    // Installed path (alongside plugin .so)
+    // TODO: determine from plugin metadata
     return QString();
 }
 
@@ -200,6 +215,31 @@ bool PluckerConduit::installResults(Sync::SyncContext *context)
 {
     if (!context) return false;
 
+    // Check if Palm viewer needs installing
+    if (context->deviceLink) {
+        KPilotDeviceLink *link = context->deviceLink;
+        if (!link->findDatabase(QStringLiteral("PlkrMain"))) {
+            Q_EMIT logMessage(QStringLiteral("Plucker viewer not found on device — queuing install"));
+
+            // Find bundled viewer PRCs
+            QString viewerDir = viewerPath();
+            if (!viewerDir.isEmpty()) {
+                QDir dir(viewerDir);
+                // Install SysZLib first (dependency)
+                QString syszlib = dir.filePath(QStringLiteral("SysZLib.prc"));
+                if (QFile::exists(syszlib)) {
+                    context->installQueue.append(syszlib);
+                }
+                // Then the viewer
+                QString viewer = dir.filePath(QStringLiteral("viewer_en.prc"));
+                if (QFile::exists(viewer)) {
+                    context->installQueue.append(viewer);
+                }
+            }
+        }
+    }
+
+    // Queue produced .pdb files
     for (const QString &pdbPath : m_producedFiles) {
         context->installQueue.append(pdbPath);
     }
