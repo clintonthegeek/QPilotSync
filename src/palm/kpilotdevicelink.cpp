@@ -210,7 +210,22 @@ void KPilotDeviceLink::cleanupWorker()
         if (!m_workerThread->wait(3000)) {
             qWarning() << "[KPilotDeviceLink] Worker thread did not finish in time, terminating";
             m_workerThread->terminate();
-            m_workerThread->wait();
+            if (!m_workerThread->wait(2000)) {
+                // Thread is stuck in a blocking syscall (e.g. pi_accept on a
+                // serial tty).  Deleting a running QThread is a Qt fatal error,
+                // so abandon it instead.  It will be cleaned up when the Palm
+                // disconnects from USB (unblocking the syscall) or at process
+                // exit.
+                //
+                // Remove parent so ~QObject::deleteChildren() won't try to
+                // destroy the still-running thread when this KPilotDeviceLink
+                // is deleted.
+                qWarning() << "[KPilotDeviceLink] Worker thread stuck in syscall, abandoning";
+                m_workerThread->setParent(nullptr);
+                m_workerThread = nullptr;
+                m_worker = nullptr;
+                return;
+            }
         }
         qDebug() << "[KPilotDeviceLink] Worker thread finished";
 
@@ -233,18 +248,14 @@ void KPilotDeviceLink::cancelConnection()
 
     emit logMessage("Cancelling connection attempt...");
 
-    // Force close the socket to interrupt pi_accept()
-    m_worker->forceCloseSocket();
-
-    // Wait for worker to finish cleanly
-    if (m_workerThread) {
-        qDebug() << "[KPilotDeviceLink] Waiting for worker thread after cancel...";
-        if (!m_workerThread->wait(2000)) {
-            qWarning() << "[KPilotDeviceLink] Worker thread did not respond to cancel, terminating";
-            m_workerThread->terminate();
-            m_workerThread->wait();
-        }
-    }
+    // Do NOT call forceCloseSocket() here.  pi_close() frees pilot-link's
+    // internal socket structures, but the worker thread may still be blocked
+    // inside pi_accept() referencing them.  When the blocking call eventually
+    // returns (e.g. USB device removal), it would access freed memory and
+    // segfault.  Instead, just request cancellation and let cleanupWorker()
+    // abandon the thread if it's stuck.  The thread will exit naturally when
+    // the Palm is unplugged.
+    m_worker->requestCancel();
 
     cleanupWorker();
     setStatus(Init);
@@ -886,4 +897,46 @@ bool KPilotDeviceLink::resetSyncFlags(int dbHandle)
 
     qDebug() << "[KPilotDeviceLink] Sync flags reset complete";
     return true;
+}
+
+bool KPilotDeviceLink::installFile(const QString &filePath)
+{
+    if (!m_isConnected || m_socket < 0) {
+        qWarning() << "[DeviceLink] Cannot install file — not connected";
+        return false;
+    }
+
+    pi_file_t *pf = pi_file_open(filePath.toLocal8Bit().constData());
+    if (!pf) {
+        qWarning() << "[DeviceLink] Failed to open file for install:" << filePath;
+        return false;
+    }
+
+    struct DBInfo dbInfo;
+    pi_file_get_info(pf, &dbInfo);
+    qDebug() << "[DeviceLink] Installing:" << dbInfo.name << "from" << filePath;
+
+    int rc = pi_file_install(pf, m_socket, 0, nullptr);
+    pi_file_close(pf);
+
+    if (rc < 0) {
+        qWarning() << "[DeviceLink] pi_file_install failed:" << rc;
+        return false;
+    }
+
+    qDebug() << "[DeviceLink] Installed successfully:" << dbInfo.name;
+    return true;
+}
+
+bool KPilotDeviceLink::findDatabase(const QString &dbName)
+{
+    if (!m_isConnected || m_socket < 0) {
+        return false;
+    }
+
+    struct DBInfo info;
+    int rc = dlp_FindDBInfo(m_socket, 0, 0,
+                             dbName.toLocal8Bit().constData(),
+                             0, 0, &info);
+    return (rc >= 0);
 }

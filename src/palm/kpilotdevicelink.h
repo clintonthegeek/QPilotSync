@@ -110,6 +110,26 @@ public:
      */
     bool resetSyncFlags(int dbHandle);
 
+    /**
+     * @brief Install a .pdb/.prc file onto the Palm device
+     *
+     * Wraps pilot-link pi_file_install(). Installs to internal storage (card 0).
+     *
+     * @param filePath Absolute path to the .pdb or .prc file
+     * @return true on success
+     */
+    bool installFile(const QString &filePath);
+
+    /**
+     * @brief Check if a database exists on the Palm device
+     *
+     * Wraps dlp_FindDBInfo(). Used to check for viewer apps, etc.
+     *
+     * @param dbName Palm database name (e.g. "PlkrMain")
+     * @return true if the database exists on the device
+     */
+    bool findDatabase(const QString &dbName);
+
 signals:
     void connectionComplete(bool success);
 
