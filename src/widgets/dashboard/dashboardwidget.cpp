@@ -21,6 +21,8 @@ DashboardWidget::DashboardWidget(QWidget *parent)
     , m_profileNameLabel(nullptr)
     , m_profilePathLabel(nullptr)
     , m_lastSyncLabel(nullptr)
+    , m_welcomeLabel(nullptr)
+    , m_listeningStatusLabel(nullptr)
     , m_connectButton(nullptr)
     , m_hotSyncButton(nullptr)
     , m_connected(false)
@@ -33,10 +35,16 @@ void DashboardWidget::setupUI()
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setSpacing(20);
 
-    // Welcome message
-    QLabel *welcomeLabel = new QLabel(i18n("<h2>Welcome to QPilotSync</h2>"));
-    welcomeLabel->setAlignment(Qt::AlignCenter);
-    mainLayout->addWidget(welcomeLabel);
+    // Welcome / status message
+    m_welcomeLabel = new QLabel(i18n("<h2>Listening for Palm devices. Press HotSync on your Palm.</h2>"));
+    m_welcomeLabel->setAlignment(Qt::AlignCenter);
+    mainLayout->addWidget(m_welcomeLabel);
+
+    // Listening status label
+    m_listeningStatusLabel = new QLabel(i18n("Listening for Palm USB devices..."));
+    m_listeningStatusLabel->setAlignment(Qt::AlignCenter);
+    m_listeningStatusLabel->setStyleSheet(QStringLiteral("color: gray; font-style: italic;"));
+    mainLayout->addWidget(m_listeningStatusLabel);
 
     // Cards layout
     QHBoxLayout *cardsLayout = new QHBoxLayout();
@@ -93,8 +101,9 @@ void DashboardWidget::setupUI()
     QVBoxLayout *actionsLayout = new QVBoxLayout(actionsCard);
 
     m_connectButton = new QPushButton(QIcon::fromTheme(QStringLiteral("network-connect")),
-                                       i18n("Connect to Device"));
+                                       i18n("Waiting for HotSync..."));
     m_connectButton->setMinimumHeight(40);
+    m_connectButton->setEnabled(false);
     connect(m_connectButton, &QPushButton::clicked, this, &DashboardWidget::connectRequested);
     actionsLayout->addWidget(m_connectButton);
 
@@ -131,24 +140,7 @@ void DashboardWidget::updateStatus(Profile *profile, bool connected)
 {
     m_connected = connected;
 
-    // Update device status
-    if (connected) {
-        m_deviceStatusLabel->setText(i18n("Status: Connected"));
-        m_deviceIconLabel->setPixmap(
-            QIcon::fromTheme(QStringLiteral("network-connect")).pixmap(64, 64));
-        m_connectButton->setText(i18n("Disconnect"));
-        m_hotSyncButton->setEnabled(true);
-    } else {
-        m_deviceNameLabel->setText(i18n("No device connected"));
-        m_deviceUserLabel->clear();
-        m_deviceStatusLabel->setText(i18n("Status: Disconnected"));
-        m_deviceIconLabel->setPixmap(
-            QIcon::fromTheme(QStringLiteral("phone")).pixmap(64, 64));
-        m_connectButton->setText(i18n("Connect to Device"));
-        m_hotSyncButton->setEnabled(false);
-    }
-
-    // Update profile info
+    // Update profile info first so device name label is set before we use it
     if (profile) {
         m_profileNameLabel->setText(profile->name());
         m_profilePathLabel->setText(profile->syncFolderPath());
@@ -166,4 +158,62 @@ void DashboardWidget::updateStatus(Profile *profile, bool connected)
         m_profilePathLabel->clear();
         m_lastSyncLabel->setText(i18n("Last sync: Never"));
     }
+
+    // Update device status
+    if (connected) {
+        m_deviceStatusLabel->setText(i18n("Status: Connected"));
+        m_deviceIconLabel->setPixmap(
+            QIcon::fromTheme(QStringLiteral("network-connect")).pixmap(64, 64));
+        m_welcomeLabel->setText(i18n("<h2>Connected to %1</h2>", m_deviceNameLabel->text()));
+        m_listeningStatusLabel->setVisible(false);
+        m_connectButton->setText(i18n("Sync Now"));
+        m_connectButton->setEnabled(true);
+        m_hotSyncButton->setEnabled(true);
+    } else {
+        m_deviceNameLabel->setText(i18n("No device connected"));
+        m_deviceUserLabel->clear();
+        m_deviceStatusLabel->setText(i18n("Status: Disconnected"));
+        m_deviceIconLabel->setPixmap(
+            QIcon::fromTheme(QStringLiteral("phone")).pixmap(64, 64));
+        setListening(true);
+        m_hotSyncButton->setEnabled(false);
+    }
+}
+
+void DashboardWidget::setListening(bool listening)
+{
+    if (listening) {
+        m_welcomeLabel->setText(i18n("<h2>Listening for Palm devices. Press HotSync on your Palm.</h2>"));
+        m_listeningStatusLabel->setText(i18n("Listening for Palm USB devices..."));
+        m_listeningStatusLabel->setVisible(true);
+        m_connectButton->setText(i18n("Waiting for HotSync..."));
+        m_connectButton->setEnabled(false);
+    } else {
+        m_welcomeLabel->setText(i18n("<h2>Welcome to QPilotSync</h2>"));
+        m_listeningStatusLabel->setVisible(false);
+        m_connectButton->setText(i18n("Connect Manually..."));
+        m_connectButton->setEnabled(true);
+    }
+}
+
+void DashboardWidget::setSyncing(bool syncing, const QString &deviceName)
+{
+    if (syncing) {
+        if (deviceName.isEmpty()) {
+            m_welcomeLabel->setText(i18n("<h2>Syncing...</h2>"));
+        } else {
+            m_welcomeLabel->setText(i18n("<h2>Syncing with %1...</h2>", deviceName));
+        }
+        m_listeningStatusLabel->setVisible(false);
+        m_connectButton->setText(i18n("Sync Now"));
+        m_connectButton->setEnabled(false);
+    } else {
+        // Return to listening state after sync completes
+        setListening(true);
+    }
+}
+
+void DashboardWidget::setLastSyncSummary(const QString &summary)
+{
+    m_lastSyncLabel->setText(summary);
 }

@@ -27,6 +27,10 @@ public:
 
     void updateStatus(Profile *profile, bool connected);
 
+    void setListening(bool listening);
+    void setSyncing(bool syncing, const QString &deviceName = QString());
+    void setLastSyncSummary(const QString &summary);
+
 Q_SIGNALS:
     void hotSyncRequested();
     void connectRequested();
@@ -47,6 +51,10 @@ private:
     QLabel *m_profileNameLabel;
     QLabel *m_profilePathLabel;
     QLabel *m_lastSyncLabel;
+
+    // Welcome / status area
+    QLabel *m_welcomeLabel;
+    QLabel *m_listeningStatusLabel;
 
     // Actions
     QPushButton *m_connectButton;
