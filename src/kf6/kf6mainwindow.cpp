@@ -833,8 +833,6 @@ void KF6MainWindow::closeProfile()
 
 void KF6MainWindow::onConnectDevice()
 {
-    qDebug() << "[KF6MainWindow] onConnectDevice() called!";
-
     if (m_listeningForDevice) {
         stopListening();
         return;

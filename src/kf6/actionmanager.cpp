@@ -76,7 +76,6 @@ void ActionManager::setupDeviceActions()
     QAction *connectAction = new QAction(QIcon::fromTheme(QStringLiteral("network-connect")),
                                           i18n("&Connect..."), this);
     QObject::connect(connectAction, &QAction::triggered, this, [this]() {
-        qDebug() << "[ActionManager] device_connect triggered!";
         emit connectRequested();
     });
     m_actionCollection->addAction(QStringLiteral("device_connect"), connectAction);
