@@ -7,6 +7,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QDebug>
+#include <QFileInfo>
 
 #include <pi-dlp.h>
 
@@ -145,6 +146,7 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
 
     m_syncing = true;
     m_cancelled = false;
+    m_pendingInstalls.clear();
     emit syncStarted();
     emit logMessage(QString("Starting sync for user: %1").arg(m_palmUserName));
 
@@ -229,6 +231,32 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
         conduitIndex++;
     }
 
+    // Post-conduit install phase: process any files queued by tool conduits
+    if (!m_pendingInstalls.isEmpty() && m_deviceLink && m_deviceLink->isConnected()) {
+        emit logMessage(QString("Installing %1 queued file(s)...")
+                        .arg(m_pendingInstalls.size()));
+
+        int installed = 0;
+        int failed = 0;
+        for (const QString &filePath : m_pendingInstalls) {
+            if (m_cancelled || (m_cancelCheck && m_cancelCheck())) break;
+
+            QFileInfo fi(filePath);
+            emit logMessage(QString("  Installing %1...").arg(fi.fileName()));
+
+            if (m_deviceLink->installFile(filePath)) {
+                installed++;
+            } else {
+                failed++;
+                emit logMessage(QString("  Failed to install %1").arg(fi.fileName()));
+            }
+        }
+
+        emit logMessage(QString("Install phase: %1 installed, %2 failed")
+                        .arg(installed).arg(failed));
+        m_pendingInstalls.clear();
+    }
+
     totalResult.endTime = QDateTime::currentDateTime();
     m_syncing = false;
 
@@ -275,6 +303,7 @@ SyncResult SyncEngine::syncAllOrdered(const QStringList &orderedIds, SyncMode mo
 
     m_syncing = true;
     m_cancelled = false;
+    m_pendingInstalls.clear();
     emit syncStarted();
     emit logMessage(QString("Starting sync for user: %1").arg(m_palmUserName));
     emit logMessage(QString("Conduit order: %1").arg(orderedIds.join(QStringLiteral(" \u2192 "))));
@@ -341,6 +370,32 @@ SyncResult SyncEngine::syncAllOrdered(const QStringList &orderedIds, SyncMode mo
         }
 
         conduitIndex++;
+    }
+
+    // Post-conduit install phase: process any files queued by tool conduits
+    if (!m_pendingInstalls.isEmpty() && m_deviceLink && m_deviceLink->isConnected()) {
+        emit logMessage(QString("Installing %1 queued file(s)...")
+                        .arg(m_pendingInstalls.size()));
+
+        int installed = 0;
+        int failed = 0;
+        for (const QString &filePath : m_pendingInstalls) {
+            if (m_cancelled || (m_cancelCheck && m_cancelCheck())) break;
+
+            QFileInfo fi(filePath);
+            emit logMessage(QString("  Installing %1...").arg(fi.fileName()));
+
+            if (m_deviceLink->installFile(filePath)) {
+                installed++;
+            } else {
+                failed++;
+                emit logMessage(QString("  Failed to install %1").arg(fi.fileName()));
+            }
+        }
+
+        emit logMessage(QString("Install phase: %1 installed, %2 failed")
+                        .arg(installed).arg(failed));
+        m_pendingInstalls.clear();
     }
 
     totalResult.endTime = QDateTime::currentDateTime();
@@ -441,6 +496,13 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
 
     // Run the sync
     result = cond->sync(&context);
+
+    // Capture any files queued for installation by this conduit
+    if (!context.installQueue.isEmpty()) {
+        m_pendingInstalls.append(context.installQueue);
+        emit logMessage(QString("%1 queued %2 file(s) for installation")
+                        .arg(cond->displayName()).arg(context.installQueue.size()));
+    }
 
     // Clear cancellation check
     if (syncBase) {

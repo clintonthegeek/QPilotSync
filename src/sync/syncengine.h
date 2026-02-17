@@ -279,6 +279,7 @@ private:
     bool m_syncing = false;
     bool m_cancelled = false;
     QString m_currentConduit;
+    QStringList m_pendingInstalls;  ///< Files queued for post-conduit installation
 
     // External callbacks for worker thread integration
     std::function<void(int, int, const QString&)> m_progressCallback;
