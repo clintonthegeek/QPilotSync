@@ -1,6 +1,7 @@
 #include "kf6mainwindow.h"
 #include "kf6settings.h"
 #include "actionmanager.h"
+#include "conduitmanager.h"
 
 #include "../app/logwidget.h"
 #include "../app/exporthandler.h"
@@ -13,24 +14,17 @@
 #include "../palm/categoryinfo.h"
 #include "../profile.h"
 
+#include "../core/iconduit.h"
 #include "../sync/syncengine.h"
 #include "../sync/synctypes.h"
+#include "../sync/conduit.h"
 #include "../sync/localfilebackend.h"
-#include "../sync/conduits/memoconduit.h"
-#include "../sync/conduits/contactconduit.h"
-#include "../sync/conduits/calendarconduit.h"
-#include "../sync/conduits/todoconduit.h"
 #include "../sync/conduits/installconduit.h"
-#include "../sync/conduits/webcalendarconduit.h"
 #include "../sync/qsynccore/conflictstore.h"
 #include "../sync/syncstate.h"
 
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
-#include "../widgets/browser/calendarview.h"
-#include "../widgets/browser/taskview.h"
-#include "../widgets/browser/contactview.h"
-#include "../widgets/browser/memoview.h"
 
 #include <QApplication>
 #include <QStatusBar>
@@ -56,6 +50,7 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDialog>
+#include <QDebug>
 #include <cstring>
 
 #include <KAboutData>
@@ -72,18 +67,10 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     , m_pageWidget(nullptr)
     , m_logDock(nullptr)
     , m_logWidget(nullptr)
-    // Page items
+    // Built-in page items
     , m_dashboardPage(nullptr)
-    , m_memosPage(nullptr)
-    , m_contactsPage(nullptr)
-    , m_calendarPage(nullptr)
-    , m_tasksPage(nullptr)
-    // Data views (page content)
+    // Built-in data views
     , m_dashboardWidget(nullptr)
-    , m_calendarView(nullptr)
-    , m_taskView(nullptr)
-    , m_contactView(nullptr)
-    , m_memoView(nullptr)
     // Action manager
     , m_actionManager(nullptr)
     // Device connection
@@ -116,6 +103,9 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
     // Initialize sync engine
     initializeSyncEngine();
+
+    // Initialize conduit manager (discovers and loads conduit plugins)
+    initializeConduits();
 
     // Create export/import handlers (must be before setupConnections)
     m_exportHandler = new ExportHandler(this);
@@ -223,38 +213,15 @@ void KF6MainWindow::createCentralLayout()
     m_pageWidget = new KPageWidget(this);
     m_pageWidget->setFaceType(KPageWidget::List);
 
-    // Create data view widgets
+    // Dashboard is the only built-in page.
+    // All other pages (Memos, Contacts, Calendar, Tasks) are created
+    // dynamically by conduit plugins via onConduitLoaded().
     m_dashboardWidget = new DashboardWidget(this);
-    m_calendarView = new CalendarView(this);
-    m_taskView = new TaskView(this);
-    m_contactView = new ContactView(this);
-    m_memoView = new MemoView(this);
 
-    // Add pages with Breeze theme icons
     m_dashboardPage = new KPageWidgetItem(m_dashboardWidget, i18n("Sync"));
     m_dashboardPage->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
     m_dashboardPage->setHeaderVisible(false);
     m_pageWidget->addPage(m_dashboardPage);
-
-    m_memosPage = new KPageWidgetItem(m_memoView, i18n("Memos"));
-    m_memosPage->setIcon(QIcon::fromTheme(QStringLiteral("view-pim-notes")));
-    m_memosPage->setHeaderVisible(false);
-    m_pageWidget->addPage(m_memosPage);
-
-    m_contactsPage = new KPageWidgetItem(m_contactView, i18n("Contacts"));
-    m_contactsPage->setIcon(QIcon::fromTheme(QStringLiteral("view-pim-contacts")));
-    m_contactsPage->setHeaderVisible(false);
-    m_pageWidget->addPage(m_contactsPage);
-
-    m_calendarPage = new KPageWidgetItem(m_calendarView, i18n("Calendar"));
-    m_calendarPage->setIcon(QIcon::fromTheme(QStringLiteral("view-calendar")));
-    m_calendarPage->setHeaderVisible(false);
-    m_pageWidget->addPage(m_calendarPage);
-
-    m_tasksPage = new KPageWidgetItem(m_taskView, i18n("Tasks"));
-    m_tasksPage->setIcon(QIcon::fromTheme(QStringLiteral("view-task")));
-    m_tasksPage->setHeaderVisible(false);
-    m_pageWidget->addPage(m_tasksPage);
 
     setCentralWidget(m_pageWidget);
 
@@ -352,20 +319,10 @@ void KF6MainWindow::setupConnections()
             this, &KF6MainWindow::onFocusLog);
 
     // Page navigation from ActionManager
+    // Only Dashboard has a fixed shortcut (Ctrl+1). Conduit pages
+    // are added dynamically and don't have static navigation bindings.
     connect(m_actionManager, &ActionManager::viewDashboardRequested, this, [this]() {
         m_pageWidget->setCurrentPage(m_dashboardPage);
-    });
-    connect(m_actionManager, &ActionManager::viewMemosRequested, this, [this]() {
-        m_pageWidget->setCurrentPage(m_memosPage);
-    });
-    connect(m_actionManager, &ActionManager::viewContactsRequested, this, [this]() {
-        m_pageWidget->setCurrentPage(m_contactsPage);
-    });
-    connect(m_actionManager, &ActionManager::viewCalendarRequested, this, [this]() {
-        m_pageWidget->setCurrentPage(m_calendarPage);
-    });
-    connect(m_actionManager, &ActionManager::viewTasksRequested, this, [this]() {
-        m_pageWidget->setCurrentPage(m_tasksPage);
     });
 
     // KPageWidget page changes
@@ -380,13 +337,20 @@ void KF6MainWindow::saveWindowState()
     settings.setWindowState(saveState());
     settings.setLogPanelVisible(m_logDock->isVisible());
 
-    // Save current page index
+    // Save current page — use 0 for Dashboard, or find the conduit page index
     int pageIndex = 0;
     KPageWidgetItem *current = m_pageWidget->currentPage();
-    if (current == m_memosPage) pageIndex = 1;
-    else if (current == m_contactsPage) pageIndex = 2;
-    else if (current == m_calendarPage) pageIndex = 3;
-    else if (current == m_tasksPage) pageIndex = 4;
+    if (current != m_dashboardPage) {
+        // Conduit pages start at index 1
+        int idx = 1;
+        for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+            if (it.value() == current) {
+                pageIndex = idx;
+                break;
+            }
+            ++idx;
+        }
+    }
     settings.setCurrentTabIndex(pageIndex);
 
     settings.sync();
@@ -412,12 +376,20 @@ void KF6MainWindow::restoreWindowState()
     m_logDock->setVisible(logVisible);
     m_actionManager->toggleLogPanelAction()->setChecked(logVisible);
 
-    // Restore current page
+    // Restore current page (0 = Dashboard, 1+ = conduit pages in insertion order)
     int pageIndex = settings.currentTabIndex();
-    KPageWidgetItem *pages[] = {m_dashboardPage, m_memosPage, m_contactsPage,
-                                m_calendarPage, m_tasksPage};
-    if (pageIndex >= 0 && pageIndex < 5) {
-        m_pageWidget->setCurrentPage(pages[pageIndex]);
+    if (pageIndex == 0 || m_conduitPages.isEmpty()) {
+        m_pageWidget->setCurrentPage(m_dashboardPage);
+    } else {
+        // Conduit pages in map iteration order
+        int idx = 1;
+        for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+            if (idx == pageIndex) {
+                m_pageWidget->setCurrentPage(it.value());
+                break;
+            }
+            ++idx;
+        }
     }
 }
 
@@ -437,32 +409,19 @@ void KF6MainWindow::onFocusLog()
 void KF6MainWindow::onPageChanged(KPageWidgetItem *current, KPageWidgetItem *previous)
 {
     Q_UNUSED(previous)
-    Q_UNUSED(current)
-    updateDataViews();
-}
 
-void KF6MainWindow::updateDataViews()
-{
     if (!m_currentProfile) {
         return;
     }
 
-    // Update the currently visible data view
-    KPageWidgetItem *currentPage = m_pageWidget->currentPage();
-    QString syncPath = m_currentProfile->syncFolderPath();
-
-    if (currentPage == m_dashboardPage) {
+    // Update the dashboard when it becomes visible
+    if (current == m_dashboardPage) {
         m_dashboardWidget->updateStatus(m_currentProfile,
                                         m_session && m_session->isConnected());
-    } else if (currentPage == m_memosPage) {
-        m_memoView->loadFromPath(syncPath);
-    } else if (currentPage == m_contactsPage) {
-        m_contactView->loadFromPath(syncPath);
-    } else if (currentPage == m_calendarPage) {
-        m_calendarView->loadFromPath(syncPath);
-    } else if (currentPage == m_tasksPage) {
-        m_taskView->loadFromPath(syncPath);
     }
+    // Conduit views handle their own data loading via loadFromPath()
+    // when a profile is loaded. Lazy per-tab refresh can be added later
+    // as an optimization.
 }
 
 void KF6MainWindow::updateMenuState(bool connected)
@@ -511,12 +470,9 @@ void KF6MainWindow::initializeSyncEngine()
 {
     m_syncEngine = new Sync::SyncEngine(this);
 
-    // Register conduits
-    m_syncEngine->registerConduit(new Sync::MemoConduit());
-    m_syncEngine->registerConduit(new Sync::ContactConduit());
-    m_syncEngine->registerConduit(new Sync::CalendarConduit());
-    m_syncEngine->registerConduit(new Sync::TodoConduit());
-    m_syncEngine->registerConduit(new Sync::WebCalendarConduit());
+    // Conduits are no longer hard-coded here. They are loaded
+    // dynamically by ConduitManager via initializeConduits() and
+    // registered with SyncEngine in onConduitLoaded().
 
     // Create install conduit
     m_installConduit = new Sync::InstallConduit(this);
@@ -540,6 +496,79 @@ void KF6MainWindow::initializeSyncEngine()
             this, &KF6MainWindow::onSyncFinished);
     connect(m_syncEngine, &Sync::SyncEngine::progressUpdated,
             this, &KF6MainWindow::onSyncProgress);
+}
+
+void KF6MainWindow::initializeConduits()
+{
+    m_conduitManager = new ConduitManager(this);
+
+    // Discover available conduit plugins from the plugin directory.
+    // Until conduits are migrated to .so plugins (Phase 3), this will
+    // find nothing -- the app starts with just the Dashboard page.
+    m_conduitManager->discoverConduits();
+    m_conduitManager->loadConfig();
+
+    connect(m_conduitManager, &ConduitManager::conduitLoaded,
+            this, &KF6MainWindow::onConduitLoaded);
+    connect(m_conduitManager, &ConduitManager::conduitUnloading,
+            this, &KF6MainWindow::onConduitUnloading);
+
+    // Load all enabled conduits (creates views & registers with SyncEngine)
+    for (const auto &info : m_conduitManager->conduitList()) {
+        if (info.enabled) {
+            QString conduitId = info.metaData.value(QStringLiteral("X-QPilotSync-ConduitId"));
+            if (conduitId.isEmpty()) {
+                conduitId = info.metaData.pluginId();
+            }
+            m_conduitManager->loadConduit(conduitId);
+        }
+    }
+}
+
+void KF6MainWindow::onConduitLoaded(IConduit *conduit)
+{
+    // Create a view page if the conduit provides one
+    if (conduit->hasView()) {
+        QWidget *view = conduit->createView(this);
+        auto *page = new KPageWidgetItem(view, conduit->viewName());
+        page->setIcon(conduit->viewIcon());
+        page->setHeaderVisible(false);
+        m_pageWidget->addPage(page);
+        m_conduitPages[conduit->conduitId()] = page;
+    }
+
+    // Merge XMLGUI contributions if the conduit provides them
+    KXMLGUIClient *guiClient = conduit->createGUIClient();
+    if (guiClient) {
+        insertChildClient(guiClient);
+        m_conduitGUIClients[conduit->conduitId()] = guiClient;
+    }
+
+    // Register with the sync engine so it participates in sync operations
+    m_syncEngine->registerConduit(conduit);
+
+    qDebug() << "[KF6MainWindow] Conduit loaded:" << conduit->conduitId()
+             << "(" << conduit->displayName() << ")";
+}
+
+void KF6MainWindow::onConduitUnloading(IConduit *conduit)
+{
+    const QString id = conduit->conduitId();
+
+    // Remove the view page
+    if (m_conduitPages.contains(id)) {
+        m_pageWidget->removePage(m_conduitPages.take(id));
+    }
+
+    // Remove XMLGUI client
+    if (m_conduitGUIClients.contains(id)) {
+        removeChildClient(m_conduitGUIClients.take(id));
+    }
+
+    // Unregister from sync engine
+    m_syncEngine->unregisterConduit(id);
+
+    qDebug() << "[KF6MainWindow] Conduit unloading:" << id;
 }
 
 void KF6MainWindow::runInstallConduit()
@@ -616,8 +645,9 @@ void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString
                               result.palmStats.total() + result.pcStats.total(),
                               errorCount));
 
-    // Update data views after sync
-    updateDataViews();
+    // Update dashboard after sync
+    m_dashboardWidget->updateStatus(m_currentProfile,
+                                    m_session && m_session->isConnected());
 }
 
 // ========== Profile Management ==========
@@ -701,7 +731,7 @@ void KF6MainWindow::loadProfile(const QString &path)
     // Update UI
     updateWindowTitle();
     updateProfileMenuState();
-    updateDataViews();
+    m_dashboardWidget->updateStatus(m_currentProfile, m_session && m_session->isConnected());
 
     m_logWidget->logInfo(i18n("Loaded profile: %1", m_currentProfile->name()));
     m_logWidget->logInfo(i18n("Sync folder: %1", m_syncPath));

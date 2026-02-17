@@ -2,12 +2,14 @@
 #define KF6MAINWINDOW_H
 
 #include <KXmlGuiWindow>
+#include <QMap>
 
 // Forward declarations
 class QTimer;
 class QDockWidget;
 class KPageWidget;
 class KPageWidgetItem;
+class KXMLGUIClient;
 class ActionManager;
 class LogWidget;
 class KPilotDeviceLink;
@@ -16,10 +18,8 @@ class ExportHandler;
 class ImportHandler;
 class Profile;
 class DashboardWidget;
-class CalendarView;
-class TaskView;
-class ContactView;
-class MemoView;
+class ConduitManager;
+class IConduit;
 
 namespace Sync {
 class SyncEngine;
@@ -106,6 +106,10 @@ private Q_SLOTS:
     void onPageChanged(KPageWidgetItem *current, KPageWidgetItem *previous);
     void onFocusLog();
 
+    // Conduit lifecycle
+    void onConduitLoaded(IConduit *conduit);
+    void onConduitUnloading(IConduit *conduit);
+
 private:
     // UI setup
     void setupUI();
@@ -115,7 +119,9 @@ private:
     void updateMenuState(bool connected);
     void updateWindowTitle();
     void updateProfileMenuState();
-    void updateDataViews();
+
+    // Conduit management
+    void initializeConduits();
 
     // Sync engine
     void initializeSyncEngine();
@@ -140,19 +146,18 @@ private:
     QDockWidget *m_logDock;
     LogWidget *m_logWidget;
 
-    // Page items
+    // Built-in page items
     KPageWidgetItem *m_dashboardPage;
-    KPageWidgetItem *m_memosPage;
-    KPageWidgetItem *m_contactsPage;
-    KPageWidgetItem *m_calendarPage;
-    KPageWidgetItem *m_tasksPage;
 
-    // Data views (page content)
+    // Built-in data views
     DashboardWidget *m_dashboardWidget;
-    CalendarView *m_calendarView;
-    TaskView *m_taskView;
-    ContactView *m_contactView;
-    MemoView *m_memoView;
+
+    // Dynamic conduit pages (keyed by conduit ID)
+    QMap<QString, KPageWidgetItem*> m_conduitPages;
+    QMap<QString, KXMLGUIClient*> m_conduitGUIClients;
+
+    // Conduit manager
+    ConduitManager *m_conduitManager = nullptr;
 
     // Action manager
     ActionManager *m_actionManager;
