@@ -96,6 +96,8 @@ add_library(QPilotCore SHARED
     # KF6 integration
     kf6/actionmanager.cpp
     kf6/actionmanager.h
+    kf6/conduitmanager.cpp
+    kf6/conduitmanager.h
     kf6/kf6mainwindow.cpp
     kf6/kf6mainwindow.h
     kf6/kf6settings.cpp
