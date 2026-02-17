@@ -20,6 +20,7 @@ class Profile;
 class DashboardWidget;
 class ConduitManager;
 class IConduit;
+class KStatusNotifierItem;
 
 namespace Sync {
 class SyncEngine;
@@ -192,6 +193,11 @@ private:
 
     // Conflict review
     QSyncCore::ConflictStore *m_conflictStore;
+
+    // System tray
+    KStatusNotifierItem *m_trayIcon = nullptr;
+    bool m_minimizeToTray = true;
+    void updateTrayState(const QString &status);
 };
 
 #endif // KF6MAINWINDOW_H

@@ -58,6 +58,7 @@
 #include <KNotification>
 #include <KPageWidget>
 #include <KPageWidgetItem>
+#include <KStatusNotifierItem>
 
 #include <pi-dlp.h>
 
@@ -124,6 +125,14 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 #else
     setupGUI(Default, QStringLiteral("qpilotsyncui.rc"));
 #endif
+
+    // System tray
+    m_trayIcon = new KStatusNotifierItem(this);
+    m_trayIcon->setIconByName(QStringLiteral("phone"));
+    m_trayIcon->setToolTipTitle(i18n("QPilotSync"));
+    m_trayIcon->setToolTipSubTitle(i18n("Listening for Palm devices"));
+    m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
+    m_trayIcon->setStandardActionsEnabled(true);
 
     // Status bar
     statusBar()->showMessage(i18n("Ready - No device connected"));
@@ -193,14 +202,12 @@ KF6MainWindow::~KF6MainWindow()
 
 void KF6MainWindow::closeEvent(QCloseEvent *event)
 {
-    // Save window state
-    saveWindowState();
-
-    // Close profile
-    if (m_currentProfile) {
-        m_currentProfile->save();
+    if (m_minimizeToTray && m_trayIcon) {
+        hide();
+        event->ignore();
+        return;
     }
-
+    saveWindowState();
     event->accept();
 }
 
@@ -1821,4 +1828,10 @@ void KF6MainWindow::onShowConflicts()
 void KF6MainWindow::onApplyConflictResolutions()
 {
     // Will be implemented with conflict review widget
+}
+
+void KF6MainWindow::updateTrayState(const QString &status)
+{
+    if (!m_trayIcon) return;
+    m_trayIcon->setToolTipSubTitle(status);
 }

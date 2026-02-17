@@ -30,6 +30,7 @@ find_package(KF6Config REQUIRED)
 find_package(KF6ConfigWidgets REQUIRED)
 find_package(KF6Crash REQUIRED)
 find_package(KF6Notifications REQUIRED)
+find_package(KF6StatusNotifierItem REQUIRED)
 
 # System libraries
 find_package(PkgConfig REQUIRED)
@@ -70,6 +71,7 @@ target_link_libraries(qpilotsync
         KF6::ConfigWidgets
         KF6::Crash
         KF6::Notifications
+        KF6::StatusNotifierItem
         QPilotCore
         pisock  # pilot-link library
         bluetooth  # Required by pilot-link for Bluetooth support

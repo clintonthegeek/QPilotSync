@@ -119,6 +119,7 @@ target_link_libraries(QPilotCore
         KF6::ConfigCore
         KF6::ConfigWidgets
         KF6::Notifications
+        KF6::StatusNotifierItem
         pisock
         ${UDEV_LIBRARIES}
 )
