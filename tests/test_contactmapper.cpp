@@ -7,7 +7,7 @@
 
 #include <QtTest/QtTest>
 #include <QDebug>
-#include "mappers/contactmapper.h"
+#include "contactmapper.h"
 
 class TestContactMapper : public QObject
 {

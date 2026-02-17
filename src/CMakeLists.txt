@@ -44,16 +44,6 @@ add_library(QPilotCore SHARED
     palm/tickleworker.cpp
     palm/tickleworker.h
 
-    # Data format mappers
-    mappers/memomapper.cpp
-    mappers/memomapper.h
-    mappers/contactmapper.cpp
-    mappers/contactmapper.h
-    mappers/calendarmapper.cpp
-    mappers/calendarmapper.h
-    mappers/todomapper.cpp
-    mappers/todomapper.h
-
     # QSyncCore - Shared sync library components (for future PlanStanLite integration)
     sync/qsynccore/synccommon.h
     sync/qsynccore/idmappingstore.cpp
@@ -79,19 +69,9 @@ add_library(QPilotCore SHARED
     sync/localfilebackend.cpp
     sync/localfilebackend.h
 
-    # Conduits - data type sync plugins
-    sync/conduits/memoconduit.cpp
-    sync/conduits/memoconduit.h
-    sync/conduits/contactconduit.cpp
-    sync/conduits/contactconduit.h
-    sync/conduits/calendarconduit.cpp
-    sync/conduits/calendarconduit.h
-    sync/conduits/todoconduit.cpp
-    sync/conduits/todoconduit.h
+    # Conduits - core device operations (non-plugin conduits)
     sync/conduits/installconduit.cpp
     sync/conduits/installconduit.h
-    sync/conduits/webcalendarconduit.cpp
-    sync/conduits/webcalendarconduit.h
 
     # KF6 integration
     kf6/actionmanager.cpp
@@ -102,16 +82,6 @@ add_library(QPilotCore SHARED
     kf6/kf6mainwindow.h
     kf6/kf6settings.cpp
     kf6/kf6settings.h
-
-    # Widgets - Browser views
-    widgets/browser/calendarview.cpp
-    widgets/browser/calendarview.h
-    widgets/browser/contactview.cpp
-    widgets/browser/contactview.h
-    widgets/browser/memoview.cpp
-    widgets/browser/memoview.h
-    widgets/browser/taskview.cpp
-    widgets/browser/taskview.h
 
     # Widgets - Common
     widgets/common/categorymanager.cpp

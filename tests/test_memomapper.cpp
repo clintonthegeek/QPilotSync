@@ -7,7 +7,7 @@
 
 #include <QtTest/QtTest>
 #include <QDebug>
-#include "mappers/memomapper.h"
+#include "memomapper.h"
 
 class TestMemoMapper : public QObject
 {

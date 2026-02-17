@@ -14,13 +14,11 @@
 
 #include "../sync/syncengine.h"
 #include "../sync/synctypes.h"
+#include "../sync/conduit.h"
 #include "../sync/localfilebackend.h"
-#include "../sync/conduits/memoconduit.h"
-#include "../sync/conduits/contactconduit.h"
-#include "../sync/conduits/calendarconduit.h"
-#include "../sync/conduits/todoconduit.h"
 #include "../sync/conduits/installconduit.h"
-#include "../sync/conduits/webcalendarconduit.h"
+#include "../core/iconduit.h"
+#include "../core/isyncconduit.h"
 
 #include "conflictreviewwidget.h"
 #include "interactiveconflicthandler.h"
@@ -838,14 +836,10 @@ void MainWindow::initializeSyncEngine()
 {
     m_syncEngine = new Sync::SyncEngine(this);
 
-    // Register conduits
-    m_syncEngine->registerConduit(new Sync::MemoConduit());
-    m_syncEngine->registerConduit(new Sync::ContactConduit());
-    m_syncEngine->registerConduit(new Sync::CalendarConduit());
-    m_syncEngine->registerConduit(new Sync::TodoConduit());
-    m_syncEngine->registerConduit(new Sync::WebCalendarConduit());
+    // Conduits are now loaded dynamically as plugins via ConduitManager.
+    // See KF6MainWindow::initializeConduits() for the active plugin-based flow.
 
-    // Create install conduit (handled separately)
+    // Create install conduit (handled separately - not a plugin)
     m_installConduit = new Sync::InstallConduit(this);
     connect(m_installConduit, &Sync::InstallConduit::logMessage,
             m_logWidget, &LogWidget::logInfo);
@@ -903,184 +897,10 @@ void MainWindow::runInstallConduit()
 
 void MainWindow::showWebCalendarSettings(QWidget *parent)
 {
-    // Get the WebCalendarConduit from the sync engine
-    IConduit *conduit = m_syncEngine->conduit("webcalendar");
-    Sync::WebCalendarConduit *webCal = dynamic_cast<Sync::WebCalendarConduit*>(conduit);
-    if (!webCal) {
-        QMessageBox::warning(parent, "Error", "WebCalendarConduit not found");
-        return;
-    }
-
-    QDialog dialog(parent);
-    dialog.setWindowTitle("Web Calendar Settings");
-    dialog.setMinimumWidth(500);
-
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
-
-    // Feeds list
-    QGroupBox *feedsGroup = new QGroupBox("Calendar Feeds");
-    QVBoxLayout *feedsLayout = new QVBoxLayout(feedsGroup);
-
-    QListWidget *feedsList = new QListWidget();
-    feedsList->setMinimumHeight(120);
-
-    // Load existing feeds
-    QList<Sync::WebCalendarFeed> feeds = webCal->feeds();
-    for (const Sync::WebCalendarFeed &feed : feeds) {
-        QListWidgetItem *item = new QListWidgetItem(
-            QString("%1 - %2").arg(feed.name).arg(feed.url.toString()));
-        item->setData(Qt::UserRole, feed.url.toString());
-        item->setData(Qt::UserRole + 1, feed.name);
-        item->setData(Qt::UserRole + 2, feed.category);
-        item->setCheckState(feed.enabled ? Qt::Checked : Qt::Unchecked);
-        feedsList->addItem(item);
-    }
-
-    feedsLayout->addWidget(feedsList);
-
-    // Add/Remove buttons
-    QHBoxLayout *feedButtonsLayout = new QHBoxLayout();
-    QPushButton *addBtn = new QPushButton("Add...");
-    QPushButton *removeBtn = new QPushButton("Remove");
-    feedButtonsLayout->addWidget(addBtn);
-    feedButtonsLayout->addWidget(removeBtn);
-    feedButtonsLayout->addStretch();
-    feedsLayout->addLayout(feedButtonsLayout);
-
-    layout->addWidget(feedsGroup);
-
-    // Fetch settings
-    QGroupBox *fetchGroup = new QGroupBox("Fetch Schedule");
-    QFormLayout *fetchLayout = new QFormLayout(fetchGroup);
-
-    QComboBox *intervalCombo = new QComboBox();
-    intervalCombo->addItem("Every HotSync", "every_sync");
-    intervalCombo->addItem("Daily", "daily");
-    intervalCombo->addItem("Weekly", "weekly");
-    intervalCombo->addItem("Monthly", "monthly");
-
-    // Set current interval
-    int intervalIdx = static_cast<int>(webCal->fetchInterval());
-    intervalCombo->setCurrentIndex(intervalIdx);
-    fetchLayout->addRow("Fetch Frequency:", intervalCombo);
-
-    layout->addWidget(fetchGroup);
-
-    // Import options
-    QGroupBox *importGroup = new QGroupBox("Import Options");
-    QFormLayout *importLayout = new QFormLayout(importGroup);
-
-    QComboBox *dateFilterCombo = new QComboBox();
-    dateFilterCombo->addItem("All events", "all");
-    dateFilterCombo->addItem("Recurring + future events (Recommended)", "recurring_and_future");
-    dateFilterCombo->addItem("Future events only", "future");
-
-    // Set current date filter (read from saved settings)
-    QJsonObject currentSettings = webCal->saveSettings();
-    QString currentFilter = currentSettings["date_filter"].toString("recurring_and_future");
-    int filterIdx = dateFilterCombo->findData(currentFilter);
-    if (filterIdx >= 0) {
-        dateFilterCombo->setCurrentIndex(filterIdx);
-    } else {
-        dateFilterCombo->setCurrentIndex(1);  // Default to recurring_and_future
-    }
-    importLayout->addRow("Date Filter:", dateFilterCombo);
-
-    layout->addWidget(importGroup);
-
-    // Buttons
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttonBox);
-
-    // Add feed button handler
-    connect(addBtn, &QPushButton::clicked, [&]() {
-        QDialog addDialog(&dialog);
-        addDialog.setWindowTitle("Add Calendar Feed");
-        QFormLayout *addLayout = new QFormLayout(&addDialog);
-
-        QLineEdit *nameEdit = new QLineEdit();
-        QLineEdit *urlEdit = new QLineEdit();
-        urlEdit->setPlaceholderText("https://example.com/calendar.ics");
-
-        addLayout->addRow("Name:", nameEdit);
-        addLayout->addRow("URL:", urlEdit);
-
-        QDialogButtonBox *addButtons = new QDialogButtonBox(
-            QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-        connect(addButtons, &QDialogButtonBox::accepted, &addDialog, &QDialog::accept);
-        connect(addButtons, &QDialogButtonBox::rejected, &addDialog, &QDialog::reject);
-        addLayout->addWidget(addButtons);
-
-        if (addDialog.exec() == QDialog::Accepted && !urlEdit->text().isEmpty()) {
-            QString name = nameEdit->text();
-            if (name.isEmpty()) {
-                name = "Calendar";
-            }
-            QListWidgetItem *item = new QListWidgetItem(
-                QString("%1 - %2").arg(name).arg(urlEdit->text()));
-            item->setData(Qt::UserRole, urlEdit->text());
-            item->setData(Qt::UserRole + 1, name);
-            item->setData(Qt::UserRole + 2, QString());  // category
-            item->setCheckState(Qt::Checked);
-            feedsList->addItem(item);
-        }
-    });
-
-    // Remove feed button handler
-    connect(removeBtn, &QPushButton::clicked, [&]() {
-        QListWidgetItem *item = feedsList->currentItem();
-        if (item) {
-            delete feedsList->takeItem(feedsList->row(item));
-        }
-    });
-
-    if (dialog.exec() == QDialog::Accepted) {
-        // Save feeds
-        QList<Sync::WebCalendarFeed> newFeeds;
-        for (int i = 0; i < feedsList->count(); ++i) {
-            QListWidgetItem *item = feedsList->item(i);
-            Sync::WebCalendarFeed feed;
-            feed.url = QUrl(item->data(Qt::UserRole).toString());
-            feed.name = item->data(Qt::UserRole + 1).toString();
-            feed.category = item->data(Qt::UserRole + 2).toString();
-            feed.enabled = item->checkState() == Qt::Checked;
-            newFeeds.append(feed);
-        }
-        webCal->setFeeds(newFeeds);
-
-        // Save fetch interval
-        QString intervalStr = intervalCombo->currentData().toString();
-        if (intervalStr == "every_sync") {
-            webCal->setFetchInterval(Sync::FetchInterval::EverySync);
-        } else if (intervalStr == "daily") {
-            webCal->setFetchInterval(Sync::FetchInterval::Daily);
-        } else if (intervalStr == "weekly") {
-            webCal->setFetchInterval(Sync::FetchInterval::Weekly);
-        } else if (intervalStr == "monthly") {
-            webCal->setFetchInterval(Sync::FetchInterval::Monthly);
-        }
-
-        // Save date filter
-        QString filterStr = dateFilterCombo->currentData().toString();
-        if (filterStr == "all") {
-            webCal->setDateFilter(Sync::WebCalendarConduit::DateFilter::All);
-        } else if (filterStr == "recurring_and_future") {
-            webCal->setDateFilter(Sync::WebCalendarConduit::DateFilter::RecurringAndFuture);
-        } else if (filterStr == "future") {
-            webCal->setDateFilter(Sync::WebCalendarConduit::DateFilter::FutureOnly);
-        }
-
-        // Save to profile
-        if (m_currentProfile) {
-            m_currentProfile->setConduitSettings("webcalendar", webCal->saveSettings());
-            m_currentProfile->save();
-        }
-
-        m_logWidget->logInfo("Web calendar settings saved");
-    }
+    Q_UNUSED(parent);
+    // Web calendar settings are now managed through the KF6 UI and
+    // the conduit plugin system. This legacy method is no longer functional.
+    m_logWidget->logWarning("Web calendar settings are available in the KF6 main window");
 }
 
 // ========== Profile Management ==========

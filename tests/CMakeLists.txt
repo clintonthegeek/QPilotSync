@@ -21,7 +21,6 @@ function(add_qpilotsync_test TEST_NAME)
 
     target_include_directories(${TEST_NAME} PRIVATE
         ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/src/mappers
         ${CMAKE_SOURCE_DIR}/src/palm
         ${CMAKE_SOURCE_DIR}/src/sync
     )
@@ -36,23 +35,43 @@ function(add_qpilotsync_test TEST_NAME)
 endfunction()
 
 # ============================================================
-# Unit Tests - Data Mappers (Pure logic, no I/O dependencies)
+# Unit Tests - Data Mappers (now in conduit plugins)
 # ============================================================
+# Mappers have been migrated from QPilotCore to their respective
+# conduit plugins (MODULE libraries). Since MODULE libraries cannot
+# be linked against at compile time, tests compile the mapper
+# sources directly from the plugin directories.
 
 add_qpilotsync_test(test_calendarmapper
     test_calendarmapper.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/calendar/calendarmapper.cpp
+)
+target_include_directories(test_calendarmapper PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/plugins/calendar
 )
 
 add_qpilotsync_test(test_contactmapper
     test_contactmapper.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/contacts/contactmapper.cpp
+)
+target_include_directories(test_contactmapper PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/plugins/contacts
 )
 
 add_qpilotsync_test(test_memomapper
     test_memomapper.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/memo/memomapper.cpp
+)
+target_include_directories(test_memomapper PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/plugins/memo
 )
 
 add_qpilotsync_test(test_todomapper
     test_todomapper.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/todos/todomapper.cpp
+)
+target_include_directories(test_todomapper PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/plugins/todos
 )
 
 # ============================================================

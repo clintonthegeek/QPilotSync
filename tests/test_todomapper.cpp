@@ -7,7 +7,7 @@
 
 #include <QtTest/QtTest>
 #include <QDebug>
-#include "mappers/todomapper.h"
+#include "todomapper.h"
 
 class TestTodoMapper : public QObject
 {

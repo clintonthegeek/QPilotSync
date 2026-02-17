@@ -9,7 +9,7 @@
 
 #include <QtTest/QtTest>
 #include <QDebug>
-#include "mappers/calendarmapper.h"
+#include "calendarmapper.h"
 
 class TestCalendarMapper : public QObject
 {
