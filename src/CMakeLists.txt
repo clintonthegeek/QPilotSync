@@ -92,6 +92,46 @@ add_library(QPilotCore STATIC
     sync/conduits/installconduit.h
     sync/conduits/webcalendarconduit.cpp
     sync/conduits/webcalendarconduit.h
+
+    # KF6 integration
+    kf6/actionmanager.cpp
+    kf6/actionmanager.h
+    kf6/kf6mainwindow.cpp
+    kf6/kf6mainwindow.h
+    kf6/kf6settings.cpp
+    kf6/kf6settings.h
+
+    # Widgets - Browser views
+    widgets/browser/calendarview.cpp
+    widgets/browser/calendarview.h
+    widgets/browser/contactview.cpp
+    widgets/browser/contactview.h
+    widgets/browser/memoview.cpp
+    widgets/browser/memoview.h
+    widgets/browser/taskview.cpp
+    widgets/browser/taskview.h
+
+    # Widgets - Common
+    widgets/common/categorymanager.cpp
+    widgets/common/categorymanager.h
+    widgets/common/categorymodel.cpp
+    widgets/common/categorymodel.h
+    widgets/common/categoryfilterwidget.cpp
+    widgets/common/categoryfilterwidget.h
+
+    # Widgets - Dashboard
+    widgets/dashboard/dashboardwidget.cpp
+    widgets/dashboard/dashboardwidget.h
+
+    # Widgets - Dialogs
+    widgets/dialogs/categoryeditordialog.cpp
+    widgets/dialogs/categoryeditordialog.h
+    widgets/dialogs/taskeditdialog.cpp
+    widgets/dialogs/taskeditdialog.h
+
+    # Widgets - Sidebar
+    widgets/sidebar/profilesidebar.cpp
+    widgets/sidebar/profilesidebar.h
 )
 
 target_link_libraries(QPilotCore
@@ -100,6 +140,13 @@ target_link_libraries(QPilotCore
         Qt::Widgets
         Qt::Network
         KF6::CalendarCore
+        KF6::CoreAddons
+        KF6::I18n
+        KF6::XmlGui
+        KF6::WidgetsAddons
+        KF6::ConfigCore
+        KF6::ConfigWidgets
+        KF6::Notifications
         pisock
 )
 
@@ -107,6 +154,8 @@ target_include_directories(QPilotCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
     ${CMAKE_CURRENT_SOURCE_DIR}/sync
+    ${CMAKE_CURRENT_SOURCE_DIR}/kf6
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets
 )
 
 # Ensure pilot-link is built before QPilotCore

@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -10,6 +11,7 @@
 
 #include <KCalendarCore/ICalFormat>
 #include <KCalendarCore/MemoryCalendar>
+#include <KCalendarCore/Event>
 
 CategoryManager::CategoryManager(const QString &dataType, QObject *parent)
     : QObject(parent)
@@ -213,25 +215,88 @@ QStringList CategoryManager::discoverCategories(const QString &dataPath, const Q
             }
         }
     } else if (dataType == QStringLiteral("todos")) {
-        // Scan todos.ics for CATEGORIES in VTODO
-        QString todosFile = dataPath + QStringLiteral(".ics");
-        if (!QFile::exists(todosFile)) {
-            // Try looking for todos.ics in parent directory
-            todosFile = QFileInfo(dataPath).dir().filePath(QStringLiteral("todos.ics"));
-        }
+        // Scan individual .ics files in the todos directory
+        QDir dir(dataPath);
+        if (dir.exists()) {
+            QStringList filters;
+            filters << QStringLiteral("*.ics");
+            QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
 
-        if (QFile::exists(todosFile)) {
-            KCalendarCore::MemoryCalendar::Ptr calendar(
-                new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
             KCalendarCore::ICalFormat format;
+            for (const QFileInfo &fileInfo : files) {
+                KCalendarCore::MemoryCalendar::Ptr calendar(
+                    new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
 
-            if (format.load(calendar, todosFile)) {
-                KCalendarCore::Todo::List todos = calendar->todos();
-                for (const KCalendarCore::Todo::Ptr &todo : todos) {
-                    QStringList cats = todo->categories();
-                    for (const QString &cat : cats) {
-                        if (!cat.isEmpty() && !discovered.contains(cat)) {
-                            discovered.append(cat);
+                if (format.load(calendar, fileInfo.filePath())) {
+                    KCalendarCore::Todo::List todos = calendar->todos();
+                    for (const KCalendarCore::Todo::Ptr &todo : todos) {
+                        QStringList cats = todo->categories();
+                        for (const QString &cat : cats) {
+                            if (!cat.isEmpty() && !discovered.contains(cat)) {
+                                discovered.append(cat);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (dataType == QStringLiteral("contacts")) {
+        // Scan individual .vcf files for CATEGORIES property
+        QDir dir(dataPath);
+        if (dir.exists()) {
+            QStringList filters;
+            filters << QStringLiteral("*.vcf");
+            QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+
+            static QRegularExpression categoryRe(QStringLiteral("^CATEGORIES:(.+)$"),
+                                                  QRegularExpression::MultilineOption);
+
+            for (const QFileInfo &fileInfo : files) {
+                QFile file(fileInfo.filePath());
+                if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                    QString content = QTextStream(&file).readAll();
+                    file.close();
+
+                    // Unfold continuation lines
+                    content.replace(QStringLiteral("\r\n "), QString());
+                    content.replace(QStringLiteral("\r\n\t"), QString());
+                    content.replace(QStringLiteral("\n "), QString());
+                    content.replace(QStringLiteral("\n\t"), QString());
+
+                    QRegularExpressionMatch match = categoryRe.match(content);
+                    if (match.hasMatch()) {
+                        QStringList cats = match.captured(1).split(QLatin1Char(','));
+                        for (const QString &cat : cats) {
+                            QString trimmed = cat.trimmed();
+                            if (!trimmed.isEmpty() && !discovered.contains(trimmed)) {
+                                discovered.append(trimmed);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (dataType == QStringLiteral("calendar")) {
+        // Scan individual .ics files in the calendar directory
+        QDir dir(dataPath);
+        if (dir.exists()) {
+            QStringList filters;
+            filters << QStringLiteral("*.ics");
+            QFileInfoList files = dir.entryInfoList(filters, QDir::Files);
+
+            KCalendarCore::ICalFormat format;
+            for (const QFileInfo &fileInfo : files) {
+                KCalendarCore::MemoryCalendar::Ptr calendar(
+                    new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone()));
+
+                if (format.load(calendar, fileInfo.filePath())) {
+                    KCalendarCore::Event::List events = calendar->events();
+                    for (const KCalendarCore::Event::Ptr &event : events) {
+                        QStringList cats = event->categories();
+                        for (const QString &cat : cats) {
+                            if (!cat.isEmpty() && !discovered.contains(cat)) {
+                                discovered.append(cat);
+                            }
                         }
                     }
                 }

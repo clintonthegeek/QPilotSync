@@ -67,12 +67,17 @@ public:
     QAction* importTodoAction() const { return action(QStringLiteral("import_todo")); }
 
     // ========== View Actions ==========
-    QAction* tabbedViewAction() const { return action(QStringLiteral("view_tabbed")); }
-    QAction* showLogAction() const { return action(QStringLiteral("view_show_log")); }
     QAction* clearLogAction() const { return action(QStringLiteral("view_clear_log")); }
     QAction* showConflictsAction() const { return action(QStringLiteral("view_show_conflicts")); }
-    QAction* toggleSidebarAction() const { return action(QStringLiteral("view_toggle_sidebar")); }
     QAction* toggleLogPanelAction() const { return action(QStringLiteral("view_toggle_log_panel")); }
+    QAction* focusLogAction() const { return action(QStringLiteral("view_focus_log")); }
+
+    // ========== Page Navigation Actions ==========
+    QAction* viewDashboardAction() const { return action(QStringLiteral("view_page_dashboard")); }
+    QAction* viewMemosAction() const { return action(QStringLiteral("view_page_memos")); }
+    QAction* viewContactsAction() const { return action(QStringLiteral("view_page_contacts")); }
+    QAction* viewCalendarAction() const { return action(QStringLiteral("view_page_calendar")); }
+    QAction* viewTasksAction() const { return action(QStringLiteral("view_page_tasks")); }
 
     // Update action states based on application state
     void updateConnectionState(bool connected, bool hasProfile);
@@ -122,6 +127,14 @@ Q_SIGNALS:
     void clearLogRequested();
     void showConflictsRequested();
 
+    // Page navigation
+    void viewDashboardRequested();
+    void viewMemosRequested();
+    void viewContactsRequested();
+    void viewCalendarRequested();
+    void viewTasksRequested();
+    void focusLogRequested();
+
 private:
     void setupActions();
     void setupFileActions();
@@ -129,6 +142,7 @@ private:
     void setupSyncActions();
     void setupDataActions();
     void setupViewActions();
+    void setupNavigationActions();
 
     KActionCollection *m_actionCollection;
     KXmlGuiWindow *m_window;

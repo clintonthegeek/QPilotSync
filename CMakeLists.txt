@@ -16,6 +16,14 @@ qt_standard_project_setup()
 
 # Find KDE Frameworks
 find_package(KF6CalendarCore REQUIRED)
+find_package(KF6CoreAddons REQUIRED)
+find_package(KF6I18n REQUIRED)
+find_package(KF6XmlGui REQUIRED)
+find_package(KF6WidgetsAddons REQUIRED)
+find_package(KF6Config REQUIRED)
+find_package(KF6ConfigWidgets REQUIRED)
+find_package(KF6Crash REQUIRED)
+find_package(KF6Notifications REQUIRED)
 
 # Build pilot-link first
 add_subdirectory(lib)
@@ -44,6 +52,14 @@ target_link_libraries(qpilotsync
         Qt::Core
         Qt::Widgets
         KF6::CalendarCore
+        KF6::CoreAddons
+        KF6::I18n
+        KF6::XmlGui
+        KF6::WidgetsAddons
+        KF6::ConfigCore
+        KF6::ConfigWidgets
+        KF6::Crash
+        KF6::Notifications
         QPilotCore
         pisock  # pilot-link library
         bluetooth  # Required by pilot-link for Bluetooth support
@@ -62,4 +78,7 @@ install(FILES data/org.qpilotsync.QPilotSync.desktop
 )
 install(FILES data/org.qpilotsync.QPilotSync.svg
     DESTINATION share/icons/hicolor/scalable/apps
+)
+install(FILES data/qpilotsyncui.rc
+    DESTINATION ${KDE_INSTALL_KXMLGUIDIR}/qpilotsync
 )

@@ -1,5 +1,5 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="qpilotsync" version="1">
+<gui name="qpilotsync" version="2">
     <MenuBar>
         <Menu name="file">
             <text>&amp;File</text>
@@ -9,8 +9,6 @@
             <Action name="file_close_profile"/>
             <Separator/>
             <Action name="file_profile_settings"/>
-            <Separator/>
-            <Action name="options_configure"/>
             <Separator/>
             <Action name="file_quit"/>
         </Menu>
@@ -65,12 +63,28 @@
 
         <Menu name="view">
             <text>&amp;View</text>
-            <Action name="view_tabbed"/>
+            <Menu name="navigate">
+                <text>&amp;Navigate</text>
+                <Action name="view_page_dashboard"/>
+                <Action name="view_page_memos"/>
+                <Action name="view_page_contacts"/>
+                <Action name="view_page_calendar"/>
+                <Action name="view_page_tasks"/>
+            </Menu>
             <Separator/>
-            <Action name="view_show_log"/>
+            <Action name="view_toggle_log_panel"/>
+            <Action name="view_focus_log"/>
             <Action name="view_clear_log"/>
             <Separator/>
             <Action name="view_show_conflicts"/>
+        </Menu>
+
+        <Menu name="settings">
+            <text>&amp;Settings</text>
+            <Action name="options_configure_toolbars"/>
+            <Action name="options_configure_keybinding"/>
+            <Separator/>
+            <Action name="options_configure"/>
         </Menu>
 
         <Menu name="help">

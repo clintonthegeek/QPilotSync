@@ -5,9 +5,9 @@
 
 // Forward declarations
 class QTimer;
-class QSplitter;
-class QTabWidget;
-class QStackedWidget;
+class QDockWidget;
+class KPageWidget;
+class KPageWidgetItem;
 class ActionManager;
 class LogWidget;
 class KPilotDeviceLink;
@@ -15,7 +15,6 @@ class DeviceSession;
 class ExportHandler;
 class ImportHandler;
 class Profile;
-class ProfileSidebar;
 class DashboardWidget;
 class CalendarView;
 class TaskView;
@@ -35,10 +34,9 @@ class ConflictStore;
 /**
  * @brief KDE Frameworks 6 native main window for QPilotSync
  *
- * Implements a modern Dolphin-style splitter layout with:
- * - Left sidebar for profile/device navigation
- * - Center area with tabbed data views (Dashboard, Calendar, Tasks, etc.)
- * - Collapsible bottom log panel
+ * Implements a KPageWidget icon-sidebar layout (like KDE System Settings)
+ * with pages for Sync/Dashboard, Memos, Contacts, Calendar, and Tasks.
+ * A QDockWidget at the bottom holds the log panel.
  *
  * Uses KXmlGuiWindow for proper KDE desktop integration with XMLGUI
  * menus and toolbars.
@@ -104,9 +102,9 @@ private Q_SLOTS:
     // View management
     void onShowConflicts();
     void onApplyConflictResolutions();
-    void onToggleSidebar(bool visible);
     void onToggleLogPanel(bool visible);
-    void onTabChanged(int index);
+    void onPageChanged(KPageWidgetItem *current, KPageWidgetItem *previous);
+    void onFocusLog();
 
 private:
     // UI setup
@@ -137,16 +135,19 @@ private:
     void saveWindowState();
     void restoreWindowState();
 
-    // Main layout components
-    QSplitter *m_mainSplitter;      // Horizontal: sidebar | content
-    QSplitter *m_contentSplitter;   // Vertical: tabs | log panel
-    QTabWidget *m_tabWidget;
+    // KPageWidget layout
+    KPageWidget *m_pageWidget;
+    QDockWidget *m_logDock;
     LogWidget *m_logWidget;
 
-    // Sidebar
-    ProfileSidebar *m_profileSidebar;
+    // Page items
+    KPageWidgetItem *m_dashboardPage;
+    KPageWidgetItem *m_memosPage;
+    KPageWidgetItem *m_contactsPage;
+    KPageWidgetItem *m_calendarPage;
+    KPageWidgetItem *m_tasksPage;
 
-    // Data views (tabs)
+    // Data views (page content)
     DashboardWidget *m_dashboardWidget;
     CalendarView *m_calendarView;
     TaskView *m_taskView;

@@ -25,8 +25,7 @@
 #include "../sync/qsynccore/conflictstore.h"
 #include "../sync/syncstate.h"
 
-// Widget includes (to be implemented)
-#include "../widgets/sidebar/profilesidebar.h"
+// Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
 #include "../widgets/browser/calendarview.h"
 #include "../widgets/browser/taskview.h"
@@ -35,8 +34,7 @@
 
 #include <QApplication>
 #include <QStatusBar>
-#include <QSplitter>
-#include <QTabWidget>
+#include <QDockWidget>
 #include <QTimer>
 #include <QDir>
 #include <QFile>
@@ -63,20 +61,24 @@
 #include <KAboutData>
 #include <KLocalizedString>
 #include <KNotification>
-#include <KMessageWidget>
+#include <KPageWidget>
+#include <KPageWidgetItem>
 
 #include <pi-dlp.h>
 
 KF6MainWindow::KF6MainWindow(QWidget *parent)
     : KXmlGuiWindow(parent)
-    // Main layout components (in declaration order)
-    , m_mainSplitter(nullptr)
-    , m_contentSplitter(nullptr)
-    , m_tabWidget(nullptr)
+    // KPageWidget layout
+    , m_pageWidget(nullptr)
+    , m_logDock(nullptr)
     , m_logWidget(nullptr)
-    // Sidebar
-    , m_profileSidebar(nullptr)
-    // Data views (tabs)
+    // Page items
+    , m_dashboardPage(nullptr)
+    , m_memosPage(nullptr)
+    , m_contactsPage(nullptr)
+    , m_calendarPage(nullptr)
+    , m_tasksPage(nullptr)
+    // Data views (page content)
     , m_dashboardWidget(nullptr)
     , m_calendarView(nullptr)
     , m_taskView(nullptr)
@@ -217,22 +219,9 @@ void KF6MainWindow::setupUI()
 
 void KF6MainWindow::createCentralLayout()
 {
-    // Create main horizontal splitter: [Sidebar | Content]
-    m_mainSplitter = new QSplitter(Qt::Horizontal, this);
-    m_mainSplitter->setObjectName(QStringLiteral("mainSplitter"));
-
-    // Create sidebar
-    m_profileSidebar = new ProfileSidebar(this);
-    m_mainSplitter->addWidget(m_profileSidebar);
-
-    // Create content vertical splitter: [Tabs / Log Panel]
-    m_contentSplitter = new QSplitter(Qt::Vertical, this);
-    m_contentSplitter->setObjectName(QStringLiteral("contentSplitter"));
-
-    // Create tab widget for data views
-    m_tabWidget = new QTabWidget(this);
-    m_tabWidget->setDocumentMode(true);
-    m_tabWidget->setTabPosition(QTabWidget::North);
+    // Create KPageWidget with List (icon sidebar) face type
+    m_pageWidget = new KPageWidget(this);
+    m_pageWidget->setFaceType(KPageWidget::List);
 
     // Create data view widgets
     m_dashboardWidget = new DashboardWidget(this);
@@ -241,33 +230,41 @@ void KF6MainWindow::createCentralLayout()
     m_contactView = new ContactView(this);
     m_memoView = new MemoView(this);
 
-    // Add tabs
-    m_tabWidget->addTab(m_dashboardWidget, QIcon::fromTheme(QStringLiteral("go-home")),
-                        i18n("Dashboard"));
-    m_tabWidget->addTab(m_calendarView, QIcon::fromTheme(QStringLiteral("view-calendar")),
-                        i18n("Calendar"));
-    m_tabWidget->addTab(m_taskView, QIcon::fromTheme(QStringLiteral("view-task")),
-                        i18n("Tasks"));
-    m_tabWidget->addTab(m_contactView, QIcon::fromTheme(QStringLiteral("view-pim-contacts")),
-                        i18n("Contacts"));
-    m_tabWidget->addTab(m_memoView, QIcon::fromTheme(QStringLiteral("view-pim-notes")),
-                        i18n("Memos"));
+    // Add pages with Breeze theme icons
+    m_dashboardPage = new KPageWidgetItem(m_dashboardWidget, i18n("Sync"));
+    m_dashboardPage->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+    m_dashboardPage->setHeaderVisible(false);
+    m_pageWidget->addPage(m_dashboardPage);
 
-    m_contentSplitter->addWidget(m_tabWidget);
+    m_memosPage = new KPageWidgetItem(m_memoView, i18n("Memos"));
+    m_memosPage->setIcon(QIcon::fromTheme(QStringLiteral("view-pim-notes")));
+    m_memosPage->setHeaderVisible(false);
+    m_pageWidget->addPage(m_memosPage);
 
-    // Create log widget
+    m_contactsPage = new KPageWidgetItem(m_contactView, i18n("Contacts"));
+    m_contactsPage->setIcon(QIcon::fromTheme(QStringLiteral("view-pim-contacts")));
+    m_contactsPage->setHeaderVisible(false);
+    m_pageWidget->addPage(m_contactsPage);
+
+    m_calendarPage = new KPageWidgetItem(m_calendarView, i18n("Calendar"));
+    m_calendarPage->setIcon(QIcon::fromTheme(QStringLiteral("view-calendar")));
+    m_calendarPage->setHeaderVisible(false);
+    m_pageWidget->addPage(m_calendarPage);
+
+    m_tasksPage = new KPageWidgetItem(m_taskView, i18n("Tasks"));
+    m_tasksPage->setIcon(QIcon::fromTheme(QStringLiteral("view-task")));
+    m_tasksPage->setHeaderVisible(false);
+    m_pageWidget->addPage(m_tasksPage);
+
+    setCentralWidget(m_pageWidget);
+
+    // Create log widget inside a QDockWidget at the bottom
     m_logWidget = new LogWidget(this);
-    m_contentSplitter->addWidget(m_logWidget);
-
-    // Set initial sizes for content splitter (80% tabs, 20% log)
-    m_contentSplitter->setSizes({600, 150});
-
-    m_mainSplitter->addWidget(m_contentSplitter);
-
-    // Set initial sizes for main splitter (sidebar 200px, content rest)
-    m_mainSplitter->setSizes({200, 800});
-
-    setCentralWidget(m_mainSplitter);
+    m_logDock = new QDockWidget(i18n("Log"), this);
+    m_logDock->setObjectName(QStringLiteral("logDock"));
+    m_logDock->setWidget(m_logWidget);
+    m_logDock->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
+    addDockWidget(Qt::BottomDockWidgetArea, m_logDock);
 }
 
 void KF6MainWindow::setupActions()
@@ -344,19 +341,36 @@ void KF6MainWindow::setupConnections()
     connect(m_actionManager, &ActionManager::showConflictsRequested,
             this, &KF6MainWindow::onShowConflicts);
 
-    // View toggle actions
-    connect(m_actionManager->toggleSidebarAction(), &QAction::toggled,
-            this, &KF6MainWindow::onToggleSidebar);
+    // Log dock toggle - sync the action checkmark with dock visibility
     connect(m_actionManager->toggleLogPanelAction(), &QAction::toggled,
             this, &KF6MainWindow::onToggleLogPanel);
+    connect(m_logDock, &QDockWidget::visibilityChanged,
+            m_actionManager->toggleLogPanelAction(), &QAction::setChecked);
 
-    // Tab changes
-    connect(m_tabWidget, &QTabWidget::currentChanged,
-            this, &KF6MainWindow::onTabChanged);
+    // Focus log
+    connect(m_actionManager, &ActionManager::focusLogRequested,
+            this, &KF6MainWindow::onFocusLog);
 
-    // Profile sidebar connections
-    connect(m_profileSidebar, &ProfileSidebar::profileSelected,
-            this, &KF6MainWindow::loadProfile);
+    // Page navigation from ActionManager
+    connect(m_actionManager, &ActionManager::viewDashboardRequested, this, [this]() {
+        m_pageWidget->setCurrentPage(m_dashboardPage);
+    });
+    connect(m_actionManager, &ActionManager::viewMemosRequested, this, [this]() {
+        m_pageWidget->setCurrentPage(m_memosPage);
+    });
+    connect(m_actionManager, &ActionManager::viewContactsRequested, this, [this]() {
+        m_pageWidget->setCurrentPage(m_contactsPage);
+    });
+    connect(m_actionManager, &ActionManager::viewCalendarRequested, this, [this]() {
+        m_pageWidget->setCurrentPage(m_calendarPage);
+    });
+    connect(m_actionManager, &ActionManager::viewTasksRequested, this, [this]() {
+        m_pageWidget->setCurrentPage(m_tasksPage);
+    });
+
+    // KPageWidget page changes
+    connect(m_pageWidget, &KPageWidget::currentPageChanged,
+            this, &KF6MainWindow::onPageChanged);
 }
 
 void KF6MainWindow::saveWindowState()
@@ -364,16 +378,17 @@ void KF6MainWindow::saveWindowState()
     KF6Settings &settings = KF6Settings::instance();
     settings.setWindowGeometry(saveGeometry());
     settings.setWindowState(saveState());
-    settings.setSplitterState(m_mainSplitter->saveState());
-    settings.setSidebarVisible(m_profileSidebar->isVisible());
-    settings.setLogPanelVisible(m_logWidget->isVisible());
-    settings.setCurrentTabIndex(m_tabWidget->currentIndex());
-    if (m_profileSidebar->isVisible()) {
-        settings.setSidebarWidth(m_profileSidebar->width());
-    }
-    if (m_logWidget->isVisible()) {
-        settings.setLogPanelHeight(m_logWidget->height());
-    }
+    settings.setLogPanelVisible(m_logDock->isVisible());
+
+    // Save current page index
+    int pageIndex = 0;
+    KPageWidgetItem *current = m_pageWidget->currentPage();
+    if (current == m_memosPage) pageIndex = 1;
+    else if (current == m_contactsPage) pageIndex = 2;
+    else if (current == m_calendarPage) pageIndex = 3;
+    else if (current == m_tasksPage) pageIndex = 4;
+    settings.setCurrentTabIndex(pageIndex);
+
     settings.sync();
 }
 
@@ -392,38 +407,37 @@ void KF6MainWindow::restoreWindowState()
         restoreState(state);
     }
 
-    // Restore splitter state
-    QByteArray splitterState = settings.splitterState();
-    if (!splitterState.isEmpty()) {
-        m_mainSplitter->restoreState(splitterState);
+    // Restore log dock visibility
+    bool logVisible = settings.logPanelVisible();
+    m_logDock->setVisible(logVisible);
+    m_actionManager->toggleLogPanelAction()->setChecked(logVisible);
+
+    // Restore current page
+    int pageIndex = settings.currentTabIndex();
+    KPageWidgetItem *pages[] = {m_dashboardPage, m_memosPage, m_contactsPage,
+                                m_calendarPage, m_tasksPage};
+    if (pageIndex >= 0 && pageIndex < 5) {
+        m_pageWidget->setCurrentPage(pages[pageIndex]);
     }
-
-    // Restore visibility
-    m_profileSidebar->setVisible(settings.sidebarVisible());
-    m_logWidget->setVisible(settings.logPanelVisible());
-    m_actionManager->toggleSidebarAction()->setChecked(settings.sidebarVisible());
-    m_actionManager->toggleLogPanelAction()->setChecked(settings.logPanelVisible());
-
-    // Restore current tab
-    int tabIndex = settings.currentTabIndex();
-    if (tabIndex >= 0 && tabIndex < m_tabWidget->count()) {
-        m_tabWidget->setCurrentIndex(tabIndex);
-    }
-}
-
-void KF6MainWindow::onToggleSidebar(bool visible)
-{
-    m_profileSidebar->setVisible(visible);
 }
 
 void KF6MainWindow::onToggleLogPanel(bool visible)
 {
-    m_logWidget->setVisible(visible);
+    m_logDock->setVisible(visible);
 }
 
-void KF6MainWindow::onTabChanged(int index)
+void KF6MainWindow::onFocusLog()
 {
-    Q_UNUSED(index)
+    m_logDock->setVisible(true);
+    m_logDock->raise();
+    m_logWidget->setFocus();
+    m_actionManager->toggleLogPanelAction()->setChecked(true);
+}
+
+void KF6MainWindow::onPageChanged(KPageWidgetItem *current, KPageWidgetItem *previous)
+{
+    Q_UNUSED(previous)
+    Q_UNUSED(current)
     updateDataViews();
 }
 
@@ -434,26 +448,20 @@ void KF6MainWindow::updateDataViews()
     }
 
     // Update the currently visible data view
-    int currentTab = m_tabWidget->currentIndex();
+    KPageWidgetItem *currentPage = m_pageWidget->currentPage();
     QString syncPath = m_currentProfile->syncFolderPath();
 
-    switch (currentTab) {
-        case 0: // Dashboard
-            m_dashboardWidget->updateStatus(m_currentProfile,
-                                            m_session && m_session->isConnected());
-            break;
-        case 1: // Calendar
-            m_calendarView->loadFromPath(syncPath);
-            break;
-        case 2: // Tasks
-            m_taskView->loadFromPath(syncPath);
-            break;
-        case 3: // Contacts
-            m_contactView->loadFromPath(syncPath);
-            break;
-        case 4: // Memos
-            m_memoView->loadFromPath(syncPath);
-            break;
+    if (currentPage == m_dashboardPage) {
+        m_dashboardWidget->updateStatus(m_currentProfile,
+                                        m_session && m_session->isConnected());
+    } else if (currentPage == m_memosPage) {
+        m_memoView->loadFromPath(syncPath);
+    } else if (currentPage == m_contactsPage) {
+        m_contactView->loadFromPath(syncPath);
+    } else if (currentPage == m_calendarPage) {
+        m_calendarView->loadFromPath(syncPath);
+    } else if (currentPage == m_tasksPage) {
+        m_taskView->loadFromPath(syncPath);
     }
 }
 
@@ -693,7 +701,6 @@ void KF6MainWindow::loadProfile(const QString &path)
     // Update UI
     updateWindowTitle();
     updateProfileMenuState();
-    m_profileSidebar->setCurrentProfile(m_currentProfile);
     updateDataViews();
 
     m_logWidget->logInfo(i18n("Loaded profile: %1", m_currentProfile->name()));
@@ -712,7 +719,6 @@ void KF6MainWindow::closeProfile()
 
     updateWindowTitle();
     updateProfileMenuState();
-    m_profileSidebar->setCurrentProfile(nullptr);
 
     m_logWidget->logInfo(i18n("Profile closed"));
 }
