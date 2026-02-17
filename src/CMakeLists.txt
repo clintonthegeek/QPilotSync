@@ -43,6 +43,8 @@ add_library(QPilotCore SHARED
     palm/devicesession.h
     palm/tickleworker.cpp
     palm/tickleworker.h
+    palm/palmdevicemonitor.cpp
+    palm/palmdevicemonitor.h
 
     # QSyncCore - Shared sync library components (for future PlanStanLite integration)
     sync/qsynccore/synccommon.h
