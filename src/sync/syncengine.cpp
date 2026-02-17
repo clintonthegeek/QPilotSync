@@ -21,18 +21,9 @@ SyncEngine::SyncEngine(QObject *parent)
 
 SyncEngine::~SyncEngine()
 {
-    // Clean up owned objects
-    // IConduit has a virtual destructor, so delete through the interface pointer is safe.
-    // However, for conduits that are QObjects with a parent (this), Qt will also
-    // try to delete them. To avoid double-delete, only delete non-QObject conduits manually.
-    for (auto it = m_conduits.begin(); it != m_conduits.end(); ++it) {
-        QObject *obj = dynamic_cast<QObject*>(it.value());
-        if (!obj) {
-            // Not a QObject — must delete manually via IConduit*
-            delete it.value();
-        }
-        // QObject conduits are parented to 'this' and will be deleted by Qt
-    }
+    // Conduits are NOT owned by SyncEngine — just clear the map.
+    // Plugin conduits are owned by ConduitManager; built-in conduits
+    // are owned by their respective creators.
     m_conduits.clear();
 
     qDeleteAll(m_states);
@@ -75,25 +66,15 @@ void SyncEngine::registerConduit(IConduit *conduit)
 
     QString id = conduit->conduitId();
 
-    // Remove existing conduit with same ID
-    if (m_conduits.contains(id)) {
-        IConduit *old = m_conduits[id];
-        QObject *oldObj = dynamic_cast<QObject*>(old);
-        if (oldObj) {
-            delete oldObj;
-        } else {
-            delete old;
-        }
-    }
+    // Remove existing entry (non-owning — don't delete)
+    m_conduits.remove(id);
 
     m_conduits[id] = conduit;
     m_conduitEnabled[id] = true;
 
-    // If the conduit is a QObject, parent it to this engine
-    QObject *obj = dynamic_cast<QObject*>(conduit);
-    if (obj) {
-        obj->setParent(this);
-    }
+    // NOTE: SyncEngine does NOT own conduits. They are owned by
+    // ConduitManager (for plugin conduits) or KF6MainWindow (for
+    // built-in conduits). Do not re-parent or delete.
 
     connectConduitSignals(conduit);
 
@@ -102,17 +83,10 @@ void SyncEngine::registerConduit(IConduit *conduit)
 
 void SyncEngine::unregisterConduit(const QString &conduitId)
 {
-    if (m_conduits.contains(conduitId)) {
-        IConduit *cond = m_conduits[conduitId];
-        QObject *obj = dynamic_cast<QObject*>(cond);
-        if (obj) {
-            delete obj;
-        } else {
-            delete cond;
-        }
-        m_conduits.remove(conduitId);
-        m_conduitEnabled.remove(conduitId);
-    }
+    // Non-owning: just remove from the map, don't delete.
+    // The conduit is owned by ConduitManager (plugins) or its creator.
+    m_conduits.remove(conduitId);
+    m_conduitEnabled.remove(conduitId);
 }
 
 IConduit* SyncEngine::conduit(const QString &conduitId) const

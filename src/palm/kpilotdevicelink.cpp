@@ -170,7 +170,7 @@ void ConnectionWorker::doConnect()
 
     qDebug() << "[ConnectionWorker] Connection accepted! Accept result:" << acceptResult;
     emit statusUpdate("Device connected!");
-    emit connectionEstablished(sock);
+    emit connectionEstablished(acceptResult);
 }
 
 // ============================================================================

@@ -117,8 +117,13 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // Now setup connections after all objects are created
     setupConnections();
 
-    // Setup XMLGUI
+    // In development builds, load the RC file directly from the source tree.
+    // In installed builds, setupGUI finds it at the standard KDE location.
+#ifdef QPILOTSYNC_DATA_DIR
+    setupGUI(Default, QStringLiteral(QPILOTSYNC_DATA_DIR "/qpilotsyncui.rc"));
+#else
     setupGUI(Default, QStringLiteral("qpilotsyncui.rc"));
+#endif
 
     // Status bar
     statusBar()->showMessage(i18n("Ready - No device connected"));
@@ -253,6 +258,10 @@ void KF6MainWindow::setupConnections()
 
     connect(m_actionManager, &ActionManager::connectRequested,
             this, &KF6MainWindow::onConnectDevice);
+    connect(m_dashboardWidget, &DashboardWidget::connectRequested,
+            this, &KF6MainWindow::onConnectDevice);
+    connect(m_dashboardWidget, &DashboardWidget::hotSyncRequested,
+            this, &KF6MainWindow::onHotSync);
     connect(m_actionManager, &ActionManager::disconnectRequested,
             this, &KF6MainWindow::onDisconnectDevice);
     connect(m_actionManager, &ActionManager::cancelConnectionRequested,
@@ -757,6 +766,8 @@ void KF6MainWindow::closeProfile()
 
 void KF6MainWindow::onConnectDevice()
 {
+    qDebug() << "[KF6MainWindow] onConnectDevice() called!";
+
     if (m_listeningForDevice) {
         stopListening();
         return;

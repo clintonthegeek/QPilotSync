@@ -73,10 +73,13 @@ void ActionManager::setupFileActions()
 void ActionManager::setupDeviceActions()
 {
     // Connect
-    QAction *connect = new QAction(QIcon::fromTheme(QStringLiteral("network-connect")),
-                                    i18n("&Connect..."), this);
-    QObject::connect(connect, &QAction::triggered, this, &ActionManager::connectRequested);
-    m_actionCollection->addAction(QStringLiteral("device_connect"), connect);
+    QAction *connectAction = new QAction(QIcon::fromTheme(QStringLiteral("network-connect")),
+                                          i18n("&Connect..."), this);
+    QObject::connect(connectAction, &QAction::triggered, this, [this]() {
+        qDebug() << "[ActionManager] device_connect triggered!";
+        emit connectRequested();
+    });
+    m_actionCollection->addAction(QStringLiteral("device_connect"), connectAction);
 
     // Disconnect
     QAction *disconnect = new QAction(QIcon::fromTheme(QStringLiteral("network-disconnect")),

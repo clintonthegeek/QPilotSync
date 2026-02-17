@@ -90,15 +90,18 @@ public:
     // ========== Conduit Management ==========
 
     /**
-     * @brief Register a conduit for a data type
+     * @brief Register a conduit for a data type (non-owning)
      *
-     * The engine takes ownership of the conduit.
+     * The engine does NOT take ownership. The caller must keep the
+     * conduit alive for the engine's lifetime, and unregister before
+     * deleting it.
+     *
      * Accepts any IConduit implementation (ISyncConduit, IToolConduit, etc.)
      */
     void registerConduit(IConduit *conduit);
 
     /**
-     * @brief Unregister a conduit by ID
+     * @brief Unregister a conduit by ID (does not delete)
      */
     void unregisterConduit(const QString &conduitId);
 

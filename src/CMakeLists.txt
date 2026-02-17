@@ -131,6 +131,12 @@ target_include_directories(QPilotCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets
 )
 
+# For development builds: tell the app where to find qpilotsyncui.rc
+# without requiring a full install
+target_compile_definitions(QPilotCore PRIVATE
+    QPILOTSYNC_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+)
+
 # Ensure pilot-link is built before QPilotCore
 add_dependencies(QPilotCore pilot-link-external)
 
