@@ -21,6 +21,8 @@ class DashboardWidget;
 class ConduitManager;
 class IConduit;
 class KStatusNotifierItem;
+class PalmDeviceMonitor;
+class AutoSyncOrchestrator;
 
 namespace Sync {
 class SyncEngine;
@@ -193,6 +195,10 @@ private:
 
     // Conflict review
     QSyncCore::ConflictStore *m_conflictStore;
+
+    // Auto-detection and auto-sync
+    PalmDeviceMonitor *m_deviceMonitor = nullptr;
+    AutoSyncOrchestrator *m_autoSync = nullptr;
 
     // System tray
     KStatusNotifierItem *m_trayIcon = nullptr;

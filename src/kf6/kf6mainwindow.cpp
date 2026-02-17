@@ -2,8 +2,10 @@
 #include "kf6settings.h"
 #include "actionmanager.h"
 #include "conduitmanager.h"
+#include "autosyncorchestrator.h"
 
 #include "../app/logwidget.h"
+#include "../palm/palmdevicemonitor.h"
 #include "../app/exporthandler.h"
 #include "../app/importhandler.h"
 
@@ -115,8 +117,50 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     m_importHandler = new ImportHandler(this);
     m_importHandler->setLogWidget(m_logWidget);
 
+    // Auto-detection
+    m_deviceMonitor = new PalmDeviceMonitor(this);
+    m_autoSync = new AutoSyncOrchestrator(this);
+    m_autoSync->setDeviceMonitor(m_deviceMonitor);
+    m_autoSync->setSyncEngine(m_syncEngine);
+    m_autoSync->setLogWidget(m_logWidget);
+
     // Now setup connections after all objects are created
     setupConnections();
+
+    // Auto-sync orchestrator signals
+    connect(m_autoSync, &AutoSyncOrchestrator::statusChanged,
+            this, &KF6MainWindow::updateTrayState);
+    connect(m_autoSync, &AutoSyncOrchestrator::connectionEstablished,
+            this, [this](const QString &userName, const QString &deviceName) {
+                m_logWidget->logInfo(i18n("Auto-connected to %1 (%2)", userName, deviceName));
+                updateMenuState(true);
+            });
+    connect(m_autoSync, &AutoSyncOrchestrator::profileCreated,
+            this, [this](const QString &path, const QString &userName) {
+                m_logWidget->logInfo(i18n("Created profile for %1 at %2", userName, path));
+                auto *notif = new KNotification(QStringLiteral("profileCreated"),
+                                                 KNotification::CloseOnTimeout, this);
+                notif->setTitle(i18n("Profile Created"));
+                notif->setText(i18n("Your Palm data is stored at %1.\nClick to change location.", path));
+                notif->sendEvent();
+            });
+    connect(m_autoSync, &AutoSyncOrchestrator::profileLoaded,
+            this, [this](Profile *profile) {
+                m_currentProfile = profile;
+                m_syncEngine->setStateDirectory(profile->stateDirectoryPath());
+                updateWindowTitle();
+                updateProfileMenuState();
+                m_dashboardWidget->updateStatus(profile, true);
+            });
+    connect(m_autoSync, &AutoSyncOrchestrator::syncFinished,
+            this, [this](bool success, const QString &summary) {
+                m_logWidget->logInfo(i18n("Auto-sync %1: %2",
+                    success ? i18n("complete") : i18n("failed"), summary));
+                updateMenuState(false);
+                m_dashboardWidget->updateStatus(m_currentProfile, false);
+            });
+    connect(m_autoSync, &AutoSyncOrchestrator::error,
+            m_logWidget, &LogWidget::logError);
 
     // In development builds, load the RC file directly from the source tree.
     // In installed builds, setupGUI finds it at the standard KDE location.
@@ -154,10 +198,23 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // Initialize menu state
     updateMenuState(false);
     updateProfileMenuState();
+
+    // Start udev monitoring for Palm devices
+    if (!m_deviceMonitor->start()) {
+        m_logWidget->logWarning(i18n("Failed to start udev monitor. "
+                                      "Use Device → Connect for manual connection."));
+    } else {
+        m_logWidget->logInfo(i18n("Listening for Palm USB devices..."));
+    }
 }
 
 KF6MainWindow::~KF6MainWindow()
 {
+    // Stop udev monitor
+    if (m_deviceMonitor) {
+        m_deviceMonitor->stop();
+    }
+
     // Stop any pending timers first
     if (m_devicePollTimer) {
         m_devicePollTimer->stop();
@@ -208,6 +265,9 @@ void KF6MainWindow::closeEvent(QCloseEvent *event)
         return;
     }
     saveWindowState();
+    if (m_currentProfile) {
+        m_currentProfile->save();
+    }
     event->accept();
 }
 
