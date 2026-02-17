@@ -1,6 +1,6 @@
 # QPilotCore library - Core functionality that will be reused by main app and tests
 
-add_library(QPilotCore STATIC
+add_library(QPilotCore SHARED
     qpilotsync_core.cpp
     qpilotsync_version.h
 
@@ -153,6 +153,7 @@ target_link_libraries(QPilotCore
 target_include_directories(QPilotCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/sync
     ${CMAKE_CURRENT_SOURCE_DIR}/kf6
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets
@@ -160,3 +161,6 @@ target_include_directories(QPilotCore PUBLIC
 
 # Ensure pilot-link is built before QPilotCore
 add_dependencies(QPilotCore pilot-link-external)
+
+# Plugin subdirectory (conduit plugins that link against QPilotCore)
+add_subdirectory(plugins)
