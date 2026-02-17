@@ -4,3 +4,4 @@
 
 add_subdirectory(memo)
 add_subdirectory(contacts)
+add_subdirectory(calendar)
