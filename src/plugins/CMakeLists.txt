@@ -3,3 +3,4 @@
 # Plugins are loaded at runtime by the sync engine.
 
 add_subdirectory(memo)
+add_subdirectory(contacts)

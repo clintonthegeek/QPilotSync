@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Name": "Contact Conduit",
+        "Description": "Synchronizes Palm AddressDB with vCard files",
+        "Icon": "view-pim-contacts",
+        "Authors": [{ "Name": "QPilotSync contributors" }],
+        "License": "GPL",
+        "Version": "1.0.0",
+        "Category": "Sync"
+    },
+    "X-QPilotSync-ConduitId": "contacts",
+    "X-QPilotSync-ConduitType": "sync",
+    "X-QPilotSync-PalmDatabase": "AddressDB",
+    "X-QPilotSync-RequiresDevice": true,
+    "X-QPilotSync-RunBefore": [],
+    "X-QPilotSync-RunAfter": [],
+    "X-QPilotSync-DefaultEnabled": true,
+    "X-QPilotSync-SortOrder": 1
+}
