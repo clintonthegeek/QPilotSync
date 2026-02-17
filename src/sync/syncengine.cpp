@@ -1,4 +1,5 @@
 #include "syncengine.h"
+#include "localfilebackend.h"
 #include "../palm/kpilotdevicelink.h"
 #include "qsynccore/conflictpolicy.h"
 
@@ -266,6 +267,11 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     // Determine collection ID for this conduit
     // For now, use conduit ID as collection ID
     context.collectionId = conduitId;
+
+    // Populate sync folder path from backend (if local file backend)
+    if (auto *localBackend = dynamic_cast<LocalFileBackend*>(m_backend)) {
+        context.syncFolderPath = localBackend->basePath();
+    }
 
     // Set up new conflict handling system
     // Create a handler that defers conflicts to the state's conflict store

@@ -49,6 +49,10 @@ public:
     QString userName;        ///< Palm username
     QString syncSessionId;   ///< Unique ID for this sync session
 
+    // Install conduit support
+    QStringList installQueue;   ///< .pdb/.prc file paths queued for installation
+    QString syncFolderPath;     ///< Base path for the profile's sync folder
+
     bool isFirstSync = false;
     bool cancelled = false;
 };
