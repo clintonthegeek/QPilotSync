@@ -107,6 +107,21 @@ add_qpilotsync_test(test_profile
 )
 
 # ============================================================
+# Unit Tests - Plucker Config
+# ============================================================
+
+add_executable(test_pluckerconfig
+    test_pluckerconfig.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerconfig.cpp
+)
+target_link_libraries(test_pluckerconfig PRIVATE Qt::Core Qt::Test)
+target_include_directories(test_pluckerconfig PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME test_pluckerconfig COMMAND test_pluckerconfig)
+set_tests_properties(test_pluckerconfig PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# ============================================================
 # Test Data Directory
 # ============================================================
 
