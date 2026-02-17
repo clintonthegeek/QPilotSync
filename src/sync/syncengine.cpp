@@ -591,6 +591,23 @@ void SyncEngine::connectConduitSignals(IConduit *conduit)
         connect(syncBase, &SyncConduitBase::conflictDetected,
                 this, &SyncEngine::onConduitConflict);
     }
+
+    // For tool conduits (IToolConduit), check for signals by QObject metadata
+    auto *obj = dynamic_cast<QObject*>(conduit);
+    if (obj && !syncBase) {
+        if (obj->metaObject()->indexOfSignal("logMessage(QString)") >= 0) {
+            connect(obj, SIGNAL(logMessage(QString)),
+                    this, SIGNAL(logMessage(QString)));
+        }
+        if (obj->metaObject()->indexOfSignal("errorOccurred(QString)") >= 0) {
+            connect(obj, SIGNAL(errorOccurred(QString)),
+                    this, SIGNAL(errorOccurred(QString)));
+        }
+        if (obj->metaObject()->indexOfSignal("progressUpdated(int,int,QString)") >= 0) {
+            connect(obj, SIGNAL(progressUpdated(int,int,QString)),
+                    this, SIGNAL(progressUpdated(int,int,QString)));
+        }
+    }
 }
 
 void SyncEngine::onConduitProgress(int current, int total, const QString &message)
