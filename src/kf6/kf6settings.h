@@ -17,7 +17,7 @@
  * KSharedConfig for storage, ensuring proper KDE desktop integration.
  *
  * Settings are stored in:
- *   - Linux: ~/.config/qpilotsyncrc
+ *   - Linux: ~/.config/wildpalmsrc
  *
  * This class is a drop-in replacement for the QSettings-based Settings class.
  */

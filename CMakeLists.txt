@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(QPilotSync VERSION 0.1.1 LANGUAGES CXX)
+project(WildPalms VERSION 0.1.1 LANGUAGES CXX)
 
 # Build shared libs (required for KDE plugin .so loading via kcoreaddons_add_plugin)
 set(BUILD_SHARED_LIBS ON)
@@ -51,14 +51,14 @@ if(BUILD_TESTS)
 endif()
 
 # Main executable
-qt_add_executable(qpilotsync
+qt_add_executable(wildpalms
     WIN32 MACOSX_BUNDLE
     src/main.cpp
     src/settings.cpp
     src/settings.h
 )
 
-target_link_libraries(qpilotsync
+target_link_libraries(wildpalms
     PRIVATE
         Qt::Core
         Qt::Widgets
@@ -72,25 +72,25 @@ target_link_libraries(qpilotsync
         KF6::Crash
         KF6::Notifications
         KF6::StatusNotifierItem
-        QPilotCore
+        WildPalmsCore
         pisock  # pilot-link library
         bluetooth  # Required by pilot-link for Bluetooth support
         usb  # Required by pilot-link for USB support
 )
 
 # Install target
-install(TARGETS qpilotsync
+install(TARGETS wildpalms
     BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
 
 # Install desktop file and icon for AppImage/Linux desktop integration
-install(FILES data/org.qpilotsync.QPilotSync.desktop
+install(FILES data/ca.vibekoder.wildpalms.desktop
     DESTINATION share/applications
 )
-install(FILES data/org.qpilotsync.QPilotSync.svg
+install(FILES data/ca.vibekoder.wildpalms.svg
     DESTINATION share/icons/hicolor/scalable/apps
 )
-install(FILES data/qpilotsyncui.rc
-    DESTINATION ${KDE_INSTALL_KXMLGUIDIR}/qpilotsync
+install(FILES data/wildpalmsui.rc
+    DESTINATION ${KDE_INSTALL_KXMLGUIDIR}/wildpalms
 )

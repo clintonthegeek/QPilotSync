@@ -17,7 +17,7 @@ namespace Sync {
  * @brief Manages sync state including ID mappings and baseline tracking
  *
  * This class composes QSyncCore components (IdMappingStore, BaselineStore)
- * with QPilotSync-specific persistence and metadata.
+ * with Wild Palms-specific persistence and metadata.
  *
  * State is stored in:
  *   <stateBaseDir>/<username>/<conduit>/

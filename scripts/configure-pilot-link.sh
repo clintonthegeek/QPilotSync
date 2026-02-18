@@ -37,7 +37,7 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 # Run autogen.sh (which handles autoreconf + configure)
-# -fPIC is required so that libpisock.a can be linked into the QPilotCore shared library
+# -fPIC is required so that libpisock.a can be linked into the WildPalmsCore shared library
 echo "Running autogen.sh..."
 CFLAGS="${CFLAGS:+$CFLAGS }-fPIC" CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-fPIC" \
 "$SOURCE_DIR/autogen.sh" \

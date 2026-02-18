@@ -1,7 +1,7 @@
 [Global]
-IconName=qpilotsync
-Name=QPilotSync
-Name[en]=QPilotSync
+IconName=wildpalms
+Name=Wild Palms
+Name[en]=Wild Palms
 Comment=Palm Pilot Synchronization
 Comment[en]=Palm Pilot Synchronization
 

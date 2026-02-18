@@ -38,4 +38,4 @@ public:
     virtual bool writeModifiedCategories(SyncContext *context) = 0;
 };
 
-Q_DECLARE_INTERFACE(ISyncConduit, "org.qpilotsync.ISyncConduit/1.0")
+Q_DECLARE_INTERFACE(ISyncConduit, "ca.vibekoder.ISyncConduit/1.0")

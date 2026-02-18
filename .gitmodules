@@ -1,18 +1,18 @@
 [submodule "src/plugins/calendar"]
 	path = src/plugins/calendar
-	url = git@github.com:clintonthegeek/qpilotsync-conduit-calendar.git
+	url = git@github.com:clintonthegeek/wildpalms-conduit-calendar.git
 [submodule "src/plugins/contacts"]
 	path = src/plugins/contacts
-	url = git@github.com:clintonthegeek/qpilotsync-conduit-contacts.git
+	url = git@github.com:clintonthegeek/wildpalms-conduit-contacts.git
 [submodule "src/plugins/memo"]
 	path = src/plugins/memo
-	url = git@github.com:clintonthegeek/qpilotsync-conduit-memo.git
+	url = git@github.com:clintonthegeek/wildpalms-conduit-memo.git
 [submodule "src/plugins/todos"]
 	path = src/plugins/todos
-	url = git@github.com:clintonthegeek/qpilotsync-conduit-todos.git
+	url = git@github.com:clintonthegeek/wildpalms-conduit-todos.git
 [submodule "src/plugins/webcalendar"]
 	path = src/plugins/webcalendar
-	url = git@github.com:clintonthegeek/qpilotsync-conduit-webcalendar.git
+	url = git@github.com:clintonthegeek/wildpalms-conduit-webcalendar.git
 [submodule "src/plugins/plucker"]
 	path = src/plugins/plucker
-	url = git@github.com:clintonthegeek/qpilotsync-conduit-plucker.git
+	url = git@github.com:clintonthegeek/wildpalms-conduit-plucker.git

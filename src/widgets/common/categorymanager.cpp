@@ -29,7 +29,7 @@ QString CategoryManager::categoriesFilePath() const
     if (m_basePath.isEmpty()) {
         return QString();
     }
-    return m_basePath + QStringLiteral("/.qpilotsync.state/categories-%1.json").arg(m_dataType);
+    return m_basePath + QStringLiteral("/.wildpalms.state/categories-%1.json").arg(m_dataType);
 }
 
 void CategoryManager::load()

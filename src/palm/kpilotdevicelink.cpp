@@ -899,7 +899,7 @@ bool KPilotDeviceLink::endSync()
 
     emit logMessage("Ending sync...");
 
-    char logEntry[] = "Sync completed by QPilotSync.\n";
+    char logEntry[] = "Sync completed by Wild Palms.\n";
     qDebug() << "[KPilotDeviceLink] Adding sync log entry";
     if (dlp_AddSyncLogEntry(m_socket, logEntry) < 0) {
         qWarning() << "[KPilotDeviceLink] Failed to add sync log entry (non-fatal)";

@@ -1,14 +1,14 @@
-# QPilotSync
+# Wild Palms
 
 Modern Palm Pilot synchronization for Linux using Qt6 and KDE Frameworks 6.
 
 Be sure to check the *USB Permissions* section below for help getting set up!
 
-![QPilotSync Screenshot](docs/screenshot.png)
+![Wild Palms Screenshot](docs/screenshot.png)
 
 ## About
 
-QPilotSync brings classic Palm Pilot devices into the 2020s with support for modern data formats and contemporary desktop environments. Sync your Palm calendar to iCalendar files, contacts to vCards, memos to Markdown, and todos to iCalendar VTODO format - all with a clean Qt6 interface.
+Wild Palms brings classic Palm Pilot devices into the 2020s with support for modern data formats and contemporary desktop environments. Sync your Palm calendar to iCalendar files, contacts to vCards, memos to Markdown, and todos to iCalendar VTODO format - all with a clean Qt6 interface.
 
 This project is a spiritual successor to KPilot, rewritten from scratch with modern C++20 and Qt6.
 
@@ -104,11 +104,11 @@ sudo make install
 sudo ldconfig
 ```
 
-## Building QPilotSync
+## Building Wild Palms
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/QPilotSync.git
-cd QPilotSync
+git clone https://github.com/YOUR_USERNAME/WildPalms.git
+cd WildPalms
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
@@ -117,7 +117,7 @@ make -j$(nproc)
 ### Running
 
 ```bash
-./build/qpilotsync
+./build/wildpalms
 ```
 
 ## Palm Device Setup
@@ -148,14 +148,14 @@ sudo udevadm trigger
 
 ### Initiating a Sync
 
-1. Launch QPilotSync, create a new profile, and configure your sync folder
+1. Launch Wild Palms, create a new profile, and configure your sync folder
 2. Select your device path (usually `/dev/ttyUSB0` or `/dev/ttyUSB1`) in profile.
-3. Both click "Connect" in QPilotSync and the HotSync button on your Palm cradle within a few seconds. 
+3. Both click "Connect" in Wild Palms and the HotSync button on your Palm cradle within a few seconds. 
 4. By default, nothing will happen once your connection is made. You can now choose various sorts of syncs, or to upload a `.prc` or `.pdb` file. You will then have to manually disconnect. **If you want the familiar HotSync Experience, you can enable automatic HotSync and auto disconnection in the Profile Settings.**
 
 ### Supported Devices
 
-QPilotSync works with any device supported by pilot-link:
+Wild Palms works with any device supported by pilot-link:
 
 - **Palm OS 3.x** - Palm III, V, Vx, VII, etc.
 - **Palm OS 4.x** - m100, m500, m505, m515, etc.
@@ -188,7 +188,7 @@ Detailed documentation is available in the `docs/` directory. Beware that these 
 ## Project Structure
 
 ```
-QPilotSync/
+WildPalms/
 ├── CMakeLists.txt           # Main build configuration
 ├── src/
 │   ├── main.cpp             # Application entry point
@@ -208,13 +208,13 @@ QPilotSync/
 
 ## Configuration
 
-QPilotSync stores configuration in `~/.config/QPilotSync/` and per-profile settings in a `.qpilotsync.conf` file within each sync folder.
+Wild Palms stores configuration in `~/.config/WildPalms/` and per-profile settings in a `.wildpalms.conf` file within each sync folder.
 
 ### Sync Folder Structure
 
 ```
 ~/PalmSync/                  # Your sync folder
-├── .qpilotsync.conf         # Profile settings
+├── .wildpalms.conf          # Profile settings
 ├── .state/                  # Sync state database
 ├── calendar/                # iCalendar events (.ics)
 │   └── Work_Calendar/       # Web calendar subscription
@@ -242,7 +242,7 @@ GPL-3.0-or-later (compatible with pilot-link and the original KPilot)
 
 ## Credits
 
-QPilotSync builds on the work of many projects:
+Wild Palms builds on the work of many projects:
 
 - **[pilot-link](https://github.com/jichu4n/pilot-link)** - The essential Palm communication library
 - **KPilot** - The original KDE Palm sync application (inspiration and reference)

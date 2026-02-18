@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# build-appimage.sh - Build QPilotSync AppImage
+# build-appimage.sh - Build Wild Palms AppImage
 #
 # This script creates a portable AppImage that can run on most Linux distributions.
 # It downloads linuxdeploy tools if needed and bundles all dependencies.
@@ -115,7 +115,7 @@ cmake "$PROJECT_DIR" \
     -DBUILD_TESTS=OFF
 
 # Build
-log_info "Building QPilotSync..."
+log_info "Building Wild Palms..."
 make -j$(nproc)
 
 # Install to AppDir
@@ -124,12 +124,12 @@ rm -rf "$APPDIR"
 make install DESTDIR="$APPDIR"
 
 # Verify desktop file and icon are installed
-if [ ! -f "$APPDIR/usr/share/applications/org.qpilotsync.QPilotSync.desktop" ]; then
+if [ ! -f "$APPDIR/usr/share/applications/ca.vibekoder.wildpalms.desktop" ]; then
     log_error "Desktop file not found in AppDir!"
     exit 1
 fi
 
-if [ ! -f "$APPDIR/usr/share/icons/hicolor/scalable/apps/org.qpilotsync.QPilotSync.svg" ]; then
+if [ ! -f "$APPDIR/usr/share/icons/hicolor/scalable/apps/ca.vibekoder.wildpalms.svg" ]; then
     log_error "Icon not found in AppDir!"
     exit 1
 fi
@@ -157,10 +157,10 @@ export LD_LIBRARY_PATH="$QT_LIB_PATH:$APPDIR/usr/lib:$LD_LIBRARY_PATH"
 export NO_STRIP=1
 
 # Add version to output filename
-VERSION=$(grep "project(QPilotSync VERSION" "$PROJECT_DIR/CMakeLists.txt" | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+VERSION=$(grep "project(WildPalms VERSION" "$PROJECT_DIR/CMakeLists.txt" | sed 's/.*VERSION \([0-9.]*\).*/\1/')
 export VERSION
 
-log_info "Building AppImage for QPilotSync v$VERSION..."
+log_info "Building AppImage for Wild Palms v$VERSION..."
 
 # Run linuxdeploy with Qt plugin
 cd "$BUILD_DIR"
@@ -168,11 +168,11 @@ cd "$BUILD_DIR"
     --appdir "$APPDIR" \
     --plugin qt \
     --output appimage \
-    --desktop-file "$APPDIR/usr/share/applications/org.qpilotsync.QPilotSync.desktop" \
-    --icon-file "$APPDIR/usr/share/icons/hicolor/scalable/apps/org.qpilotsync.QPilotSync.svg"
+    --desktop-file "$APPDIR/usr/share/applications/ca.vibekoder.wildpalms.desktop" \
+    --icon-file "$APPDIR/usr/share/icons/hicolor/scalable/apps/ca.vibekoder.wildpalms.svg"
 
 # Find the generated AppImage
-APPIMAGE=$(ls -1 QPilotSync*.AppImage 2>/dev/null | head -1)
+APPIMAGE=$(ls -1 Wild_Palms*.AppImage 2>/dev/null || ls -1 WildPalms*.AppImage 2>/dev/null | head -1)
 
 if [ -n "$APPIMAGE" ]; then
     log_info "AppImage created successfully: $BUILD_DIR/$APPIMAGE"

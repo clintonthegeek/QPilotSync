@@ -94,7 +94,7 @@ struct DeviceFingerprint
 /**
  * @brief Profile represents a sync profile with its settings
  *
- * Profile settings are stored in the sync folder itself as .qpilotsync.conf,
+ * Profile settings are stored in the sync folder itself as .wildpalms.conf,
  * making profiles portable - you can move the entire sync folder and the
  * settings travel with it.
  *
@@ -179,10 +179,10 @@ public:
 
     // ========== Persistence ==========
 
-    // Load settings from .qpilotsync.conf in the sync folder
+    // Load settings from .wildpalms.conf in the sync folder
     bool load();
 
-    // Save settings to .qpilotsync.conf in the sync folder
+    // Save settings to .wildpalms.conf in the sync folder
     bool save();
 
     // Initialize a new profile (create directories and default config)

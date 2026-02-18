@@ -16,15 +16,15 @@ class IConduit;
  *
  * Replaces the hard-coded conduit registration in KF6MainWindow.
  * Conduit plugins are .so files discovered via KPluginMetaData::findPlugins()
- * from the "qpilotsync/conduits" subdirectory.
+ * from the "wildpalms/conduits" subdirectory.
  *
  * Each plugin's JSON metadata must contain:
- *   - X-QPilotSync-ConduitId       (string)  unique conduit identifier
- *   - X-QPilotSync-PalmCreatorId   (string)  Palm OS 4-char creator ID (e.g. "memo", "addr")
- *   - X-QPilotSync-DefaultEnabled  (bool, default true)
- *   - X-QPilotSync-SortOrder       (int, default 0)   for UI ordering
- *   - X-QPilotSync-RunBefore       (string array)      dependency ordering
- *   - X-QPilotSync-RunAfter        (string array)      dependency ordering
+ *   - X-WildPalms-ConduitId       (string)  unique conduit identifier
+ *   - X-WildPalms-PalmCreatorId   (string)  Palm OS 4-char creator ID (e.g. "memo", "addr")
+ *   - X-WildPalms-DefaultEnabled  (bool, default true)
+ *   - X-WildPalms-SortOrder       (int, default 0)   for UI ordering
+ *   - X-WildPalms-RunBefore       (string array)      dependency ordering
+ *   - X-WildPalms-RunAfter        (string array)      dependency ordering
  *
  * Only one conduit may be enabled per Palm creator ID at a time.
  * Enabling a conduit that shares a creator ID with an already-enabled
@@ -58,7 +58,7 @@ public:
     /**
      * @brief Scan the plugin directory and populate the internal catalogue
      *
-     * Calls KPluginMetaData::findPlugins("qpilotsync/conduits").
+     * Calls KPluginMetaData::findPlugins("wildpalms/conduits").
      * Does NOT load any plugins -- call loadConduit() or loadConfig()
      * to instantiate them.
      */
@@ -72,7 +72,7 @@ public:
      * Uses KPluginFactory to create the QObject, then dynamic_cast to IConduit*.
      * Emits conduitLoaded() on success.
      *
-     * @param pluginId  The X-QPilotSync-ConduitId value
+     * @param pluginId  The X-WildPalms-ConduitId value
      * @return true on success
      */
     bool loadConduit(const QString &pluginId);
@@ -117,7 +117,7 @@ public:
     /**
      * @brief Resolve execution order via topological sort
      *
-     * Reads X-QPilotSync-RunBefore / RunAfter from each enabled plugin's
+     * Reads X-WildPalms-RunBefore / RunAfter from each enabled plugin's
      * metadata and performs Kahn's algorithm.  Falls back to sortOrder
      * for plugins with no dependency edges.
      *

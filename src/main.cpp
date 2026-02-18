@@ -7,7 +7,7 @@
 #include <KCrash>
 
 #include "kf6/kf6mainwindow.h"
-#include "qpilotsync_version.h"
+#include "wildpalms_version.h"
 
 int main(int argc, char *argv[])
 {
@@ -22,17 +22,17 @@ int main(int argc, char *argv[])
         QCoreApplication::addLibraryPath(localPluginDir);
     }
 
-    KLocalizedString::setApplicationDomain("qpilotsync");
+    KLocalizedString::setApplicationDomain("wildpalms");
 
     KAboutData aboutData(
-        QStringLiteral("qpilotsync"),
-        i18n("QPilotSync"),
-        QStringLiteral(QPILOTSYNC_VERSION_STRING),
+        QStringLiteral("wildpalms"),
+        i18n("Wild Palms"),
+        QStringLiteral(WILDPALMS_VERSION_STRING),
         i18n("Modern Palm Pilot synchronization for Linux"),
         KAboutLicense::GPL_V3,
-        i18n("(c) 2024-2025 QPilotSync contributors"));
-    aboutData.setOrganizationDomain("qpilotsync.org");
-    aboutData.setDesktopFileName(QStringLiteral("org.qpilotsync.QPilotSync"));
+        i18n("Copyright (C) 2024-2026 Clinton Ignatov"));
+    aboutData.setOrganizationDomain("vibekoder.ca");
+    aboutData.setDesktopFileName(QStringLiteral("ca.vibekoder.wildpalms"));
     KAboutData::setApplicationData(aboutData);
 
     KCrash::initialize();

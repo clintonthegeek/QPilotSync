@@ -15,4 +15,4 @@ public:
     virtual bool installResults(Sync::SyncContext *context) = 0;
 };
 
-Q_DECLARE_INTERFACE(IToolConduit, "org.qpilotsync.IToolConduit/1.0")
+Q_DECLARE_INTERFACE(IToolConduit, "ca.vibekoder.IToolConduit/1.0")

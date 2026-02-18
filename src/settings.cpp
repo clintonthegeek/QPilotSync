@@ -10,7 +10,7 @@ Settings& Settings::instance()
 }
 
 Settings::Settings()
-    : m_settings("QPilotSync", "QPilotSync")
+    : m_settings("WildPalms", "WildPalms")
 {
 }
 

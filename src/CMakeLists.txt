@@ -1,8 +1,8 @@
-# QPilotCore library - Core functionality that will be reused by main app and tests
+# WildPalmsCore library - Core functionality that will be reused by main app and tests
 
-add_library(QPilotCore SHARED
-    qpilotsync_core.cpp
-    qpilotsync_version.h
+add_library(WildPalmsCore SHARED
+    wildpalms_core.cpp
+    wildpalms_version.h
 
     # Application UI
     app/mainwindow.cpp
@@ -110,7 +110,7 @@ add_library(QPilotCore SHARED
     widgets/sidebar/profilesidebar.h
 )
 
-target_link_libraries(QPilotCore
+target_link_libraries(WildPalmsCore
     PUBLIC
         Qt::Core
         Qt::Widgets
@@ -128,7 +128,7 @@ target_link_libraries(QPilotCore
         ${UDEV_LIBRARIES}
 )
 
-target_include_directories(QPilotCore PUBLIC
+target_include_directories(WildPalmsCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/app
     ${CMAKE_CURRENT_SOURCE_DIR}/core
@@ -138,14 +138,14 @@ target_include_directories(QPilotCore PUBLIC
     ${UDEV_INCLUDE_DIRS}
 )
 
-# For development builds: tell the app where to find qpilotsyncui.rc
+# For development builds: tell the app where to find wildpalmsui.rc
 # without requiring a full install
-target_compile_definitions(QPilotCore PRIVATE
-    QPILOTSYNC_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+target_compile_definitions(WildPalmsCore PRIVATE
+    WILDPALMS_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
 )
 
-# Ensure pilot-link is built before QPilotCore
-add_dependencies(QPilotCore pilot-link-external)
+# Ensure pilot-link is built before WildPalmsCore
+add_dependencies(WildPalmsCore pilot-link-external)
 
-# Plugin subdirectory (conduit plugins that link against QPilotCore)
+# Plugin subdirectory (conduit plugins that link against WildPalmsCore)
 add_subdirectory(plugins)

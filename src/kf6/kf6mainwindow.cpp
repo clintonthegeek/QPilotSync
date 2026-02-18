@@ -10,7 +10,7 @@
 #include "../app/importhandler.h"
 #include "../settingsdialog.h"
 
-#include "../qpilotsync_version.h"
+#include "../wildpalms_version.h"
 #include "../palm/kpilotdevicelink.h"
 #include "../palm/devicesession.h"
 #include "../palm/pilotrecord.h"
@@ -204,16 +204,16 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
     // In development builds, load the RC file directly from the source tree.
     // In installed builds, setupGUI finds it at the standard KDE location.
-#ifdef QPILOTSYNC_DATA_DIR
-    setupGUI(Default, QStringLiteral(QPILOTSYNC_DATA_DIR "/qpilotsyncui.rc"));
+#ifdef WILDPALMS_DATA_DIR
+    setupGUI(Default, QStringLiteral(WILDPALMS_DATA_DIR "/wildpalmsui.rc"));
 #else
-    setupGUI(Default, QStringLiteral("qpilotsyncui.rc"));
+    setupGUI(Default, QStringLiteral("wildpalmsui.rc"));
 #endif
 
     // System tray
     m_trayIcon = new KStatusNotifierItem(this);
     m_trayIcon->setIconByName(QStringLiteral("phone"));
-    m_trayIcon->setToolTipTitle(i18n("QPilotSync"));
+    m_trayIcon->setToolTipTitle(i18n("Wild Palms"));
     m_trayIcon->setToolTipSubTitle(i18n("Listening for Palm devices"));
     m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
     m_trayIcon->setStandardActionsEnabled(true);
@@ -225,7 +225,7 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     statusBar()->showMessage(i18n("Ready - No device connected"));
 
     // Log initial message
-    m_logWidget->logInfo(QStringLiteral("QPilotSync %1 initialized").arg(QPILOTSYNC_VERSION_STRING));
+    m_logWidget->logInfo(QStringLiteral("Wild Palms %1 initialized").arg(WILDPALMS_VERSION_STRING));
 
     // Restore window state
     restoreWindowState();
@@ -325,7 +325,7 @@ void KF6MainWindow::closeEvent(QCloseEvent *event)
 
 void KF6MainWindow::setupUI()
 {
-    setWindowTitle(i18n("QPilotSync - Palm Pilot Synchronization"));
+    setWindowTitle(i18n("Wild Palms - Palm Pilot Synchronization"));
     setMinimumSize(1000, 700);
 
     createCentralLayout();
@@ -567,7 +567,7 @@ void KF6MainWindow::updateMenuState(bool connected)
 
 void KF6MainWindow::updateWindowTitle()
 {
-    QString title = i18n("QPilotSync");
+    QString title = i18n("Wild Palms");
     if (m_currentProfile) {
         title += QStringLiteral(" - ") + m_currentProfile->name();
     }
@@ -650,7 +650,7 @@ void KF6MainWindow::initializeConduits()
     // Load all enabled conduits (creates views & registers with SyncEngine)
     for (const auto &info : m_conduitManager->conduitList()) {
         if (info.enabled) {
-            QString conduitId = info.metaData.value(QStringLiteral("X-QPilotSync-ConduitId"));
+            QString conduitId = info.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
             if (conduitId.isEmpty()) {
                 conduitId = info.metaData.pluginId();
             }
@@ -687,12 +687,12 @@ void KF6MainWindow::onConduitLoaded(IConduit *conduit)
     if (md.isValid()) {
         QStringList runBefore, runAfter;
         const QJsonObject raw = md.rawData();
-        const QJsonValue beforeVal = raw.value(QStringLiteral("X-QPilotSync-RunBefore"));
+        const QJsonValue beforeVal = raw.value(QStringLiteral("X-WildPalms-RunBefore"));
         if (beforeVal.isArray()) {
             for (const QJsonValue &v : beforeVal.toArray())
                 if (!v.toString().isEmpty()) runBefore << v.toString();
         }
-        const QJsonValue afterVal = raw.value(QStringLiteral("X-QPilotSync-RunAfter"));
+        const QJsonValue afterVal = raw.value(QStringLiteral("X-WildPalms-RunAfter"));
         if (afterVal.isArray()) {
             for (const QJsonValue &v : afterVal.toArray())
                 if (!v.toString().isEmpty()) runAfter << v.toString();
@@ -932,7 +932,7 @@ void KF6MainWindow::onConnectDevice()
 
     QLabel *infoLabel = new QLabel(
         i18n("Enter the device path and press Connect.\n"
-             "Press the HotSync button on your Palm - QPilotSync will wait for it."));
+             "Press the HotSync button on your Palm - Wild Palms will wait for it."));
     layout->addWidget(infoLabel);
 
     QFormLayout *formLayout = new QFormLayout();
@@ -1903,8 +1903,8 @@ void KF6MainWindow::onAbout()
 {
     // KAboutApplicationDialog will be used via standard KDE mechanisms
     // For now, show a simple about box
-    QMessageBox::about(this, i18n("About QPilotSync"),
-        i18n("<h3>QPilotSync %1</h3>"
+    QMessageBox::about(this, i18n("About Wild Palms"),
+        i18n("<h3>Wild Palms %1</h3>"
              "<p>Modern Palm Pilot synchronization for Linux</p>"
              "<p>Built with:</p>"
              "<ul>"
@@ -1914,7 +1914,7 @@ void KF6MainWindow::onAbout()
              "</ul>"
              "<p>Bringing classic Palm Pilots into the modern era!</p>"
              "<p>Licensed with the <a href=https://www.gnu.org/licenses/gpl-3.0.txt>GPL version 3.0</a> or later.</p>",
-             QString::fromLatin1(QPILOTSYNC_VERSION_STRING),
+             QString::fromLatin1(WILDPALMS_VERSION_STRING),
              QString::fromLatin1(QT_VERSION_STR)));
 }
 

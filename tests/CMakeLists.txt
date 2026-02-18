@@ -1,8 +1,8 @@
-# QPilotSync Test Suite
+# Wild Palms Test Suite
 # Uses Qt Test framework for unit and integration testing
 
 # Helper function to create a test executable
-function(add_qpilotsync_test TEST_NAME)
+function(add_wildpalms_test TEST_NAME)
     set(TEST_SOURCES ${ARGN})
 
     add_executable(${TEST_NAME} ${TEST_SOURCES})
@@ -13,7 +13,7 @@ function(add_qpilotsync_test TEST_NAME)
             Qt::Test
             Qt::Widgets
             KF6::CalendarCore
-            QPilotCore
+            WildPalmsCore
             pisock
             bluetooth
             usb
@@ -37,12 +37,12 @@ endfunction()
 # ============================================================
 # Unit Tests - Data Mappers (now in conduit plugins)
 # ============================================================
-# Mappers have been migrated from QPilotCore to their respective
+# Mappers have been migrated from WildPalmsCore to their respective
 # conduit plugins (MODULE libraries). Since MODULE libraries cannot
 # be linked against at compile time, tests compile the mapper
 # sources directly from the plugin directories.
 
-add_qpilotsync_test(test_calendarmapper
+add_wildpalms_test(test_calendarmapper
     test_calendarmapper.cpp
     ${CMAKE_SOURCE_DIR}/src/plugins/calendar/calendarmapper.cpp
 )
@@ -50,7 +50,7 @@ target_include_directories(test_calendarmapper PRIVATE
     ${CMAKE_SOURCE_DIR}/src/plugins/calendar
 )
 
-add_qpilotsync_test(test_contactmapper
+add_wildpalms_test(test_contactmapper
     test_contactmapper.cpp
     ${CMAKE_SOURCE_DIR}/src/plugins/contacts/contactmapper.cpp
 )
@@ -58,7 +58,7 @@ target_include_directories(test_contactmapper PRIVATE
     ${CMAKE_SOURCE_DIR}/src/plugins/contacts
 )
 
-add_qpilotsync_test(test_memomapper
+add_wildpalms_test(test_memomapper
     test_memomapper.cpp
     ${CMAKE_SOURCE_DIR}/src/plugins/memo/memomapper.cpp
 )
@@ -66,7 +66,7 @@ target_include_directories(test_memomapper PRIVATE
     ${CMAKE_SOURCE_DIR}/src/plugins/memo
 )
 
-add_qpilotsync_test(test_todomapper
+add_wildpalms_test(test_todomapper
     test_todomapper.cpp
     ${CMAKE_SOURCE_DIR}/src/plugins/todos/todomapper.cpp
 )
@@ -78,7 +78,7 @@ target_include_directories(test_todomapper PRIVATE
 # Unit Tests - Palm Data Structures
 # ============================================================
 
-add_qpilotsync_test(test_categoryinfo
+add_wildpalms_test(test_categoryinfo
     test_categoryinfo.cpp
 )
 
@@ -86,23 +86,23 @@ add_qpilotsync_test(test_categoryinfo
 # Unit Tests - Sync Infrastructure
 # ============================================================
 
-add_qpilotsync_test(test_syncstate
+add_wildpalms_test(test_syncstate
     test_syncstate.cpp
 )
 
-add_qpilotsync_test(test_conflict
+add_wildpalms_test(test_conflict
     test_conflict.cpp
 )
 
-add_qpilotsync_test(test_localfilebackend
+add_wildpalms_test(test_localfilebackend
     test_localfilebackend.cpp
 )
 
-add_qpilotsync_test(test_syncengine
+add_wildpalms_test(test_syncengine
     test_syncengine.cpp
 )
 
-add_qpilotsync_test(test_profile
+add_wildpalms_test(test_profile
     test_profile.cpp
 )
 

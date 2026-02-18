@@ -35,7 +35,7 @@ class ConflictStore;
 }
 
 /**
- * @brief KDE Frameworks 6 native main window for QPilotSync
+ * @brief KDE Frameworks 6 native main window for Wild Palms
  *
  * Implements a KPageWidget icon-sidebar layout (like KDE System Settings)
  * with pages for Sync/Dashboard, Memos, Contacts, Calendar, and Tasks.

@@ -1,5 +1,5 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="qpilotsync" version="2">
+<gui name="wildpalms" version="2">
     <MenuBar>
         <Menu name="file">
             <text>&amp;File</text>

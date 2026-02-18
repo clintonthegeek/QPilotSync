@@ -1,4 +1,4 @@
-# QPilotSync Architecture Overview
+# Wild Palms Architecture Overview
 
 **Version**: 2.0
 **Date**: 2026-01-08
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-QPilotSync is a modern Qt6/KDE application for synchronizing Palm Pilot devices with Linux. It provides bidirectional sync of Memos, Contacts, Calendar, and Todos between Palm devices and standard file formats (Markdown, vCard, iCalendar).
+Wild Palms is a modern Qt6/KDE application for synchronizing Palm Pilot devices with Linux. It provides bidirectional sync of Memos, Contacts, Calendar, and Todos between Palm devices and standard file formats (Markdown, vCard, iCalendar).
 
 **Current State**: Full bidirectional sync is operational with async device operations, connection management, and profile-based configuration.
 
@@ -203,7 +203,7 @@ The async operation architecture ensures the UI never blocks during device opera
 ## Directory Structure
 
 ```
-QPilotSync/
+WildPalms/
 ├── src/
 │   ├── main.cpp                 # Application entry point
 │   ├── settings.cpp/h           # Global settings
@@ -267,7 +267,7 @@ When a user creates/opens a profile, the sync folder contains:
 
 ```
 ~/PalmSync/                      # User's sync folder (profile)
-├── .qpilotsync.conf             # Profile settings (INI format)
+├── .wildpalms.conf             # Profile settings (INI format)
 ├── .state/                      # Sync state (ID mappings, baseline)
 │   └── <username>/
 │       ├── memos/
@@ -422,7 +422,7 @@ When a user creates/opens a profile, the sync folder contains:
 - Qt signal/slot for cross-thread communication
 
 ### 5. Profile-Based Configuration
-- Settings stored in sync folder (.qpilotsync.conf)
+- Settings stored in sync folder (.wildpalms.conf)
 - Portable: move folder = move settings
 - Per-device fingerprinting
 - Multiple profiles supported
@@ -443,7 +443,7 @@ When a user creates/opens a profile, the sync folder contains:
 
 ## Configuration Reference
 
-### Profile Settings (.qpilotsync.conf)
+### Profile Settings (.wildpalms.conf)
 ```ini
 [profile]
 name=My Palm
@@ -468,7 +468,7 @@ enabled=true
 # ... etc
 ```
 
-### Global Settings (~/.config/qpilotsync.conf)
+### Global Settings (~/.config/wildpalms.conf)
 ```ini
 [general]
 defaultProfilePath=/home/user/PalmSync
@@ -483,5 +483,5 @@ defaultProfilePath=/home/user/PalmSync
 
 ---
 
-**Document Maintainer**: QPilotSync Development
+**Document Maintainer**: Wild Palms Development
 **Last Updated**: 2026-01-08

@@ -16,7 +16,7 @@
  * are stored in the Profile class within the sync folder itself.
  *
  * Uses QSettings for platform-appropriate storage:
- *   - Linux: ~/.config/QPilotSync/QPilotSync.conf
+ *   - Linux: ~/.config/WildPalms/WildPalms.conf
  *   - Windows: Registry
  *   - macOS: plist
  */

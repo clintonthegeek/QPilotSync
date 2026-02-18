@@ -189,7 +189,7 @@ void DashboardWidget::setListening(bool listening)
         m_connectButton->setText(i18n("Waiting for HotSync..."));
         m_connectButton->setEnabled(false);
     } else {
-        m_welcomeLabel->setText(i18n("<h2>Welcome to QPilotSync</h2>"));
+        m_welcomeLabel->setText(i18n("<h2>Welcome to Wild Palms</h2>"));
         m_listeningStatusLabel->setVisible(false);
         m_connectButton->setText(i18n("Connect Manually..."));
         m_connectButton->setEnabled(true);

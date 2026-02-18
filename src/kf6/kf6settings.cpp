@@ -11,7 +11,7 @@ KF6Settings& KF6Settings::instance()
 }
 
 KF6Settings::KF6Settings()
-    : m_config(KSharedConfig::openConfig(QStringLiteral("qpilotsyncrc")))
+    : m_config(KSharedConfig::openConfig(QStringLiteral("wildpalmsrc")))
 {
 }
 

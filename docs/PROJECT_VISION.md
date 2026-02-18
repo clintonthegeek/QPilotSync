@@ -1,8 +1,8 @@
-# QPilotSync Project Vision
+# Wild Palms Project Vision
 
 ## Overview
 
-QPilotSync is a modern Qt6-based synchronization application for Palm Pilot devices, bringing classic Palm organizers into the 2020s with support for modern data formats and contemporary desktop environments.
+Wild Palms is a modern Qt6-based synchronization application for Palm Pilot devices, bringing classic Palm organizers into the 2020s with support for modern data formats and contemporary desktop environments.
 
 ## Goals
 
@@ -135,7 +135,7 @@ QPilotSync is a modern Qt6-based synchronization application for Palm Pilot devi
 
 ## Long-Term Vision
 
-QPilotSync should become:
+Wild Palms should become:
 - The reference implementation for modern Palm syncing
 - A bridge between vintage computing and modern workflows
 - A showcase for Qt6 application architecture

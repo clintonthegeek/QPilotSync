@@ -48,7 +48,7 @@ SettingsDialog::SettingsDialog(ConduitManager *conduitManager,
     : KPageDialog(parent)
     , m_conduitManager(conduitManager)
 {
-    setWindowTitle(i18n("Configure QPilotSync"));
+    setWindowTitle(i18n("Configure Wild Palms"));
     setFaceType(KPageDialog::List);
     setMinimumSize(650, 550);
 
@@ -78,7 +78,7 @@ SettingsDialog::SettingsDialog(ConduitManager *conduitManager,
     if (m_conduitManager) {
         const auto plugins = m_conduitManager->conduitList();
         for (const auto &plugin : plugins) {
-            QString id = plugin.metaData.value(QStringLiteral("X-QPilotSync-ConduitId"));
+            QString id = plugin.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
             if (id.isEmpty()) id = plugin.metaData.pluginId();
             if (plugin.enabled) {
                 addConduitConfigPages(id);
@@ -162,7 +162,7 @@ QWidget* SettingsDialog::createConduitsPage()
 
             for (const auto &plugin : conduits) {
                 QString conduitId = plugin.metaData.value(
-                    QStringLiteral("X-QPilotSync-ConduitId"));
+                    QStringLiteral("X-WildPalms-ConduitId"));
                 if (conduitId.isEmpty()) conduitId = plugin.metaData.pluginId();
 
                 auto *conduitItem = new QTreeWidgetItem(groupItem);
@@ -202,7 +202,7 @@ QWidget* SettingsDialog::createConduitsPage()
         }
         QString conduitId = current->data(0, Qt::UserRole).toString();
         KPluginMetaData md = m_conduitManager->conduitMetaData(conduitId);
-        QString palmDb = md.value(QStringLiteral("X-QPilotSync-PalmDatabase"));
+        QString palmDb = md.value(QStringLiteral("X-WildPalms-PalmDatabase"));
         QString desc = md.description();
         QString text = QStringLiteral("<b>%1</b>").arg(md.name());
         if (!desc.isEmpty()) {
@@ -428,7 +428,7 @@ QWidget* SettingsDialog::createAdvancedPage()
     auto *infoLayout = new QVBoxLayout(infoGroup);
 
     QString configPath = QStandardPaths::writableLocation(
-        QStandardPaths::ConfigLocation) + QStringLiteral("/qpilotsyncrc");
+        QStandardPaths::ConfigLocation) + QStringLiteral("/wildpalmsrc");
     m_configFileLabel = new QLabel(
         i18n("Settings file: <code>%1</code>", configPath));
     m_configFileLabel->setTextFormat(Qt::RichText);
@@ -437,7 +437,7 @@ QWidget* SettingsDialog::createAdvancedPage()
     infoLayout->addWidget(m_configFileLabel);
 
     auto *profileInfo = new QLabel(
-        i18n("Profile settings are stored as <code>.qpilotsync.conf</code> "
+        i18n("Profile settings are stored as <code>.wildpalms.conf</code> "
              "in each sync folder."));
     profileInfo->setTextFormat(Qt::RichText);
     profileInfo->setWordWrap(true);

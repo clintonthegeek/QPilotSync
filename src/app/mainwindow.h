@@ -29,7 +29,7 @@ class ConflictStore;
 }
 
 /**
- * @brief Main application window for QPilotSync
+ * @brief Main application window for Wild Palms
  *
  * Manages the application UI, device connection, sync operations,
  * and profile management. Uses an MDI interface for multiple views.

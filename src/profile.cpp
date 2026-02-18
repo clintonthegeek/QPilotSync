@@ -349,7 +349,7 @@ QString Profile::configFilePath() const
     if (m_syncFolderPath.isEmpty()) {
         return QString();
     }
-    return QDir(m_syncFolderPath).filePath(".qpilotsync.conf");
+    return QDir(m_syncFolderPath).filePath(".wildpalms.conf");
 }
 
 QString Profile::stateDirectoryPath() const

@@ -32,10 +32,10 @@ ConduitManager::~ConduitManager()
 void ConduitManager::discoverConduits()
 {
     const QList<KPluginMetaData> found =
-        KPluginMetaData::findPlugins(QStringLiteral("qpilotsync/conduits"));
+        KPluginMetaData::findPlugins(QStringLiteral("wildpalms/conduits"));
 
     for (const KPluginMetaData &md : found) {
-        QString conduitId = metaValue(md, QStringLiteral("X-QPilotSync-ConduitId"));
+        QString conduitId = metaValue(md, QStringLiteral("X-WildPalms-ConduitId"));
 
         // Fall back to the plugin's internal name if the custom key is absent
         if (conduitId.isEmpty()) {
@@ -58,10 +58,10 @@ void ConduitManager::discoverConduits()
         PluginInfo info;
         info.metaData       = md;
         info.instance       = nullptr;
-        info.palmCreatorId  = metaValue(md, QStringLiteral("X-QPilotSync-PalmCreatorId"));
-        info.defaultEnabled = metaBool(md, QStringLiteral("X-QPilotSync-DefaultEnabled"), true);
+        info.palmCreatorId  = metaValue(md, QStringLiteral("X-WildPalms-PalmCreatorId"));
+        info.defaultEnabled = metaBool(md, QStringLiteral("X-WildPalms-DefaultEnabled"), true);
         info.enabled        = info.defaultEnabled;
-        info.sortOrder      = metaInt(md, QStringLiteral("X-QPilotSync-SortOrder"), 0);
+        info.sortOrder      = metaInt(md, QStringLiteral("X-WildPalms-SortOrder"), 0);
 
         m_plugins.insert(conduitId, info);
 
@@ -274,7 +274,7 @@ QStringList ConduitManager::resolveExecutionOrder() const
 
         // "I must run before X"  ->  edge: id -> X
         const QStringList before =
-            metaStringList(info.metaData, QStringLiteral("X-QPilotSync-RunBefore"));
+            metaStringList(info.metaData, QStringLiteral("X-WildPalms-RunBefore"));
         for (const QString &beforeId : before) {
             if (conduitIds.contains(beforeId)) {
                 mustRunBefore[id].append(beforeId);
@@ -284,7 +284,7 @@ QStringList ConduitManager::resolveExecutionOrder() const
 
         // "I must run after X"  ->  edge: X -> id
         const QStringList after =
-            metaStringList(info.metaData, QStringLiteral("X-QPilotSync-RunAfter"));
+            metaStringList(info.metaData, QStringLiteral("X-WildPalms-RunAfter"));
         for (const QString &afterId : after) {
             if (conduitIds.contains(afterId)) {
                 mustRunBefore[afterId].append(id);

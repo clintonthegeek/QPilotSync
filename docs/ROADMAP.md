@@ -1,8 +1,8 @@
-# QPilotSync Development Roadmap
+# Wild Palms Development Roadmap
 
 ## Overview
 
-This roadmap outlines the incremental development plan for QPilotSync, broken into manageable phases with clear deliverables and validation criteria.
+This roadmap outlines the incremental development plan for Wild Palms, broken into manageable phases with clear deliverables and validation criteria.
 
 ---
 
@@ -425,7 +425,7 @@ This roadmap outlines the incremental development plan for QPilotSync, broken in
 - Public release
 
 ### Success Metric
-"Others can successfully use QPilotSync"
+"Others can successfully use Wild Palms"
 
 ---
 

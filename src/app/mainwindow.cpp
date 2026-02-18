@@ -3,7 +3,7 @@
 #include "exporthandler.h"
 #include "importhandler.h"
 
-#include "../qpilotsync_version.h"
+#include "../wildpalms_version.h"
 #include "../palm/kpilotdevicelink.h"
 #include "../palm/devicesession.h"
 #include "../palm/pilotrecord.h"
@@ -72,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_conflictHandler(nullptr)
     , m_conflictStore(nullptr)
 {
-    setWindowTitle("QPilotSync - Palm Pilot Synchronization");
+    setWindowTitle("Wild Palms - Palm Pilot Synchronization");
     setMinimumSize(900, 600);
 
     // Restore window geometry if saved
@@ -110,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
     statusBar()->showMessage("Ready - No device connected");
 
     // Log initial message
-    m_logWidget->logInfo("QPilotSync " + QString(QPILOTSYNC_VERSION_STRING) + " initialized");
+    m_logWidget->logInfo("Wild Palms " + QString(WILDPALMS_VERSION_STRING) + " initialized");
 
     // Load default profile if set
     QString defaultProfile = Settings::instance().defaultProfilePath();
@@ -167,7 +167,7 @@ void MainWindow::onConnectDevice()
     // Info label
     QLabel *infoLabel = new QLabel(
         "Enter the device path and press Connect.\n"
-        "Press the HotSync button on your Palm - QPilotSync will wait for it.");
+        "Press the HotSync button on your Palm - Wild Palms will wait for it.");
     layout->addWidget(infoLabel);
 
     // Form layout for settings
@@ -1009,7 +1009,7 @@ void MainWindow::closeProfile()
 
 void MainWindow::updateWindowTitle()
 {
-    QString title = "QPilotSync";
+    QString title = "Wild Palms";
     if (m_currentProfile) {
         title += " - " + m_currentProfile->name();
     }
@@ -1616,8 +1616,8 @@ void MainWindow::onQuit()
 
 void MainWindow::onAbout()
 {
-    QMessageBox::about(this, "About QPilotSync",
-        QString("<h3>QPilotSync %1</h3>"
+    QMessageBox::about(this, "About Wild Palms",
+        QString("<h3>Wild Palms %1</h3>"
                 "<p>Modern Palm Pilot synchronization for Linux</p>"
                 "<p>Built with:</p>"
                 "<ul>"
@@ -1627,7 +1627,7 @@ void MainWindow::onAbout()
                 "</ul>"
                 "<p>Bringing classic Palm Pilots into the modern era!</p>"
                 "<p>Licensed with the <a href=https://www.gnu.org/licenses/gpl-3.0.txt>GPL version 3.0</a> or later.</p>")
-            .arg(QPILOTSYNC_VERSION_STRING)
+            .arg(WILDPALMS_VERSION_STRING)
             .arg(QT_VERSION_STR));
 }
 
@@ -1893,7 +1893,7 @@ void MainWindow::createMenus()
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
 
-    QAction *aboutAction = helpMenu->addAction("&About QPilotSync");
+    QAction *aboutAction = helpMenu->addAction("&About Wild Palms");
     connect(aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
 
     QAction *aboutQtAction = helpMenu->addAction("About &Qt");

@@ -96,4 +96,4 @@ public:
     virtual void saveSettings() {}
 };
 
-Q_DECLARE_INTERFACE(IConduit, "org.qpilotsync.IConduit/1.0")
+Q_DECLARE_INTERFACE(IConduit, "ca.vibekoder.IConduit/1.0")

@@ -228,7 +228,7 @@ public:
     /**
      * @brief Set the sync state directory
      *
-     * Default: ~/.qpilotsync/
+     * Default: ~/.wildpalms/
      */
     void setStateDirectory(const QString &path);
 

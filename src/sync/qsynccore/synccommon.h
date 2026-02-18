@@ -6,7 +6,7 @@
  * @brief Common types for the QSyncCore shared sync library
  *
  * This header contains platform-agnostic types that can be shared
- * between QPilotSync, PlanStanLite, and other sync-enabled applications.
+ * between Wild Palms, PlanStanLite, and other sync-enabled applications.
  *
  * Design goals:
  *   - No dependency on specific device/backend implementations

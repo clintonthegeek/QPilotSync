@@ -222,7 +222,7 @@ void TestProfile::testConfigFilePath()
     QString configPath = profile.configFilePath();
 
     QVERIFY(configPath.contains(m_tempDir->path()));
-    QVERIFY(configPath.endsWith(".qpilotsync.conf"));
+    QVERIFY(configPath.endsWith(".wildpalms.conf"));
 }
 
 void TestProfile::testStateDirectoryPath()
