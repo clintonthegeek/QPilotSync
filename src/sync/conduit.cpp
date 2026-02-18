@@ -1,8 +1,14 @@
 #include "conduit.h"
 #include "../palm/kpilotdevicelink.h"
 #include "../palm/pilotrecord.h"
+#include "../palm/categoryinfo.h"
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 namespace Sync {
 
@@ -38,6 +44,9 @@ SyncResult SyncConduitBase::sync(SyncContext *context)
         result.endTime = QDateTime::currentDateTime();
         return result;
     }
+
+    // Load categories from Palm AppInfo block
+    loadCategories(context);
 
     // Determine if this is a first sync
     context->isFirstSync = context->state->isFirstSync();
@@ -90,6 +99,10 @@ SyncResult SyncConduitBase::sync(SyncContext *context)
         if (!writeModifiedCategories(context)) {
             emit logMessage("Warning: Failed to write modified categories");
         }
+
+        // Persist final category list for conduit views (after sync has
+        // merged desktop categories into the Palm's list)
+        persistCategoriesForViews(context);
 
         // Clean up deleted records from Palm database
         context->deviceLink->cleanUpDatabase(m_dbHandle);
@@ -1482,11 +1495,127 @@ void SyncConduitBase::saveBaseline(SyncContext *context)
     qDeleteAll(records);
 }
 
+SyncConduitBase::~SyncConduitBase()
+{
+    delete m_categories;
+}
+
+void SyncConduitBase::loadCategories(SyncContext *context)
+{
+    if (m_categories) {
+        delete m_categories;
+        m_categories = nullptr;
+    }
+    m_originalAppInfo.clear();
+
+    if (!context || !context->deviceLink || m_dbHandle < 0) {
+        return;
+    }
+
+    m_categories = new CategoryInfo();
+
+    unsigned char appInfoBuf[4096];
+    size_t appInfoSize = sizeof(appInfoBuf);
+
+    if (context->deviceLink->readAppBlock(m_dbHandle, appInfoBuf, &appInfoSize)) {
+        m_originalAppInfo = QByteArray(reinterpret_cast<const char*>(appInfoBuf), appInfoSize);
+        m_categories->parse(appInfoBuf, appInfoSize);
+        emit logMessage(QString("Loaded %1 categories").arg(m_categories->usedCategories().size()));
+    }
+}
+
+void SyncConduitBase::persistCategoriesForViews(SyncContext *context)
+{
+    if (!m_categories || !m_categories->isValid()) {
+        return;
+    }
+
+    if (!context || context->syncFolderPath.isEmpty()) {
+        return;
+    }
+
+    // Build path: <syncFolder>/.wildpalms.state/categories-<conduitId>.json
+    QString stateDir = context->syncFolderPath + QStringLiteral("/.wildpalms.state");
+    QDir().mkpath(stateDir);
+
+    QString filePath = stateDir + QStringLiteral("/categories-%1.json").arg(conduitId());
+
+    // Collect non-empty category names from Palm's AppInfo block
+    QJsonArray categoriesArray;
+    categoriesArray.append(QStringLiteral("Unfiled"));
+    for (int i = 1; i < CategoryInfo::MAX_CATEGORIES; ++i) {
+        QString name = m_categories->categoryName(i);
+        if (!name.isEmpty()) {
+            categoriesArray.append(name);
+        }
+    }
+
+    QJsonObject root;
+    root[QStringLiteral("categories")] = categoriesArray;
+
+    QFile file(filePath);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+        file.close();
+        emit logMessage(QString("Persisted %1 categories for views").arg(categoriesArray.size()));
+    }
+}
+
+QString SyncConduitBase::categoryName(int categoryIndex) const
+{
+    if (m_categories) {
+        return m_categories->categoryName(categoryIndex);
+    }
+    return QString();
+}
+
 bool SyncConduitBase::writeModifiedCategories(SyncContext *context)
 {
-    // Default implementation - no categories to write
-    // Override in derived classes that handle categories
-    Q_UNUSED(context);
+    if (!m_categories || !m_categories->isDirty()) {
+        return true;
+    }
+
+    if (!context || !context->deviceLink || m_dbHandle < 0) {
+        emit logMessage("Warning: Cannot write categories - no device connection");
+        return false;
+    }
+
+    emit logMessage("Writing modified categories back to Palm...");
+
+    size_t catSize = m_categories->packSize();
+
+    if (m_originalAppInfo.isEmpty()) {
+        QByteArray buffer(catSize, 0);
+        int packed = m_categories->pack(reinterpret_cast<unsigned char*>(buffer.data()), buffer.size());
+        if (packed < 0) {
+            emit logMessage("Warning: Failed to pack categories");
+            return false;
+        }
+
+        if (!context->deviceLink->writeAppBlock(m_dbHandle,
+                reinterpret_cast<const unsigned char*>(buffer.constData()), packed)) {
+            emit logMessage("Warning: Failed to write categories to Palm");
+            return false;
+        }
+    } else {
+        QByteArray buffer = m_originalAppInfo;
+
+        int packed = m_categories->pack(reinterpret_cast<unsigned char*>(buffer.data()),
+                                         qMin(static_cast<size_t>(buffer.size()), catSize));
+        if (packed < 0) {
+            emit logMessage("Warning: Failed to pack categories");
+            return false;
+        }
+
+        if (!context->deviceLink->writeAppBlock(m_dbHandle,
+                reinterpret_cast<const unsigned char*>(buffer.constData()), buffer.size())) {
+            emit logMessage("Warning: Failed to write AppInfo block to Palm");
+            return false;
+        }
+    }
+
+    m_categories->clearDirty();
+    emit logMessage("Categories updated on Palm");
     return true;
 }
 

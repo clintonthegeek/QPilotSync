@@ -41,40 +41,44 @@ void CategoryManager::load()
         return;
     }
 
+    // Load from JSON if it exists
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        // File doesn't exist, try to discover categories from data files
-        QString dataPath = m_basePath + QStringLiteral("/") + m_dataType;
-        m_categories = discoverCategories(dataPath, m_dataType);
+    if (file.open(QIODevice::ReadOnly)) {
+        QJsonParseError error;
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
+        file.close();
 
-        // Always ensure "Unfiled" exists
-        if (!m_categories.contains(unfiledCategoryName())) {
-            m_categories.prepend(unfiledCategoryName());
+        if (error.error == QJsonParseError::NoError) {
+            QJsonObject root = doc.object();
+            QJsonArray categoriesArray = root[QStringLiteral("categories")].toArray();
+            for (const QJsonValue &value : categoriesArray) {
+                QString name = value.toString();
+                if (!name.isEmpty() && !m_categories.contains(name)) {
+                    m_categories.append(name);
+                }
+            }
         }
-        return;
     }
 
-    QJsonParseError error;
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
-    file.close();
-
-    if (error.error != QJsonParseError::NoError) {
-        return;
-    }
-
-    QJsonObject root = doc.object();
-    QJsonArray categoriesArray = root[QStringLiteral("categories")].toArray();
-
-    for (const QJsonValue &value : categoriesArray) {
-        QString name = value.toString();
-        if (!name.isEmpty() && !m_categories.contains(name)) {
-            m_categories.append(name);
+    // Always discover categories from data files and merge
+    QString dataPath = m_basePath + QStringLiteral("/") + m_dataType;
+    QStringList discovered = discoverCategories(dataPath, m_dataType);
+    bool added = false;
+    for (const QString &cat : discovered) {
+        if (!m_categories.contains(cat)) {
+            m_categories.append(cat);
+            added = true;
         }
     }
 
     // Ensure "Unfiled" is always present
     if (!m_categories.contains(unfiledCategoryName())) {
         m_categories.prepend(unfiledCategoryName());
+    }
+
+    // Persist newly discovered categories so JSON stays authoritative
+    if (added) {
+        save();
     }
 }
 

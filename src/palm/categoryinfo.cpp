@@ -76,7 +76,13 @@ CategoryInfo::CategoryInfo()
 
 bool CategoryInfo::parse(const unsigned char *appInfoData, size_t size)
 {
-    if (!appInfoData || size < sizeof(CategoryAppInfo_t)) {
+    // On-wire minimum: 2 (renamed flags) + 256 (names) + 16 (IDs) +
+    // 1 (lastUniqueID) + 1 (padding) = 276 bytes.
+    // Note: sizeof(CategoryAppInfo_t) is much larger (340) because the
+    // C struct expands the 2-byte renamed bitmask into unsigned int[16].
+    static constexpr size_t kMinWireSize = 276;
+
+    if (!appInfoData || size < kMinWireSize) {
         m_valid = false;
         return false;
     }

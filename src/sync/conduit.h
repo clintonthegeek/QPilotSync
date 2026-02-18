@@ -15,6 +15,7 @@
 #include "qsynccore/conflictpolicy.h"
 #include "qsynccore/conflictstore.h"
 #include "../core/isyncconduit.h"
+#include "../palm/categoryinfo.h"
 
 class QWidget;
 
@@ -90,7 +91,7 @@ class SyncConduitBase : public QObject, public ISyncConduit
 
 public:
     explicit SyncConduitBase(QObject *parent = nullptr) : QObject(parent) {}
-    ~SyncConduitBase() override = default;
+    ~SyncConduitBase() override;
 
     // ========== Conduit Identity ==========
 
@@ -375,8 +376,7 @@ public:
      * @return Category name, or empty string if not available
      */
     QString categoryNameForIndex(int categoryIndex) const override {
-        Q_UNUSED(categoryIndex);
-        return QString();
+        return categoryName(categoryIndex);
     }
 
 Q_SIGNALS:
@@ -535,21 +535,19 @@ protected:
      */
     void saveBaseline(SyncContext *context);
 
-    /**
-     * @brief Write modified categories back to Palm
-     *
-     * Called before closing the database if categories were added/modified
-     * during PC→Palm sync. Override in derived classes that handle categories.
-     *
-     * @param context Sync context with device link
-     * @return true if categories were written or no changes needed
-     */
     bool writeModifiedCategories(SyncContext *context) override;
 
     /**
      * @brief Check if cancellation was requested
      */
     bool isCancelled() const { return m_cancelCheck && m_cancelCheck(); }
+
+    CategoryInfo *m_categories = nullptr;
+    QByteArray m_originalAppInfo;
+
+    void loadCategories(SyncContext *context);
+    void persistCategoriesForViews(SyncContext *context);
+    QString categoryName(int categoryIndex) const;
 
     int m_dbHandle = -1;  ///< Open Palm database handle
     std::function<bool()> m_cancelCheck;  ///< External cancellation check
