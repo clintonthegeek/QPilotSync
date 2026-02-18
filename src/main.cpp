@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QDir>
 
 #include <KAboutData>
 #include <KLocalizedString>
@@ -11,6 +12,15 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+
+    // Add the lib/ directory next to the executable as a plugin search path.
+    // This allows KPluginMetaData::findPlugins() to discover conduit plugins
+    // when running from the build directory without installing.
+    QDir appDir(QCoreApplication::applicationDirPath());
+    QString localPluginDir = appDir.absoluteFilePath(QStringLiteral("lib"));
+    if (QDir(localPluginDir).exists()) {
+        QCoreApplication::addLibraryPath(localPluginDir);
+    }
 
     KLocalizedString::setApplicationDomain("qpilotsync");
 
@@ -32,8 +42,9 @@ int main(int argc, char *argv[])
     parser.process(app);
     aboutData.processCommandLine(&parser);
 
-    KF6MainWindow window;
-    window.show();
+    auto *window = new KF6MainWindow;
+    window->setAttribute(Qt::WA_DeleteOnClose);
+    window->show();
 
     return app.exec();
 }
