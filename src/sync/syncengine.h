@@ -101,6 +101,17 @@ public:
     void registerConduit(IConduit *conduit);
 
     /**
+     * @brief Store ordering hints for a conduit
+     *
+     * For SyncConduitBase conduits, ordering is read from runBefore()/runAfter().
+     * For other conduit types (e.g. IToolConduit), the caller must provide
+     * ordering hints explicitly via this method.
+     */
+    void setConduitOrdering(const QString &conduitId,
+                            const QStringList &runBefore,
+                            const QStringList &runAfter);
+
+    /**
      * @brief Unregister a conduit by ID (does not delete)
      */
     void unregisterConduit(const QString &conduitId);
@@ -268,6 +279,8 @@ private:
 
     QMap<QString, IConduit*> m_conduits;
     QMap<QString, bool> m_conduitEnabled;
+    QMap<QString, QStringList> m_conduitRunBefore;   ///< Ordering hints for non-SyncConduitBase
+    QMap<QString, QStringList> m_conduitRunAfter;    ///< Ordering hints for non-SyncConduitBase
     QMap<QString, SyncState*> m_states;
 
     QString m_palmUserName;

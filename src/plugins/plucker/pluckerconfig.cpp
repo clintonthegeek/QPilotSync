@@ -173,8 +173,8 @@ QStringList PluckerConfig::buildCLIArgs(const PluckerChannel &channel, const QSt
     args << QStringLiteral("--bpp=%1").arg(channel.bpp);
     args << QStringLiteral("--maxwidth=%1").arg(channel.maxWidth);
     args << QStringLiteral("--maxheight=%1").arg(channel.maxHeight);
-    args << QStringLiteral("--alt_maxwidth=%1").arg(channel.altMaxWidth);
-    args << QStringLiteral("--alt_maxheight=%1").arg(channel.altMaxHeight);
+    args << QStringLiteral("--alt-maxwidth=%1").arg(channel.altMaxWidth);
+    args << QStringLiteral("--alt-maxheight=%1").arg(channel.altMaxHeight);
     args << QStringLiteral("--compression=%1").arg(channel.compression);
 
     if (channel.stayOnHost) args << QStringLiteral("--stayonhost");

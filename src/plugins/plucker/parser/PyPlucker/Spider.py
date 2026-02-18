@@ -175,7 +175,7 @@ LINK_ATTRIBUTES_TO_IGNORE = (
     )
 
 
-_DOTTED_QUAD = re.compile('^\d+\.\d+\.\d+\.\d+$')
+_DOTTED_QUAD = re.compile(r'^\d+\.\d+\.\d+\.\d+$')
 
 #
 # Moved from SpiderLink so the robot code could use it too.

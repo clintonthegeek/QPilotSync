@@ -182,7 +182,7 @@ class Mapper:
         # If arg is integer, treats it as a registered-document id.  Get-only.
         if type(url_or_doc) == type(''):
             import urllib.request, urllib.parse, urllib.error
-            url, tag = urllib.parse.splittag(url_or_doc)
+            url, tag = urllib.parse.urldefrag(url_or_doc)
             finalurl = self._alias_list.get(url, url)
             if tag:
                 id = self._get_id_for_url((finalurl, tag))

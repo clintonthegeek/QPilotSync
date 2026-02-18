@@ -88,6 +88,16 @@ void SyncEngine::unregisterConduit(const QString &conduitId)
     // The conduit is owned by ConduitManager (plugins) or its creator.
     m_conduits.remove(conduitId);
     m_conduitEnabled.remove(conduitId);
+    m_conduitRunBefore.remove(conduitId);
+    m_conduitRunAfter.remove(conduitId);
+}
+
+void SyncEngine::setConduitOrdering(const QString &conduitId,
+                                     const QStringList &runBefore,
+                                     const QStringList &runAfter)
+{
+    m_conduitRunBefore[conduitId] = runBefore;
+    m_conduitRunAfter[conduitId] = runAfter;
 }
 
 IConduit* SyncEngine::conduit(const QString &conduitId) const
@@ -651,13 +661,23 @@ QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
     }
 
     // Build edges from runBefore() and runAfter()
-    // These methods are only available on SyncConduitBase
     for (const QString &id : conduitIds) {
+        QStringList beforeList;
+        QStringList afterList;
+
+        // SyncConduitBase has runBefore()/runAfter() methods
         auto *cond = dynamic_cast<SyncConduitBase*>(m_conduits.value(id));
-        if (!cond) continue;  // IConduit-only conduits have no ordering constraints
+        if (cond) {
+            beforeList = cond->runBefore();
+            afterList = cond->runAfter();
+        } else {
+            // Non-SyncConduitBase conduits use stored ordering hints
+            beforeList = m_conduitRunBefore.value(id);
+            afterList = m_conduitRunAfter.value(id);
+        }
 
         // "I must run before X" means edge: id -> X
-        for (const QString &beforeId : cond->runBefore()) {
+        for (const QString &beforeId : beforeList) {
             if (conduitIds.contains(beforeId)) {
                 mustRunBefore[id].append(beforeId);
                 inDegree[beforeId]++;
@@ -665,7 +685,7 @@ QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
         }
 
         // "I must run after X" means edge: X -> id
-        for (const QString &afterId : cond->runAfter()) {
+        for (const QString &afterId : afterList) {
             if (conduitIds.contains(afterId)) {
                 mustRunBefore[afterId].append(id);
                 inDegree[id]++;
@@ -724,18 +744,25 @@ QString SyncEngine::checkCircularDependencies(const QStringList &conduitIds)
     }
 
     for (const QString &id : conduitIds) {
-        auto *cond = dynamic_cast<SyncConduitBase*>(m_conduits.value(id));
-        if (!cond) continue;  // IConduit-only conduits have no ordering constraints
+        QStringList beforeList;
+        QStringList afterList;
 
-        // "I must run before X" means edge: id -> X
-        for (const QString &beforeId : cond->runBefore()) {
+        auto *cond = dynamic_cast<SyncConduitBase*>(m_conduits.value(id));
+        if (cond) {
+            beforeList = cond->runBefore();
+            afterList = cond->runAfter();
+        } else {
+            beforeList = m_conduitRunBefore.value(id);
+            afterList = m_conduitRunAfter.value(id);
+        }
+
+        for (const QString &beforeId : beforeList) {
             if (conduitIds.contains(beforeId)) {
                 edges[id].append(beforeId);
             }
         }
 
-        // "I must run after X" means edge: X -> id
-        for (const QString &afterId : cond->runAfter()) {
+        for (const QString &afterId : afterList) {
             if (conduitIds.contains(afterId)) {
                 edges[afterId].append(id);
             }

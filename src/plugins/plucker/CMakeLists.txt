@@ -18,3 +18,8 @@ target_link_libraries(qpilotsync_plucker
     KF6::WidgetsAddons
     Qt::Widgets
 )
+
+# Tell the plugin where to find its bundled data (parser + viewer PRCs)
+target_compile_definitions(qpilotsync_plucker PRIVATE
+    PLUCKER_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)

@@ -8,6 +8,7 @@
 #include "../palm/palmdevicemonitor.h"
 #include "../app/exporthandler.h"
 #include "../app/importhandler.h"
+#include "../settingsdialog.h"
 
 #include "../qpilotsync_version.h"
 #include "../palm/kpilotdevicelink.h"
@@ -28,6 +29,9 @@
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
 
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QApplication>
 #include <QStatusBar>
 #include <QDockWidget>
@@ -133,6 +137,24 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     connect(m_autoSync, &AutoSyncOrchestrator::connectionEstablished,
             this, [this](const QString &userName, const QString &deviceName) {
                 m_logWidget->logInfo(i18n("Auto-connected to %1 (%2)", userName, deviceName));
+
+                // Adopt the orchestrator's session so the UI (Disconnect, sync
+                // buttons, export/import) works with the auto-detected connection
+                DeviceSession *autoSession = m_autoSync->activeSession();
+                if (autoSession) {
+                    // Clean up any existing manual session
+                    if (m_session && m_session != autoSession) {
+                        m_session->disconnectDevice();
+                        m_session->deleteLater();
+                    }
+                    m_session = autoSession;
+                    m_deviceLink = autoSession->deviceLink();
+
+                    m_exportHandler->setDeviceLink(m_deviceLink);
+                    m_importHandler->setDeviceLink(m_deviceLink);
+                    m_syncEngine->setDeviceLink(m_deviceLink);
+                }
+
                 updateMenuState(true);
             });
     connect(m_autoSync, &AutoSyncOrchestrator::profileCreated,
@@ -156,6 +178,24 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
             this, [this](bool success, const QString &summary) {
                 m_logWidget->logInfo(i18n("Auto-sync %1: %2",
                     success ? i18n("complete") : i18n("failed"), summary));
+
+                // The orchestrator disconnects the session after sync.
+                // Release our references to avoid dangling pointers.
+                m_session = nullptr;
+                m_deviceLink = nullptr;
+                m_exportHandler->setDeviceLink(nullptr);
+                m_importHandler->setDeviceLink(nullptr);
+                m_syncEngine->setDeviceLink(nullptr);
+
+                // Refresh conduit views with newly synced data
+                if (m_currentProfile) {
+                    QString syncPath = m_currentProfile->syncFolderPath();
+                    for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+                        QWidget *view = it.value()->widget();
+                        QMetaObject::invokeMethod(view, "loadFromPath", Q_ARG(QString, syncPath));
+                    }
+                }
+
                 updateMenuState(false);
                 m_dashboardWidget->updateStatus(m_currentProfile, false);
             });
@@ -177,6 +217,9 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     m_trayIcon->setToolTipSubTitle(i18n("Listening for Palm devices"));
     m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
     m_trayIcon->setStandardActionsEnabled(true);
+
+    // Load minimize-to-tray preference (default: false = closing quits)
+    m_minimizeToTray = KF6Settings::instance().minimizeToTray();
 
     // Status bar
     statusBar()->showMessage(i18n("Ready - No device connected"));
@@ -210,6 +253,15 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
 KF6MainWindow::~KF6MainWindow()
 {
+    // Disconnect conduit manager signals. Its destructor emits
+    // conduitUnloading() for each plugin, which would try to call our
+    // onConduitUnloading() slot. By disconnecting here, the signal fires
+    // harmlessly into the void when deleteChildren() eventually destroys
+    // the manager (after all base-class destructors have run cleanly).
+    if (m_conduitManager) {
+        disconnect(m_conduitManager, nullptr, this, nullptr);
+    }
+
     // Stop udev monitor
     if (m_deviceMonitor) {
         m_deviceMonitor->stop();
@@ -322,6 +374,8 @@ void KF6MainWindow::setupConnections()
             this, &KF6MainWindow::onCloseProfile);
     connect(m_actionManager, &ActionManager::profileSettingsRequested,
             this, &KF6MainWindow::onProfileSettings);
+    connect(m_actionManager, &ActionManager::settingsRequested,
+            this, &KF6MainWindow::onSettings);
 
     connect(m_actionManager, &ActionManager::connectRequested,
             this, &KF6MainWindow::onConnectDevice);
@@ -502,6 +556,10 @@ void KF6MainWindow::onPageChanged(KPageWidgetItem *current, KPageWidgetItem *pre
 
 void KF6MainWindow::updateMenuState(bool connected)
 {
+    // Also consider connected if the orchestrator has an active session
+    if (!connected && m_session && m_session->isConnected()) {
+        connected = true;
+    }
     bool hasProfile = m_currentProfile != nullptr;
     m_actionManager->updateConnectionState(connected, hasProfile);
     m_actionManager->updateProfileState(hasProfile);
@@ -622,6 +680,27 @@ void KF6MainWindow::onConduitLoaded(IConduit *conduit)
 
     // Register with the sync engine so it participates in sync operations
     m_syncEngine->registerConduit(conduit);
+
+    // Pass ordering hints from plugin metadata to the sync engine
+    // (SyncConduitBase reads these itself, but other conduit types need explicit hints)
+    KPluginMetaData md = m_conduitManager->conduitMetaData(conduit->conduitId());
+    if (md.isValid()) {
+        QStringList runBefore, runAfter;
+        const QJsonObject raw = md.rawData();
+        const QJsonValue beforeVal = raw.value(QStringLiteral("X-QPilotSync-RunBefore"));
+        if (beforeVal.isArray()) {
+            for (const QJsonValue &v : beforeVal.toArray())
+                if (!v.toString().isEmpty()) runBefore << v.toString();
+        }
+        const QJsonValue afterVal = raw.value(QStringLiteral("X-QPilotSync-RunAfter"));
+        if (afterVal.isArray()) {
+            for (const QJsonValue &v : afterVal.toArray())
+                if (!v.toString().isEmpty()) runAfter << v.toString();
+        }
+        if (!runBefore.isEmpty() || !runAfter.isEmpty()) {
+            m_syncEngine->setConduitOrdering(conduit->conduitId(), runBefore, runAfter);
+        }
+    }
 
     qDebug() << "[KF6MainWindow] Conduit loaded:" << conduit->conduitId()
              << "(" << conduit->displayName() << ")";
@@ -804,10 +883,17 @@ void KF6MainWindow::loadProfile(const QString &path)
 
     KF6Settings::instance().sync();
 
-    // Update UI
+    // Tell conduit views to load data from the profile's sync folder
+    for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+        QWidget *view = it.value()->widget();
+        QMetaObject::invokeMethod(view, "loadFromPath", Q_ARG(QString, m_syncPath));
+    }
+
+    // Update UI — check for active connection (manual or auto-sync)
+    bool connected = m_session && m_session->isConnected();
     updateWindowTitle();
-    updateProfileMenuState();
-    m_dashboardWidget->updateStatus(m_currentProfile, m_session && m_session->isConnected());
+    updateMenuState(connected);
+    m_dashboardWidget->updateStatus(m_currentProfile, connected);
 
     m_logWidget->logInfo(i18n("Loaded profile: %1", m_currentProfile->name()));
     m_logWidget->logInfo(i18n("Sync folder: %1", m_syncPath));
@@ -1226,10 +1312,19 @@ void KF6MainWindow::onDisconnectDevice()
         }
 
         m_session->disconnectDevice();
+
+        // If the session belonged to the auto-sync orchestrator, don't
+        // delete it — the orchestrator owns its lifecycle.  Just release
+        // our reference.
+        if (m_session == m_autoSync->activeSession()) {
+            m_session = nullptr;
+        }
+
         m_deviceLink = nullptr;
 
         m_exportHandler->setDeviceLink(nullptr);
         m_importHandler->setDeviceLink(nullptr);
+        m_syncEngine->setDeviceLink(nullptr);
 
         statusBar()->showMessage(i18n("Disconnected"));
         m_logWidget->logInfo(i18n("Disconnected from device"));
@@ -1825,9 +1920,11 @@ void KF6MainWindow::onAbout()
 
 void KF6MainWindow::onSettings()
 {
-    // Will be replaced with KConfigDialog
-    QMessageBox::information(this, i18n("Settings"),
-        i18n("Settings dialog will be implemented with KConfigDialog."));
+    SettingsDialog dialog(m_conduitManager, this);
+    connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
+        m_minimizeToTray = KF6Settings::instance().minimizeToTray();
+    });
+    dialog.exec();
 }
 
 void KF6MainWindow::onClearLog()

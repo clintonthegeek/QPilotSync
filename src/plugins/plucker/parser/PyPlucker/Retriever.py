@@ -70,38 +70,43 @@ def GuessType (name):
     return 'unknown/unknown'
 
 
-class PluckerFancyOpener (urllib.request.FancyURLopener):
-    """A subclass of urllib.FancyURLopener, so we can remember an
-    error code and the error text."""
+class PluckerFancyOpener:
+    """URL opener with custom headers.  Replaces the removed
+    urllib.request.FancyURLopener with urllib.request.urlopen()."""
 
     def __init__(self, alias_list=None, config=None, *args):
-        urllib.request.FancyURLopener.__init__(*(self,) + args)
         self._alias_list = alias_list
-        self.remove_header ('User-Agent')
+        self.addheaders = []
         user_agent = (config and config.get_string('user_agent', None)) or 'Plucker/Py-%s' % __version__
-        self.addheader ('User-Agent', user_agent)
+        self.addheader('User-Agent', user_agent)
         referrer = config and config.get_string('referrer', None)
         if referrer:
             self.addheader('Referer', referrer)
-        self.addheader ('Accept', 'image/jpeg, image/gif, image/png, image/webp, text/html, text/plain, text/xhtml;q=0.8, text/xml;q=0.6, text/*;q=0.4')
+        self.addheader('Accept', 'image/jpeg, image/gif, image/png, image/webp, text/html, text/plain, text/xhtml;q=0.8, text/xml;q=0.6, text/*;q=0.4')
 
         if 'HTTP_PROXY' in os.environ and ('HTTP_PROXY_USER' in os.environ and 'HTTP_PROXY_PASS' in os.environ):
             import base64
             auth_header = os.environ['HTTP_PROXY_USER'] + ":" + os.environ['HTTP_PROXY_PASS']
             encoded_header = base64.b64encode(bytes(auth_header, 'ascii'))
-            self.addheader ('Proxy-Authorization', 'Basic %s' % encoded_header.decode('ascii').strip())
-        #for header in self.addheaders: message(0, "%s", header)
+            self.addheader('Proxy-Authorization', 'Basic %s' % encoded_header.decode('ascii').strip())
 
+    def addheader(self, key, value):
+        self.addheaders.append((key, value))
 
-    def remove_header (self, header):
-        """Remove the header information 'header' if on the header list.
-           Return if found on list.
-        """
-        for i in range (len (self.addheaders)):
+    def remove_header(self, header):
+        """Remove the header information 'header' if on the header list."""
+        for i in range(len(self.addheaders)):
             if self.addheaders[i][0] == header:
                 del self.addheaders[i]
                 return 1
         return 0
+
+    def open(self, url, data=None):
+        """Fetch a URL using urllib.request, applying stored headers."""
+        req = urllib.request.Request(url, data=data)
+        for key, value in self.addheaders:
+            req.add_header(key, value)
+        return urllib.request.urlopen(req)
 
 
 def parse_http_header_value(headerval):
@@ -187,7 +192,7 @@ class SimpleRetriever:
                     headers_dict.update (dict(webdoc.info()))
                     return (headers_dict, None)
                 if hasattr (webdoc, 'url'):
-                    (webdoc_protocol, webdoc_rest_of_url) = urllib.parse.splittype(webdoc.url)
+                    webdoc_protocol = urllib.parse.urlparse(webdoc.url).scheme
 
                     # check to see we have a valid URL; if not, use one we started with
                     if webdoc_protocol:

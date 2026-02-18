@@ -52,27 +52,19 @@ QString PluckerConduit::findPython() const
 
 QString PluckerConduit::parserPath() const
 {
-    QDir appDir(QCoreApplication::applicationDirPath());
-
-    // Development: build/bin -> src/plugins/plucker/parser
-    QString devPath = appDir.absoluteFilePath(
-        QStringLiteral("../../src/plugins/plucker/parser/PyPlucker/Spider.py"));
-    if (QFile::exists(devPath)) return QFileInfo(devPath).canonicalFilePath();
-
+#ifdef PLUCKER_DATA_DIR
+    QString path = QStringLiteral(PLUCKER_DATA_DIR "/parser/PyPlucker/Spider.py");
+    if (QFile::exists(path)) return QFileInfo(path).canonicalFilePath();
+#endif
     return QString();
 }
 
 QString PluckerConduit::viewerPath() const
 {
-    QDir appDir(QCoreApplication::applicationDirPath());
-
-    // Development path: build/bin -> src/plugins/plucker/viewer
-    QString devPath = appDir.absoluteFilePath(
-        QStringLiteral("../../src/plugins/plucker/viewer"));
-    if (QDir(devPath).exists()) return QFileInfo(devPath).canonicalFilePath();
-
-    // Installed path (alongside plugin .so)
-    // TODO: determine from plugin metadata
+#ifdef PLUCKER_DATA_DIR
+    QString path = QStringLiteral(PLUCKER_DATA_DIR "/viewer");
+    if (QDir(path).exists()) return QFileInfo(path).canonicalFilePath();
+#endif
     return QString();
 }
 
@@ -85,10 +77,10 @@ bool PluckerConduit::canSync(const Sync::SyncContext *context) const
 bool PluckerConduit::shouldRun(const Sync::SyncContext *context) const
 {
     Q_UNUSED(context);
-    for (const auto &ch : m_config.channels()) {
-        if (PluckerConfig::isDue(ch)) return true;
-    }
-    return false;
+    // Always return true — config isn't loaded until prepareExecution()
+    // (called from sync()), so m_config.channels() would be empty here.
+    // sync() handles the "no channels due" case gracefully.
+    return true;
 }
 
 bool PluckerConduit::prepareExecution(Sync::SyncContext *context)
@@ -218,10 +210,7 @@ bool PluckerConduit::installResults(Sync::SyncContext *context)
     // Check if Palm viewer needs installing
     if (context->deviceLink) {
         KPilotDeviceLink *link = context->deviceLink;
-        if (!link->findDatabase(QStringLiteral("PlkrMain"))) {
-            Q_EMIT logMessage(QStringLiteral("Plucker viewer not found on device — queuing install"));
-
-            // Find bundled viewer PRCs
+        if (!link->findDatabase(QStringLiteral("Plucker"))) {
             QString viewerDir = viewerPath();
             if (!viewerDir.isEmpty()) {
                 QDir dir(viewerDir);
@@ -235,6 +224,10 @@ bool PluckerConduit::installResults(Sync::SyncContext *context)
                 if (QFile::exists(viewer)) {
                     context->installQueue.append(viewer);
                 }
+                Q_EMIT logMessage(QStringLiteral("Plucker viewer not found on device — queued %1 PRCs")
+                                  .arg(context->installQueue.size()));
+            } else {
+                Q_EMIT logMessage(QStringLiteral("Plucker viewer not found on device and bundled viewer PRCs not available"));
             }
         }
     }

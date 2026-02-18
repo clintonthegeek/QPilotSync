@@ -840,7 +840,7 @@ class PluckerTextParagraph:
                 if '_plucker_id_tag' in value:
                     doc = find_registered_document(value['_plucker_id_tag'])
                     if doc:
-                        oldurl, tag = urllib.parse.splittag(value['href'])
+                        oldurl, tag = urllib.parse.urldefrag(value['href'])
                         if tag:
                             newurl = doc.get_url() + '#' + tag
                         else:
@@ -2255,7 +2255,7 @@ class PluckerMetadataDocument (PluckerSpecialDocument):
                 vlen = len(self._info[key])
                 nwords = (vlen + 1) / 2
                 dataval = self._info[key] + '\0' * (vlen % 2)
-                assert(len(dataval) == (nwords * 2), "Invalid length calculation in marshalling of PluckerMetadataDocument")
+                assert len(dataval) == (nwords * 2), "Invalid length calculation in marshalling of PluckerMetadataDocument"
                 subrecords.append(struct.pack('>HH', self.TYPECODE_AUTHOR, nwords))
                 subrecords.append(dataval)
                 count = count + 1
@@ -2264,7 +2264,7 @@ class PluckerMetadataDocument (PluckerSpecialDocument):
                 vlen = len(self._info[key])
                 nwords = (vlen + 1) / 2
                 dataval = self._info[key] + '\0' * (vlen % 2)
-                assert(len(dataval) == (nwords * 2), "Invalid length calculation in marshalling of PluckerMetadataDocument")
+                assert len(dataval) == (nwords * 2), "Invalid length calculation in marshalling of PluckerMetadataDocument"
                 subrecords.append(struct.pack('>HH', self.TYPECODE_TITLE, nwords))
                 subrecords.append(dataval)
                 count = count + 1
@@ -2407,7 +2407,7 @@ def Undump_PluckerDocument (url, data, verbose=0):
 
     if not pluckerdoc:
         # nothing worked, i.e. unknown data
-        raise ValueError("Unknown Plucker data \BB%s\AB" % repr(data))
+        raise ValueError("Unknown Plucker data \\BB%s\\AB" % repr(data))
     return pluckerdoc
 
 
