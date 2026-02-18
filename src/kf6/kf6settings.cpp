@@ -288,7 +288,7 @@ void KF6Settings::setSidebarWidth(int width)
 
 bool KF6Settings::minimizeToTray() const
 {
-    return systemTrayGroup().readEntry("MinimizeToTray", true);
+    return systemTrayGroup().readEntry("MinimizeToTray", false);
 }
 
 void KF6Settings::setMinimizeToTray(bool enabled)

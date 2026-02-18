@@ -1116,7 +1116,7 @@ void KF6MainWindow::startConnection(const QString &devicePath)
     m_logWidget->logInfo(i18n("Connecting to %1...", devicePath));
     statusBar()->showMessage(i18n("Connecting to %1...", devicePath));
 
-    m_session->connectDevice(devicePath);
+    m_session->connectDevice(QStringList{devicePath});
 
     updateMenuState(false);
     m_actionManager->cancelConnectionAction()->setEnabled(true);

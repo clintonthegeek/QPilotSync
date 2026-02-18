@@ -19,11 +19,16 @@ class IConduit;
  * from the "qpilotsync/conduits" subdirectory.
  *
  * Each plugin's JSON metadata must contain:
- *   - X-QPilotSync-ConduitId   (string)  unique conduit identifier
- *   - X-QPilotSync-DefaultEnabled (bool, default true)
- *   - X-QPilotSync-SortOrder   (int, default 0)   for UI ordering
- *   - X-QPilotSync-RunBefore   (string array)      dependency ordering
- *   - X-QPilotSync-RunAfter    (string array)      dependency ordering
+ *   - X-QPilotSync-ConduitId       (string)  unique conduit identifier
+ *   - X-QPilotSync-PalmCreatorId   (string)  Palm OS 4-char creator ID (e.g. "memo", "addr")
+ *   - X-QPilotSync-DefaultEnabled  (bool, default true)
+ *   - X-QPilotSync-SortOrder       (int, default 0)   for UI ordering
+ *   - X-QPilotSync-RunBefore       (string array)      dependency ordering
+ *   - X-QPilotSync-RunAfter        (string array)      dependency ordering
+ *
+ * Only one conduit may be enabled per Palm creator ID at a time.
+ * Enabling a conduit that shares a creator ID with an already-enabled
+ * conduit will automatically disable the incumbent.
  *
  * Enabled/disabled state is persisted in the application KConfig under
  * the [Conduits] group with keys like "<pluginId>Enabled".
@@ -39,6 +44,7 @@ public:
     struct PluginInfo {
         KPluginMetaData metaData;
         IConduit *instance = nullptr;
+        QString palmCreatorId;     ///< Palm OS 4-char creator ID (empty if not a Palm-app conduit)
         bool defaultEnabled = false;
         bool enabled = false;
         int sortOrder = 0;
@@ -91,6 +97,15 @@ public:
 
     /** @brief Return metadata for a single plugin */
     KPluginMetaData conduitMetaData(const QString &pluginId) const;
+
+    /** @brief Return the Palm creator ID for a conduit (empty if none) */
+    QString palmCreatorId(const QString &pluginId) const;
+
+    /**
+     * @brief Find the enabled conduit registered for a Palm creator ID
+     * @return Conduit ID, or empty string if none enabled for that creator
+     */
+    QString enabledConduitForCreatorId(const QString &creatorId) const;
 
     // ========== Enable / Disable ==========
 

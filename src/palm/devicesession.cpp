@@ -24,7 +24,7 @@ DeviceSession::~DeviceSession()
 
 // ========== Connection ==========
 
-void DeviceSession::connectDevice(const QString &devicePath)
+void DeviceSession::connectDevice(const QStringList &devicePaths)
 {
     if (m_deviceLink) {
         emit errorOccurred("Already connected or connection in progress");
@@ -32,9 +32,9 @@ void DeviceSession::connectDevice(const QString &devicePath)
     }
 
     emit connectionStarted();
-    emit logMessage(QString("Connecting to %1...").arg(devicePath));
+    emit logMessage(QString("Connecting on %1 port(s)...").arg(devicePaths.size()));
 
-    m_deviceLink = new KPilotDeviceLink(devicePath, this);
+    m_deviceLink = new KPilotDeviceLink(devicePaths, this);
 
     // Connect KPilotDeviceLink signals
     connect(m_deviceLink, &KPilotDeviceLink::connectionComplete,

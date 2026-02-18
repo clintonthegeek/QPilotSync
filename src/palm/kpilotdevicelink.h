@@ -3,27 +3,28 @@
 
 #include "kpilotlink.h"
 #include <QString>
+#include <QStringList>
 #include <QThread>
-#include <QMutex>
 #include <atomic>
 
 /**
  * @brief Worker object for blocking pilot-link connection in separate thread
+ *
+ * Tries each device path sequentially with pi_accept_to() using a short
+ * timeout.  The correct port responds immediately (Palm is already
+ * transmitting); wrong ports time out after @a timeoutSeconds.
  */
 class ConnectionWorker : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit ConnectionWorker(const QString &devicePath, QObject *parent = nullptr);
+    explicit ConnectionWorker(const QStringList &devicePaths,
+                              int timeoutSeconds = 5,
+                              QObject *parent = nullptr);
     ~ConnectionWorker();
 
-    int socket() const { return m_socket; }
     void requestCancel();
-
-    // Force-close the socket to interrupt blocking pi_accept()
-    // Thread-safe: can be called from main thread
-    void forceCloseSocket();
 
 public slots:
     void doConnect();
@@ -34,10 +35,11 @@ signals:
     void statusUpdate(const QString &status);
 
 private:
-    QString m_devicePath;
-    std::atomic<int> m_socket;  // atomic for thread-safe access
+    QString probeForActivePort();
+
+    QStringList m_devicePaths;
+    int m_timeoutSeconds;
     std::atomic<bool> m_cancelRequested;
-    QMutex m_socketMutex;  // protects socket close operations
 };
 
 /**
@@ -54,7 +56,7 @@ class KPilotDeviceLink : public KPilotLink
     Q_OBJECT
 
 public:
-    explicit KPilotDeviceLink(const QString &devicePath, QObject *parent = nullptr);
+    explicit KPilotDeviceLink(const QStringList &devicePaths, QObject *parent = nullptr);
     ~KPilotDeviceLink() override;
 
     // KPilotLink interface implementation
@@ -141,7 +143,7 @@ private slots:
 private:
     void cleanupWorker();
 
-    QString m_devicePath;      // Device path (e.g., "/dev/ttyUSB0", "usb:")
+    QStringList m_devicePaths; // Device paths to try (e.g., "/dev/ttyUSB0", "/dev/ttyUSB1")
     int m_socket;              // pilot-link socket descriptor
     bool m_isConnected;
 

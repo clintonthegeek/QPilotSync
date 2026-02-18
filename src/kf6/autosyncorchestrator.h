@@ -15,7 +15,7 @@ namespace Sync { class SyncEngine; }
  * @brief Orchestrates the auto-detect -> connect -> sync pipeline.
  *
  * When PalmDeviceMonitor detects a Palm:
- * 1. Races parallel connections on all detected ports
+ * 1. Tries detected ports sequentially (bounded timeout per port)
  * 2. Reads device identity (user info, serial number)
  * 3. Looks up or auto-creates a profile
  * 4. Runs HotSync
@@ -34,6 +34,7 @@ public:
     void setLogWidget(LogWidget *logWidget);
 
     bool isBusy() const { return m_busy; }
+    DeviceSession* activeSession() const { return m_session; }
 
 Q_SIGNALS:
     void syncStarted(const QString &userName);
@@ -54,16 +55,15 @@ private Q_SLOTS:
 private:
     Profile* findOrCreateProfile(const QString &usbSerial,
                                   const QString &userName, quint32 userId);
-    void startParallelConnections(const QStringList &ports);
-    void cleanupLosingConnection(int index);
+    void startConnection(const QStringList &ports);
+    void cleanupAfterFailure();
 
     PalmDeviceMonitor *m_monitor = nullptr;
     Sync::SyncEngine *m_syncEngine = nullptr;
     LogWidget *m_logWidget = nullptr;
 
-    // Parallel connection state
-    QList<DeviceSession*> m_racingSessions;
-    DeviceSession *m_winningSession = nullptr;
+    // Connection state
+    DeviceSession *m_session = nullptr;
     QString m_currentUsbSerial;
     bool m_busy = false;
 

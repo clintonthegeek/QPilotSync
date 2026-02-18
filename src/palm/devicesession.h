@@ -49,10 +49,10 @@ public:
     /**
      * @brief Start device connection (async)
      *
-     * Uses the existing KPilotDeviceLink connection mechanism.
-     * Emits connectionComplete() when done.
+     * Tries each port in @a devicePaths sequentially with a bounded
+     * timeout.  Emits connectionComplete() when done.
      */
-    void connectDevice(const QString &devicePath);
+    void connectDevice(const QStringList &devicePaths);
 
     /**
      * @brief Disconnect from device

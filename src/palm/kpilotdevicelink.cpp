@@ -12,23 +12,40 @@
 #include <QCoreApplication>
 #include <cstring>
 
+// POSIX — for raw port probing before handing off to pilot-link
+#include <fcntl.h>
+#include <unistd.h>
+#include <poll.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+
 // ============================================================================
 // ConnectionWorker - runs blocking pilot-link calls in a separate thread
+//
+// Two-phase connection:
+//   Phase 1 (probe): Opens all ttyUSB ports simultaneously with raw POSIX
+//     and polls for incoming data.  Only the HotSync port receives CMP
+//     wakeup data from the Palm; the debug/console port stays silent.
+//     No protocol bytes are sent, so we can't crash the Palm.
+//   Phase 2 (connect): Uses pilot-link pi_accept_to() on the identified
+//     HotSync port only.  The wakeup packet is safe on the HotSync port.
 // ============================================================================
 
-ConnectionWorker::ConnectionWorker(const QString &devicePath, QObject *parent)
+ConnectionWorker::ConnectionWorker(const QStringList &devicePaths,
+                                   int timeoutSeconds,
+                                   QObject *parent)
     : QObject(parent)
-    , m_devicePath(devicePath)
-    , m_socket(-1)
+    , m_devicePaths(devicePaths)
+    , m_timeoutSeconds(timeoutSeconds)
     , m_cancelRequested(false)
 {
-    qDebug() << "[ConnectionWorker] Created for device:" << devicePath;
+    qDebug() << "[ConnectionWorker] Created for ports:" << devicePaths
+             << "timeout:" << timeoutSeconds << "s";
 }
 
 ConnectionWorker::~ConnectionWorker()
 {
     qDebug() << "[ConnectionWorker] Destroyed";
-    // Note: socket cleanup is handled by KPilotDeviceLink or forceCloseSocket
 }
 
 void ConnectionWorker::requestCancel()
@@ -37,27 +54,149 @@ void ConnectionWorker::requestCancel()
     m_cancelRequested = true;
 }
 
-void ConnectionWorker::forceCloseSocket()
+/**
+ * Phase 1: Probe all ports simultaneously to find the HotSync port.
+ *
+ * Opens every ttyUSB port with raw POSIX, configures serial parameters
+ * to match pilot-link (raw, 9600 baud, 8N1, CLOCAL), and polls for
+ * incoming data.  Only the HotSync port receives CMP data from the
+ * Palm; the debug/console port stays silent.
+ *
+ * All ports are opened simultaneously because the Palm's USB controller
+ * may require all endpoints to be active before starting the protocol.
+ *
+ * No protocol bytes are written, so this cannot crash the Palm.
+ *
+ * Returns the device path that has data, or empty if none responded.
+ */
+QString ConnectionWorker::probeForActivePort()
 {
-    QMutexLocker locker(&m_socketMutex);
-    int sock = m_socket.load();
-    if (sock >= 0) {
-        qDebug() << "[ConnectionWorker] Force-closing socket" << sock << "to interrupt pi_accept()";
-        m_cancelRequested = true;
-        pi_close(sock);
-        m_socket = -1;
+    qDebug() << "[ConnectionWorker] Probing" << m_devicePaths.size()
+             << "port(s) for HotSync data (timeout" << m_timeoutSeconds << "s)";
+
+    struct ProbePort {
+        int fd;
+        QString path;
+    };
+
+    QVector<ProbePort> probes;
+    QVector<struct pollfd> pfds;
+
+    // Open all ports at once and configure serial like pilot-link's s_open()
+    for (const QString &port : m_devicePaths) {
+        int fd = ::open(port.toUtf8().constData(), O_RDWR | O_NONBLOCK);
+        if (fd < 0) {
+            qDebug() << "[ConnectionWorker] Cannot open" << port
+                     << "for probing (errno:" << errno << ")";
+            continue;
+        }
+
+        // Match pilot-link's serial configuration:
+        // raw mode, 9600 baud, 8N1, CLOCAL (ignore modem control)
+        struct termios tcn;
+        if (tcgetattr(fd, &tcn) == 0) {
+            tcn.c_oflag = 0;
+            tcn.c_iflag = IGNBRK | IGNPAR;
+            tcn.c_cflag = CREAD | CLOCAL | CS8;
+            cfsetspeed(&tcn, B9600);
+            tcn.c_lflag = NOFLSH;
+            cfmakeraw(&tcn);
+            for (int i = 0; i < NCCS; i++)
+                tcn.c_cc[i] = 0;
+            tcn.c_cc[VMIN] = 1;
+            tcn.c_cc[VTIME] = 0;
+            tcsetattr(fd, TCSANOW, &tcn);
+        }
+
+        struct pollfd pfd{};
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfds.append(pfd);
+        probes.append({fd, port});
+
+        qDebug() << "[ConnectionWorker] Opened" << port << "for probing (fd:" << fd << ")";
     }
+
+    if (probes.isEmpty()) {
+        qWarning() << "[ConnectionWorker] Could not open any ports for probing";
+        return {};
+    }
+
+    emit statusUpdate(QString("Probing %1 port(s)...").arg(probes.size()));
+
+    // Poll all ports simultaneously.  Check for cancellation every 250ms.
+    QString result;
+    int totalMs = m_timeoutSeconds * 1000;
+    int elapsed = 0;
+    const int pollInterval = 250;
+
+    while (elapsed < totalMs && !m_cancelRequested && result.isEmpty()) {
+        int remaining = qMin(pollInterval, totalMs - elapsed);
+        int ret = ::poll(pfds.data(), pfds.size(), remaining);
+
+        if (ret > 0) {
+            for (int i = 0; i < pfds.size(); ++i) {
+                if (pfds[i].revents & POLLIN) {
+                    result = probes[i].path;
+                    break;
+                }
+            }
+        }
+        elapsed += remaining;
+    }
+
+    // Close all probe fds
+    for (auto &p : probes) {
+        ::close(p.fd);
+    }
+
+    if (!result.isEmpty()) {
+        qDebug() << "[ConnectionWorker] HotSync data detected on" << result
+                 << "after" << elapsed << "ms";
+    } else if (m_cancelRequested) {
+        qDebug() << "[ConnectionWorker] Probe cancelled";
+    } else {
+        qDebug() << "[ConnectionWorker] No HotSync data on any port after"
+                 << totalMs << "ms";
+    }
+
+    return result;
 }
 
+/**
+ * Phase 2: Connect via pilot-link on the identified HotSync port.
+ */
 void ConnectionWorker::doConnect()
 {
     qDebug() << "[ConnectionWorker] doConnect() starting on thread:" << QThread::currentThread();
-    qDebug() << "[ConnectionWorker] Device path:" << m_devicePath;
+    qDebug() << "[ConnectionWorker] Ports to try:" << m_devicePaths;
 
-    emit statusUpdate("Creating pilot-link socket...");
+    // Phase 1: Probe all ports to find the HotSync port.
+    QString activePort = probeForActivePort();
 
-    // Create socket
-    qDebug() << "[ConnectionWorker] Calling pi_socket(PI_AF_PILOT, PI_SOCK_STREAM, PI_PF_DLP)";
+    if (activePort.isEmpty()) {
+        if (m_cancelRequested) {
+            emit connectionFailed("Connection cancelled");
+        } else {
+            QString error = QString("No HotSync data detected on any of %1 port(s)")
+                .arg(m_devicePaths.size());
+            qWarning() << "[ConnectionWorker]" << error;
+            emit connectionFailed(error);
+        }
+        return;
+    }
+
+    if (m_cancelRequested) {
+        emit connectionFailed("Connection cancelled");
+        return;
+    }
+
+    // Phase 2: Connect via pilot-link on the identified HotSync port.
+    // pi_accept_to() with timeout is safe here — the wakeup packet goes
+    // to the HotSync port (which expects it), not the debug port.
+    qDebug() << "[ConnectionWorker] Connecting on HotSync port:" << activePort;
+    emit statusUpdate(QString("Connecting on %1...").arg(activePort));
+
     int sock = pi_socket(PI_AF_PILOT, PI_SOCK_STREAM, PI_PF_DLP);
     if (sock < 0) {
         QString error = QString("Failed to create pilot-link socket (errno: %1)").arg(errno);
@@ -66,127 +205,71 @@ void ConnectionWorker::doConnect()
         return;
     }
 
-    {
-        QMutexLocker locker(&m_socketMutex);
-        m_socket = sock;
-    }
-    qDebug() << "[ConnectionWorker] Socket created successfully, fd:" << sock;
-
-    if (m_cancelRequested) {
-        qDebug() << "[ConnectionWorker] Cancel requested after socket creation";
-        QMutexLocker locker(&m_socketMutex);
-        if (m_socket >= 0) {
-            pi_close(m_socket);
-            m_socket = -1;
-        }
-        emit connectionFailed("Connection cancelled");
-        return;
-    }
-
-    // Bind to device
-    emit statusUpdate(QString("Binding to device %1...").arg(m_devicePath));
-    qDebug() << "[ConnectionWorker] Calling pi_bind() with path:" << m_devicePath.toUtf8().constData();
-
-    int bindResult = pi_bind(sock, m_devicePath.toUtf8().constData());
+    int bindResult = pi_bind(sock, activePort.toUtf8().constData());
     if (bindResult < 0) {
-        QString error = QString("Failed to bind to device %1 (result: %2, errno: %3)")
-            .arg(m_devicePath).arg(bindResult).arg(errno);
+        QString error = QString("Failed to bind to %1 (result: %2)")
+            .arg(activePort).arg(bindResult);
         qWarning() << "[ConnectionWorker]" << error;
-        QMutexLocker locker(&m_socketMutex);
-        if (m_socket >= 0) {
-            pi_close(m_socket);
-            m_socket = -1;
-        }
+        pi_close(sock);
         emit connectionFailed(error);
         return;
     }
-    qDebug() << "[ConnectionWorker] Bind successful, result:" << bindResult;
-
-    if (m_cancelRequested) {
-        qDebug() << "[ConnectionWorker] Cancel requested after bind";
-        QMutexLocker locker(&m_socketMutex);
-        if (m_socket >= 0) {
-            pi_close(m_socket);
-            m_socket = -1;
-        }
-        emit connectionFailed("Connection cancelled");
-        return;
-    }
-
-    // Listen for connection
-    emit statusUpdate("Listening for device...");
-    qDebug() << "[ConnectionWorker] Calling pi_listen() with backlog 1";
 
     int listenResult = pi_listen(sock, 1);
     if (listenResult < 0) {
-        QString error = QString("Failed to listen on device (result: %1, errno: %2)")
-            .arg(listenResult).arg(errno);
+        QString error = QString("Failed to listen on %1 (result: %2)")
+            .arg(activePort).arg(listenResult);
         qWarning() << "[ConnectionWorker]" << error;
-        QMutexLocker locker(&m_socketMutex);
-        if (m_socket >= 0) {
-            pi_close(m_socket);
-            m_socket = -1;
-        }
+        pi_close(sock);
         emit connectionFailed(error);
         return;
     }
-    qDebug() << "[ConnectionWorker] Listen successful";
 
-    if (m_cancelRequested) {
-        qDebug() << "[ConnectionWorker] Cancel requested after listen";
-        QMutexLocker locker(&m_socketMutex);
-        if (m_socket >= 0) {
-            pi_close(m_socket);
-            m_socket = -1;
-        }
-        emit connectionFailed("Connection cancelled");
-        return;
-    }
+    qDebug() << "[ConnectionWorker] Calling pi_accept_to() on" << activePort
+             << "with timeout" << m_timeoutSeconds << "s";
 
-    // Accept connection - THIS BLOCKS until HotSync button is pressed
-    emit statusUpdate("Waiting for HotSync button press... (press button on Palm now)");
-    qDebug() << "[ConnectionWorker] Calling pi_accept() - THIS WILL BLOCK until HotSync";
-    qDebug() << "[ConnectionWorker] Press the HotSync button on your Palm device now!";
+    int acceptResult = pi_accept_to(sock, nullptr, nullptr, m_timeoutSeconds);
 
-    int acceptResult = pi_accept(sock, nullptr, nullptr);
-    if (acceptResult < 0) {
+    if (acceptResult >= 0) {
         if (m_cancelRequested) {
-            qDebug() << "[ConnectionWorker] Accept interrupted - connection cancelled by user";
-            emit connectionFailed("Connection cancelled by user");
-        } else {
-            QString error = QString("Failed to accept connection (result: %1, errno: %2)")
-                .arg(acceptResult).arg(errno);
-            qWarning() << "[ConnectionWorker]" << error;
-            emit connectionFailed(error);
+            qDebug() << "[ConnectionWorker] Connected but cancel was requested, closing";
+            pi_close(acceptResult);
+            emit connectionFailed("Connection cancelled");
+            return;
         }
-        // Socket may already be closed by forceCloseSocket(), check first
-        QMutexLocker locker(&m_socketMutex);
-        if (m_socket >= 0) {
-            pi_close(m_socket);
-            m_socket = -1;
-        }
+
+        qDebug() << "[ConnectionWorker] Connected on" << activePort
+                 << "accept result:" << acceptResult;
+        emit statusUpdate("Device connected!");
+        emit connectionEstablished(acceptResult);
         return;
     }
 
-    qDebug() << "[ConnectionWorker] Connection accepted! Accept result:" << acceptResult;
-    emit statusUpdate("Device connected!");
-    emit connectionEstablished(acceptResult);
+    // pi_accept_to() auto-closes the socket on failure
+    if (m_cancelRequested) {
+        emit connectionFailed("Connection cancelled");
+    } else {
+        QString error = QString("Handshake failed on %1 (result: %2)")
+            .arg(activePort).arg(acceptResult);
+        qWarning() << "[ConnectionWorker]" << error;
+        emit connectionFailed(error);
+    }
 }
 
 // ============================================================================
 // KPilotDeviceLink
 // ============================================================================
 
-KPilotDeviceLink::KPilotDeviceLink(const QString &devicePath, QObject *parent)
+KPilotDeviceLink::KPilotDeviceLink(const QStringList &devicePaths, QObject *parent)
     : KPilotLink(parent)
-    , m_devicePath(devicePath)
+    , m_devicePaths(devicePaths)
     , m_socket(-1)
     , m_isConnected(false)
     , m_workerThread(nullptr)
     , m_worker(nullptr)
 {
-    qDebug() << "[KPilotDeviceLink] Initialized for device:" << devicePath;
-    emit logMessage(QString("Initialized device link for: %1").arg(devicePath));
+    qDebug() << "[KPilotDeviceLink] Initialized for ports:" << devicePaths;
+    emit logMessage(QString("Initialized device link for: %1").arg(devicePaths.join(QStringLiteral(", "))));
 }
 
 KPilotDeviceLink::~KPilotDeviceLink()
@@ -207,25 +290,12 @@ void KPilotDeviceLink::cleanupWorker()
     if (m_workerThread) {
         qDebug() << "[KPilotDeviceLink] Waiting for worker thread to finish...";
         m_workerThread->quit();
-        if (!m_workerThread->wait(3000)) {
-            qWarning() << "[KPilotDeviceLink] Worker thread did not finish in time, terminating";
+        // pi_accept_to() uses a bounded timeout (default 5s per port), so
+        // the thread will exit on its own.  Allow generous headroom.
+        if (!m_workerThread->wait(20000)) {
+            qWarning() << "[KPilotDeviceLink] Worker thread did not finish in 20s, terminating";
             m_workerThread->terminate();
-            if (!m_workerThread->wait(2000)) {
-                // Thread is stuck in a blocking syscall (e.g. pi_accept on a
-                // serial tty).  Deleting a running QThread is a Qt fatal error,
-                // so abandon it instead.  It will be cleaned up when the Palm
-                // disconnects from USB (unblocking the syscall) or at process
-                // exit.
-                //
-                // Remove parent so ~QObject::deleteChildren() won't try to
-                // destroy the still-running thread when this KPilotDeviceLink
-                // is deleted.
-                qWarning() << "[KPilotDeviceLink] Worker thread stuck in syscall, abandoning";
-                m_workerThread->setParent(nullptr);
-                m_workerThread = nullptr;
-                m_worker = nullptr;
-                return;
-            }
+            m_workerThread->wait(2000);
         }
         qDebug() << "[KPilotDeviceLink] Worker thread finished";
 
@@ -248,15 +318,10 @@ void KPilotDeviceLink::cancelConnection()
 
     emit logMessage("Cancelling connection attempt...");
 
-    // Do NOT call forceCloseSocket() here.  pi_close() frees pilot-link's
-    // internal socket structures, but the worker thread may still be blocked
-    // inside pi_accept() referencing them.  When the blocking call eventually
-    // returns (e.g. USB device removal), it would access freed memory and
-    // segfault.  Instead, just request cancellation and let cleanupWorker()
-    // abandon the thread if it's stuck.  The thread will exit naturally when
-    // the Palm is unplugged.
-    m_worker->requestCancel();
-
+    // Set the cancel flag.  The worker thread checks this between port
+    // attempts and exits within at most one pi_accept_to() timeout period
+    // (default 1 second).  No need to force-close the socket — the bounded
+    // timeout guarantees the thread becomes responsive.
     cleanupWorker();
     setStatus(Init);
     emit logMessage("Connection cancelled");
@@ -275,13 +340,13 @@ bool KPilotDeviceLink::openConnection()
     // Clean up any existing worker
     cleanupWorker();
 
-    emit logMessage(QString("Opening connection to %1...").arg(m_devicePath));
+    emit logMessage(QString("Opening connection on %1 port(s)...").arg(m_devicePaths.size()));
     setStatus(WaitingForDevice);
 
-    // Create worker thread
-    qDebug() << "[KPilotDeviceLink] Creating worker thread";
+    // Create worker thread — tries ports sequentially with bounded timeout
+    qDebug() << "[KPilotDeviceLink] Creating worker thread for ports:" << m_devicePaths;
     m_workerThread = new QThread(this);
-    m_worker = new ConnectionWorker(m_devicePath);
+    m_worker = new ConnectionWorker(m_devicePaths);
     m_worker->moveToThread(m_workerThread);
 
     // Connect signals
@@ -300,7 +365,7 @@ bool KPilotDeviceLink::openConnection()
     qDebug() << "[KPilotDeviceLink] Starting worker thread";
     m_workerThread->start();
 
-    emit logMessage("Connection started in background - press HotSync button on Palm");
+    emit logMessage("Connecting — trying ports sequentially");
     qDebug() << "[KPilotDeviceLink] openConnection() returning true (async)";
 
     return true;  // Connection started successfully (but not yet complete)

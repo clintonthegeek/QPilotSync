@@ -56,8 +56,9 @@ void ConduitManager::discoverConduits()
         }
 
         PluginInfo info;
-        info.metaData      = md;
+        info.metaData       = md;
         info.instance       = nullptr;
+        info.palmCreatorId  = metaValue(md, QStringLiteral("X-QPilotSync-PalmCreatorId"));
         info.defaultEnabled = metaBool(md, QStringLiteral("X-QPilotSync-DefaultEnabled"), true);
         info.enabled        = info.defaultEnabled;
         info.sortOrder      = metaInt(md, QStringLiteral("X-QPilotSync-SortOrder"), 0);
@@ -65,6 +66,8 @@ void ConduitManager::discoverConduits()
         m_plugins.insert(conduitId, info);
 
         qDebug() << "[ConduitManager] Discovered conduit:" << conduitId
+                 << "creatorId:" << (info.palmCreatorId.isEmpty()
+                                      ? QStringLiteral("(none)") : info.palmCreatorId)
                  << "sortOrder:" << info.sortOrder
                  << "defaultEnabled:" << info.defaultEnabled;
     }
@@ -195,7 +198,50 @@ void ConduitManager::setConduitEnabled(const QString &pluginId, bool enabled)
     if (!m_plugins.contains(pluginId)) {
         return;
     }
+
+    if (enabled) {
+        // Enforce one-active-per-creator-ID: if another conduit is already
+        // enabled for the same Palm creator ID, disable it first.
+        const QString creatorId = m_plugins[pluginId].palmCreatorId;
+        if (!creatorId.isEmpty()) {
+            for (auto it = m_plugins.begin(); it != m_plugins.end(); ++it) {
+                if (it.key() != pluginId
+                    && it->palmCreatorId == creatorId
+                    && it->enabled) {
+                    qDebug() << "[ConduitManager] Disabling" << it.key()
+                             << "— creator ID" << creatorId
+                             << "claimed by" << pluginId;
+                    it->enabled = false;
+                }
+            }
+        }
+    }
+
     m_plugins[pluginId].enabled = enabled;
+}
+
+// ========== Creator ID Queries ==========
+
+QString ConduitManager::palmCreatorId(const QString &pluginId) const
+{
+    auto it = m_plugins.constFind(pluginId);
+    if (it != m_plugins.constEnd()) {
+        return it->palmCreatorId;
+    }
+    return QString();
+}
+
+QString ConduitManager::enabledConduitForCreatorId(const QString &creatorId) const
+{
+    if (creatorId.isEmpty()) {
+        return QString();
+    }
+    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
+        if (it->enabled && it->palmCreatorId == creatorId) {
+            return it.key();
+        }
+    }
+    return QString();
 }
 
 // ========== Ordering ==========

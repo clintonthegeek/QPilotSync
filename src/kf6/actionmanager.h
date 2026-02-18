@@ -90,6 +90,7 @@ Q_SIGNALS:
     void openProfileRequested();
     void closeProfileRequested();
     void profileSettingsRequested();
+    void settingsRequested();
 
     // Device operations
     void connectRequested();

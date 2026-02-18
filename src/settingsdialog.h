@@ -1,63 +1,71 @@
 #ifndef SETTINGSDIALOG_H
 #define SETTINGSDIALOG_H
 
-#include <QDialog>
-#include <QTabWidget>
-#include <QLineEdit>
-#include <QComboBox>
-#include <QCheckBox>
-#include <QSpinBox>
-#include <QPushButton>
-#include <QLabel>
-#include <QListWidget>
+#include <KPageDialog>
+#include <QMap>
+
+class QCheckBox;
+class QLineEdit;
+class QListWidget;
+class QPushButton;
+class QLabel;
+class QTreeWidget;
+class QTreeWidgetItem;
+class KPageWidgetItem;
+class ConduitManager;
 
 /**
- * @brief Global settings dialog with tabbed interface
+ * @brief Global settings dialog using KPageDialog (icon-sidebar layout)
  *
  * Provides configuration for global (non-profile-specific) settings:
+ *   - Conduits: Enable/disable conduits grouped by Palm creator ID
  *   - Profiles: Default profile, recent profiles list
- *   - Devices: View registered devices (read-only)
- *   - Advanced: Debug options
+ *   - Devices: View registered devices
+ *   - Advanced: System tray, debug options
  *
- * Profile-specific settings (device port/baud, sync folder, conflict policy, conduits)
- * are configured through File → Profile Settings menu item.
+ * Conduit config pages are dynamically added/removed in the sidebar
+ * when conduits are enabled or disabled.
  */
-class SettingsDialog : public QDialog
+class SettingsDialog : public KPageDialog
 {
     Q_OBJECT
 
 public:
-    explicit SettingsDialog(QWidget *parent = nullptr);
+    explicit SettingsDialog(ConduitManager *conduitManager,
+                            QWidget *parent = nullptr);
 
-    // Load current settings into UI
-    void loadSettings();
-
-    // Save UI values to settings
-    void saveSettings();
-
-signals:
+Q_SIGNALS:
     void settingsChanged();
 
-private slots:
+private Q_SLOTS:
+    void onConduitToggled(QTreeWidgetItem *item, int column);
     void onSetDefaultProfile();
     void onBrowseDefaultProfile();
     void onClearDefaultProfile();
     void onRemoveRecentProfile();
     void onClearRecentProfiles();
     void onClearDeviceRegistry();
-    void onAccept();
     void onApply();
 
 private:
-    void setupUi();
+    void loadSettings();
+    void saveSettings();
+    QWidget* createConduitsPage();
     QWidget* createProfilesPage();
     QWidget* createDevicesPage();
     QWidget* createAdvancedPage();
 
-    // Tab widget
-    QTabWidget *m_tabWidget;
+    void addConduitConfigPages(const QString &conduitId);
+    void removeConduitConfigPages(const QString &conduitId);
 
-    // Profiles page widgets
+    ConduitManager *m_conduitManager;
+
+    // Conduits page
+    QTreeWidget *m_conduitTree;
+    QLabel *m_conduitDetailLabel;
+    QMap<QString, QList<KPageWidgetItem*>> m_conduitConfigPages;
+
+    // Profiles page
     QLineEdit *m_defaultProfileEdit;
     QPushButton *m_browseProfileBtn;
     QPushButton *m_clearProfileBtn;
@@ -66,18 +74,14 @@ private:
     QPushButton *m_removeRecentBtn;
     QPushButton *m_clearRecentBtn;
 
-    // Devices page widgets
+    // Devices page
     QListWidget *m_deviceRegistryList;
     QPushButton *m_clearRegistryBtn;
 
-    // Advanced page widgets
+    // Advanced page
+    QCheckBox *m_minimizeToTrayCheck;
     QCheckBox *m_debugLoggingCheck;
     QLabel *m_configFileLabel;
-
-    // Dialog buttons
-    QPushButton *m_okButton;
-    QPushButton *m_cancelButton;
-    QPushButton *m_applyButton;
 };
 
 #endif // SETTINGSDIALOG_H

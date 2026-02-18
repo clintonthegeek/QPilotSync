@@ -33,7 +33,7 @@ void ActionManager::setupActions()
     // Add standard KDE actions
     KStandardAction::quit(m_window, &QWidget::close, m_actionCollection);
     KStandardAction::preferences(this, [this]() {
-        // Will be connected to settings dialog
+        Q_EMIT settingsRequested();
     }, m_actionCollection);
     KStandardAction::configureToolbars(m_window, [this]() {
         m_window->configureToolbars();

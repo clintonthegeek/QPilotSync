@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QDebug>
 #include <QRegularExpression>
+#include <QTimer>
 #include <cstring>
 
 #include <pi-dlp.h>
@@ -24,19 +25,17 @@ AutoSyncOrchestrator::AutoSyncOrchestrator(QObject *parent)
 
 AutoSyncOrchestrator::~AutoSyncOrchestrator()
 {
-    // Clean up any racing sessions still alive
-    for (DeviceSession *session : m_racingSessions) {
-        if (!session) {
-            continue;
+    if (m_session) {
+        if (m_session->isConnected()) {
+            m_session->disconnectDevice();
         }
-        if (session->isConnected()) {
-            session->disconnectDevice();
-        }
-        delete session;
+        delete m_session;
+        m_session = nullptr;
     }
-    m_racingSessions.clear();
 
-    delete m_currentProfile;
+    // Don't delete m_currentProfile — if profileLoaded was emitted,
+    // the main window owns it. If it wasn't, cleanupAfterFailure()
+    // already deleted it.
     m_currentProfile = nullptr;
 }
 
@@ -88,17 +87,17 @@ void AutoSyncOrchestrator::onPalmDetected(const QStringList &ports, const QStrin
     }
 
     Q_EMIT statusChanged(QStringLiteral("Connecting..."));
-    startParallelConnections(ports);
+    startConnection(ports);
 }
 
-void AutoSyncOrchestrator::startParallelConnections(const QStringList &ports)
+void AutoSyncOrchestrator::startConnection(const QStringList &ports)
 {
-    // Clean up any leftover sessions from a previous run
-    for (DeviceSession *session : m_racingSessions) {
-        delete session;
+    // Clean up any leftover session from a previous run
+    if (m_session) {
+        disconnect(m_session, nullptr, this, nullptr);
+        delete m_session;
+        m_session = nullptr;
     }
-    m_racingSessions.clear();
-    m_winningSession = nullptr;
 
     if (ports.isEmpty()) {
         if (m_logWidget) {
@@ -109,191 +108,126 @@ void AutoSyncOrchestrator::startParallelConnections(const QStringList &ports)
         return;
     }
 
-    // Create one DeviceSession per port and race them
-    for (const QString &port : ports) {
-        auto *session = new DeviceSession(this);
+    // Create a single session that tries all ports sequentially
+    m_session = new DeviceSession(this);
 
-        connect(session, &DeviceSession::connectionComplete,
-                this, &AutoSyncOrchestrator::onConnectionComplete);
-        connect(session, &DeviceSession::logMessage, this, [this](const QString &msg) {
-            if (m_logWidget) {
-                m_logWidget->logInfo(msg);
-            }
-        });
-        connect(session, &DeviceSession::errorOccurred, this, [this](const QString &msg) {
-            if (m_logWidget) {
-                m_logWidget->logError(msg);
-            }
-        });
-
-        m_racingSessions.append(session);
-
+    connect(m_session, &DeviceSession::connectionComplete,
+            this, &AutoSyncOrchestrator::onConnectionComplete);
+    connect(m_session, &DeviceSession::logMessage, this, [this](const QString &msg) {
         if (m_logWidget) {
-            m_logWidget->logInfo(QStringLiteral("  Racing connection on %1").arg(port));
+            m_logWidget->logInfo(msg);
         }
+    });
+    connect(m_session, &DeviceSession::errorOccurred, this, [this](const QString &msg) {
+        if (m_logWidget) {
+            m_logWidget->logError(msg);
+        }
+    });
 
-        session->connectDevice(port);
+    if (m_logWidget) {
+        m_logWidget->logInfo(
+            QStringLiteral("Trying %1 port(s): %2")
+                .arg(ports.size())
+                .arg(ports.join(QStringLiteral(", "))));
     }
+
+    m_session->connectDevice(ports);
 }
 
 void AutoSyncOrchestrator::onConnectionComplete(bool success)
 {
-    auto *session = qobject_cast<DeviceSession*>(sender());
-    if (!session) {
+    if (!m_session) {
         return;
     }
 
-    int index = m_racingSessions.indexOf(session);
-    if (index < 0) {
-        // Session not in the race (already cleaned up)
-        return;
-    }
-
-    if (success && !m_winningSession) {
-        // First successful connection wins the race
-        m_winningSession = session;
-
+    if (success) {
         if (m_logWidget) {
-            m_logWidget->logInfo(QStringLiteral("Connection established (winner on port #%1)")
-                                     .arg(index + 1));
+            m_logWidget->logInfo(QStringLiteral("Connection established"));
         }
 
-        // Connect winner's subsequent signals
-        connect(m_winningSession, &DeviceSession::deviceReady,
+        // Wire up subsequent signals
+        connect(m_session, &DeviceSession::deviceReady,
                 this, &AutoSyncOrchestrator::onDeviceReady);
-        connect(m_winningSession, &DeviceSession::readyForSync,
+        connect(m_session, &DeviceSession::readyForSync,
                 this, &AutoSyncOrchestrator::onReadyForSync);
-        connect(m_winningSession, &DeviceSession::syncFinished,
+        connect(m_session, &DeviceSession::syncFinished,
                 this, &AutoSyncOrchestrator::onSyncFinished);
+        return;
+    }
 
-        // Clean up all the losers
-        for (int i = 0; i < m_racingSessions.size(); ++i) {
-            if (i != index) {
-                cleanupLosingConnection(i);
-            }
+    // Connection failed on all ports
+    if (m_logWidget) {
+        m_logWidget->logError(QStringLiteral("Connection failed on all ports"));
+    }
+    Q_EMIT error(QStringLiteral("Failed to connect on any port"));
+    Q_EMIT statusChanged(QStringLiteral("Connection failed"));
+
+    disconnect(m_session, nullptr, this, nullptr);
+    m_session->deleteLater();
+    m_session = nullptr;
+    m_busy = false;
+
+    // Reset status after a few seconds so the user sees the app is ready
+    QTimer::singleShot(4000, this, [this]() {
+        if (!m_busy) {
+            Q_EMIT statusChanged(QStringLiteral("Listening for Palm devices"));
         }
-
-        return;
-    }
-
-    if (success && m_winningSession) {
-        // We already have a winner; this late success is a loser
-        cleanupLosingConnection(index);
-        return;
-    }
-
-    // This connection failed. Check if all have failed.
-    if (!m_winningSession) {
-        bool allDone = true;
-        for (int i = 0; i < m_racingSessions.size(); ++i) {
-            DeviceSession *s = m_racingSessions[i];
-            if (s && s != session && s->isBusy()) {
-                allDone = false;
-                break;
-            }
-        }
-
-        if (allDone) {
-            if (m_logWidget) {
-                m_logWidget->logError(
-                    QStringLiteral("All connection attempts failed"));
-            }
-            Q_EMIT error(QStringLiteral("Failed to connect on any port"));
-            Q_EMIT statusChanged(QStringLiteral("Connection failed"));
-
-            // Clean up all sessions
-            for (DeviceSession *s : m_racingSessions) {
-                delete s;
-            }
-            m_racingSessions.clear();
-            m_busy = false;
-        }
-    }
-}
-
-void AutoSyncOrchestrator::cleanupLosingConnection(int index)
-{
-    if (index < 0 || index >= m_racingSessions.size()) {
-        return;
-    }
-
-    DeviceSession *loser = m_racingSessions[index];
-    if (!loser) {
-        return;
-    }
-
-    // Disconnect all signals to prevent late callbacks
-    disconnect(loser, nullptr, this, nullptr);
-
-    if (loser->isConnected()) {
-        loser->disconnectDevice();
-    }
-
-    // Don't delete immediately -- schedule for safe deletion
-    loser->deleteLater();
-    m_racingSessions[index] = nullptr;
+    });
 }
 
 void AutoSyncOrchestrator::onDeviceReady(const QString &userName, const QString &deviceName)
 {
-    if (!m_winningSession) {
-        return;
-    }
-
     if (m_logWidget) {
         m_logWidget->logInfo(
             QStringLiteral("Device ready: %1 (%2)").arg(userName, deviceName));
     }
+}
 
-    // Read full user info from the device link
-    KPilotDeviceLink *link = m_winningSession->deviceLink();
+void AutoSyncOrchestrator::onReadyForSync()
+{
+    if (!m_session || !m_syncEngine) {
+        if (m_logWidget) {
+            m_logWidget->logError(
+                QStringLiteral("Not ready for sync: missing session or engine"));
+        }
+        cleanupAfterFailure();
+        return;
+    }
+
+    // Read user info from the device to identify which profile to use.
+    KPilotDeviceLink *link = m_session->deviceLink();
     struct PilotUser user;
     memset(&user, 0, sizeof(user));
 
-    QString resolvedUserName = userName;
+    QString userName;
     quint32 userId = 0;
 
     if (link && link->readUserInfo(user)) {
-        resolvedUserName = QString::fromLatin1(user.username);
+        userName = QString::fromLatin1(user.username);
         userId = user.userID;
 
         if (m_logWidget) {
             m_logWidget->logInfo(
-                QStringLiteral("User: %1 (ID: %2)").arg(resolvedUserName).arg(userId));
+                QStringLiteral("User: %1 (ID: %2)").arg(userName).arg(userId));
         }
     }
 
     // Find or create the profile for this device
-    Profile *profile = findOrCreateProfile(m_currentUsbSerial, resolvedUserName, userId);
+    Profile *profile = findOrCreateProfile(m_currentUsbSerial, userName, userId);
     if (!profile) {
         if (m_logWidget) {
             m_logWidget->logError(QStringLiteral("Failed to find or create profile"));
         }
         Q_EMIT error(QStringLiteral("Could not create sync profile"));
-
-        m_winningSession->disconnectDevice();
-        m_busy = false;
+        cleanupAfterFailure();
         return;
     }
 
     m_currentProfile = profile;
-    Q_EMIT connectionEstablished(resolvedUserName, deviceName);
+    Q_EMIT connectionEstablished(userName, QStringLiteral("Palm"));
     Q_EMIT profileLoaded(m_currentProfile);
-}
-
-void AutoSyncOrchestrator::onReadyForSync()
-{
-    if (!m_winningSession || !m_syncEngine || !m_currentProfile) {
-        if (m_logWidget) {
-            m_logWidget->logError(
-                QStringLiteral("Not ready for sync: missing session, engine, or profile"));
-        }
-        m_busy = false;
-        return;
-    }
 
     // Configure the sync engine with the profile's paths
-    KPilotDeviceLink *link = m_winningSession->deviceLink();
     m_syncEngine->setDeviceLink(link);
     m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
 
@@ -311,7 +245,7 @@ void AutoSyncOrchestrator::onReadyForSync()
     Q_EMIT statusChanged(QStringLiteral("Syncing..."));
     Q_EMIT syncStarted(m_currentProfile->deviceFingerprint().userName);
 
-    m_winningSession->requestSync(Sync::SyncMode::HotSync, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::HotSync, m_syncEngine);
 }
 
 void AutoSyncOrchestrator::onSyncFinished(bool success, const QString &summary)
@@ -332,31 +266,49 @@ void AutoSyncOrchestrator::onSyncFinished(bool success, const QString &summary)
     }
 
     // Disconnect the device cleanly
-    if (m_winningSession) {
-        m_winningSession->disconnectDevice();
+    if (m_session) {
+        m_session->disconnectDevice();
     }
 
     Q_EMIT statusChanged(success ? QStringLiteral("Sync complete")
                                  : QStringLiteral("Sync failed"));
     Q_EMIT syncFinished(success, summary);
 
-    // Clean up session state
-    // The winning session is still in m_racingSessions; clean up everything
-    for (int i = 0; i < m_racingSessions.size(); ++i) {
-        DeviceSession *s = m_racingSessions[i];
-        if (s) {
-            disconnect(s, nullptr, this, nullptr);
-            s->deleteLater();
-            m_racingSessions[i] = nullptr;
-        }
+    // Clean up session
+    if (m_session) {
+        disconnect(m_session, nullptr, this, nullptr);
+        m_session->deleteLater();
+        m_session = nullptr;
     }
-    m_racingSessions.clear();
-    m_winningSession = nullptr;
+
+    // Don't delete the profile — ownership was transferred to the main
+    // window via the profileLoaded signal.
+    m_currentProfile = nullptr;
+
+    m_busy = false;
+}
+
+void AutoSyncOrchestrator::cleanupAfterFailure()
+{
+    if (m_session) {
+        m_session->disconnectDevice();
+        disconnect(m_session, nullptr, this, nullptr);
+        m_session->deleteLater();
+        m_session = nullptr;
+    }
 
     delete m_currentProfile;
     m_currentProfile = nullptr;
 
     m_busy = false;
+
+    Q_EMIT statusChanged(QStringLiteral("Sync failed"));
+
+    QTimer::singleShot(4000, this, [this]() {
+        if (!m_busy) {
+            Q_EMIT statusChanged(QStringLiteral("Listening for Palm devices"));
+        }
+    });
 }
 
 // ========== Private Helpers ==========

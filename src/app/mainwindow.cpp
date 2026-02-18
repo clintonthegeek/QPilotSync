@@ -365,7 +365,7 @@ void MainWindow::startConnection(const QString &devicePath)
     statusBar()->showMessage(QString("Connecting to %1...").arg(devicePath));
 
     // Start async connection
-    m_session->connectDevice(devicePath);
+    m_session->connectDevice(QStringList{devicePath});
 
     // Connection attempt started - update menu state
     updateMenuState(false);
@@ -1633,7 +1633,7 @@ void MainWindow::onAbout()
 
 void MainWindow::onSettings()
 {
-    SettingsDialog dialog(this);
+    SettingsDialog dialog(nullptr, this);
     connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
         m_logWidget->logInfo("Settings updated");
     });
