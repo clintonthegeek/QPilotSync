@@ -413,6 +413,15 @@ void KPilotDeviceLink::closeConnection()
     if (m_socket >= 0) {
         qDebug() << "[KPilotDeviceLink] Closing socket:" << m_socket;
         emit logMessage("Closing connection...");
+
+        // Set a short timeout so pi_close()'s internal dlp_EndOfSync()
+        // doesn't block forever if the device is already gone (e.g. a
+        // PTY whose master side was closed).
+        int timeout = 2000; // milliseconds
+        size_t len = sizeof(timeout);
+        pi_setsockopt(m_socket, PI_LEVEL_DEV, PI_DEV_TIMEOUT,
+                       &timeout, &len);
+
         pi_close(m_socket);
         m_socket = -1;
     }

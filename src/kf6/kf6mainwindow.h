@@ -202,7 +202,7 @@ private:
 
     // System tray
     KStatusNotifierItem *m_trayIcon = nullptr;
-    bool m_minimizeToTray = false;
+    bool m_minimizeToTray = true;
     void updateTrayState(const QString &status);
 };
 

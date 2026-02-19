@@ -216,9 +216,10 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     m_trayIcon->setToolTipTitle(i18n("Wild Palms"));
     m_trayIcon->setToolTipSubTitle(i18n("Listening for Palm devices"));
     m_trayIcon->setCategory(KStatusNotifierItem::ApplicationStatus);
+    m_trayIcon->setStatus(KStatusNotifierItem::Active);
     m_trayIcon->setStandardActionsEnabled(true);
 
-    // Load minimize-to-tray preference (default: false = closing quits)
+    // Load minimize-to-tray preference (default: true = closing minimizes to tray)
     m_minimizeToTray = KF6Settings::instance().minimizeToTray();
 
     // Status bar
