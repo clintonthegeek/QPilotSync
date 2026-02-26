@@ -7,9 +7,11 @@
 #include <pi-dlp.h>
 #include <pi-file.h>
 #include <pi-buffer.h>
+#include <pi-debug.h>
 
 #include <QDebug>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <cstring>
 
 // POSIX — for raw port probing before handing off to pilot-link
@@ -69,7 +71,7 @@ void ConnectionWorker::requestCancel()
  *
  * Returns the device path that has data, or empty if none responded.
  */
-QString ConnectionWorker::probeForActivePort()
+ConnectionWorker::ProbeResult ConnectionWorker::probeForActivePort()
 {
     qDebug() << "[ConnectionWorker] Probing" << m_devicePaths.size()
              << "port(s) for HotSync data (timeout" << m_timeoutSeconds << "s)";
@@ -125,19 +127,20 @@ QString ConnectionWorker::probeForActivePort()
     emit statusUpdate(QString("Probing %1 port(s)...").arg(probes.size()));
 
     // Poll all ports simultaneously.  Check for cancellation every 250ms.
-    QString result;
+    ProbeResult result;
     int totalMs = m_timeoutSeconds * 1000;
     int elapsed = 0;
     const int pollInterval = 250;
 
-    while (elapsed < totalMs && !m_cancelRequested && result.isEmpty()) {
+    while (elapsed < totalMs && !m_cancelRequested && result.port.isEmpty()) {
         int remaining = qMin(pollInterval, totalMs - elapsed);
         int ret = ::poll(pfds.data(), pfds.size(), remaining);
 
         if (ret > 0) {
             for (int i = 0; i < pfds.size(); ++i) {
                 if (pfds[i].revents & POLLIN) {
-                    result = probes[i].path;
+                    result.port = probes[i].path;
+                    result.fd = probes[i].fd;
                     break;
                 }
             }
@@ -145,14 +148,19 @@ QString ConnectionWorker::probeForActivePort()
         elapsed += remaining;
     }
 
-    // Close all probe fds
+    // Close ONLY non-active probe fds.  The active port's fd stays open
+    // so its CMP data remains in the kernel tty buffer — two fds to the
+    // same tty share the input buffer, and closing the LAST fd flushes it.
+    // pilot-link's pi_bind() will open its own fd, then we close ours.
     for (auto &p : probes) {
-        ::close(p.fd);
+        if (p.fd != result.fd) {
+            ::close(p.fd);
+        }
     }
 
-    if (!result.isEmpty()) {
-        qDebug() << "[ConnectionWorker] HotSync data detected on" << result
-                 << "after" << elapsed << "ms";
+    if (!result.port.isEmpty()) {
+        qDebug() << "[ConnectionWorker] HotSync data detected on" << result.port
+                 << "after" << elapsed << "ms (keeping probe fd" << result.fd << "open)";
     } else if (m_cancelRequested) {
         qDebug() << "[ConnectionWorker] Probe cancelled";
     } else {
@@ -172,7 +180,19 @@ void ConnectionWorker::doConnect()
     qDebug() << "[ConnectionWorker] Ports to try:" << m_devicePaths;
 
     // Phase 1: Probe all ports to find the HotSync port.
-    QString activePort = probeForActivePort();
+    // The probe keeps the active port's fd open so CMP data stays in the
+    // kernel tty buffer.  We close it after pi_bind() opens its own fd.
+    QString activePort;
+    int probeFd = -1;  // Probe fd to close after pi_bind
+
+    if (m_devicePaths.size() == 1) {
+        activePort = m_devicePaths.first();
+        qDebug() << "[ConnectionWorker] Single port, skipping probe:" << activePort;
+    } else {
+        ProbeResult probe = probeForActivePort();
+        activePort = probe.port;
+        probeFd = probe.fd;
+    }
 
     if (activePort.isEmpty()) {
         if (m_cancelRequested) {
@@ -187,6 +207,7 @@ void ConnectionWorker::doConnect()
     }
 
     if (m_cancelRequested) {
+        if (probeFd >= 0) ::close(probeFd);
         emit connectionFailed("Connection cancelled");
         return;
     }
@@ -197,6 +218,18 @@ void ConnectionWorker::doConnect()
     qDebug() << "[ConnectionWorker] Connecting on HotSync port:" << activePort;
     emit statusUpdate(QString("Connecting on %1...").arg(activePort));
 
+    // Close the probe fd BEFORE pilot-link opens the tty.  USB serial
+    // drivers (visor, usb-serial) don't handle two concurrent fds to the
+    // same port during CMP handshake.  Closing flushes the CMP wakeup
+    // data, but pi_serial_accept() has a Linux workaround that sends a
+    // wakeup packet when no data is available within 1 second.
+    if (probeFd >= 0) {
+        qDebug() << "[ConnectionWorker] Closing probe fd" << probeFd
+                 << "before pilot-link takes over";
+        ::close(probeFd);
+        probeFd = -1;
+    }
+
     int sock = pi_socket(PI_AF_PILOT, PI_SOCK_STREAM, PI_PF_DLP);
     if (sock < 0) {
         QString error = QString("Failed to create pilot-link socket (errno: %1)").arg(errno);
@@ -206,6 +239,7 @@ void ConnectionWorker::doConnect()
     }
 
     int bindResult = pi_bind(sock, activePort.toUtf8().constData());
+
     if (bindResult < 0) {
         QString error = QString("Failed to bind to %1 (result: %2)")
             .arg(activePort).arg(bindResult);
@@ -241,7 +275,43 @@ void ConnectionWorker::doConnect()
         qDebug() << "[ConnectionWorker] Connected on" << activePort
                  << "accept result:" << acceptResult;
         emit statusUpdate("Device connected!");
-        emit connectionEstablished(acceptResult);
+
+        // Perform initial DLP reads on the same thread as pi_accept_to(),
+        // matching how pilot-xfer (plu_connect) does it.  This avoids
+        // cross-thread socket usage for the first protocol exchanges and
+        // keeps timing tight (no event-loop hop between CMP and DLP).
+        HandshakeResult result;
+        result.socket = acceptResult;
+
+        // Read user info first (needed for device identification)
+        struct PilotUser pilotUser;
+        memset(&pilotUser, 0, sizeof(pilotUser));
+        if (dlp_ReadUserInfo(acceptResult, &pilotUser) >= 0) {
+            result.userInfoValid = true;
+            result.userName = QString::fromLatin1(pilotUser.username);
+            result.userId = pilotUser.userID;
+            qDebug() << "[ConnectionWorker] ReadUserInfo OK - user:" << result.userName
+                     << "id:" << result.userId;
+        } else {
+            qDebug() << "[ConnectionWorker] ReadUserInfo failed (non-fatal)";
+        }
+
+        // Read system info
+        struct SysInfo sysInfo;
+        memset(&sysInfo, 0, sizeof(sysInfo));
+        if (dlp_ReadSysInfo(acceptResult, &sysInfo) >= 0) {
+            result.sysInfoValid = true;
+            result.romVersion = sysInfo.romVersion;
+            result.productId = QString::fromLatin1(sysInfo.prodID);
+            qDebug() << "[ConnectionWorker] ReadSysInfo OK - romVersion:" << result.romVersion;
+        } else {
+            qDebug() << "[ConnectionWorker] ReadSysInfo failed (non-fatal)";
+        }
+
+        // NOTE: OpenConduit is NOT called here. It belongs exclusively in
+        // DeviceWorker::doSync() which handles it before each sync operation.
+
+        emit connectionEstablished(result);
         return;
     }
 
@@ -349,6 +419,9 @@ bool KPilotDeviceLink::openConnection()
     m_worker = new ConnectionWorker(m_devicePaths);
     m_worker->moveToThread(m_workerThread);
 
+    // Register metatype for cross-thread signal
+    qRegisterMetaType<HandshakeResult>("HandshakeResult");
+
     // Connect signals
     connect(m_workerThread, &QThread::started, m_worker, &ConnectionWorker::doConnect);
     connect(m_worker, &ConnectionWorker::connectionEstablished,
@@ -371,15 +444,22 @@ bool KPilotDeviceLink::openConnection()
     return true;  // Connection started successfully (but not yet complete)
 }
 
-void KPilotDeviceLink::onConnectionEstablished(int socket)
+void KPilotDeviceLink::onConnectionEstablished(const HandshakeResult &result)
 {
-    qDebug() << "[KPilotDeviceLink] onConnectionEstablished() socket:" << socket;
+    qDebug() << "[KPilotDeviceLink] onConnectionEstablished() socket:" << result.socket;
 
-    m_socket = socket;
+    m_socket = result.socket;
     m_isConnected = true;
-    setStatus(AcceptedDevice);
+    m_handshake = result;
 
+    setStatus(AcceptedDevice);
     emit logMessage("Device connected successfully!");
+
+    // Emit deviceReady with user info (previously done inside readUserInfo)
+    if (result.userInfoValid) {
+        emit deviceReady(result.userName, QStringLiteral("Palm Device"));
+    }
+
     emit connectionComplete(true);
 
     qDebug() << "[KPilotDeviceLink] Connection established, m_isConnected = true";
@@ -441,11 +521,14 @@ bool KPilotDeviceLink::readUserInfo(struct PilotUser &user)
         return false;
     }
 
-    qDebug() << "[KPilotDeviceLink] Calling dlp_ReadUserInfo()";
+    qDebug() << "[KPilotDeviceLink] Calling dlp_ReadUserInfo() on socket" << m_socket
+             << "connected:" << pi_socket_connected(m_socket);
     struct PilotUser pilotUser;
     int result = dlp_ReadUserInfo(m_socket, &pilotUser);
     if (result < 0) {
-        qWarning() << "[KPilotDeviceLink] dlp_ReadUserInfo() failed, result:" << result;
+        qWarning() << "[KPilotDeviceLink] dlp_ReadUserInfo() failed, result:" << result
+                    << "pi_error:" << pi_error(m_socket)
+                    << "palmos_error:" << pi_palmos_error(m_socket);
         setError("Failed to read user info");
         return false;
     }
@@ -497,11 +580,13 @@ bool KPilotDeviceLink::readSysInfo(struct SysInfo &sysInfo)
         return false;
     }
 
-    qDebug() << "[KPilotDeviceLink] Calling dlp_ReadSysInfo()";
+    qDebug() << "[KPilotDeviceLink] Calling dlp_ReadSysInfo() on socket" << m_socket;
     struct SysInfo info;
     int result = dlp_ReadSysInfo(m_socket, &info);
     if (result < 0) {
-        qWarning() << "[KPilotDeviceLink] dlp_ReadSysInfo() failed, result:" << result;
+        qWarning() << "[KPilotDeviceLink] dlp_ReadSysInfo() failed, result:" << result
+                    << "pi_error:" << pi_error(m_socket)
+                    << "palmos_error:" << pi_palmos_error(m_socket);
         setError("Failed to read system info");
         return false;
     }
@@ -808,6 +893,87 @@ bool KPilotDeviceLink::deleteRecord(int dbHandle, int recordId)
     qDebug() << "[KPilotDeviceLink] Record deleted successfully";
     emit logMessage(QString("Record deleted (ID: %1)").arg(recordId));
     return true;
+}
+
+bool KPilotDeviceLink::resetDBIndex(int dbHandle)
+{
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] resetDBIndex() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    int result = dlp_ResetDBIndex(m_socket, dbHandle);
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_ResetDBIndex() failed, result:" << result;
+        setError("Failed to reset database index");
+        return false;
+    }
+
+    qDebug() << "[KPilotDeviceLink] Database index reset for handle:" << dbHandle;
+    return true;
+}
+
+QList<PilotRecord*> KPilotDeviceLink::readModifiedRecords(int dbHandle)
+{
+    qDebug() << "[KPilotDeviceLink] readModifiedRecords() called for handle:" << dbHandle;
+    QList<PilotRecord*> records;
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] readModifiedRecords() - not connected";
+        setError("Not connected");
+        return records;
+    }
+
+    if (!resetDBIndex(dbHandle)) {
+        return records;
+    }
+
+    QElapsedTimer timer;
+    timer.start();
+
+    pi_buffer_t *buffer = pi_buffer_new(0xffff);
+
+    while (m_isConnected) {
+        recordid_t id = 0;
+        int recindex = 0;
+        int attr = 0;
+        int category = 0;
+
+        int result = dlp_ReadNextModifiedRec(m_socket, dbHandle,
+                                             buffer, &id, &recindex,
+                                             &attr, &category);
+
+        if (result < 0) {
+            // End of modified records: PI_ERR_DLP_PALMOS with dlpErrNotFound
+            if (pi_palmos_error(m_socket) == dlpErrNotFound) {
+                qDebug() << "[KPilotDeviceLink] readModifiedRecords: end of modified records";
+            } else {
+                qWarning() << "[KPilotDeviceLink] dlp_ReadNextModifiedRec() failed, result:" << result
+                           << "pi_error:" << pi_error(m_socket)
+                           << "palmos_error:" << pi_palmos_error(m_socket);
+            }
+            break;
+        }
+
+        QByteArray data(reinterpret_cast<const char*>(buffer->data), buffer->used);
+        PilotRecord *record = new PilotRecord(id, category, attr, data);
+        records.append(record);
+
+        qDebug() << "[KPilotDeviceLink] readModifiedRecords: id=" << id
+                 << "attr=0x" << Qt::hex << attr << Qt::dec
+                 << "dirty=" << (attr & 0x40 ? "yes" : "no")
+                 << "deleted=" << (attr & 0x80 ? "yes" : "no")
+                 << "category=" << category
+                 << "size=" << buffer->used;
+    }
+
+    pi_buffer_free(buffer);
+
+    qDebug() << "[KPilotDeviceLink] readModifiedRecords: found" << records.size()
+             << "records in" << timer.elapsed() << "ms";
+    emit logMessage(QString("Read %1 modified records").arg(records.size()));
+    return records;
 }
 
 bool KPilotDeviceLink::readAppBlock(int dbHandle, unsigned char *buffer, size_t *size)

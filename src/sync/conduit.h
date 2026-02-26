@@ -5,6 +5,7 @@
 #include <QString>
 #include <QStringList>
 #include <QList>
+#include <QSet>
 #include <QIcon>
 #include <QJsonObject>
 #include <QDateTime>
@@ -57,6 +58,9 @@ public:
 
     bool isFirstSync = false;
     bool cancelled = false;
+
+    QSet<QString> baselineUpdatedPcIds;   ///< PC IDs created/updated during sync
+    QSet<QString> baselineDeletedPcIds;   ///< PC IDs deleted during sync
 };
 
 /**
@@ -534,6 +538,10 @@ protected:
      * for change detection in the next sync.
      */
     void saveBaseline(SyncContext *context);
+
+    void saveBaselineIncremental(SyncContext *context,
+                                 const QSet<QString> &updatedPcIds,
+                                 const QSet<QString> &deletedPcIds);
 
     bool writeModifiedCategories(SyncContext *context) override;
 

@@ -5,6 +5,7 @@
 
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -119,8 +120,15 @@ SyncResult SyncConduitBase::sync(SyncContext *context)
 
     // Update sync state
     if (result.success) {
-        // Save baseline hashes for all current backend records
-        saveBaseline(context);
+        if (context->mode == SyncMode::HotSync && !context->isFirstSync) {
+            // Incremental baseline: only update changed records
+            saveBaselineIncremental(context,
+                                    context->baselineUpdatedPcIds,
+                                    context->baselineDeletedPcIds);
+        } else {
+            // Full baseline for FullSync, FirstSync, etc.
+            saveBaseline(context);
+        }
 
         context->state->setLastSyncTime(QDateTime::currentDateTime());
         context->state->save();
@@ -139,23 +147,39 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
 {
     emit logMessage("Performing HotSync (modified records only)...");
 
+    QElapsedTimer totalTimer;
+    totalTimer.start();
+
     SyncResult result;
     result.success = true;
-
-    // Load modified Palm records
-    QList<PilotRecord*> palmRecords = readPalmRecords(context, true);
-    emit logMessage(QString("Found %1 modified Palm records").arg(palmRecords.size()));
-
-    // Load all backend records (we need full set for lookups)
-    QList<BackendRecord*> backendRecords = context->backend->loadRecords(context->collectionId);
-    emit logMessage(QString("Loaded %1 backend records").arg(backendRecords.size()));
 
     // Track which Palm records we've processed (by ID)
     QSet<QString> processedPalmIds;
     // Track which backend records we've processed
     QSet<QString> processedBackendIds;
 
-    // Process modified Palm records
+    // ── Phase 1: Read dirty Palm records (only modified transfer over USB) ──
+    QElapsedTimer phaseTimer;
+    phaseTimer.start();
+    QList<PilotRecord*> palmRecords = readPalmRecords(context, true);
+    qDebug() << "[HotSync] Phase 1: readModifiedRecords:" << palmRecords.size()
+             << "dirty records in" << phaseTimer.elapsed() << "ms";
+    emit logMessage(QString("Found %1 modified Palm records").arg(palmRecords.size()));
+
+    // ── Phase 2: Load backend records, build hash index for O(1) lookup ──
+    phaseTimer.restart();
+    QList<BackendRecord*> backendRecords = context->backend->loadRecords(context->collectionId);
+    QHash<QString, BackendRecord*> backendIndex;
+    backendIndex.reserve(backendRecords.size());
+    for (BackendRecord *rec : backendRecords) {
+        backendIndex.insert(rec->id, rec);
+    }
+    qDebug() << "[HotSync] Phase 2: loaded" << backendRecords.size()
+             << "backend records, built index in" << phaseTimer.elapsed() << "ms";
+    emit logMessage(QString("Loaded %1 backend records").arg(backendRecords.size()));
+
+    // ── Phase 3: Process dirty Palm records ──
+    phaseTimer.restart();
     for (PilotRecord *palmRecord : palmRecords) {
         if (context->cancelled || isCancelled()) break;
 
@@ -165,31 +189,38 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
 
         BackendRecord *backendRecord = nullptr;
         if (!pcId.isEmpty()) {
-            // Find matching backend record
-            for (BackendRecord *rec : backendRecords) {
-                if (rec->id == pcId) {
-                    backendRecord = rec;
-                    break;
-                }
-            }
+            backendRecord = backendIndex.value(pcId, nullptr);
         }
 
         syncRecord(palmRecord, backendRecord, context, result.palmStats, result.pcStats);
 
-        // Update category tracking after sync
+        // Track baseline updates for incremental save
         if (!palmRecord->isDeleted()) {
             QString categoryName = categoryNameForIndex(palmRecord->category());
             context->state->updateCategories(palmId, categoryName, {});
+            // Re-query pcId after syncRecord (it may have created a new mapping)
+            QString newPcId = context->state->pcIdForPalm(palmId);
+            if (!newPcId.isEmpty()) {
+                context->baselineUpdatedPcIds.insert(newPcId);
+            }
+        } else {
+            // Palm record deleted — PC side may also be deleted
+            if (!pcId.isEmpty()) {
+                context->baselineDeletedPcIds.insert(pcId);
+            }
         }
 
         if (backendRecord) {
             processedBackendIds.insert(backendRecord->id);
         }
     }
+    qDebug() << "[HotSync] Phase 3: processed" << palmRecords.size()
+             << "dirty Palm records in" << phaseTimer.elapsed() << "ms";
 
-    // IMPORTANT: Check for category-only changes on Palm
+    // ── Phase 4: Category-change detection (single full read) ──
     // Palm doesn't set the dirty flag when only the category changes,
-    // so we need to explicitly check all mapped records for category differences
+    // so we read ALL records once and check mapped records for differences
+    phaseTimer.restart();
     QList<PilotRecord*> allPalmRecords = readPalmRecords(context, false);
     int categoryChanges = 0;
     for (PilotRecord *palmRecord : allPalmRecords) {
@@ -205,7 +236,7 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
 
         // Check if we have a mapping for this record
         QString pcId = context->state->pcIdForPalm(palmId);
-        if (pcId.isEmpty()) continue;  // No mapping, skip
+        if (pcId.isEmpty()) continue;
 
         // Get stored category from mapping
         IDMapping mapping = context->state->getMapping(palmId);
@@ -215,30 +246,26 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
         // Compare categories (case-insensitive, treating empty/"Unfiled" as equivalent)
         QString normalizedStored = storedCategory;
         QString normalizedCurrent = currentCategory;
-        if (normalizedStored.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        if (normalizedStored.compare(QStringLiteral("Unfiled"), Qt::CaseInsensitive) == 0) {
             normalizedStored.clear();
         }
-        if (normalizedCurrent.compare("Unfiled", Qt::CaseInsensitive) == 0) {
+        if (normalizedCurrent.compare(QStringLiteral("Unfiled"), Qt::CaseInsensitive) == 0) {
             normalizedCurrent.clear();
         }
 
         if (normalizedStored.compare(normalizedCurrent, Qt::CaseInsensitive) != 0) {
-            // Category changed! Sync this record
+            qDebug() << "[HotSync] Phase 4: Category change detected:"
+                     << palmRecordDescription(palmRecord)
+                     << "stored=" << (storedCategory.isEmpty() ? "Unfiled" : storedCategory)
+                     << "current=" << (currentCategory.isEmpty() ? "Unfiled" : currentCategory);
             emit logMessage(QString("Category changed on Palm: %1 (%2 → %3)")
                 .arg(palmRecordDescription(palmRecord))
-                .arg(storedCategory.isEmpty() ? "Unfiled" : storedCategory)
-                .arg(currentCategory.isEmpty() ? "Unfiled" : currentCategory));
+                .arg(storedCategory.isEmpty() ? QStringLiteral("Unfiled") : storedCategory)
+                .arg(currentCategory.isEmpty() ? QStringLiteral("Unfiled") : currentCategory));
 
-            BackendRecord *backendRecord = nullptr;
-            for (BackendRecord *rec : backendRecords) {
-                if (rec->id == pcId) {
-                    backendRecord = rec;
-                    break;
-                }
-            }
+            BackendRecord *backendRecord = backendIndex.value(pcId, nullptr);
 
             if (backendRecord) {
-                // Update PC with new category from Palm
                 BackendRecord *updated = palmToBackend(palmRecord, context);
                 if (updated) {
                     updated->id = backendRecord->id;
@@ -247,51 +274,48 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
                     result.pcStats.updated++;
                     categoryChanges++;
                     processedBackendIds.insert(backendRecord->id);
+                    context->baselineUpdatedPcIds.insert(backendRecord->id);
                 }
             }
 
-            // Update category tracking
             context->state->updateCategories(palmId, currentCategory, {});
             processedPalmIds.insert(palmId);
         }
     }
     qDeleteAll(allPalmRecords);
 
+    qDebug() << "[HotSync] Phase 4: category scan complete -"
+             << categoryChanges << "changes in" << phaseTimer.elapsed() << "ms";
     if (categoryChanges > 0) {
         emit logMessage(QString("Synced %1 category-only changes from Palm").arg(categoryChanges));
     }
 
-    // Process modified backend records that weren't already handled
-    emit logMessage(QString("Processing %1 backend records for changes...").arg(backendRecords.size()));
+    // ── Phase 5: Process modified backend records ──
+    phaseTimer.restart();
+    int backendChanges = 0;
+    int backendNew = 0;
     for (BackendRecord *backendRecord : backendRecords) {
         if (context->cancelled || isCancelled()) break;
         if (processedBackendIds.contains(backendRecord->id)) continue;
 
-        // Check if this record has been modified since baseline
         QString currentHash = backendRecord->contentHash;
         QString baselineHash = context->state->baselineHash(backendRecord->id);
 
-        // If no baseline, check if it's a new file (not in mappings)
         QString palmId = context->state->palmIdForPC(backendRecord->id);
         bool isNew = palmId.isEmpty();
         bool isModified = !baselineHash.isEmpty() && (currentHash != baselineHash);
 
-        emit logMessage(QString("  Backend: %1 - palmId=%2 isNew=%3 isModified=%4")
-            .arg(backendRecord->description())
-            .arg(palmId.isEmpty() ? "(none)" : palmId)
-            .arg(isNew ? "yes" : "no")
-            .arg(isModified ? "yes" : "no"));
-
         if (isNew || isModified) {
+            qDebug() << "[HotSync] Phase 5: Backend change:"
+                     << backendRecord->id
+                     << (isNew ? "NEW" : "MODIFIED");
+
             PilotRecord *palmRecord = nullptr;
             bool ownsPalmRecord = false;
 
             if (!palmId.isEmpty()) {
-                // palmRecords only contains dirty records, so we need to read
-                // the Palm record directly if we want to update it
                 palmRecord = context->deviceLink->readRecordById(m_dbHandle, palmId.toUInt());
                 ownsPalmRecord = true;
-
                 if (palmRecord) {
                     emit logMessage(QString("PC modified: %1 → updating Palm")
                         .arg(backendRecord->description()));
@@ -302,38 +326,60 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
             }
 
             syncRecord(palmRecord, backendRecord, context, result.palmStats, result.pcStats);
+            context->baselineUpdatedPcIds.insert(backendRecord->id);
+
+            if (isNew) backendNew++;
+            else backendChanges++;
 
             if (ownsPalmRecord) {
                 delete palmRecord;
             }
         }
     }
+    qDebug() << "[HotSync] Phase 5:" << backendChanges << "modified,"
+             << backendNew << "new backend records in" << phaseTimer.elapsed() << "ms";
 
-    // Detect deleted PC files (have mapping but file no longer exists)
+    // ── Phase 6: Detect deleted PC files ──
+    phaseTimer.restart();
     QSet<QString> existingPcIds;
+    existingPcIds.reserve(backendRecords.size());
     for (BackendRecord *rec : backendRecords) {
         existingPcIds.insert(rec->id);
     }
 
+    int pcDeleted = 0;
     QStringList allMappedPcIds = context->state->allPCIds();
     for (const QString &pcId : allMappedPcIds) {
         if (context->cancelled || isCancelled()) break;
         if (existingPcIds.contains(pcId)) continue;
 
-        // PC file was deleted - find and delete corresponding Palm record
         QString palmId = context->state->palmIdForPC(pcId);
         if (!palmId.isEmpty()) {
+            qDebug() << "[HotSync] Phase 6: PC file deleted:" << pcId
+                     << "→ deleting Palm record" << palmId;
             emit logMessage(QString("PC file deleted, removing from Palm: %1").arg(pcId));
             if (deletePalmRecord(palmId, context)) {
                 context->state->removePCMapping(pcId);
                 result.palmStats.deleted++;
+                context->baselineDeletedPcIds.insert(pcId);
+                pcDeleted++;
             }
         }
     }
+    qDebug() << "[HotSync] Phase 6:" << pcDeleted << "deleted PC files in"
+             << phaseTimer.elapsed() << "ms";
 
     // Cleanup
     qDeleteAll(palmRecords);
     qDeleteAll(backendRecords);
+
+    qDebug() << "[HotSync] TOTAL: completed in" << totalTimer.elapsed() << "ms"
+             << "| Palm: created=" << result.palmStats.created
+             << "updated=" << result.palmStats.updated
+             << "deleted=" << result.palmStats.deleted
+             << "| PC: created=" << result.pcStats.created
+             << "updated=" << result.pcStats.updated
+             << "deleted=" << result.pcStats.deleted;
 
     return result;
 }
@@ -1436,22 +1482,17 @@ QList<PilotRecord*> SyncConduitBase::readPalmRecords(SyncContext *context, bool 
 {
     if (m_dbHandle < 0) return {};
 
-    QList<PilotRecord*> allRecords = context->deviceLink->readAllRecords(m_dbHandle);
-
     if (!modifiedOnly) {
-        return allRecords;
+        return context->deviceLink->readAllRecords(m_dbHandle);
     }
 
-    // Filter to only modified records
-    QList<PilotRecord*> modifiedRecords;
-    for (PilotRecord *record : allRecords) {
-        if (record->isDirty() || record->isDeleted()) {
-            modifiedRecords.append(record);
-        } else {
-            delete record;  // Free unneeded records
-        }
-    }
-    return modifiedRecords;
+    // Use dlp_ReadNextModifiedRec — only dirty/deleted records transfer over USB
+    QElapsedTimer timer;
+    timer.start();
+    QList<PilotRecord*> records = context->deviceLink->readModifiedRecords(m_dbHandle);
+    qDebug() << "[SyncConduit] readPalmRecords(modifiedOnly=true):"
+             << records.size() << "records in" << timer.elapsed() << "ms";
+    return records;
 }
 
 bool SyncConduitBase::writePalmRecord(PilotRecord *record, SyncContext *context)
@@ -1482,6 +1523,9 @@ bool SyncConduitBase::checkVolatility(const SyncStats &stats, int totalRecords, 
 
 void SyncConduitBase::saveBaseline(SyncContext *context)
 {
+    QElapsedTimer timer;
+    timer.start();
+
     // Load all current backend records and save their hashes
     QList<BackendRecord*> records = context->backend->loadRecords(context->collectionId);
 
@@ -1493,6 +1537,43 @@ void SyncConduitBase::saveBaseline(SyncContext *context)
     context->state->saveBaseline(hashes);
 
     qDeleteAll(records);
+
+    qDebug() << "[SyncConduit] saveBaseline: saved" << hashes.size()
+             << "hashes in" << timer.elapsed() << "ms";
+}
+
+void SyncConduitBase::saveBaselineIncremental(SyncContext *context,
+                                               const QSet<QString> &updatedPcIds,
+                                               const QSet<QString> &deletedPcIds)
+{
+    QElapsedTimer timer;
+    timer.start();
+
+    QSyncCore::BaselineStore *baseline = context->state->baselineStore();
+
+    // Update hashes for created/modified PC records
+    int updated = 0;
+    for (const QString &pcId : updatedPcIds) {
+        BackendRecord *record = context->backend->loadRecord(pcId);
+        if (record) {
+            baseline->setHash(pcId, record->contentHash);
+            delete record;
+            updated++;
+        }
+    }
+
+    // Remove hashes for deleted PC records
+    int removed = 0;
+    for (const QString &pcId : deletedPcIds) {
+        baseline->removeHash(pcId);
+        removed++;
+    }
+
+    // Persist the updated baseline
+    context->state->save();
+
+    qDebug() << "[SyncConduit] saveBaselineIncremental: updated=" << updated
+             << "removed=" << removed << "in" << timer.elapsed() << "ms";
 }
 
 SyncConduitBase::~SyncConduitBase()

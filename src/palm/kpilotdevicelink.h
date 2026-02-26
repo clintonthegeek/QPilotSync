@@ -5,7 +5,26 @@
 #include <QString>
 #include <QStringList>
 #include <QThread>
+#include <QMetaType>
 #include <atomic>
+
+/**
+ * @brief Data captured during the connection handshake on the worker thread
+ *
+ * All initial DLP reads happen on the same thread as pi_accept_to(),
+ * avoiding cross-thread socket races.  Results are passed to the main
+ * thread via signal.
+ */
+struct HandshakeResult {
+    int socket = -1;
+    bool userInfoValid = false;
+    QString userName;
+    quint32 userId = 0;
+    bool sysInfoValid = false;
+    quint32 romVersion = 0;
+    QString productId;
+};
+Q_DECLARE_METATYPE(HandshakeResult)
 
 /**
  * @brief Worker object for blocking pilot-link connection in separate thread
@@ -30,12 +49,16 @@ public slots:
     void doConnect();
 
 signals:
-    void connectionEstablished(int socket);
+    void connectionEstablished(const HandshakeResult &result);
     void connectionFailed(const QString &error);
     void statusUpdate(const QString &status);
 
 private:
-    QString probeForActivePort();
+    struct ProbeResult {
+        QString port;   // Device path (empty on failure)
+        int fd = -1;    // Kept open so CMP data stays in kernel buffer
+    };
+    ProbeResult probeForActivePort();
 
     QStringList m_devicePaths;
     int m_timeoutSeconds;
@@ -76,6 +99,14 @@ public:
     // Cancel a pending connection attempt
     void cancelConnection();
 
+    // Handshake data captured during connection (on worker thread)
+    bool handshakeUserInfoValid() const { return m_handshake.userInfoValid; }
+    QString handshakeUserName() const { return m_handshake.userName; }
+    quint32 handshakeUserId() const { return m_handshake.userId; }
+    bool handshakeSysInfoValid() const { return m_handshake.sysInfoValid; }
+    quint32 handshakeRomVersion() const { return m_handshake.romVersion; }
+    QString handshakeProductId() const { return m_handshake.productId; }
+
     bool readUserInfo(struct PilotUser &user) override;
     bool writeUserInfo(const struct PilotUser &user) override;
     bool readSysInfo(struct SysInfo &sysInfo) override;
@@ -89,6 +120,8 @@ public:
     PilotRecord* readRecordById(int dbHandle, int recordId) override;
     bool writeRecord(int dbHandle, PilotRecord *record) override;
     bool deleteRecord(int dbHandle, int recordId) override;
+    QList<PilotRecord*> readModifiedRecords(int dbHandle) override;
+    bool resetDBIndex(int dbHandle) override;
 
     bool readAppBlock(int dbHandle, unsigned char *buffer, size_t *size) override;
     bool writeAppBlock(int dbHandle, const unsigned char *buffer, size_t size) override;
@@ -136,7 +169,7 @@ signals:
     void connectionComplete(bool success);
 
 private slots:
-    void onConnectionEstablished(int socket);
+    void onConnectionEstablished(const HandshakeResult &result);
     void onConnectionFailed(const QString &error);
     void onWorkerStatus(const QString &status);
 
@@ -146,6 +179,7 @@ private:
     QStringList m_devicePaths; // Device paths to try (e.g., "/dev/ttyUSB0", "/dev/ttyUSB1")
     int m_socket;              // pilot-link socket descriptor
     bool m_isConnected;
+    HandshakeResult m_handshake;
 
     // Worker thread for async connection
     QThread *m_workerThread;

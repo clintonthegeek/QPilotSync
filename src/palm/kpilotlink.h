@@ -61,6 +61,8 @@ public:
     virtual PilotRecord* readRecordById(int dbHandle, int recordId) = 0;
     virtual bool writeRecord(int dbHandle, PilotRecord *record) = 0;
     virtual bool deleteRecord(int dbHandle, int recordId) = 0;
+    virtual QList<PilotRecord*> readModifiedRecords(int dbHandle) = 0;
+    virtual bool resetDBIndex(int dbHandle) = 0;
 
     // AppInfo block (categories, etc.)
     virtual bool readAppBlock(int dbHandle, unsigned char *buffer, size_t *size) = 0;
