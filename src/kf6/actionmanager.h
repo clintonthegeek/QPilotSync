@@ -53,19 +53,6 @@ public:
     QAction* openSyncFolderAction() const { return action(QStringLiteral("sync_open_folder")); }
     QAction* installFilesAction() const { return action(QStringLiteral("sync_install_files")); }
 
-    // ========== Export Actions ==========
-    QAction* exportMemosAction() const { return action(QStringLiteral("export_memos")); }
-    QAction* exportContactsAction() const { return action(QStringLiteral("export_contacts")); }
-    QAction* exportCalendarAction() const { return action(QStringLiteral("export_calendar")); }
-    QAction* exportTodosAction() const { return action(QStringLiteral("export_todos")); }
-    QAction* exportAllAction() const { return action(QStringLiteral("export_all")); }
-
-    // ========== Import Actions ==========
-    QAction* importMemoAction() const { return action(QStringLiteral("import_memo")); }
-    QAction* importContactAction() const { return action(QStringLiteral("import_contact")); }
-    QAction* importEventAction() const { return action(QStringLiteral("import_event")); }
-    QAction* importTodoAction() const { return action(QStringLiteral("import_todo")); }
-
     // ========== View Actions ==========
     QAction* clearLogAction() const { return action(QStringLiteral("view_clear_log")); }
     QAction* showConflictsAction() const { return action(QStringLiteral("view_show_conflicts")); }
@@ -111,19 +98,6 @@ Q_SIGNALS:
     void openSyncFolderRequested();
     void installFilesRequested();
 
-    // Export operations
-    void exportMemosRequested();
-    void exportContactsRequested();
-    void exportCalendarRequested();
-    void exportTodosRequested();
-    void exportAllRequested();
-
-    // Import operations
-    void importMemoRequested();
-    void importContactRequested();
-    void importEventRequested();
-    void importTodoRequested();
-
     // View operations
     void clearLogRequested();
     void showConflictsRequested();
@@ -141,7 +115,6 @@ private:
     void setupFileActions();
     void setupDeviceActions();
     void setupSyncActions();
-    void setupDataActions();
     void setupViewActions();
     void setupNavigationActions();
 

@@ -1,5 +1,5 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="wildpalms" version="2">
+<gui name="wildpalms" version="3">
     <MenuBar>
         <Menu name="file">
             <text>&amp;File</text>
@@ -39,26 +39,6 @@
             <Action name="sync_open_folder"/>
             <Separator/>
             <Action name="sync_install_files"/>
-        </Menu>
-
-        <Menu name="data">
-            <text>D&amp;ata</text>
-            <Menu name="export">
-                <text>&amp;Export</text>
-                <Action name="export_memos"/>
-                <Action name="export_contacts"/>
-                <Action name="export_calendar"/>
-                <Action name="export_todos"/>
-                <Separator/>
-                <Action name="export_all"/>
-            </Menu>
-            <Menu name="import">
-                <text>&amp;Import</text>
-                <Action name="import_memo"/>
-                <Action name="import_contact"/>
-                <Action name="import_event"/>
-                <Action name="import_todo"/>
-            </Menu>
         </Menu>
 
         <Menu name="view">

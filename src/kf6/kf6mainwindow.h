@@ -14,8 +14,6 @@ class ActionManager;
 class LogWidget;
 class KPilotDeviceLink;
 class DeviceSession;
-class ExportHandler;
-class ImportHandler;
 class Profile;
 class DashboardWidget;
 class ConduitManager;
@@ -173,10 +171,6 @@ private:
     Sync::SyncEngine *m_syncEngine;
     Sync::InstallConduit *m_installConduit;
     QString m_syncPath;
-
-    // Export/Import handlers
-    ExportHandler *m_exportHandler;
-    ImportHandler *m_importHandler;
 
     // Last used connection settings
     QString m_lastUsedDevicePath;

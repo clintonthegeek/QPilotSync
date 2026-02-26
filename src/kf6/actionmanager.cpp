@@ -26,7 +26,6 @@ void ActionManager::setupActions()
     setupFileActions();
     setupDeviceActions();
     setupSyncActions();
-    setupDataActions();
     setupViewActions();
     setupNavigationActions();
 
@@ -163,54 +162,6 @@ void ActionManager::setupSyncActions()
     m_actionCollection->addAction(QStringLiteral("sync_install_files"), installFiles);
 }
 
-void ActionManager::setupDataActions()
-{
-    // Export Memos
-    QAction *exportMemos = new QAction(i18n("Memos to Markdown..."), this);
-    connect(exportMemos, &QAction::triggered, this, &ActionManager::exportMemosRequested);
-    m_actionCollection->addAction(QStringLiteral("export_memos"), exportMemos);
-
-    // Export Contacts
-    QAction *exportContacts = new QAction(i18n("Contacts to vCard..."), this);
-    connect(exportContacts, &QAction::triggered, this, &ActionManager::exportContactsRequested);
-    m_actionCollection->addAction(QStringLiteral("export_contacts"), exportContacts);
-
-    // Export Calendar
-    QAction *exportCalendar = new QAction(i18n("Calendar to iCalendar..."), this);
-    connect(exportCalendar, &QAction::triggered, this, &ActionManager::exportCalendarRequested);
-    m_actionCollection->addAction(QStringLiteral("export_calendar"), exportCalendar);
-
-    // Export Todos
-    QAction *exportTodos = new QAction(i18n("Todos to iCalendar..."), this);
-    connect(exportTodos, &QAction::triggered, this, &ActionManager::exportTodosRequested);
-    m_actionCollection->addAction(QStringLiteral("export_todos"), exportTodos);
-
-    // Export All
-    QAction *exportAll = new QAction(i18n("Export All..."), this);
-    connect(exportAll, &QAction::triggered, this, &ActionManager::exportAllRequested);
-    m_actionCollection->addAction(QStringLiteral("export_all"), exportAll);
-
-    // Import Memo
-    QAction *importMemo = new QAction(i18n("Memo from Markdown..."), this);
-    connect(importMemo, &QAction::triggered, this, &ActionManager::importMemoRequested);
-    m_actionCollection->addAction(QStringLiteral("import_memo"), importMemo);
-
-    // Import Contact
-    QAction *importContact = new QAction(i18n("Contact from vCard..."), this);
-    connect(importContact, &QAction::triggered, this, &ActionManager::importContactRequested);
-    m_actionCollection->addAction(QStringLiteral("import_contact"), importContact);
-
-    // Import Event
-    QAction *importEvent = new QAction(i18n("Event from iCalendar..."), this);
-    connect(importEvent, &QAction::triggered, this, &ActionManager::importEventRequested);
-    m_actionCollection->addAction(QStringLiteral("import_event"), importEvent);
-
-    // Import Todo
-    QAction *importTodo = new QAction(i18n("Todo from iCalendar..."), this);
-    connect(importTodo, &QAction::triggered, this, &ActionManager::importTodoRequested);
-    m_actionCollection->addAction(QStringLiteral("import_todo"), importTodo);
-}
-
 void ActionManager::setupViewActions()
 {
     // Toggle Log Panel
@@ -297,16 +248,6 @@ void ActionManager::updateConnectionState(bool connected, bool hasProfile)
         installFilesAction()->setText(i18n("Install Files on Next Sync..."));
     }
 
-    // Export/Import require connection
-    exportMemosAction()->setEnabled(connected);
-    exportContactsAction()->setEnabled(connected);
-    exportCalendarAction()->setEnabled(connected);
-    exportTodosAction()->setEnabled(connected);
-    exportAllAction()->setEnabled(connected);
-    importMemoAction()->setEnabled(connected);
-    importContactAction()->setEnabled(connected);
-    importEventAction()->setEnabled(connected);
-    importTodoAction()->setEnabled(connected);
 }
 
 void ActionManager::updateProfileState(bool hasProfile)

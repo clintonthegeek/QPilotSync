@@ -5,14 +5,8 @@ add_library(WildPalmsCore SHARED
     wildpalms_version.h
 
     # Application UI
-    app/mainwindow.cpp
-    app/mainwindow.h
     app/logwidget.cpp
     app/logwidget.h
-    app/exporthandler.cpp
-    app/exporthandler.h
-    app/importhandler.cpp
-    app/importhandler.h
     app/conflictdialog.cpp
     app/conflictdialog.h
     app/conflictreviewwidget.cpp
@@ -21,8 +15,6 @@ add_library(WildPalmsCore SHARED
     app/interactiveconflicthandler.h
 
     # Settings and dialogs
-    settings.cpp
-    settings.h
     settingsdialog.cpp
     settingsdialog.h
     profile.cpp

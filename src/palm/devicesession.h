@@ -110,6 +110,20 @@ public:
     QString currentOperation() const { return m_currentOperation; }
 
     /**
+     * @brief Pause the keep-alive tickle for exclusive socket access
+     *
+     * Call this before doing direct DLP operations on the socket
+     * (e.g. pi_file_install from the install conduit).  The tickle
+     * will resume when the next operation starts, or call resumeTickle().
+     */
+    void pauseTickle();
+
+    /**
+     * @brief Resume the keep-alive tickle after a manual pause
+     */
+    void resumeTickle();
+
+    /**
      * @brief Set connection mode (keep alive vs disconnect after sync)
      */
     void setConnectionMode(ConnectionMode mode) { m_connectionMode = mode; }
@@ -132,7 +146,6 @@ signals:
 
     void operationStarted(const QString &operationName);
     void operationFinished(bool success, const QString &summary);
-    void operationCancelled();
 
     // ========== Progress ==========
 

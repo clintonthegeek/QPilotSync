@@ -6,8 +6,6 @@
 
 #include "../app/logwidget.h"
 #include "../palm/palmdevicemonitor.h"
-#include "../app/exporthandler.h"
-#include "../app/importhandler.h"
 #include "../settingsdialog.h"
 
 #include "../wildpalms_version.h"
@@ -87,9 +85,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     , m_syncEngine(nullptr)
     , m_installConduit(nullptr)
     , m_syncPath()
-    // Export/Import handlers
-    , m_exportHandler(nullptr)
-    , m_importHandler(nullptr)
     // Last used connection settings
     , m_lastUsedDevicePath()
     , m_lastUsedBaudRate()
@@ -113,13 +108,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
     // Initialize conduit manager (discovers and loads conduit plugins)
     initializeConduits();
-
-    // Create export/import handlers (must be before setupConnections)
-    m_exportHandler = new ExportHandler(this);
-    m_exportHandler->setLogWidget(m_logWidget);
-
-    m_importHandler = new ImportHandler(this);
-    m_importHandler->setLogWidget(m_logWidget);
 
     // Auto-detection
     m_deviceMonitor = new PalmDeviceMonitor(this);
@@ -150,8 +138,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
                     m_session = autoSession;
                     m_deviceLink = autoSession->deviceLink();
 
-                    m_exportHandler->setDeviceLink(m_deviceLink);
-                    m_importHandler->setDeviceLink(m_deviceLink);
                     m_syncEngine->setDeviceLink(m_deviceLink);
                 }
 
@@ -183,8 +169,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
                 // Release our references to avoid dangling pointers.
                 m_session = nullptr;
                 m_deviceLink = nullptr;
-                m_exportHandler->setDeviceLink(nullptr);
-                m_importHandler->setDeviceLink(nullptr);
                 m_syncEngine->setDeviceLink(nullptr);
 
                 // Refresh conduit views with newly synced data
@@ -273,14 +257,6 @@ KF6MainWindow::~KF6MainWindow()
         m_devicePollTimer->stop();
     }
 
-    // Clear device link references from handlers before anything else
-    // This prevents use-after-free if the link gets deleted
-    if (m_exportHandler) {
-        m_exportHandler->setDeviceLink(nullptr);
-    }
-    if (m_importHandler) {
-        m_importHandler->setDeviceLink(nullptr);
-    }
     m_deviceLink = nullptr;
 
     // Disconnect device if connected (don't delete - let Qt handle it)
@@ -413,26 +389,6 @@ void KF6MainWindow::setupConnections()
             this, &KF6MainWindow::onOpenSyncFolder);
     connect(m_actionManager, &ActionManager::installFilesRequested,
             this, &KF6MainWindow::onInstallFiles);
-
-    connect(m_actionManager, &ActionManager::exportMemosRequested,
-            m_exportHandler, &ExportHandler::exportMemos);
-    connect(m_actionManager, &ActionManager::exportContactsRequested,
-            m_exportHandler, &ExportHandler::exportContacts);
-    connect(m_actionManager, &ActionManager::exportCalendarRequested,
-            m_exportHandler, &ExportHandler::exportCalendar);
-    connect(m_actionManager, &ActionManager::exportTodosRequested,
-            m_exportHandler, &ExportHandler::exportTodos);
-    connect(m_actionManager, &ActionManager::exportAllRequested,
-            m_exportHandler, &ExportHandler::exportAll);
-
-    connect(m_actionManager, &ActionManager::importMemoRequested,
-            m_importHandler, &ImportHandler::importMemo);
-    connect(m_actionManager, &ActionManager::importContactRequested,
-            m_importHandler, &ImportHandler::importContact);
-    connect(m_actionManager, &ActionManager::importEventRequested,
-            m_importHandler, &ImportHandler::importEvent);
-    connect(m_actionManager, &ActionManager::importTodoRequested,
-            m_importHandler, &ImportHandler::importTodo);
 
     connect(m_actionManager, &ActionManager::clearLogRequested,
             this, &KF6MainWindow::onClearLog);
@@ -729,13 +685,26 @@ void KF6MainWindow::onConduitUnloading(IConduit *conduit)
 
 void KF6MainWindow::runInstallConduit()
 {
+    qDebug() << "[runInstallConduit] m_installConduit:" << (m_installConduit != nullptr)
+             << "m_session:" << (m_session != nullptr)
+             << "connected:" << (m_session ? m_session->isConnected() : false);
+
     if (!m_installConduit || !m_session || !m_session->isConnected()) {
+        qDebug() << "[runInstallConduit] Skipped — precondition failed";
         return;
     }
 
-    if (!m_installConduit->hasPendingFiles()) {
+    QStringList pending = m_installConduit->pendingFiles();
+    qDebug() << "[runInstallConduit] Install folder:" << m_installConduit->installFolder()
+             << "pending files:" << pending.size() << pending;
+
+    if (pending.isEmpty()) {
         return;
     }
+
+    // Pause tickle for exclusive socket access — the tickle thread
+    // sends dlp_GetSysDateTime every 5s which would corrupt pi_file_install
+    m_session->pauseTickle();
 
     m_logWidget->logInfo(i18n("--- Installing pending files ---"));
 
@@ -1098,8 +1067,6 @@ void KF6MainWindow::startConnection(const QString &devicePath)
     connect(m_session, &DeviceSession::disconnected,
             this, [this]() {
                 m_deviceLink = nullptr;
-                m_exportHandler->setDeviceLink(nullptr);
-                m_importHandler->setDeviceLink(nullptr);
                 updateMenuState(false);
                 statusBar()->showMessage(i18n("Disconnected"));
 
@@ -1145,9 +1112,6 @@ void KF6MainWindow::onConnectionComplete(bool success)
     notification->sendEvent();
 
     m_deviceLink = m_session->deviceLink();
-
-    m_exportHandler->setDeviceLink(m_deviceLink);
-    m_importHandler->setDeviceLink(m_deviceLink);
 
     // Read user info
     struct PilotUser user;
@@ -1323,8 +1287,6 @@ void KF6MainWindow::onDisconnectDevice()
 
         m_deviceLink = nullptr;
 
-        m_exportHandler->setDeviceLink(nullptr);
-        m_importHandler->setDeviceLink(nullptr);
         m_syncEngine->setDeviceLink(nullptr);
 
         statusBar()->showMessage(i18n("Disconnected"));
