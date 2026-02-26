@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Name": "Install Files",
+        "Description": "Installs .prc and .pdb files to Palm devices",
+        "Icon": "document-import",
+        "Authors": [{ "Name": "Clinton Ignatov" }],
+        "License": "GPL",
+        "Version": "1.0.0",
+        "Category": "Tool"
+    },
+    "X-WildPalms-ConduitId": "install",
+    "X-WildPalms-ConduitType": "tool",
+    "X-WildPalms-RequiresDevice": true,
+    "X-WildPalms-DefaultEnabled": true,
+    "X-WildPalms-SortOrder": 0
+}
