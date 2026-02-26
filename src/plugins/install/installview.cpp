@@ -89,6 +89,16 @@ void InstallView::refresh()
     populateInstalledList();
 }
 
+void InstallView::loadFromPath(const QString &syncPath)
+{
+    if (syncPath.isEmpty()) {
+        m_installFolder.clear();
+        refresh();
+        return;
+    }
+    setInstallFolder(QDir(syncPath).filePath(QStringLiteral("install")));
+}
+
 void InstallView::populatePendingList()
 {
     m_pendingList->clear();

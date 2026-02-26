@@ -16,6 +16,9 @@ public:
     void setInstallFolder(const QString &path);
     void refresh();
 
+public slots:
+    void loadFromPath(const QString &syncPath);
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
