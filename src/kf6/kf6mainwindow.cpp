@@ -114,78 +114,22 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     m_deviceMonitor = new PalmDeviceMonitor(this);
     m_autoSync = new AutoSyncOrchestrator(this);
     m_autoSync->setDeviceMonitor(m_deviceMonitor);
-    m_autoSync->setSyncEngine(m_syncEngine);
     m_autoSync->setLogWidget(m_logWidget);
 
     // Now setup connections after all objects are created
     setupConnections();
 
-    // Auto-sync orchestrator signals
-    connect(m_autoSync, &AutoSyncOrchestrator::statusChanged,
-            this, &KF6MainWindow::updateTrayState);
-    connect(m_autoSync, &AutoSyncOrchestrator::connectionEstablished,
-            this, [this](const QString &userName, const QString &deviceName) {
-                m_logWidget->logInfo(i18n("Auto-connected to %1 (%2)", userName, deviceName));
-
-                // Adopt the orchestrator's session so the UI (Disconnect, sync
-                // buttons, export/import) works with the auto-detected connection
-                DeviceSession *autoSession = m_autoSync->activeSession();
-                if (autoSession) {
-                    // Clean up any existing manual session
-                    if (m_session && m_session != autoSession) {
-                        m_session->disconnectDevice();
-                        m_session->deleteLater();
-                    }
-                    m_session = autoSession;
-                    m_deviceLink = autoSession->deviceLink();
-
-                    m_syncEngine->setDeviceLink(m_deviceLink);
-                }
-
-                updateMenuState(true);
-            });
+    // Auto-sync orchestrator — detection and profile resolution only
+    connect(m_autoSync, &AutoSyncOrchestrator::deviceDetected,
+            this, &KF6MainWindow::onAutoDeviceDetected);
     connect(m_autoSync, &AutoSyncOrchestrator::profileCreated,
             this, [this](const QString &path, const QString &userName) {
                 m_logWidget->logInfo(i18n("Created profile for %1 at %2", userName, path));
-                auto *notif = new KNotification(QStringLiteral("profileCreated"),
-                                                 KNotification::CloseOnTimeout, this);
-                notif->setTitle(i18n("Profile Created"));
-                notif->setText(i18n("Your Palm data is stored at %1.\nClick to change location.", path));
-                notif->sendEvent();
-            });
-    connect(m_autoSync, &AutoSyncOrchestrator::profileLoaded,
-            this, [this](Profile *profile) {
-                m_currentProfile = profile;
-                m_syncEngine->setStateDirectory(profile->stateDirectoryPath());
-                updateWindowTitle();
-                updateProfileMenuState();
-                m_dashboardWidget->updateStatus(profile, true);
-            });
-    connect(m_autoSync, &AutoSyncOrchestrator::syncFinished,
-            this, [this](bool success, const QString &summary) {
-                m_logWidget->logInfo(i18n("Auto-sync %1: %2",
-                    success ? i18n("complete") : i18n("failed"), summary));
-
-                // The orchestrator disconnects the session after sync.
-                // Release our references to avoid dangling pointers.
-                m_session = nullptr;
-                m_deviceLink = nullptr;
-                m_syncEngine->setDeviceLink(nullptr);
-
-                // Refresh conduit views with newly synced data
-                if (m_currentProfile) {
-                    QString syncPath = m_currentProfile->syncFolderPath();
-                    for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
-                        QWidget *view = it.value()->widget();
-                        QMetaObject::invokeMethod(view, "loadFromPath", Q_ARG(QString, syncPath));
-                    }
-                }
-
-                updateMenuState(false);
-                m_dashboardWidget->updateStatus(m_currentProfile, false);
             });
     connect(m_autoSync, &AutoSyncOrchestrator::error,
             m_logWidget, &LogWidget::logError);
+    connect(m_autoSync, &AutoSyncOrchestrator::statusChanged,
+            this, &KF6MainWindow::updateTrayState);
 
     // In development builds, load the RC file directly from the source tree.
     // In installed builds, setupGUI finds it at the standard KDE location.
@@ -1027,10 +971,17 @@ void KF6MainWindow::onDevicePoll()
     }
 }
 
-void KF6MainWindow::startConnection(const QString &devicePath)
+void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
 {
+    if (devicePaths.isEmpty()) {
+        m_logWidget->logError(i18n("No device paths provided"));
+        return;
+    }
+
+    // Clean up existing session
     if (m_session) {
-        delete m_session;
+        m_session->disconnectDevice();
+        m_session->deleteLater();
         m_session = nullptr;
         m_deviceLink = nullptr;
     }
@@ -1041,6 +992,7 @@ void KF6MainWindow::startConnection(const QString &devicePath)
         m_session->setConnectionMode(m_currentProfile->connectionMode());
     }
 
+    // Wire all session signals
     connect(m_session, &DeviceSession::connectionComplete,
             this, &KF6MainWindow::onConnectionComplete);
     connect(m_session, &DeviceSession::deviceReady,
@@ -1079,13 +1031,18 @@ void KF6MainWindow::startConnection(const QString &devicePath)
     connect(m_session, &DeviceSession::readyForSync,
             this, &KF6MainWindow::onReadyForSync);
 
-    m_logWidget->logInfo(i18n("Connecting to %1...", devicePath));
-    statusBar()->showMessage(i18n("Connecting to %1...", devicePath));
-
-    m_session->connectDevice(QStringList{devicePath});
+    m_logWidget->logInfo(i18n("Connecting to %1...", devicePaths.join(QStringLiteral(", "))));
+    m_session->connectDevice(devicePaths);
 
     updateMenuState(false);
-    m_actionManager->cancelConnectionAction()->setEnabled(true);
+    if (m_actionManager) {
+        m_actionManager->cancelConnectionAction()->setEnabled(true);
+    }
+}
+
+void KF6MainWindow::startConnection(const QString &devicePath)
+{
+    startConnectionMultiPort(QStringList{devicePath});
 }
 
 void KF6MainWindow::onConnectionComplete(bool success)
@@ -1276,13 +1233,6 @@ void KF6MainWindow::onDisconnectDevice()
 
         m_session->disconnectDevice();
 
-        // If the session belonged to the auto-sync orchestrator, don't
-        // delete it — the orchestrator owns its lifecycle.  Just release
-        // our reference.
-        if (m_session == m_autoSync->activeSession()) {
-            m_session = nullptr;
-        }
-
         m_deviceLink = nullptr;
 
         m_syncEngine->setDeviceLink(nullptr);
@@ -1338,24 +1288,59 @@ void KF6MainWindow::onDeviceStatusChanged(int status)
     }
 }
 
+void KF6MainWindow::onAutoDeviceDetected(Profile *profile, const QStringList &ports)
+{
+    // Guard: if we're already busy with a sync, ignore
+    if (m_session && m_session->isBusy()) {
+        m_logWidget->logWarning(i18n("Device detected but sync already in progress — ignoring"));
+        delete profile;
+        return;
+    }
+
+    // If an idle session exists, disconnect it first
+    if (m_session && m_session->isConnected()) {
+        m_logWidget->logInfo(i18n("Disconnecting previous session for new device"));
+        m_session->disconnectDevice();
+        m_session->deleteLater();
+        m_session = nullptr;
+        m_deviceLink = nullptr;
+    }
+
+    if (profile) {
+        // Known device — load profile and connect
+        QString profilePath = profile->syncFolderPath();
+        delete profile;  // loadProfile creates its own copy
+        loadProfile(profilePath);
+        startConnectionMultiPort(ports);
+    } else {
+        // Unknown device — connect first, then we'll read identity and create profile
+        m_logWidget->logInfo(i18n("New Palm device detected — connecting to identify..."));
+        startConnectionMultiPort(ports);
+    }
+}
+
 void KF6MainWindow::onDeviceReady(const QString &userName, const QString &deviceName)
 {
     m_logWidget->logInfo(i18n("Device ready: %1 (%2)", userName, deviceName));
+
+    // If no profile is loaded and auto-sync is available, try to create one
+    if (!m_currentProfile && m_autoSync) {
+        Profile *newProfile = m_autoSync->findOrCreateProfile(
+            QString(), userName, 0);
+        if (newProfile) {
+            QString profilePath = newProfile->syncFolderPath();
+            delete newProfile;
+            loadProfile(profilePath);
+        }
+    }
 }
 
 void KF6MainWindow::onReadyForSync()
 {
-    if (!m_currentProfile || !m_currentProfile->autoSyncOnConnect()) {
-        return;
-    }
-
-    m_logWidget->logInfo(i18n("Auto-sync enabled - starting sync..."));
-
-    QString syncType = m_currentProfile->defaultSyncType();
-    if (syncType == QStringLiteral("fullsync")) {
-        onFullSync();
-    } else {
-        onHotSync();
+    // Auto-sync if profile is configured for it
+    if (m_currentProfile && m_currentProfile->autoSyncOnConnect()) {
+        m_logWidget->logInfo(i18n("Auto-sync enabled — starting HotSync"));
+        QTimer::singleShot(0, this, &KF6MainWindow::onHotSync);
     }
 }
 

@@ -111,6 +111,9 @@ private Q_SLOTS:
     void onConduitLoaded(IConduit *conduit);
     void onConduitUnloading(IConduit *conduit);
 
+    // Auto-sync detection
+    void onAutoDeviceDetected(Profile *profile, const QStringList &ports);
+
 private:
     // UI setup
     void setupUI();
@@ -134,6 +137,7 @@ private:
     void closeProfile();
 
     // Device handling
+    void startConnectionMultiPort(const QStringList &devicePaths);
     bool handleDeviceFingerprint(const struct DeviceFingerprint &connectedDevice);
     void registerDeviceWithCurrentProfile(const struct DeviceFingerprint &fingerprint);
     int countDatabaseRecords(const QString &dbName);
