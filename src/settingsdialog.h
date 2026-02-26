@@ -2,43 +2,32 @@
 #define SETTINGSDIALOG_H
 
 #include <KPageDialog>
-#include <QMap>
 
 class QCheckBox;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QLabel;
-class QTreeWidget;
-class QTreeWidgetItem;
-class KPageWidgetItem;
-class ConduitManager;
 
 /**
  * @brief Global settings dialog using KPageDialog (icon-sidebar layout)
  *
  * Provides configuration for global (non-profile-specific) settings:
- *   - Conduits: Enable/disable conduits grouped by Palm creator ID
  *   - Profiles: Default profile, recent profiles list
  *   - Devices: View registered devices
  *   - Advanced: System tray, debug options
- *
- * Conduit config pages are dynamically added/removed in the sidebar
- * when conduits are enabled or disabled.
  */
 class SettingsDialog : public KPageDialog
 {
     Q_OBJECT
 
 public:
-    explicit SettingsDialog(ConduitManager *conduitManager,
-                            QWidget *parent = nullptr);
+    explicit SettingsDialog(QWidget *parent = nullptr);
 
 Q_SIGNALS:
     void settingsChanged();
 
 private Q_SLOTS:
-    void onConduitToggled(QTreeWidgetItem *item, int column);
     void onSetDefaultProfile();
     void onBrowseDefaultProfile();
     void onClearDefaultProfile();
@@ -50,20 +39,9 @@ private Q_SLOTS:
 private:
     void loadSettings();
     void saveSettings();
-    QWidget* createConduitsPage();
     QWidget* createProfilesPage();
     QWidget* createDevicesPage();
     QWidget* createAdvancedPage();
-
-    void addConduitConfigPages(const QString &conduitId);
-    void removeConduitConfigPages(const QString &conduitId);
-
-    ConduitManager *m_conduitManager;
-
-    // Conduits page
-    QTreeWidget *m_conduitTree;
-    QLabel *m_conduitDetailLabel;
-    QMap<QString, QList<KPageWidgetItem*>> m_conduitConfigPages;
 
     // Profiles page
     QLineEdit *m_defaultProfileEdit;

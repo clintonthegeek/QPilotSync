@@ -2,8 +2,6 @@
 #include "../core/iconduit.h"
 
 #include <KPluginFactory>
-#include <KSharedConfig>
-#include <KConfigGroup>
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -60,7 +58,6 @@ void ConduitManager::discoverConduits()
         info.instance       = nullptr;
         info.palmCreatorId  = metaValue(md, QStringLiteral("X-WildPalms-PalmCreatorId"));
         info.defaultEnabled = metaBool(md, QStringLiteral("X-WildPalms-DefaultEnabled"), true);
-        info.enabled        = info.defaultEnabled;
         info.sortOrder      = metaInt(md, QStringLiteral("X-WildPalms-SortOrder"), 0);
 
         m_plugins.insert(conduitId, info);
@@ -157,17 +154,6 @@ IConduit *ConduitManager::conduit(const QString &pluginId) const
     return nullptr;
 }
 
-QList<IConduit *> ConduitManager::enabledConduits() const
-{
-    QList<IConduit *> result;
-    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
-        if (it->enabled && it->instance) {
-            result.append(it->instance);
-        }
-    }
-    return result;
-}
-
 QList<ConduitManager::PluginInfo> ConduitManager::conduitList() const
 {
     return m_plugins.values();
@@ -182,44 +168,6 @@ KPluginMetaData ConduitManager::conduitMetaData(const QString &pluginId) const
     return KPluginMetaData();
 }
 
-// ========== Enable / Disable ==========
-
-bool ConduitManager::isConduitEnabled(const QString &pluginId) const
-{
-    auto it = m_plugins.constFind(pluginId);
-    if (it != m_plugins.constEnd()) {
-        return it->enabled;
-    }
-    return false;
-}
-
-void ConduitManager::setConduitEnabled(const QString &pluginId, bool enabled)
-{
-    if (!m_plugins.contains(pluginId)) {
-        return;
-    }
-
-    if (enabled) {
-        // Enforce one-active-per-creator-ID: if another conduit is already
-        // enabled for the same Palm creator ID, disable it first.
-        const QString creatorId = m_plugins[pluginId].palmCreatorId;
-        if (!creatorId.isEmpty()) {
-            for (auto it = m_plugins.begin(); it != m_plugins.end(); ++it) {
-                if (it.key() != pluginId
-                    && it->palmCreatorId == creatorId
-                    && it->enabled) {
-                    qDebug() << "[ConduitManager] Disabling" << it.key()
-                             << "— creator ID" << creatorId
-                             << "claimed by" << pluginId;
-                    it->enabled = false;
-                }
-            }
-        }
-    }
-
-    m_plugins[pluginId].enabled = enabled;
-}
-
 // ========== Creator ID Queries ==========
 
 QString ConduitManager::palmCreatorId(const QString &pluginId) const
@@ -231,30 +179,11 @@ QString ConduitManager::palmCreatorId(const QString &pluginId) const
     return QString();
 }
 
-QString ConduitManager::enabledConduitForCreatorId(const QString &creatorId) const
-{
-    if (creatorId.isEmpty()) {
-        return QString();
-    }
-    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
-        if (it->enabled && it->palmCreatorId == creatorId) {
-            return it.key();
-        }
-    }
-    return QString();
-}
-
 // ========== Ordering ==========
 
-QStringList ConduitManager::resolveExecutionOrder() const
+QStringList ConduitManager::resolveExecutionOrder(const QStringList &enabledConduitIds) const
 {
-    // Collect enabled conduit IDs
-    QStringList conduitIds;
-    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
-        if (it->enabled) {
-            conduitIds.append(it.key());
-        }
-    }
+    QStringList conduitIds = enabledConduitIds;
 
     if (conduitIds.isEmpty()) {
         return conduitIds;
@@ -340,31 +269,6 @@ QStringList ConduitManager::resolveExecutionOrder() const
     }
 
     return result;
-}
-
-// ========== Config Persistence ==========
-
-void ConduitManager::loadConfig()
-{
-    KConfigGroup grp(KSharedConfig::openConfig(), QStringLiteral("Conduits"));
-
-    for (auto it = m_plugins.begin(); it != m_plugins.end(); ++it) {
-        const QString key = it.key() + QStringLiteral("Enabled");
-        // If the key is absent in config, fall back to the plugin's default
-        it->enabled = grp.readEntry(key, it->defaultEnabled);
-    }
-}
-
-void ConduitManager::saveConfig()
-{
-    KConfigGroup grp(KSharedConfig::openConfig(), QStringLiteral("Conduits"));
-
-    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
-        const QString key = it.key() + QStringLiteral("Enabled");
-        grp.writeEntry(key, it->enabled);
-    }
-
-    grp.sync();
 }
 
 // ========== Private Helpers ==========

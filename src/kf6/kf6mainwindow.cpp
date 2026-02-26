@@ -26,6 +26,7 @@
 
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
+#include "../widgets/dialogs/profilepropertiesdialog.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -597,22 +598,19 @@ void KF6MainWindow::initializeConduits()
     // Until conduits are migrated to .so plugins (Phase 3), this will
     // find nothing -- the app starts with just the Dashboard page.
     m_conduitManager->discoverConduits();
-    m_conduitManager->loadConfig();
 
     connect(m_conduitManager, &ConduitManager::conduitLoaded,
             this, &KF6MainWindow::onConduitLoaded);
     connect(m_conduitManager, &ConduitManager::conduitUnloading,
             this, &KF6MainWindow::onConduitUnloading);
 
-    // Load all enabled conduits (creates views & registers with SyncEngine)
+    // Load ALL discovered conduits (profile controls which ones participate in sync)
     for (const auto &info : m_conduitManager->conduitList()) {
-        if (info.enabled) {
-            QString conduitId = info.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
-            if (conduitId.isEmpty()) {
-                conduitId = info.metaData.pluginId();
-            }
-            m_conduitManager->loadConduit(conduitId);
+        QString conduitId = info.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
+        if (conduitId.isEmpty()) {
+            conduitId = info.metaData.pluginId();
         }
+        m_conduitManager->loadConduit(conduitId);
     }
 }
 
@@ -1568,14 +1566,33 @@ void KF6MainWindow::onCloseProfile()
 void KF6MainWindow::onProfileSettings()
 {
     if (!m_currentProfile) {
-        m_logWidget->logWarning(i18n("No profile loaded"));
+        m_logWidget->logError(i18n("No profile loaded"));
         return;
     }
 
-    // Use a simplified settings dialog for now
-    // Full implementation would use KConfigDialog
-    QMessageBox::information(this, i18n("Profile Settings"),
-        i18n("Profile settings dialog will be implemented with KConfigDialog."));
+    auto *dlg = new ProfilePropertiesDialog(m_currentProfile, m_conduitManager, this);
+    connect(dlg, &ProfilePropertiesDialog::settingsChanged, this, [this]() {
+        // Re-apply conduit enabled settings to sync engine
+        for (const QString &conduitId : m_syncEngine->registeredConduits()) {
+            m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+
+            QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
+            if (!conduitSettings.isEmpty()) {
+                auto *conduit = dynamic_cast<Sync::SyncConduitBase*>(m_syncEngine->conduit(conduitId));
+                if (conduit) {
+                    conduit->loadSettings(conduitSettings);
+                }
+            }
+        }
+
+        if (m_session) {
+            m_session->setConnectionMode(m_currentProfile->connectionMode());
+        }
+
+        updateWindowTitle();
+    });
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->show();
 }
 
 // ========== Sync Operations ==========
@@ -1883,7 +1900,7 @@ void KF6MainWindow::onAbout()
 
 void KF6MainWindow::onSettings()
 {
-    SettingsDialog dialog(m_conduitManager, this);
+    SettingsDialog dialog(this);
     connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
         m_minimizeToTray = KF6Settings::instance().minimizeToTray();
     });

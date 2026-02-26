@@ -1,7 +1,5 @@
 #include "settingsdialog.h"
 #include "kf6/kf6settings.h"
-#include "kf6/conduitmanager.h"
-#include "core/iconduit.h"
 #include "profile.h"
 
 #include <KLocalizedString>
@@ -13,9 +11,6 @@
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
-#include <QHeaderView>
 #include <QPushButton>
 #include <QLabel>
 #include <QDialogButtonBox>
@@ -25,28 +20,8 @@
 #include <QFont>
 #include <QStandardPaths>
 
-// Human-readable names for well-known Palm OS creator IDs
-static QString palmAppName(const QString &creatorId)
-{
-    static const QMap<QString, QString> names = {
-        { QStringLiteral("memo"), QStringLiteral("Memo Pad") },
-        { QStringLiteral("addr"), QStringLiteral("Address Book") },
-        { QStringLiteral("date"), QStringLiteral("Date Book") },
-        { QStringLiteral("todo"), QStringLiteral("To Do List") },
-        { QStringLiteral("mail"), QStringLiteral("Mail") },
-        { QStringLiteral("lnch"), QStringLiteral("Launcher") },
-        { QStringLiteral("Plkr"), QStringLiteral("Plucker") },
-        { QStringLiteral("Mcal"), QStringLiteral("DateBk") },
-        { QStringLiteral("psys"), QStringLiteral("System Preferences") },
-        { QStringLiteral("secr"), QStringLiteral("Security") },
-    };
-    return names.value(creatorId);
-}
-
-SettingsDialog::SettingsDialog(ConduitManager *conduitManager,
-                               QWidget *parent)
+SettingsDialog::SettingsDialog(QWidget *parent)
     : KPageDialog(parent)
-    , m_conduitManager(conduitManager)
 {
     setWindowTitle(i18n("Configure Wild Palms"));
     setFaceType(KPageDialog::List);
@@ -57,11 +32,7 @@ SettingsDialog::SettingsDialog(ConduitManager *conduitManager,
                        | QDialogButtonBox::Apply);
     button(QDialogButtonBox::Apply)->setEnabled(true);
 
-    // Add pages with icons — Conduits first
-    auto *conduitsPage = new KPageWidgetItem(createConduitsPage(), i18n("Conduits"));
-    conduitsPage->setIcon(QIcon::fromTheme(QStringLiteral("application-x-addon")));
-    addPage(conduitsPage);
-
+    // Add pages with icons
     auto *profilesPage = new KPageWidgetItem(createProfilesPage(), i18n("Profiles"));
     profilesPage->setIcon(QIcon::fromTheme(QStringLiteral("user-identity")));
     addPage(profilesPage);
@@ -74,18 +45,6 @@ SettingsDialog::SettingsDialog(ConduitManager *conduitManager,
     advancedPage->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
     addPage(advancedPage);
 
-    // Add config pages for already-enabled conduits
-    if (m_conduitManager) {
-        const auto plugins = m_conduitManager->conduitList();
-        for (const auto &plugin : plugins) {
-            QString id = plugin.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
-            if (id.isEmpty()) id = plugin.metaData.pluginId();
-            if (plugin.enabled) {
-                addConduitConfigPages(id);
-            }
-        }
-    }
-
     // Wire buttons
     connect(this, &QDialog::accepted, this, [this]() {
         saveSettings();
@@ -94,203 +53,6 @@ SettingsDialog::SettingsDialog(ConduitManager *conduitManager,
             this, &SettingsDialog::onApply);
 
     loadSettings();
-}
-
-// ========== Conduits Page ==========
-
-QWidget* SettingsDialog::createConduitsPage()
-{
-    auto *page = new QWidget();
-    auto *layout = new QVBoxLayout(page);
-
-    auto *info = new QLabel(
-        i18n("Each conduit handles synchronization for a specific Palm application. "
-             "Only one conduit may be active per Palm app at a time. "
-             "Enabling a competing conduit will automatically disable the incumbent."));
-    info->setWordWrap(true);
-    layout->addWidget(info);
-
-    // Tree widget: top-level = creator ID group, children = conduits
-    m_conduitTree = new QTreeWidget();
-    m_conduitTree->setHeaderLabels({i18n("Conduit"), i18n("Version"), i18n("Creator ID")});
-    m_conduitTree->setAlternatingRowColors(true);
-    m_conduitTree->setRootIsDecorated(true);
-    m_conduitTree->header()->setStretchLastSection(false);
-    m_conduitTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_conduitTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_conduitTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-
-    if (m_conduitManager) {
-        // Group conduits by creator ID
-        QMap<QString, QList<ConduitManager::PluginInfo>> groups;
-        const auto plugins = m_conduitManager->conduitList();
-        for (const auto &info : plugins) {
-            QString creatorId = info.palmCreatorId;
-            if (creatorId.isEmpty()) {
-                creatorId = QStringLiteral("_utilities");
-            }
-            groups[creatorId].append(info);
-        }
-
-        for (auto it = groups.constBegin(); it != groups.constEnd(); ++it) {
-            const QString &creatorId = it.key();
-            const auto &conduits = it.value();
-
-            // Group header
-            QString groupLabel;
-            if (creatorId == QStringLiteral("_utilities")) {
-                groupLabel = i18n("Utilities");
-            } else {
-                QString appName = palmAppName(creatorId);
-                if (appName.isEmpty()) {
-                    groupLabel = i18n("Palm App \"%1\"", creatorId);
-                } else {
-                    groupLabel = QStringLiteral("%1").arg(appName);
-                }
-            }
-
-            auto *groupItem = new QTreeWidgetItem(m_conduitTree);
-            groupItem->setText(0, groupLabel);
-            if (creatorId != QStringLiteral("_utilities")) {
-                groupItem->setText(2, creatorId);
-            }
-            groupItem->setFlags(groupItem->flags() & ~Qt::ItemIsSelectable);
-            QFont groupFont = groupItem->font(0);
-            groupFont.setBold(true);
-            groupItem->setFont(0, groupFont);
-            groupItem->setExpanded(true);
-
-            for (const auto &plugin : conduits) {
-                QString conduitId = plugin.metaData.value(
-                    QStringLiteral("X-WildPalms-ConduitId"));
-                if (conduitId.isEmpty()) conduitId = plugin.metaData.pluginId();
-
-                auto *conduitItem = new QTreeWidgetItem(groupItem);
-                conduitItem->setText(0, plugin.metaData.name());
-                conduitItem->setText(1, plugin.metaData.version());
-                conduitItem->setToolTip(0, plugin.metaData.description());
-                conduitItem->setData(0, Qt::UserRole, conduitId);
-                conduitItem->setData(0, Qt::UserRole + 1, plugin.palmCreatorId);
-                conduitItem->setFlags(conduitItem->flags() | Qt::ItemIsUserCheckable);
-                conduitItem->setCheckState(0, plugin.enabled ? Qt::Checked : Qt::Unchecked);
-
-                // Show the conduit's icon if available
-                QString iconName = plugin.metaData.iconName();
-                if (!iconName.isEmpty()) {
-                    conduitItem->setIcon(0, QIcon::fromTheme(iconName));
-                }
-            }
-        }
-    }
-
-    connect(m_conduitTree, &QTreeWidget::itemChanged,
-            this, &SettingsDialog::onConduitToggled);
-
-    layout->addWidget(m_conduitTree);
-
-    // Detail label below the tree
-    m_conduitDetailLabel = new QLabel();
-    m_conduitDetailLabel->setWordWrap(true);
-    m_conduitDetailLabel->setTextFormat(Qt::RichText);
-    layout->addWidget(m_conduitDetailLabel);
-
-    connect(m_conduitTree, &QTreeWidget::currentItemChanged,
-            this, [this](QTreeWidgetItem *current, QTreeWidgetItem *) {
-        if (!current || current->data(0, Qt::UserRole).toString().isEmpty()) {
-            m_conduitDetailLabel->clear();
-            return;
-        }
-        QString conduitId = current->data(0, Qt::UserRole).toString();
-        KPluginMetaData md = m_conduitManager->conduitMetaData(conduitId);
-        QString palmDb = md.value(QStringLiteral("X-WildPalms-PalmDatabase"));
-        QString desc = md.description();
-        QString text = QStringLiteral("<b>%1</b>").arg(md.name());
-        if (!desc.isEmpty()) {
-            text += QStringLiteral("<br>%1").arg(desc);
-        }
-        if (!palmDb.isEmpty()) {
-            text += QStringLiteral("<br>") + i18n("Palm database: <code>%1</code>", palmDb);
-        }
-        m_conduitDetailLabel->setText(text);
-    });
-
-    return page;
-}
-
-void SettingsDialog::onConduitToggled(QTreeWidgetItem *item, int column)
-{
-    if (column != 0) return;
-    QString conduitId = item->data(0, Qt::UserRole).toString();
-    if (conduitId.isEmpty()) return;  // group header, ignore
-
-    bool enabled = (item->checkState(0) == Qt::Checked);
-    m_conduitManager->setConduitEnabled(conduitId, enabled);
-
-    if (enabled) {
-        // setConduitEnabled may have auto-disabled another conduit sharing
-        // the same creator ID — update any sibling checkboxes that changed
-        QString creatorId = item->data(0, Qt::UserRole + 1).toString();
-        if (!creatorId.isEmpty()) {
-            QTreeWidgetItem *parent = item->parent();
-            if (parent) {
-                // Block signals to avoid recursive onConduitToggled calls
-                m_conduitTree->blockSignals(true);
-                for (int i = 0; i < parent->childCount(); ++i) {
-                    QTreeWidgetItem *sibling = parent->child(i);
-                    if (sibling == item) continue;
-                    QString siblingId = sibling->data(0, Qt::UserRole).toString();
-                    if (!m_conduitManager->isConduitEnabled(siblingId)) {
-                        sibling->setCheckState(0, Qt::Unchecked);
-                        removeConduitConfigPages(siblingId);
-                    }
-                }
-                m_conduitTree->blockSignals(false);
-            }
-        }
-        addConduitConfigPages(conduitId);
-    } else {
-        removeConduitConfigPages(conduitId);
-    }
-}
-
-void SettingsDialog::addConduitConfigPages(const QString &conduitId)
-{
-    if (m_conduitConfigPages.contains(conduitId)) return;  // already added
-
-    IConduit *conduit = m_conduitManager->conduit(conduitId);
-    if (!conduit) return;
-
-    int numPages = conduit->configPages();
-    if (numPages <= 0) return;
-
-    QList<KPageWidgetItem*> pages;
-    for (int i = 0; i < numPages; ++i) {
-        QWidget *configWidget = conduit->createConfigPage(i, nullptr);
-        if (!configWidget) continue;
-
-        QString pageName = (numPages == 1)
-            ? conduit->displayName()
-            : QStringLiteral("%1 (%2)").arg(conduit->displayName()).arg(i + 1);
-
-        auto *pageItem = new KPageWidgetItem(configWidget, pageName);
-        pageItem->setIcon(conduit->icon());
-        addPage(pageItem);
-        pages.append(pageItem);
-    }
-
-    if (!pages.isEmpty()) {
-        m_conduitConfigPages.insert(conduitId, pages);
-    }
-}
-
-void SettingsDialog::removeConduitConfigPages(const QString &conduitId)
-{
-    if (!m_conduitConfigPages.contains(conduitId)) return;
-
-    const auto pages = m_conduitConfigPages.take(conduitId);
-    for (KPageWidgetItem *page : pages) {
-        removePage(page);  // KPageDialog takes ownership and deletes
-    }
 }
 
 // ========== Profiles Page ==========
@@ -525,11 +287,6 @@ void SettingsDialog::saveSettings()
     s.setMinimizeToTray(m_minimizeToTrayCheck->isChecked());
     s.setDebugLogging(m_debugLoggingCheck->isChecked());
     s.sync();
-
-    // Persist conduit enabled/disabled state
-    if (m_conduitManager) {
-        m_conduitManager->saveConfig();
-    }
 
     Q_EMIT settingsChanged();
 }

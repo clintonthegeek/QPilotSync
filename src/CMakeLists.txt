@@ -94,6 +94,8 @@ add_library(WildPalmsCore SHARED
     # Widgets - Dialogs
     widgets/dialogs/categoryeditordialog.cpp
     widgets/dialogs/categoryeditordialog.h
+    widgets/dialogs/profilepropertiesdialog.cpp
+    widgets/dialogs/profilepropertiesdialog.h
     widgets/dialogs/taskeditdialog.cpp
     widgets/dialogs/taskeditdialog.h
 

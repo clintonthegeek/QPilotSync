@@ -26,12 +26,8 @@ class IConduit;
  *   - X-WildPalms-RunBefore       (string array)      dependency ordering
  *   - X-WildPalms-RunAfter        (string array)      dependency ordering
  *
- * Only one conduit may be enabled per Palm creator ID at a time.
- * Enabling a conduit that shares a creator ID with an already-enabled
- * conduit will automatically disable the incumbent.
- *
- * Enabled/disabled state is persisted in the application KConfig under
- * the [Conduits] group with keys like "<pluginId>Enabled".
+ * Which conduits participate in a given sync is determined by the profile,
+ * not by ConduitManager.  This class is a pure discovery/loading service.
  */
 class ConduitManager : public QObject
 {
@@ -46,7 +42,6 @@ public:
         IConduit *instance = nullptr;
         QString palmCreatorId;     ///< Palm OS 4-char creator ID (empty if not a Palm-app conduit)
         bool defaultEnabled = false;
-        bool enabled = false;
         int sortOrder = 0;
     };
 
@@ -59,8 +54,7 @@ public:
      * @brief Scan the plugin directory and populate the internal catalogue
      *
      * Calls KPluginMetaData::findPlugins("wildpalms/conduits").
-     * Does NOT load any plugins -- call loadConduit() or loadConfig()
-     * to instantiate them.
+     * Does NOT load any plugins -- call loadConduit() to instantiate them.
      */
     void discoverConduits();
 
@@ -89,9 +83,6 @@ public:
     /** @brief Return the live IConduit* for a loaded plugin, or nullptr */
     IConduit *conduit(const QString &pluginId) const;
 
-    /** @brief Return all currently loaded & enabled conduits */
-    QList<IConduit *> enabledConduits() const;
-
     /** @brief Return the full catalogue (discovered, loaded or not) */
     QList<PluginInfo> conduitList() const;
 
@@ -100,17 +91,6 @@ public:
 
     /** @brief Return the Palm creator ID for a conduit (empty if none) */
     QString palmCreatorId(const QString &pluginId) const;
-
-    /**
-     * @brief Find the enabled conduit registered for a Palm creator ID
-     * @return Conduit ID, or empty string if none enabled for that creator
-     */
-    QString enabledConduitForCreatorId(const QString &creatorId) const;
-
-    // ========== Enable / Disable ==========
-
-    bool isConduitEnabled(const QString &pluginId) const;
-    void setConduitEnabled(const QString &pluginId, bool enabled);
 
     // ========== Ordering ==========
 
@@ -123,19 +103,7 @@ public:
      *
      * @return Ordered list of conduit IDs (enabled only)
      */
-    QStringList resolveExecutionOrder() const;
-
-    // ========== Config Persistence ==========
-
-    /**
-     * @brief Load enabled/disabled state from KConfig [Conduits] group
-     */
-    void loadConfig();
-
-    /**
-     * @brief Save enabled/disabled state to KConfig [Conduits] group
-     */
-    void saveConfig();
+    QStringList resolveExecutionOrder(const QStringList &enabledConduitIds) const;
 
 Q_SIGNALS:
     /** Emitted after a conduit has been successfully loaded */
