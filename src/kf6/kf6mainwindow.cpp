@@ -20,7 +20,6 @@
 #include "../sync/synctypes.h"
 #include "../sync/conduit.h"
 #include "../sync/localfilebackend.h"
-#include "../sync/conduits/installconduit.h"
 #include "../sync/qsynccore/conflictstore.h"
 #include "../sync/syncstate.h"
 
@@ -84,7 +83,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     , m_deviceLink(nullptr)
     // Sync engine and conduits
     , m_syncEngine(nullptr)
-    , m_installConduit(nullptr)
     , m_syncPath()
     // Last used connection settings
     , m_lastUsedDevicePath()
@@ -510,17 +508,6 @@ void KF6MainWindow::initializeSyncEngine()
     // dynamically by ConduitManager via initializeConduits() and
     // registered with SyncEngine in onConduitLoaded().
 
-    // Create install conduit
-    m_installConduit = new Sync::InstallConduit(this);
-    connect(m_installConduit, &Sync::InstallConduit::logMessage,
-            m_logWidget, &LogWidget::logInfo);
-    connect(m_installConduit, &Sync::InstallConduit::errorOccurred,
-            m_logWidget, &LogWidget::logError);
-    connect(m_installConduit, &Sync::InstallConduit::progressUpdated,
-            this, [this](int current, int total, const QString &fileName) {
-                statusBar()->showMessage(i18n("Installing %1 (%2/%3)", fileName, current, total));
-            });
-
     // Connect sync engine signals
     connect(m_syncEngine, &Sync::SyncEngine::logMessage,
             m_logWidget, &LogWidget::logInfo);
@@ -623,50 +610,6 @@ void KF6MainWindow::onConduitUnloading(IConduit *conduit)
     m_syncEngine->unregisterConduit(id);
 
     qDebug() << "[KF6MainWindow] Conduit unloading:" << id;
-}
-
-void KF6MainWindow::runInstallConduit()
-{
-    qDebug() << "[runInstallConduit] m_installConduit:" << (m_installConduit != nullptr)
-             << "m_session:" << (m_session != nullptr)
-             << "connected:" << (m_session ? m_session->isConnected() : false);
-
-    if (!m_installConduit || !m_session || !m_session->isConnected()) {
-        qDebug() << "[runInstallConduit] Skipped — precondition failed";
-        return;
-    }
-
-    QStringList pending = m_installConduit->pendingFiles();
-    qDebug() << "[runInstallConduit] Install folder:" << m_installConduit->installFolder()
-             << "pending files:" << pending.size() << pending;
-
-    if (pending.isEmpty()) {
-        return;
-    }
-
-    // Pause tickle for exclusive socket access — the tickle thread
-    // sends dlp_GetSysDateTime every 5s which would corrupt pi_file_install
-    m_session->pauseTickle();
-
-    m_logWidget->logInfo(i18n("--- Installing pending files ---"));
-
-    int socket = m_deviceLink->socketDescriptor();
-    QList<Sync::InstallResult> results = m_installConduit->installAll(socket);
-
-    int successCount = 0;
-    int failCount = 0;
-    for (const Sync::InstallResult &r : results) {
-        if (r.success) {
-            successCount++;
-        } else {
-            failCount++;
-        }
-    }
-
-    if (successCount > 0 || failCount > 0) {
-        m_logWidget->logInfo(i18n("Install complete: %1 succeeded, %2 failed",
-                                  successCount, failCount));
-    }
 }
 
 void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString &operationName)
@@ -780,9 +723,6 @@ void KF6MainWindow::loadProfile(const QString &path)
     if (m_session) {
         m_session->setConnectionMode(m_currentProfile->connectionMode());
     }
-
-    // Configure install conduit
-    m_installConduit->setInstallFolder(m_currentProfile->installFolderPath());
 
     // Add to recent profiles
     KF6Settings::instance().addRecentProfile(path);
@@ -1005,8 +945,6 @@ void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
             this, &KF6MainWindow::onSyncProgress);
     connect(m_session, &DeviceSession::palmScreenMessage,
             this, &KF6MainWindow::onSessionPalmScreen);
-    connect(m_session, &DeviceSession::installFinished,
-            this, &KF6MainWindow::onInstallFinished);
     connect(m_session, &DeviceSession::syncFinished,
             this, [this](bool success, const QString &summary) {
                 Q_UNUSED(summary);
@@ -1594,8 +1532,6 @@ void KF6MainWindow::onHotSync()
     }
 
     m_logWidget->logInfo(i18n("=== Starting HotSync ==="));
-    runInstallConduit();
-
     m_pendingSyncOperationName = i18n("HotSync");
     m_session->requestSync(Sync::SyncMode::HotSync, m_syncEngine);
 }
@@ -1619,8 +1555,6 @@ void KF6MainWindow::onFullSync()
     if (ret != QMessageBox::Yes) return;
 
     m_logWidget->logInfo(i18n("=== Starting Full Sync ==="));
-    runInstallConduit();
-
     m_pendingSyncOperationName = i18n("Full Sync");
     m_session->requestSync(Sync::SyncMode::FullSync, m_syncEngine);
 }
@@ -1667,8 +1601,6 @@ void KF6MainWindow::onCopyPCToPalm()
     if (ret != QMessageBox::Yes) return;
 
     m_logWidget->logInfo(i18n("=== Copying PC → Palm ==="));
-    runInstallConduit();
-
     m_pendingSyncOperationName = i18n("Copy PC → Palm");
     m_session->requestSync(Sync::SyncMode::CopyPCToPalm, m_syncEngine);
 }
@@ -1718,8 +1650,6 @@ void KF6MainWindow::onRestore()
     if (ret != QMessageBox::Yes) return;
 
     m_logWidget->logInfo(i18n("=== Restoring PC → Palm ==="));
-    runInstallConduit();
-
     m_pendingSyncOperationName = i18n("Restore");
     m_session->requestSync(Sync::SyncMode::Restore, m_syncEngine);
 }
@@ -1755,48 +1685,40 @@ void KF6MainWindow::onInstallFiles()
         return;
     }
 
-    bool connected = m_session && m_session->isConnected();
+    QString installFolder = m_currentProfile->installFolderPath();
+    QDir installDir(installFolder);
+    if (!installDir.exists()) {
+        installDir.mkpath(QStringLiteral("."));
+    }
 
-    if (connected) {
-        m_logWidget->logInfo(i18n("--- Installing files to Palm ---"));
-        statusBar()->showMessage(i18n("Installing files..."));
-        m_session->requestInstall(files);
-    } else {
-        QString installFolder = m_currentProfile->installFolderPath();
-        QDir installDir(installFolder);
-        if (!installDir.exists()) {
-            installDir.mkpath(QStringLiteral("."));
+    int copiedCount = 0;
+    int failCount = 0;
+
+    for (const QString &filePath : files) {
+        QFileInfo fileInfo(filePath);
+        QString destPath = installDir.filePath(fileInfo.fileName());
+
+        if (QFile::exists(destPath)) {
+            QFile::remove(destPath);
         }
 
-        int copiedCount = 0;
-        int failCount = 0;
-
-        for (const QString &filePath : files) {
-            QFileInfo fileInfo(filePath);
-            QString destPath = installDir.filePath(fileInfo.fileName());
-
-            if (QFile::exists(destPath)) {
-                QFile::remove(destPath);
-            }
-
-            if (QFile::copy(filePath, destPath)) {
-                m_logWidget->logInfo(i18n("Queued for install: %1", fileInfo.fileName()));
-                copiedCount++;
-            } else {
-                m_logWidget->logError(i18n("Failed to copy %1 to install folder", fileInfo.fileName()));
-                failCount++;
-            }
-        }
-
-        if (failCount == 0) {
-            QMessageBox::information(this, i18n("Files Queued"),
-                i18n("%1 file(s) queued for installation.\n\n"
-                     "They will be installed on the next HotSync.", copiedCount));
+        if (QFile::copy(filePath, destPath)) {
+            m_logWidget->logInfo(i18n("Queued for install: %1", fileInfo.fileName()));
+            copiedCount++;
         } else {
-            QMessageBox::warning(this, i18n("Files Queued"),
-                i18n("%1 file(s) queued, %2 failed to copy.\nCheck the log for details.",
-                     copiedCount, failCount));
+            m_logWidget->logError(i18n("Failed to copy %1 to install folder", fileInfo.fileName()));
+            failCount++;
         }
+    }
+
+    if (failCount == 0) {
+        QMessageBox::information(this, i18n("Files Queued"),
+            i18n("%1 file(s) queued for installation.\n\n"
+                 "They will be installed on the next sync.", copiedCount));
+    } else {
+        QMessageBox::warning(this, i18n("Files Queued"),
+            i18n("%1 file(s) queued, %2 failed to copy.\nCheck the log for details.",
+                 copiedCount, failCount));
     }
 }
 
@@ -1825,29 +1747,6 @@ void KF6MainWindow::onSyncProgress(int current, int total, const QString &messag
 void KF6MainWindow::onSessionPalmScreen(const QString &message)
 {
     m_logWidget->logInfo(i18n("[Palm Screen] %1", message));
-}
-
-void KF6MainWindow::onInstallFinished(bool success, int successCount, int failCount)
-{
-    statusBar()->showMessage(i18n("Install complete"));
-
-    m_logWidget->logInfo(i18n("Installation complete: %1 succeeded, %2 failed",
-                              successCount, failCount));
-
-    KNotification *notification = new KNotification(QStringLiteral("installComplete"), KNotification::CloseOnTimeout, this);
-    notification->setTitle(i18n("Install Complete"));
-    notification->setText(i18n("Successfully installed %1 file(s)", successCount));
-    notification->setIconName(QStringLiteral("document-import"));
-    notification->sendEvent();
-
-    if (success && failCount == 0) {
-        QMessageBox::information(this, i18n("Install Complete"),
-            i18n("Successfully installed %1 file(s) to Palm.", successCount));
-    } else {
-        QMessageBox::warning(this, i18n("Install Complete"),
-            i18n("Installed %1 file(s), %2 failed.\nCheck the log for details.",
-                 successCount, failCount));
-    }
 }
 
 void KF6MainWindow::onAsyncSyncResult(const Sync::SyncResult &result)

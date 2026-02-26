@@ -63,10 +63,6 @@ add_library(WildPalmsCore SHARED
     sync/localfilebackend.cpp
     sync/localfilebackend.h
 
-    # Conduits - core device operations (non-plugin conduits)
-    sync/conduits/installconduit.cpp
-    sync/conduits/installconduit.h
-
     # KF6 integration
     kf6/actionmanager.cpp
     kf6/actionmanager.h

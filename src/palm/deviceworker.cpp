@@ -1,17 +1,14 @@
 #include "deviceworker.h"
 #include "../sync/syncengine.h"
 #include "../sync/synctypes.h"
-#include "../sync/conduits/installconduit.h"
 
 #include <QDebug>
 #include <QThread>
-#include <QFile>
-#include <QFileInfo>
 
 // pilot-link headers
 extern "C" {
+#include <pi-socket.h>
 #include <pi-dlp.h>
-#include <pi-file.h>
 }
 
 DeviceWorker::DeviceWorker(QObject *parent)
@@ -46,7 +43,10 @@ void DeviceWorker::doOpenConduit()
 
     int result = dlp_OpenConduit(m_socket);
     if (result < 0) {
-        emit error(QString("dlp_OpenConduit failed: %1").arg(result));
+        emit error(QString("dlp_OpenConduit failed: %1 (pi_error: %2, palmos: %3)")
+                       .arg(result)
+                       .arg(pi_error(m_socket))
+                       .arg(pi_palmos_error(m_socket)));
         emit openConduitFinished(false);
         return;
     }
@@ -71,77 +71,6 @@ void DeviceWorker::doEndSync(bool success)
     // dlp_EndOfSync(m_socket, status);
 
     emit logMessage(success ? "Sync session ended normally" : "Sync session ended with error");
-}
-
-void DeviceWorker::doInstall(const QStringList &filePaths)
-{
-    qDebug() << "[DeviceWorker] doInstall() files:" << filePaths.size()
-             << "on thread:" << QThread::currentThread();
-
-    if (m_socket < 0) {
-        emit error("No socket connection");
-        emit installFinished(false, 0, filePaths.size());
-        return;
-    }
-
-    if (filePaths.isEmpty()) {
-        emit installFinished(true, 0, 0);
-        return;
-    }
-
-    resetCancel();
-
-    int successCount = 0;
-    int failCount = 0;
-    int total = filePaths.size();
-
-    emit palmScreenChanged("Installing files...");
-
-    for (int i = 0; i < filePaths.size(); ++i) {
-        if (isCancelled()) {
-            emit logMessage("Install cancelled by user");
-            break;
-        }
-
-        const QString &filePath = filePaths[i];
-        QFileInfo fileInfo(filePath);
-        QString fileName = fileInfo.fileName();
-
-        emit progress(i + 1, total, QString("Installing %1").arg(fileName));
-        emit logMessage(QString("Installing: %1").arg(fileName));
-
-        // Use pi_file_install from pilot-link
-        struct pi_file *pf = pi_file_open(filePath.toLocal8Bit().constData());
-        if (!pf) {
-            emit logMessage(QString("Failed to open: %1").arg(fileName));
-            failCount++;
-            continue;
-        }
-
-        int result = pi_file_install(pf, m_socket, 0, nullptr);
-        pi_file_close(pf);
-
-        if (result < 0) {
-            emit logMessage(QString("Failed to install %1: error %2").arg(fileName).arg(result));
-            failCount++;
-        } else {
-            emit logMessage(QString("Installed: %1").arg(fileName));
-            successCount++;
-        }
-    }
-
-    emit progress(total, total, "Install complete");
-
-    // Call dlp_OpenConduit to reset Palm screen back to ready state
-    dlp_OpenConduit(m_socket);
-
-    emit palmScreenChanged("Install complete");
-
-    QString summary = QString("Installed %1 file(s), %2 failed")
-                          .arg(successCount).arg(failCount);
-    emit logMessage(summary);
-    emit installFinished(failCount == 0, successCount, failCount);
-    emit operationFinished(failCount == 0, "install");
 }
 
 void DeviceWorker::doSync(int mode,

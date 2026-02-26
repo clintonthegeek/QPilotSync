@@ -25,7 +25,6 @@ class AutoSyncOrchestrator;
 namespace Sync {
 class SyncEngine;
 class SyncResult;
-class InstallConduit;
 }
 
 namespace QSyncCore {
@@ -92,7 +91,6 @@ private Q_SLOTS:
 
     // DeviceSession callbacks
     void onSessionPalmScreen(const QString &message);
-    void onInstallFinished(bool success, int successCount, int failCount);
     void onAsyncSyncResult(const Sync::SyncResult &result);
 
     // Misc
@@ -129,7 +127,6 @@ private:
 
     // Sync engine
     void initializeSyncEngine();
-    void runInstallConduit();
     void showSyncResult(const Sync::SyncResult &result, const QString &operationName);
 
     // Profile management
@@ -173,7 +170,6 @@ private:
 
     // Sync engine and conduits
     Sync::SyncEngine *m_syncEngine;
-    Sync::InstallConduit *m_installConduit;
     QString m_syncPath;
 
     // Last used connection settings

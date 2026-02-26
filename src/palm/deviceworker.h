@@ -11,7 +11,6 @@
 // Forward declarations
 namespace Sync {
 class SyncEngine;
-class InstallConduit;
 enum class SyncMode;
 }
 
@@ -24,7 +23,6 @@ enum class SyncMode;
  *
  * Key responsibilities:
  * - Execute sync operations
- * - Install files to Palm
  * - Export data from Palm
  * - Report progress
  * - Support cancellation
@@ -68,13 +66,6 @@ public slots:
     void doEndSync(bool success);
 
     /**
-     * @brief Install files to Palm device
-     *
-     * @param filePaths List of .prc/.pdb files to install
-     */
-    void doInstall(const QStringList &filePaths);
-
-    /**
      * @brief Execute a sync operation
      *
      * @param mode Sync mode (HotSync, FullSync, etc.)
@@ -112,11 +103,6 @@ signals:
      * @brief Palm screen message changed
      */
     void palmScreenChanged(const QString &message);
-
-    /**
-     * @brief Install operation completed
-     */
-    void installFinished(bool success, int successCount, int failCount);
 
     /**
      * @brief Sync operation completed (simple version)

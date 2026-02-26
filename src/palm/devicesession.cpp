@@ -77,31 +77,6 @@ bool DeviceSession::isConnected() const
 
 // ========== Async Operations ==========
 
-void DeviceSession::requestInstall(const QStringList &filePaths)
-{
-    if (!isConnected()) {
-        emit errorOccurred("Not connected to device");
-        return;
-    }
-
-    if (m_busy) {
-        emit errorOccurred("Another operation is in progress");
-        return;
-    }
-
-    m_busy = true;
-    m_currentOperation = "install";
-    emit operationStarted("Installing files");
-
-    ensureWorkerThread();
-    stopTickle();  // Pause tickle - operation keeps connection alive
-
-    // Invoke install on worker thread
-    QMetaObject::invokeMethod(m_worker, "doInstall",
-                              Qt::QueuedConnection,
-                              Q_ARG(QStringList, filePaths));
-}
-
 void DeviceSession::requestSync(Sync::SyncMode mode, Sync::SyncEngine *engine)
 {
     if (!isConnected()) {
@@ -173,9 +148,23 @@ void DeviceSession::onConnectionComplete(bool success)
         emit logMessage("Connected to Palm device");
         emit connectionComplete(true);
 
-        // Open conduit to advance Palm screen from "Identifying User"
-        // Note: Don't start tickle until openConduit completes to avoid socket conflicts
-        openConduitAsync();
+        // Check if the connection worker already opened the conduit
+        // (it does this on the same thread as pi_accept_to, matching
+        // pilot-xfer's plu_connect() pattern for reliable timing)
+        if (m_deviceLink && m_deviceLink->isConduitOpened()) {
+            qDebug() << "[DeviceSession] Conduit already opened during handshake";
+            m_conduitOpened = true;
+            emit logMessage("Palm ready for sync");
+
+            // Start tickle if in keep-alive mode
+            if (m_connectionMode == ConnectionMode::KeepAlive) {
+                startTickle();
+            }
+            emit readyForSync();
+        } else {
+            // Fall back to async conduit open
+            openConduitAsync();
+        }
     } else {
         emit connectionComplete(false);
 
@@ -203,20 +192,6 @@ void DeviceSession::onWorkerProgress(int current, int total, const QString &msg)
 void DeviceSession::onWorkerPalmScreen(const QString &message)
 {
     emit palmScreenMessage(message);
-}
-
-void DeviceSession::onWorkerInstallFinished(bool success, int successCount, int failCount)
-{
-    m_busy = false;
-    m_currentOperation.clear();
-
-    // Always resume tickle after install - MainWindow will handle disconnect
-    // if this was a standalone install (not part of HotSync)
-    if (m_connectionMode == ConnectionMode::KeepAlive) {
-        startTickle();
-    }
-
-    emit installFinished(success, successCount, failCount);
 }
 
 void DeviceSession::onWorkerSyncFinished(bool success, const QString &summary)
@@ -257,9 +232,9 @@ void DeviceSession::onWorkerOpenConduitFinished(bool success)
 
 void DeviceSession::onWorkerOperationFinished(bool success, const QString &operation)
 {
-    // Note: Don't start tickle here - the specific handlers (onWorkerInstallFinished,
-    // onWorkerSyncFinished) already handle tickle/disconnect based on connection mode.
-    // This signal is emitted alongside those, so we just update state and relay.
+    // Note: Don't start tickle here - the specific handler (onWorkerSyncFinished)
+    // already handles tickle/disconnect based on connection mode.
+    // This signal is emitted alongside that, so we just update state and relay.
     m_busy = false;
     m_currentOperation.clear();
     emit operationFinished(success, operation);
@@ -320,8 +295,6 @@ void DeviceSession::ensureWorkerThread()
             this, &DeviceSession::onWorkerProgress);
     connect(m_worker, &DeviceWorker::palmScreenChanged,
             this, &DeviceSession::onWorkerPalmScreen);
-    connect(m_worker, &DeviceWorker::installFinished,
-            this, &DeviceSession::onWorkerInstallFinished);
     connect(m_worker, &DeviceWorker::syncFinished,
             this, &DeviceSession::onWorkerSyncFinished);
     connect(m_worker, &DeviceWorker::syncResultReady,
@@ -432,6 +405,24 @@ void DeviceSession::stopTickle()
 {
     if (m_tickle) {
         QMetaObject::invokeMethod(m_tickle, "stop", Qt::QueuedConnection);
+    }
+}
+
+void DeviceSession::pauseTickle()
+{
+    if (m_tickle && m_tickle->isRunning()) {
+        // BlockingQueuedConnection ensures the tickle is fully stopped
+        // before we return — no stray DLP calls on the socket.
+        QMetaObject::invokeMethod(m_tickle, "stop", Qt::BlockingQueuedConnection);
+        qDebug() << "[DeviceSession] Tickle paused for exclusive socket access";
+    }
+}
+
+void DeviceSession::resumeTickle()
+{
+    if (m_connectionMode == ConnectionMode::KeepAlive && isConnected() && !m_busy) {
+        startTickle();
+        qDebug() << "[DeviceSession] Tickle resumed";
     }
 }
 

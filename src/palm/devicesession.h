@@ -30,8 +30,8 @@ enum class SyncMode;
  * Usage:
  *   1. Call connectDevice() to start connection
  *   2. Wait for deviceReady() signal
- *   3. Call requestSync(), requestInstall(), etc.
- *   4. Results come via signals (syncFinished, installFinished, etc.)
+ *   3. Call requestSync(), etc.
+ *   4. Results come via signals (syncFinished, etc.)
  *   5. Call disconnectDevice() when done
  *
  * All operations are non-blocking and can be cancelled with requestCancel().
@@ -72,14 +72,6 @@ public:
     KPilotDeviceLink* deviceLink() const { return m_deviceLink; }
 
     // ========== Async Operations ==========
-
-    /**
-     * @brief Install files to Palm (async)
-     *
-     * Files are installed in order. Progress is reported via
-     * progressUpdated(). Results via installFinished().
-     */
-    void requestInstall(const QStringList &filePaths);
 
     /**
      * @brief Run sync operation (async)
@@ -154,7 +146,6 @@ signals:
 
     // ========== Results ==========
 
-    void installFinished(bool success, int successCount, int failCount);
     void syncFinished(bool success, const QString &summary);
     void syncResultReady(const Sync::SyncResult &result);
 
@@ -171,7 +162,6 @@ private slots:
     // Worker callbacks
     void onWorkerProgress(int current, int total, const QString &msg);
     void onWorkerPalmScreen(const QString &message);
-    void onWorkerInstallFinished(bool success, int successCount, int failCount);
     void onWorkerSyncFinished(bool success, const QString &summary);
     void onWorkerSyncResultReady(const Sync::SyncResult &result);
     void onWorkerOpenConduitFinished(bool success);
@@ -205,7 +195,6 @@ private:
     // Pending operation state
     Sync::SyncEngine *m_pendingSyncEngine = nullptr;
     Sync::SyncMode m_pendingSyncMode;
-    QStringList m_pendingInstallFiles;
 };
 
 #endif // DEVICESESSION_H
