@@ -10,7 +10,7 @@ Be sure to check the [USB Permissions](#usb-device-permissions) section below fo
 
 ## Why "Wild Palms"?
 
-The project was originally called "KPilot" during early development, but needed its own identity. *Wild Palms* is a nod to the 1993 sci-fi miniseries — a fitting name for software that bridges decades of technology. It's also just a good name for a Palm app.
+The project was originally called QPilotSync, but needed its own identity. The name comes from Bruce Wagner's graphic novel *Wild Palms* (later adapted into a 1993 ABC miniseries) — a story about technology, media, and reality that feels right at home bridging decades of computing. It's also just a good name for a Palm app.
 
 ## About
 
