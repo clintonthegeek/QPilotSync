@@ -4,18 +4,14 @@
 #include <QWidget>
 
 class QLabel;
-class QPushButton;
 class QVBoxLayout;
 class Profile;
 
 /**
- * @brief Dashboard widget showing device and sync status
+ * @brief Compact status header showing device, profile, and sync state
  *
- * Displays:
- * - Device connection status
- * - Current profile info
- * - Last sync info
- * - Quick action buttons
+ * Sits between the toolbar and the conduit page area.
+ * Height is fixed to ~120-160 px.
  */
 class DashboardWidget : public QWidget
 {
@@ -31,36 +27,23 @@ public:
     void setSyncing(bool syncing, const QString &deviceName = QString());
     void setLastSyncSummary(const QString &summary);
 
-Q_SIGNALS:
-    void hotSyncRequested();
-    void connectRequested();
-
 private:
     void setupUI();
-    void createDeviceCard();
-    void createProfileCard();
-    void createActionsCard();
 
-    // Device status card
+    // Left: device info
     QLabel *m_deviceIconLabel;
     QLabel *m_deviceNameLabel;
     QLabel *m_deviceStatusLabel;
-    QLabel *m_deviceUserLabel;
+    QLabel *m_deviceDetailsLabel;
 
-    // Profile card
+    // Center: profile info
     QLabel *m_profileNameLabel;
-    QLabel *m_profilePathLabel;
     QLabel *m_lastSyncLabel;
 
-    // Welcome / status area
-    QLabel *m_welcomeLabel;
-    QLabel *m_listeningStatusLabel;
+    // Right: status headline
+    QLabel *m_statusLabel;
 
-    // Actions
-    QPushButton *m_connectButton;
-    QPushButton *m_hotSyncButton;
-
-    bool m_connected;
+    bool m_connected = false;
 };
 
 #endif // DASHBOARDWIDGET_H

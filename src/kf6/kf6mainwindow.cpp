@@ -72,9 +72,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     , m_pageWidget(nullptr)
     , m_logDock(nullptr)
     , m_logWidget(nullptr)
-    // Built-in page items
-    , m_dashboardPage(nullptr)
-    // Built-in data views
     , m_dashboardWidget(nullptr)
     // Action manager
     , m_actionManager(nullptr)
@@ -253,21 +250,22 @@ void KF6MainWindow::setupUI()
 
 void KF6MainWindow::createCentralLayout()
 {
-    // Create KPageWidget with List (icon sidebar) face type
-    m_pageWidget = new KPageWidget(this);
-    m_pageWidget->setFaceType(KPageWidget::List);
-
-    // Dashboard is the only built-in page.
-    // All other pages (Memos, Contacts, Calendar, Tasks) are created
-    // dynamically by conduit plugins via onConduitLoaded().
+    // Status header strip (120 px, sits between toolbar and conduit pages)
     m_dashboardWidget = new DashboardWidget(this);
 
-    m_dashboardPage = new KPageWidgetItem(m_dashboardWidget, i18n("Sync"));
-    m_dashboardPage->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
-    m_dashboardPage->setHeaderVisible(false);
-    m_pageWidget->addPage(m_dashboardPage);
+    // Conduit page area with icon sidebar
+    m_pageWidget = new KPageWidget(this);
+    m_pageWidget->setFaceType(KPageWidget::List);
+    // Conduit pages are added dynamically by onConduitLoaded()
 
-    setCentralWidget(m_pageWidget);
+    // Stack: dashboard header on top, page widget below
+    auto *central = new QWidget(this);
+    auto *vbox = new QVBoxLayout(central);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(0);
+    vbox->addWidget(m_dashboardWidget);
+    vbox->addWidget(m_pageWidget, 1);
+    setCentralWidget(central);
 
     // Create log widget inside a QDockWidget at the bottom
     m_logWidget = new LogWidget(this);
@@ -299,10 +297,6 @@ void KF6MainWindow::setupConnections()
 
     connect(m_actionManager, &ActionManager::connectRequested,
             this, &KF6MainWindow::onConnectDevice);
-    connect(m_dashboardWidget, &DashboardWidget::connectRequested,
-            this, &KF6MainWindow::onConnectDevice);
-    connect(m_dashboardWidget, &DashboardWidget::hotSyncRequested,
-            this, &KF6MainWindow::onHotSync);
     connect(m_actionManager, &ActionManager::disconnectRequested,
             this, &KF6MainWindow::onDisconnectDevice);
     connect(m_actionManager, &ActionManager::cancelConnectionRequested,
@@ -348,13 +342,6 @@ void KF6MainWindow::setupConnections()
     connect(m_actionManager, &ActionManager::focusLogRequested,
             this, &KF6MainWindow::onFocusLog);
 
-    // Page navigation from ActionManager
-    // Only Dashboard has a fixed shortcut (Ctrl+1). Conduit pages
-    // are added dynamically and don't have static navigation bindings.
-    connect(m_actionManager, &ActionManager::viewDashboardRequested, this, [this]() {
-        m_pageWidget->setCurrentPage(m_dashboardPage);
-    });
-
     // KPageWidget page changes
     connect(m_pageWidget, &KPageWidget::currentPageChanged,
             this, &KF6MainWindow::onPageChanged);
@@ -367,19 +354,16 @@ void KF6MainWindow::saveWindowState()
     settings.setWindowState(saveState());
     settings.setLogPanelVisible(m_logDock->isVisible());
 
-    // Save current page — use 0 for Dashboard, or find the conduit page index
+    // Save current conduit page index
     int pageIndex = 0;
     KPageWidgetItem *current = m_pageWidget->currentPage();
-    if (current != m_dashboardPage) {
-        // Conduit pages start at index 1
-        int idx = 1;
-        for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
-            if (it.value() == current) {
-                pageIndex = idx;
-                break;
-            }
-            ++idx;
+    int idx = 0;
+    for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+        if (it.value() == current) {
+            pageIndex = idx;
+            break;
         }
+        ++idx;
     }
     settings.setCurrentTabIndex(pageIndex);
 
@@ -406,13 +390,10 @@ void KF6MainWindow::restoreWindowState()
     m_logDock->setVisible(logVisible);
     m_actionManager->toggleLogPanelAction()->setChecked(logVisible);
 
-    // Restore current page (0 = Dashboard, 1+ = conduit pages in insertion order)
+    // Restore current conduit page
     int pageIndex = settings.currentTabIndex();
-    if (pageIndex == 0 || m_conduitPages.isEmpty()) {
-        m_pageWidget->setCurrentPage(m_dashboardPage);
-    } else {
-        // Conduit pages in map iteration order
-        int idx = 1;
+    if (!m_conduitPages.isEmpty()) {
+        int idx = 0;
         for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
             if (idx == pageIndex) {
                 m_pageWidget->setCurrentPage(it.value());
@@ -439,16 +420,7 @@ void KF6MainWindow::onFocusLog()
 void KF6MainWindow::onPageChanged(KPageWidgetItem *current, KPageWidgetItem *previous)
 {
     Q_UNUSED(previous)
-
-    if (!m_currentProfile) {
-        return;
-    }
-
-    // Update the dashboard when it becomes visible
-    if (current == m_dashboardPage) {
-        m_dashboardWidget->updateStatus(m_currentProfile,
-                                        m_session && m_session->isConnected());
-    }
+    Q_UNUSED(current)
     // Conduit views handle their own data loading via loadFromPath()
     // when a profile is loaded. Lazy per-tab refresh can be added later
     // as an optimization.
@@ -654,6 +626,12 @@ void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString
                               operationName,
                               result.palmStats.total() + result.pcStats.total(),
                               errorCount));
+
+    // Record last sync time on successful sync
+    if (result.success && m_currentProfile) {
+        m_currentProfile->setLastSyncTime(result.endTime);
+        m_currentProfile->save();
+    }
 
     // Update dashboard after sync
     m_dashboardWidget->updateStatus(m_currentProfile,
@@ -1006,19 +984,28 @@ void KF6MainWindow::onConnectionComplete(bool success)
 
     m_deviceLink = m_session->deviceLink();
 
-    // Read user info
-    struct PilotUser user;
-    memset(&user, 0, sizeof(user));
-
-    if (m_deviceLink->readUserInfo(user)) {
-        QString userName = QString::fromLatin1(user.username);
-        quint32 userId = user.userID;
+    // Use handshake data (captured during connection on the worker thread —
+    // no DLP calls on the main thread while tickle may be running)
+    if (m_deviceLink->handshakeUserInfoValid()) {
+        QString userName = m_deviceLink->handshakeUserName();
+        quint32 userId = m_deviceLink->handshakeUserId();
 
         m_logWidget->logInfo(i18n("User: %1 (ID: %2)", userName, userId));
 
         DeviceFingerprint connectedDevice;
         connectedDevice.userId = userId;
         connectedDevice.userName = userName;
+        if (m_deviceLink->handshakeSysInfoValid()) {
+            connectedDevice.romVersion = m_deviceLink->handshakeRomVersion();
+            connectedDevice.productId = m_deviceLink->handshakeProductId();
+        }
+        if (m_deviceLink->handshakeStorageInfoValid()) {
+            connectedDevice.modelName = m_deviceLink->handshakeCardName();
+            connectedDevice.manufacturer = m_deviceLink->handshakeManufacturer();
+            connectedDevice.romSize = m_deviceLink->handshakeRomSize();
+            connectedDevice.ramSize = m_deviceLink->handshakeRamSize();
+            connectedDevice.ramFree = m_deviceLink->handshakeRamFree();
+        }
 
         if (m_currentProfile) {
             if (!handleDeviceFingerprint(connectedDevice)) {
@@ -1051,6 +1038,8 @@ void KF6MainWindow::onConnectionComplete(bool success)
                 QLineEdit::Normal, QStringLiteral("PalmUser"));
 
             if (!newUserName.isEmpty()) {
+                struct PilotUser user;
+                memset(&user, 0, sizeof(user));
                 strncpy(user.username, newUserName.toLatin1().constData(), sizeof(user.username) - 1);
                 user.userID = static_cast<unsigned long>(QDateTime::currentSecsSinceEpoch());
 
@@ -1062,6 +1051,17 @@ void KF6MainWindow::onConnectionComplete(bool success)
                         DeviceFingerprint newFp;
                         newFp.userId = user.userID;
                         newFp.userName = newUserName;
+                        if (m_deviceLink->handshakeSysInfoValid()) {
+                            newFp.romVersion = m_deviceLink->handshakeRomVersion();
+                            newFp.productId = m_deviceLink->handshakeProductId();
+                        }
+                        if (m_deviceLink->handshakeStorageInfoValid()) {
+                            newFp.modelName = m_deviceLink->handshakeCardName();
+                            newFp.manufacturer = m_deviceLink->handshakeManufacturer();
+                            newFp.romSize = m_deviceLink->handshakeRomSize();
+                            newFp.ramSize = m_deviceLink->handshakeRamSize();
+                            newFp.ramFree = m_deviceLink->handshakeRamFree();
+                        }
                         registerDeviceWithCurrentProfile(newFp);
                     }
                 } else {
@@ -1069,20 +1069,32 @@ void KF6MainWindow::onConnectionComplete(bool success)
                 }
             }
         }
+    } else {
+        m_logWidget->logWarning(i18n("Could not read user info from device"));
     }
 
-    // Read system info
-    struct SysInfo sysInfo;
-    memset(&sysInfo, 0, sizeof(sysInfo));
-
-    if (m_deviceLink->readSysInfo(sysInfo)) {
+    // System info display (from handshake)
+    if (m_deviceLink->handshakeSysInfoValid()) {
         m_logWidget->logInfo(i18n("Palm OS: %1.%2, Product ID: %3",
-                                  sysInfo.romVersion >> 16,
-                                  (sysInfo.romVersion >> 8) & 0xFF,
-                                  QString::fromLatin1(sysInfo.prodID)));
+                                  m_deviceLink->handshakeRomVersion() >> 16,
+                                  (m_deviceLink->handshakeRomVersion() >> 8) & 0xFF,
+                                  m_deviceLink->handshakeProductId()));
+    }
+
+    // Storage info display (from handshake)
+    if (m_deviceLink->handshakeStorageInfoValid()) {
+        QString ramTotal = DeviceFingerprint::formatMemorySize(m_deviceLink->handshakeRamSize());
+        QString ramFree = DeviceFingerprint::formatMemorySize(m_deviceLink->handshakeRamFree());
+        m_logWidget->logInfo(i18n("Device: %1 by %2, RAM: %3/%4",
+                                  m_deviceLink->handshakeCardName(),
+                                  m_deviceLink->handshakeManufacturer(),
+                                  ramFree, ramTotal));
     }
 
     m_syncEngine->setDeviceLink(m_deviceLink);
+    if (m_deviceLink->handshakeUserInfoValid()) {
+        m_syncEngine->setPalmUserName(m_deviceLink->handshakeUserName());
+    }
 
     updateMenuState(true);
     m_dashboardWidget->updateStatus(m_currentProfile, true);
@@ -1101,6 +1113,46 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
 
     if (expectedDevice.matches(connectedDevice)) {
         m_logWidget->logInfo(i18n("Device fingerprint verified"));
+
+        // Merge extended info from connected device into stored fingerprint
+        // so ramFree updates and initially-missing fields get filled
+        bool changed = false;
+        if (connectedDevice.hasExtendedInfo()) {
+            if (expectedDevice.modelName.isEmpty() && !connectedDevice.modelName.isEmpty()) {
+                expectedDevice.modelName = connectedDevice.modelName;
+                changed = true;
+            }
+            if (expectedDevice.manufacturer.isEmpty() && !connectedDevice.manufacturer.isEmpty()) {
+                expectedDevice.manufacturer = connectedDevice.manufacturer;
+                changed = true;
+            }
+            if (expectedDevice.romVersion == 0 && connectedDevice.romVersion != 0) {
+                expectedDevice.romVersion = connectedDevice.romVersion;
+                changed = true;
+            }
+            if (expectedDevice.productId.isEmpty() && !connectedDevice.productId.isEmpty()) {
+                expectedDevice.productId = connectedDevice.productId;
+                changed = true;
+            }
+            if (expectedDevice.romSize == 0 && connectedDevice.romSize != 0) {
+                expectedDevice.romSize = connectedDevice.romSize;
+                changed = true;
+            }
+            if (expectedDevice.ramSize == 0 && connectedDevice.ramSize != 0) {
+                expectedDevice.ramSize = connectedDevice.ramSize;
+                changed = true;
+            }
+            // Always update ramFree (it's a snapshot)
+            if (connectedDevice.ramFree != 0 && connectedDevice.ramFree != expectedDevice.ramFree) {
+                expectedDevice.ramFree = connectedDevice.ramFree;
+                changed = true;
+            }
+        }
+        if (changed) {
+            m_currentProfile->setDeviceFingerprint(expectedDevice);
+            m_currentProfile->save();
+        }
+
         return true;
     }
 
@@ -1426,6 +1478,11 @@ void KF6MainWindow::onDeviceInfo()
         .arg((sysInfo.romVersion >> 8) & 0xFF)
         .arg(sysInfo.romVersion & 0xFF);
 
+    // Read storage info for live device details
+    struct CardInfo cardInfo;
+    memset(&cardInfo, 0, sizeof(cardInfo));
+    bool hasStorageInfo = m_deviceLink->readStorageInfo(0, cardInfo);
+
     QStringList databases = m_deviceLink->listDatabases();
 
     QString info = QStringLiteral(
@@ -1442,6 +1499,23 @@ void KF6MainWindow::onDeviceInfo()
         .arg(osVersion)
         .arg(QString::fromLatin1(sysInfo.prodID))
         .arg(databases.size());
+
+    if (hasStorageInfo) {
+        info += QStringLiteral(
+            "<h4>Storage</h4>"
+            "<table>"
+            "<tr><td><b>Device Model:</b></td><td>%1</td></tr>"
+            "<tr><td><b>Manufacturer:</b></td><td>%2</td></tr>"
+            "<tr><td><b>ROM Size:</b></td><td>%3</td></tr>"
+            "<tr><td><b>RAM Size:</b></td><td>%4</td></tr>"
+            "<tr><td><b>Free RAM:</b></td><td>%5</td></tr>"
+            "</table>")
+            .arg(QString::fromLatin1(cardInfo.name))
+            .arg(QString::fromLatin1(cardInfo.manufacturer))
+            .arg(DeviceFingerprint::formatMemorySize(cardInfo.romSize))
+            .arg(DeviceFingerprint::formatMemorySize(cardInfo.ramSize))
+            .arg(DeviceFingerprint::formatMemorySize(cardInfo.ramFree));
+    }
 
     info += i18n("<h4>PIM Databases</h4><ul>");
     QStringList pimDbs = {QStringLiteral("MemoDB"), QStringLiteral("AddressDB"),

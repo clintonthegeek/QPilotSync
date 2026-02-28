@@ -4,6 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QMap>
+#include <QDateTime>
 #include <QJsonObject>
 
 /**
@@ -37,9 +38,19 @@ enum class ConnectionMode
  */
 struct DeviceFingerprint
 {
+    // --- Identity fields (used for matching) ---
     quint32 userId = 0;
     QString userName;
     QString usbSerialNumber;  // USB descriptor serial (e.g. "L0JG14I11398")
+
+    // --- Informational fields (NOT used for identity matching) ---
+    QString modelName;         // from CardInfo.name (e.g. "Palm m515")
+    QString manufacturer;      // from CardInfo.manufacturer (e.g. "Palm, Inc.")
+    quint32 romVersion = 0;    // from SysInfo.romVersion
+    QString productId;         // from SysInfo.prodID
+    quint64 romSize = 0;       // ROM bytes
+    quint64 ramSize = 0;       // total RAM bytes
+    quint64 ramFree = 0;       // free RAM bytes (snapshot at last connect)
 
     bool isValid() const { return userId != 0 || !userName.isEmpty() || !usbSerialNumber.isEmpty(); }
     bool isEmpty() const { return userId == 0 && userName.isEmpty() && usbSerialNumber.isEmpty(); }
@@ -57,16 +68,55 @@ struct DeviceFingerprint
     }
 
     // Create a display string for the fingerprint
+    // Uses model name as primary label when available
     QString displayString() const {
         if (isEmpty()) return QString();
-        if (!usbSerialNumber.isEmpty()) {
-            if (userName.isEmpty()) return QString("S/N: %1").arg(usbSerialNumber);
-            if (userId == 0) return QString("%1 (S/N: %2)").arg(userName, usbSerialNumber);
-            return QString("%1 (ID: %2, S/N: %3)").arg(userName).arg(userId).arg(usbSerialNumber);
+
+        // Build identity suffix: "Clinton, ID: 12345"
+        QString identity;
+        if (!userName.isEmpty() && userId != 0) {
+            identity = QString("%1, ID: %2").arg(userName).arg(userId);
+        } else if (!userName.isEmpty()) {
+            identity = userName;
+        } else if (userId != 0) {
+            identity = QString("ID: %1").arg(userId);
         }
-        if (userName.isEmpty()) return QString("ID: %1").arg(userId);
-        if (userId == 0) return userName;
-        return QString("%1 (ID: %2)").arg(userName).arg(userId);
+
+        // Use model name as primary label if available
+        if (!modelName.isEmpty()) {
+            if (identity.isEmpty()) return modelName;
+            return QString("%1 (%2)").arg(modelName, identity);
+        }
+
+        // Fallback: identity-only display
+        if (!usbSerialNumber.isEmpty()) {
+            if (identity.isEmpty()) return QString("S/N: %1").arg(usbSerialNumber);
+            return QString("%1 (S/N: %2)").arg(identity, usbSerialNumber);
+        }
+        return identity;
+    }
+
+    // Format Palm OS version from romVersion field (e.g. "5.2.1")
+    QString palmOSVersionString() const {
+        if (romVersion == 0) return QString();
+        int major = (romVersion >> 16) & 0xFF;
+        int minor = (romVersion >> 8) & 0xFF;
+        int patch = romVersion & 0xFF;
+        if (patch == 0) return QString("%1.%2").arg(major).arg(minor);
+        return QString("%1.%2.%3").arg(major).arg(minor).arg(patch);
+    }
+
+    // Format a byte count as a human-readable size (e.g. "16 MB")
+    static QString formatMemorySize(quint64 bytes) {
+        if (bytes == 0) return QString();
+        if (bytes >= 1024 * 1024) return QString("%1 MB").arg(bytes / (1024 * 1024));
+        if (bytes >= 1024) return QString("%1 KB").arg(bytes / 1024);
+        return QString("%1 B").arg(bytes);
+    }
+
+    // Check if extended device info (model/memory/OS) is available
+    bool hasExtendedInfo() const {
+        return !modelName.isEmpty() || romVersion != 0 || ramSize != 0;
     }
 
     // Create a unique key for registry lookups (format: userId:userName:serial)
@@ -154,6 +204,10 @@ public:
     QString defaultSyncType() const;  // "hotsync" or "fullsync"
     void setDefaultSyncType(const QString &type);
 
+    // Last sync timestamp (overall, not per-conduit)
+    QDateTime lastSyncTime() const;
+    void setLastSyncTime(const QDateTime &time);
+
     // ========== Sync Settings ==========
 
     // Conflict resolution policy (legacy - maps to autoResolve)
@@ -208,6 +262,9 @@ private:
     ConnectionMode m_connectionMode = ConnectionMode::KeepAlive;
     bool m_autoSyncOnConnect = false;
     QString m_defaultSyncType = "hotsync";
+
+    // Sync metadata
+    QDateTime m_lastSyncTime;
 
     // Sync settings
     QString m_conflictPolicy;

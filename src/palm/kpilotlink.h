@@ -8,6 +8,7 @@
 // Forward declarations
 struct PilotUser;
 struct SysInfo;
+struct CardInfo;
 class PilotRecord;
 
 /**
@@ -49,6 +50,7 @@ public:
     virtual bool readUserInfo(struct PilotUser &user) = 0;
     virtual bool writeUserInfo(const struct PilotUser &user) = 0;
     virtual bool readSysInfo(struct SysInfo &sysInfo) = 0;
+    virtual bool readStorageInfo(int cardNo, struct CardInfo &cardInfo) = 0;
 
     // Database operations
     virtual int openDatabase(const QString &dbName, bool readWrite = false) = 0;

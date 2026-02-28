@@ -308,6 +308,24 @@ void ConnectionWorker::doConnect()
             qDebug() << "[ConnectionWorker] ReadSysInfo failed (non-fatal)";
         }
 
+        // Read storage info (card 0 = internal storage)
+        struct CardInfo cardInfo;
+        memset(&cardInfo, 0, sizeof(cardInfo));
+        if (dlp_ReadStorageInfo(acceptResult, 0, &cardInfo) >= 0) {
+            result.storageInfoValid = true;
+            result.cardName = QString::fromLatin1(cardInfo.name);
+            result.manufacturer = QString::fromLatin1(cardInfo.manufacturer);
+            result.romSize = cardInfo.romSize;
+            result.ramSize = cardInfo.ramSize;
+            result.ramFree = cardInfo.ramFree;
+            qDebug() << "[ConnectionWorker] ReadStorageInfo OK - name:" << result.cardName
+                     << "manufacturer:" << result.manufacturer
+                     << "ROM:" << result.romSize << "RAM:" << result.ramSize
+                     << "free:" << result.ramFree;
+        } else {
+            qDebug() << "[ConnectionWorker] ReadStorageInfo failed (non-fatal)";
+        }
+
         // NOTE: OpenConduit is NOT called here. It belongs exclusively in
         // DeviceWorker::doSync() which handles it before each sync operation.
 
@@ -599,6 +617,38 @@ bool KPilotDeviceLink::readSysInfo(struct SysInfo &sysInfo)
     emit logMessage(QString("ROM Version: %1.%2")
                    .arg((sysInfo.romVersion >> 16) & 0xFF)
                    .arg((sysInfo.romVersion >> 8) & 0xFF));
+
+    return true;
+}
+
+bool KPilotDeviceLink::readStorageInfo(int cardNo, struct CardInfo &cardInfo)
+{
+    qDebug() << "[KPilotDeviceLink] readStorageInfo() called for card:" << cardNo;
+
+    if (!m_isConnected) {
+        qWarning() << "[KPilotDeviceLink] readStorageInfo() - not connected";
+        setError("Not connected");
+        return false;
+    }
+
+    struct CardInfo info;
+    memset(&info, 0, sizeof(info));
+    int result = dlp_ReadStorageInfo(m_socket, cardNo, &info);
+    if (result < 0) {
+        qWarning() << "[KPilotDeviceLink] dlp_ReadStorageInfo() failed, result:" << result
+                    << "pi_error:" << pi_error(m_socket)
+                    << "palmos_error:" << pi_palmos_error(m_socket);
+        setError("Failed to read storage info");
+        return false;
+    }
+
+    cardInfo = info;
+    qDebug() << "[KPilotDeviceLink] Storage info read:"
+             << "name=" << info.name
+             << "manufacturer=" << info.manufacturer
+             << "romSize=" << info.romSize
+             << "ramSize=" << info.ramSize
+             << "ramFree=" << info.ramFree;
 
     return true;
 }

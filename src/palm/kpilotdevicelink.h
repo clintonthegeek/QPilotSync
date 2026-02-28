@@ -23,6 +23,12 @@ struct HandshakeResult {
     bool sysInfoValid = false;
     quint32 romVersion = 0;
     QString productId;
+    bool storageInfoValid = false;
+    QString cardName;        // CardInfo.name (e.g. "Palm m515")
+    QString manufacturer;    // CardInfo.manufacturer (e.g. "Palm, Inc.")
+    quint64 romSize = 0;     // bytes
+    quint64 ramSize = 0;     // bytes
+    quint64 ramFree = 0;     // bytes
 };
 Q_DECLARE_METATYPE(HandshakeResult)
 
@@ -106,10 +112,17 @@ public:
     bool handshakeSysInfoValid() const { return m_handshake.sysInfoValid; }
     quint32 handshakeRomVersion() const { return m_handshake.romVersion; }
     QString handshakeProductId() const { return m_handshake.productId; }
+    bool handshakeStorageInfoValid() const { return m_handshake.storageInfoValid; }
+    QString handshakeCardName() const { return m_handshake.cardName; }
+    QString handshakeManufacturer() const { return m_handshake.manufacturer; }
+    quint64 handshakeRomSize() const { return m_handshake.romSize; }
+    quint64 handshakeRamSize() const { return m_handshake.ramSize; }
+    quint64 handshakeRamFree() const { return m_handshake.ramFree; }
 
     bool readUserInfo(struct PilotUser &user) override;
     bool writeUserInfo(const struct PilotUser &user) override;
     bool readSysInfo(struct SysInfo &sysInfo) override;
+    bool readStorageInfo(int cardNo, struct CardInfo &cardInfo) override;
 
     int openDatabase(const QString &dbName, bool readWrite = false) override;
     bool closeDatabase(int handle) override;
