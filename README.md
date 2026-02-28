@@ -1,63 +1,149 @@
 # Wild Palms
 
-Modern Palm Pilot synchronization for Linux using Qt6 and KDE Frameworks 6.
+Modern Palm OS synchronization for Linux, built with Qt6, KDE Frameworks 6, and an extensible conduit plugin system.
 
-Be sure to check the *USB Permissions* section below for help getting set up!
+**Wild Palms** is a ground-up rewrite inspired by the original KPilot. It brings Palm devices into the modern Linux desktop with bidirectional sync to open file formats, automatic device detection, a rich plugin architecture for third-party conduits, and native KDE integration.
 
-![Wild Palms Screenshot](docs/screenshot.png)
+Be sure to check the [USB Permissions](#usb-device-permissions) section below for help getting set up!
+
+![Wild Palms Screenshot](docs/Screenshot.jpg)
+
+## Why "Wild Palms"?
+
+The project was originally called "KPilot" during early development, but needed its own identity. *Wild Palms* is a nod to the 1993 sci-fi miniseries — a fitting name for software that bridges decades of technology. It's also just a good name for a Palm app.
 
 ## About
 
-Wild Palms brings classic Palm Pilot devices into the 2020s with support for modern data formats and contemporary desktop environments. Sync your Palm calendar to iCalendar files, contacts to vCards, memos to Markdown, and todos to iCalendar VTODO format - all with a clean Qt6 interface.
+Wild Palms syncs your Palm calendar to iCalendar files, contacts to vCards, memos to Markdown, and todos to iCalendar VTODO format. Everything lands in a plain folder on your filesystem — no proprietary databases, no lock-in. Use your synced data with any editor, calendar app, or version control system you like.
 
-This project is a spiritual successor to KPilot, rewritten from scratch with modern C++20 and Qt6.
+This project has been developed with *extremely close and meticulous human scrutiny* in Claude Code, and is released under GPLv3 to maximize ethical code practices.
 
-It has been developed with *extremely close and meticulous human scrutiny* in Claude Code, and is released under GPLv3 to maximize ethical code practices. No data safety is guaranteed, use at your own risk.
+No data safety is guaranteed. Use at your own risk.
 
-Read-only fetching of web calendars is implemented for instant one-way sync with your current cloud-based calendar service, or a tool like [VDirSyncer](https://github.com/pimutils/vdirsyncer) can be used *right now* for bi-directional sync. Esoteric and complex event recurrence rules are still discarded.
+## Features at a Glance
 
-Better, integrated calendar handling and syncing is planned.
+### Bidirectional PIM Sync
 
-## Features
+| Data Type | Palm Database | PC Format | View |
+|-----------|--------------|-----------|------|
+| Calendar | DatebookDB | iCalendar `.ics` (VEVENT) | Calendar browser |
+| Contacts | AddressDB | vCard 4.0 `.vcf` | Contact browser |
+| Memos | MemoDB | Markdown `.md` with YAML frontmatter | Memo browser |
+| Todos | ToDoDB | iCalendar `.ics` (VTODO) | Task browser/editor |
 
-### Device Communication
-- USB and serial connection support
-- Async/non-blocking connection handling
-- Device information display (Palm OS version, memory, user info)
-- Connection keep-alive for multiple operations without re-sync
-
-### Data Synchronization
-- **Calendar** - Bidirectional sync with iCalendar (.ics) files
-- **Contacts** - Bidirectional sync with vCard 4.0 (.vcf) files
-- **Memos** - Bidirectional sync with Markdown (.md) files
-- **Todos** - Bidirectional sync with iCalendar VTODO format
+All four PIM conduits support HotSync (dirty-flag-only, fast), full sync, copy in either direction, backup, and restore. Category names are synced bidirectionally and can be managed from the PC side.
 
 ### Web Calendar Subscriptions
-- Subscribe to remote iCalendar feeds (read-only)
-- Multiple feed support with individual categories
-- Configurable fetch intervals (every sync, daily, weekly, monthly)
-- Date filtering options (all events, recurring + future, future only)
+
+Subscribe to remote iCalendar feeds for one-way sync to your Palm:
+
+- Multiple named feeds, each mapped to its own Palm category
+- Configurable fetch intervals: every sync, daily, weekly, monthly
+- Date filtering: all events, recurring + future, or future only
+- Feeds are merged into your calendar sync folder automatically
+
+For full bidirectional cloud calendar sync, pair with a tool like [VDirSyncer](https://github.com/pimutils/vdirsyncer). Better integrated CalDAV handling is planned.
+
+### Plucker: Offline Web Reading on Your Palm
+
+The bundled **Plucker conduit** converts web pages into compressed Palm documents for offline reading — a full-featured web-to-Palm pipeline:
+
+- **Multiple channels** — each with its own home URL, crawl settings, and Palm category
+- **Deep spidering** — configurable crawl depth, breadth-first or depth-first, stay-on-host filter, URL inclusion patterns, custom user-agent
+- **Image processing** — configurable colour depth, max dimensions (portrait and landscape), compression quality, or disable images entirely
+- **Storage targets** — install to RAM, SD card, Memory Stick, or CompactFlash with custom subdirectory paths
+- **Scheduling** — per-channel auto-update frequency (hours, days, weeks) with next-due tracking
+- **Automatic viewer install** — detects whether the Plucker viewer app is on the device and installs it (plus the SysZLib dependency) if missing
+- **Bundled PyPlucker** — the Python spider/converter is included as a submodule; no separate install needed
+
+### File Installation
+
+Drag-and-drop `.prc` and `.pdb` files onto the Install view (or use the file picker) to queue them for installation at next sync. Installed files are moved to an `installed/` archive automatically.
+
+Any conduit can also programmatically queue files for installation via the shared `SyncContext::installQueue` — this is how the Plucker conduit delivers its `.pdb` output to the device.
+
+### Device Connection
+
+- **Automatic USB detection** — `libudev`-based monitoring detects Palm devices the moment they're plugged in and the HotSync button is pressed
+- **Multi-port probing** — Palm USB devices expose two serial ports (HotSync + debug console); Wild Palms probes both simultaneously and connects to the correct one
+- **Auto-profile resolution** — detected devices are matched to their profile by USB serial number, then user ID, then username
+- **Comprehensive device info** — reads model name, manufacturer, Palm OS version, ROM/RAM sizes during handshake; persisted in the profile and displayed in the dashboard
+- **Keep-alive mode** — maintains the connection between operations with periodic tickle, so you can browse device info, run multiple syncs, and install files without reconnecting
+- **Traditional HotSync mode** — optionally auto-sync and disconnect after each connection, just like the classic Palm Desktop experience
 
 ### Sync Engine
-- Extensible conduit plugin architecture
-- Dependency-aware conduit ordering
-- First-sync detection with device fingerprinting
-- Per-profile settings and sync state
 
-### Data Format Support
-- Windows-1252 encoding (Palm's native character set)
-- Category mapping between Palm and modern formats
-- RFC 5545 compliant iCalendar output
-- RFC 6350 compliant vCard 4.0 output
+- **Six sync modes** — HotSync, Full Sync, Copy Palm to PC, Copy PC to Palm, Backup, Restore
+- **Incremental change detection** — dirty-flag tracking on the Palm side, content-hash baselines on the PC side; only changed records are transferred
+- **Conflict resolution** — layered system with auto-resolve strategies (palm wins, PC wins, newer wins, duplicate, etc.), interactive conflict dialog, deferred conflict queue with batch review UI
+- **Volatility guard** — warns before syncs that would change more than 70% of records, protecting against accidental bulk data loss
+- **Data loss tracking** — every sync result carries detailed warnings about truncated fields, unsupported features, or encoding downgrades
+- **Dependency ordering** — conduits declare run-before/run-after constraints; Kahn's topological sort ensures correct execution order
+
+### KDE Desktop Integration
+
+- **KXmlGuiWindow** with XMLGUI menus, toolbars, and configurable keyboard shortcuts
+- **KPageWidget** icon-sidebar layout (like KDE System Settings) with dynamically loaded conduit pages
+- **KStatusNotifierItem** system tray with minimize-to-tray support
+- **KDE notifications** for connection events
+- **KConfig** global settings at `~/.config/wildpalmsrc`
+- **Portable profiles** — each profile is a `.wildpalms.conf` file inside the sync folder itself; move the folder, settings travel with it
+
+---
+
+## Conduit Plugin Architecture
+
+Wild Palms is designed around a plugin system. Every data handler — Memos, Calendar, Contacts, Todos, Plucker, Install, Web Calendar — is a conduit plugin loaded at runtime via the KDE plugin framework.
+
+### What a Third-Party Conduit Can Do
+
+Third-party developers can create conduits that plug into Wild Palms with full access to the same capabilities the built-in conduits use:
+
+| Capability | Description |
+|-----------|-------------|
+| **Sync data** | Read/write Palm database records, map to any PC file format |
+| **Provide a view** | Add a page to the icon sidebar with a full browse/edit widget |
+| **Contribute menus** | Merge `KXMLGUIClient` actions into the main window's menus and toolbars |
+| **Declare dependencies** | Specify run-before/run-after constraints relative to other conduits |
+| **Queue file installs** | Push `.prc`/`.pdb` paths onto the shared install queue |
+| **Run external tools** | Invoke subprocesses (like PyPlucker) with timeout management |
+| **Access the device** | Use the full pilot-link API: open databases, install files, query device info |
+| **Store settings** | Per-profile JSON config blobs, loaded/saved by the profile system |
+| **Schedule runs** | Interval-based `shouldRun()` logic to skip unnecessary syncs |
+| **Provide config pages** | Add configuration UI to the Profile Properties dialog |
+
+Conduits are standard KDE plugins — a shared library with a JSON metadata file:
+
+```json
+{
+    "KPlugin": {
+        "Name": "My Conduit",
+        "Description": "Syncs my custom data",
+        "Icon": "my-icon"
+    },
+    "X-WildPalms-ConduitId": "myconduit",
+    "X-WildPalms-ConduitType": "sync",
+    "X-WildPalms-PalmDatabase": "MyDB",
+    "X-WildPalms-DefaultEnabled": true,
+    "X-WildPalms-RunAfter": ["contacts"]
+}
+```
+
+The Plucker conduit is a good example of what's possible: it runs an external tool, processes the output, queues files for installation, auto-installs a viewer app on the device, provides a full channel management UI with a tabbed configuration dialog, and schedules its own update intervals — all as a plugin.
+
+More conduits are planned, and third-party contributions are welcome. If you have a Palm database that needs syncing, Wild Palms gives you the framework to build it.
+
+---
 
 ## Build Requirements
 
 - **Qt 6.2** or later
-- **KDE Frameworks 6** (KCalendarCore)
+- **KDE Frameworks 6** (KCalendarCore, KXmlGui, KNotifications, KStatusNotifierItem, etc.)
 - **CMake** 3.19+
 - **C++20** compatible compiler (GCC 10+, Clang 10+)
 - **pilot-link** library and headers
-- **libusb** development files
+- **libudev** development files
+- **Python 3** (for the Plucker conduit's PyPlucker spider)
 
 ### Installing Dependencies
 
@@ -65,7 +151,7 @@ Better, integrated calendar handling and syncing is planned.
 
 ```bash
 # Install from official repos
-sudo pacman -S base-devel cmake qt6-base kf6-kcalendarcore libusb libbluetooth
+sudo pacman -S base-devel cmake qt6-base kf6-kcalendarcore libusb libbluetooth python
 
 # Install pilot-link from AUR
 yay -S pilot-link-git
@@ -77,7 +163,7 @@ yay -S pilot-link-git
 ```bash
 # Install build dependencies
 sudo apt install build-essential cmake qt6-base-dev \
-    libkf6calendarcore-dev libusb-dev libbluetooth-dev
+    libkf6calendarcore-dev libusb-dev libbluetooth-dev python3
 
 # pilot-link and its related libraries are not in modern Debian/Ubuntu repos
 # Download .deb packages from: https://www.jpilot.org/download/
@@ -87,7 +173,7 @@ sudo apt install build-essential cmake qt6-base-dev \
 
 ```bash
 sudo dnf install @development-tools cmake qt6-qtbase-devel \
-    kf6-kcalendarcore-devel libusb-devel bluez-libs-devel pilot-link-devel
+    kf6-kcalendarcore-devel libusb-devel bluez-libs-devel pilot-link-devel python3
 ```
 
 ### Building pilot-link from Source (if packages unavailable)
@@ -107,11 +193,10 @@ sudo ldconfig
 ## Building Wild Palms
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/WildPalms.git
+git clone --recurse-submodules https://github.com/nickvonkaenel/WildPalms.git
 cd WildPalms
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+cmake -B build
+make -C build -j$(nproc)
 ```
 
 ### Running
@@ -124,15 +209,17 @@ make -j$(nproc)
 
 ### USB Device Permissions
 
-In Manjaro (and so, likely Arch), I have had to add my user to the `uucp` group in order to get establish a USB connection.
+On Arch/Manjaro, you may need to add your user to the `uucp` group for USB serial access:
+
 ```bash
-sudo groupmod -aG uucp *username*
+sudo usermod -aG uucp $USER
 ```
-Then restart (a logout/login didn't actually work for me for some reason).
 
-Run `sudo dmesg --follow` in an open terminal the first time you press HotSync to figure out what block device(s) to try and connect with. For me it was `/dev/ttyUSB1`, but yours could be different!
+Then restart your session (a logout/login may not be sufficient; a reboot is reliable).
 
-Another trick is to make a udev rule to allow non-root access to Palm devices:
+Run `sudo dmesg --follow` in a terminal the first time you press HotSync to identify your device ports. Wild Palms can auto-detect them, but it helps to know what to expect.
+
+You can also create a udev rule for non-root access to Palm devices:
 
 ```bash
 sudo tee /etc/udev/rules.d/60-palm.rules << 'EOF'
@@ -146,31 +233,50 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-### Initiating a Sync
+### Getting Started
 
-1. Launch Wild Palms, create a new profile, and configure your sync folder
-2. Select your device path (usually `/dev/ttyUSB0` or `/dev/ttyUSB1`) in profile.
-3. Both click "Connect" in Wild Palms and the HotSync button on your Palm cradle within a few seconds. 
-4. By default, nothing will happen once your connection is made. You can now choose various sorts of syncs, or to upload a `.prc` or `.pdb` file. You will then have to manually disconnect. **If you want the familiar HotSync Experience, you can enable automatic HotSync and auto disconnection in the Profile Settings.**
+1. Launch Wild Palms and create a new profile (File > New Profile), selecting a folder for your synced data
+2. Configure your device port in Profile Settings (usually `/dev/ttyUSB0` or `/dev/ttyUSB1`)
+3. Click Connect in Wild Palms, then press the HotSync button on your Palm cradle
+4. Once connected, choose a sync operation from the Sync menu — or browse your device info, install files, manage Plucker channels, etc.
+
+By default, the connection stays open for multiple operations. For the classic one-button HotSync experience, enable **Auto-sync on connect** and **Disconnect after sync** in Profile Settings.
 
 ### Supported Devices
 
 Wild Palms works with any device supported by pilot-link:
 
-- **Palm OS 3.x** - Palm III, V, Vx, VII, etc.
-- **Palm OS 4.x** - m100, m500, m505, m515, etc.
-- **Palm OS 5.x** - Tungsten series, Zire series, LifeDrive, TX
-- **Handspring** - Visor, Treo 90/180/270/300/600/650
-- **Sony CLIE** - All models
-- **Other** - Any Palm OS compatible device
+- **Palm OS 3.x** — Palm III, V, Vx, VII, etc.
+- **Palm OS 4.x** — m100, m500, m505, m515, etc.
+- **Palm OS 5.x** — Tungsten series, Zire series, LifeDrive, TX
+- **Handspring** — Visor, Treo 90/180/270/300/600/650
+- **Sony CLIE** — All models
+- **Other** — Any Palm OS compatible device
 
-Both USB and serial (RS-232) connections are supported.
+Both USB and serial (RS-232) connections are supported. Windows and Mac support are unlikely in the near future — the underlying libraries are *nix only.
 
-Windows and Mac support are unlikely in the near future—the underlying libraries are *nix only.
+## Sync Folder Structure
+
+Each profile is a self-contained folder:
+
+```
+~/PalmSync/
+├── .wildpalms.conf          # Profile settings (portable)
+├── .state/                  # Sync state, ID mappings, conflict queue
+├── calendar/                # iCalendar events (.ics)
+│   └── Work_Calendar/       # Web calendar subscription subfolder
+├── contacts/                # vCard files (.vcf)
+├── memos/                   # Markdown files (.md)
+├── todos/                   # iCalendar todos (.ics)
+└── install/                 # .prc/.pdb files queued for installation
+    └── installed/           # Archive of already-installed files
+```
+
+Global settings live at `~/.config/wildpalmsrc`.
 
 ## Documentation
 
-Detailed documentation is available in the `docs/` directory. Beware that these files may not necessarily be up to date:
+Detailed documentation is available in the `docs/` directory. These files may not always be up to date:
 
 | Document | Description |
 |----------|-------------|
@@ -179,62 +285,17 @@ Detailed documentation is available in the `docs/` directory. Beware that these 
 | [SYNC_ENGINE_ARCHITECTURE.md](docs/SYNC_ENGINE_ARCHITECTURE.md) | Sync engine design |
 | [CONDUIT_PLUGIN_DESIGN.md](docs/CONDUIT_PLUGIN_DESIGN.md) | Conduit plugin system |
 | [DATA_LOSS_HANDLING.md](docs/DATA_LOSS_HANDLING.md) | Data loss prevention |
-| [FIELD_MAPPING.md](docs/FIELD_MAPPING.md) | Palm to iCalendar/vCard mapping |
-| [KPILOT_ANALYSIS.md](docs/KPILOT_ANALYSIS.md) | Analysis of original KPilot |
-| [ROADMAP.md](docs/ROADMAP.md) | Development roadmap |
-| [CHALLENGES.md](docs/CHALLENGES.md) | Known challenges |
-| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Development setup |
-
-## Project Structure
-
-```
-WildPalms/
-├── CMakeLists.txt           # Main build configuration
-├── src/
-│   ├── main.cpp             # Application entry point
-│   ├── app/                  # Main window and UI
-│   ├── palm/                 # Palm device communication (pilot-link wrapper)
-│   ├── sync/                 # Sync engine and conduits
-│   │   ├── conduits/        # Data type handlers (calendar, contacts, etc.)
-│   │   ├── syncengine.*     # Core sync orchestration
-│   │   └── localfilebackend.* # File-based storage
-│   └── profile.*            # User profile management
-├── lib/
-│   └── CMakeLists.txt       # External dependency configuration
-├── docs/                     # Architecture and design docs
-├── scripts/                  # Build helper scripts
-└── tests/                    # Test suites
-```
-
-## Configuration
-
-Wild Palms stores configuration in `~/.config/WildPalms/` and per-profile settings in a `.wildpalms.conf` file within each sync folder.
-
-### Sync Folder Structure
-
-```
-~/PalmSync/                  # Your sync folder
-├── .wildpalms.conf          # Profile settings
-├── .state/                  # Sync state database
-├── calendar/                # iCalendar events (.ics)
-│   └── Work_Calendar/       # Web calendar subscription
-├── contacts/                # vCard files (.vcf)
-├── memos/                   # Markdown files (.md)
-├── todos/                   # iCalendar todos (.ics)
-└── install/                 # .prc/.pdb files to install
-    └── installed/           # Already installed files
-```
+| [FIELD_MAPPING.md](docs/FIELD_MAPPING.md) | Palm to iCalendar/vCard field mapping |
 
 ## Contributing
 
-Contributions will be welcome as the project matures; this early release is still fluctuating and total refactors are likely as complex calendar sync logic is intergrated. Areas where help is especially appreciated:
+Contributions are welcome! Areas where help is especially appreciated:
 
-- Testing with various Palm devices and Palm OS versions
-- Bug reports and feature requests
-- Documentation improvements
-- Icons and Graphics
-- *Packaging for various Linux distributions* Someone running Debian or Ubuntu might please build a `.deb` file, etc.
-- A better name or branding!
+- **Testing** with various Palm devices and Palm OS versions
+- **Conduit development** — build a conduit for your favourite Palm database
+- **Packaging** for Linux distributions (Debian/Ubuntu `.deb`, Fedora `.rpm`, Flatpak, AppImage)
+- **Bug reports** and feature requests
+- **Icons and graphics**
 
 ## License
 
@@ -244,16 +305,17 @@ GPL-3.0-or-later (compatible with pilot-link and the original KPilot)
 
 Wild Palms builds on the work of many projects:
 
-- **[pilot-link](https://github.com/jichu4n/pilot-link)** - The essential Palm communication library
-- **KPilot** - The original KDE Palm sync application (inspiration and reference)
-- **KDE Frameworks** - KCalendarCore for iCalendar/vCard handling
-- **Qt Project** - The excellent Qt6 framework
+- **[pilot-link](https://github.com/jichu4n/pilot-link)** — The essential Palm communication library
+- **KPilot** — The original KDE Palm sync application (inspiration and reference)
+- **[Plucker](http://www.plkr.org/)** — The offline web reader for Palm OS, and PyPlucker
+- **KDE Frameworks** — KCalendarCore, KXmlGui, KNotifications, and more
+- **Qt Project** — The excellent Qt6 framework
 
 ## Related Projects
 
-- **[J-Pilot](http://www.jpilot.org/)** - GTK-based Palm desktop and sync application
-- **[pilot-link](https://github.com/jichu4n/pilot-link)** - Command-line Palm tools
+- **[J-Pilot](http://www.jpilot.org/)** — GTK-based Palm desktop and sync application
+- **[pilot-link](https://github.com/jichu4n/pilot-link)** — Command-line Palm tools
 
 ---
 
-*Keeping Palm OS devices alive in the modern era.*
+*Keeping Palm OS alive on the modern Linux desktop.*
