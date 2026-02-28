@@ -37,14 +37,8 @@ SyncEngine::~SyncEngine()
 void SyncEngine::setDeviceLink(KPilotDeviceLink *link)
 {
     m_deviceLink = link;
-
-    // Read username when connected
-    if (m_deviceLink && m_deviceLink->isConnected()) {
-        PilotUser user;
-        if (m_deviceLink->readUserInfo(user)) {
-            m_palmUserName = QString::fromUtf8(user.username);
-        }
-    }
+    // Username is set separately via setPalmUserName() from handshake data,
+    // avoiding a DLP call on the main thread while tickle may be running.
 }
 
 // ========== Backend Configuration ==========
@@ -195,6 +189,9 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
         // Check if conduit should run (interval-based conduits may skip)
         SyncContext preCheckContext;
         preCheckContext.mode = mode;
+        if (auto *localBackend = dynamic_cast<LocalFileBackend*>(m_backend)) {
+            preCheckContext.syncFolderPath = localBackend->basePath();
+        }
         if (!cond->shouldRun(&preCheckContext)) {
             emit logMessage(QString("Skipping %1 (not due yet)").arg(cond->displayName()));
             conduitIndex++;
@@ -336,6 +333,9 @@ SyncResult SyncEngine::syncAllOrdered(const QStringList &orderedIds, SyncMode mo
         // Check if conduit should run (interval-based conduits may skip)
         SyncContext preCheckContext;
         preCheckContext.mode = mode;
+        if (auto *localBackend = dynamic_cast<LocalFileBackend*>(m_backend)) {
+            preCheckContext.syncFolderPath = localBackend->basePath();
+        }
         if (!cond->shouldRun(&preCheckContext)) {
             emit logMessage(QString("Skipping %1 (not due yet)").arg(cond->displayName()));
             conduitIndex++;

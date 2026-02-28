@@ -54,8 +54,6 @@ endif()
 qt_add_executable(wildpalms
     WIN32 MACOSX_BUNDLE
     src/main.cpp
-    src/settings.cpp
-    src/settings.h
 )
 
 target_link_libraries(wildpalms

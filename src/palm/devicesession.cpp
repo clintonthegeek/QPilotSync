@@ -46,7 +46,6 @@ void DeviceSession::connectDevice(const QStringList &devicePaths)
     connect(m_deviceLink, &KPilotDeviceLink::errorOccurred,
             this, &DeviceSession::errorOccurred);
 
-    m_conduitOpened = false;
     m_deviceLink->openConnection();
 }
 
@@ -63,7 +62,6 @@ void DeviceSession::disconnectDevice()
         m_deviceLink->closeConnection();
         m_deviceLink->deleteLater();
         m_deviceLink = nullptr;
-        m_conduitOpened = false;
 
         emit disconnected();
         emit logMessage("Disconnected from device");
@@ -148,23 +146,14 @@ void DeviceSession::onConnectionComplete(bool success)
         emit logMessage("Connected to Palm device");
         emit connectionComplete(true);
 
-        // Check if the connection worker already opened the conduit
-        // (it does this on the same thread as pi_accept_to, matching
-        // pilot-xfer's plu_connect() pattern for reliable timing)
-        if (m_deviceLink && m_deviceLink->isConduitOpened()) {
-            qDebug() << "[DeviceSession] Conduit already opened during handshake";
-            m_conduitOpened = true;
-            emit logMessage("Palm ready for sync");
-
-            // Start tickle if in keep-alive mode
-            if (m_connectionMode == ConnectionMode::KeepAlive) {
-                startTickle();
-            }
-            emit readyForSync();
-        } else {
-            // Fall back to async conduit open
-            openConduitAsync();
+        // Start tickle in keep-alive mode
+        if (m_connectionMode == ConnectionMode::KeepAlive) {
+            startTickle();
         }
+
+        // Always signal readiness — doSync() handles OpenConduit internally
+        emit logMessage("Palm ready for sync");
+        emit readyForSync();
     } else {
         emit connectionComplete(false);
 
@@ -214,22 +203,6 @@ void DeviceSession::onWorkerSyncResultReady(const Sync::SyncResult &result)
     emit syncResultReady(result);
 }
 
-void DeviceSession::onWorkerOpenConduitFinished(bool success)
-{
-    m_conduitOpened = success;
-    if (success) {
-        emit logMessage("Palm ready for sync");
-
-        // Start tickle if in keep-alive mode
-        if (m_connectionMode == ConnectionMode::KeepAlive) {
-            startTickle();
-        }
-
-        // Signal that we're ready for operations
-        emit readyForSync();
-    }
-}
-
 void DeviceSession::onWorkerOperationFinished(bool success, const QString &operation)
 {
     // Note: Don't start tickle here - the specific handler (onWorkerSyncFinished)
@@ -259,7 +232,6 @@ void DeviceSession::onConnectionLost()
     // Force cleanup of connection state
     m_busy = false;
     m_currentOperation.clear();
-    m_conduitOpened = false;
 
     // Clean up threads
     stopTickleThread();
@@ -299,8 +271,6 @@ void DeviceSession::ensureWorkerThread()
             this, &DeviceSession::onWorkerSyncFinished);
     connect(m_worker, &DeviceWorker::syncResultReady,
             this, &DeviceSession::onWorkerSyncResultReady);
-    connect(m_worker, &DeviceWorker::openConduitFinished,
-            this, &DeviceSession::onWorkerOpenConduitFinished);
     connect(m_worker, &DeviceWorker::operationFinished,
             this, &DeviceSession::onWorkerOperationFinished);
     connect(m_worker, &DeviceWorker::error,
@@ -426,15 +396,3 @@ void DeviceSession::resumeTickle()
     }
 }
 
-void DeviceSession::openConduitAsync()
-{
-    if (!isConnected()) {
-        return;
-    }
-
-    ensureWorkerThread();
-
-    // Open conduit on worker thread
-    QMetaObject::invokeMethod(m_worker, "doOpenConduit",
-                              Qt::QueuedConnection);
-}

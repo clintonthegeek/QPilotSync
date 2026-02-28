@@ -164,7 +164,6 @@ private slots:
     void onWorkerPalmScreen(const QString &message);
     void onWorkerSyncFinished(bool success, const QString &summary);
     void onWorkerSyncResultReady(const Sync::SyncResult &result);
-    void onWorkerOpenConduitFinished(bool success);
     void onWorkerOperationFinished(bool success, const QString &operation);
     void onWorkerError(const QString &error);
     void onWorkerLogMessage(const QString &message);
@@ -179,7 +178,6 @@ private:
     void stopTickleThread();
     void startTickle();
     void stopTickle();
-    void openConduitAsync();
 
     KPilotDeviceLink *m_deviceLink = nullptr;
     QThread *m_workerThread = nullptr;
@@ -189,7 +187,6 @@ private:
 
     std::atomic<bool> m_busy{false};
     QString m_currentOperation;
-    bool m_conduitOpened = false;
     ConnectionMode m_connectionMode = ConnectionMode::KeepAlive;
 
     // Pending operation state

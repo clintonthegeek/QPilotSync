@@ -148,10 +148,7 @@ private:
     QDockWidget *m_logDock;
     LogWidget *m_logWidget;
 
-    // Built-in page items
-    KPageWidgetItem *m_dashboardPage;
-
-    // Built-in data views
+    // Status header strip (above conduit pages)
     DashboardWidget *m_dashboardWidget;
 
     // Dynamic conduit pages (keyed by conduit ID)

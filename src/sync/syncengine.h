@@ -73,6 +73,11 @@ public:
      */
     QString palmUserName() const { return m_palmUserName; }
 
+    /**
+     * @brief Set the Palm username from handshake data
+     */
+    void setPalmUserName(const QString &name) { m_palmUserName = name; }
+
     // ========== Backend Configuration ==========
 
     /**

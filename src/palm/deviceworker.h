@@ -50,14 +50,6 @@ public:
 
 public slots:
     /**
-     * @brief Signal to Palm that a conduit is starting
-     *
-     * Calls dlp_OpenConduit() to update Palm screen from
-     * "Identifying User" to sync status.
-     */
-    void doOpenConduit();
-
-    /**
      * @brief End the sync session
      *
      * Calls dlp_EndOfSync() with the given status.
@@ -113,11 +105,6 @@ signals:
      * @brief Sync operation completed with full result
      */
     void syncResultReady(const Sync::SyncResult &result);
-
-    /**
-     * @brief OpenConduit completed
-     */
-    void openConduitFinished(bool success);
 
     /**
      * @brief General operation completed

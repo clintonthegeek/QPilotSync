@@ -28,33 +28,6 @@ void DeviceWorker::setSocket(int socket)
     qDebug() << "[DeviceWorker] Socket set to:" << socket;
 }
 
-void DeviceWorker::doOpenConduit()
-{
-    qDebug() << "[DeviceWorker] doOpenConduit() on thread:" << QThread::currentThread();
-
-    if (m_socket < 0) {
-        emit error("No socket connection");
-        emit openConduitFinished(false);
-        return;
-    }
-
-    emit palmScreenChanged("Syncing...");
-    emit logMessage("Opening conduit session...");
-
-    int result = dlp_OpenConduit(m_socket);
-    if (result < 0) {
-        emit error(QString("dlp_OpenConduit failed: %1 (pi_error: %2, palmos: %3)")
-                       .arg(result)
-                       .arg(pi_error(m_socket))
-                       .arg(pi_palmos_error(m_socket)));
-        emit openConduitFinished(false);
-        return;
-    }
-
-    emit logMessage("Conduit session opened - Palm ready for sync");
-    emit openConduitFinished(true);
-}
-
 void DeviceWorker::doEndSync(bool success)
 {
     qDebug() << "[DeviceWorker] doEndSync() success:" << success;
