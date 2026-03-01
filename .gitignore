@@ -67,6 +67,7 @@ CMakeLists.txt.user*
 *~
 *.swp
 *.swo
+*.kate-swp
 *.bak
 *.orig
 *.rej
