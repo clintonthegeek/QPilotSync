@@ -155,6 +155,7 @@ exportAll/
 .claude/
 
 # Reference docs (kept locally, not tracked)
+docs/archived/
 docs/plans/
 docs/kde-power-software-design-guide/
 docs/*.pdf
