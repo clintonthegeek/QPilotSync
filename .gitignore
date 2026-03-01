@@ -154,5 +154,11 @@ exportAll/
 # Claude Code settings
 .claude/
 
+# Reference docs (kept locally, not tracked)
+docs/plans/
+docs/kde-power-software-design-guide/
+docs/*.pdf
+docs/rfc*
+
 # Symlinks (personal development environment)
 kdepim-4.3.4
