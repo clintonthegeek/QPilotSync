@@ -175,6 +175,36 @@ void Profile::setConflictFallback(const QString &fallback)
     m_conflictFallback = fallback;
 }
 
+QString Profile::conflictPromptStrategy() const
+{
+    return m_conflictPromptStrategy;
+}
+
+void Profile::setConflictPromptStrategy(const QString &strategy)
+{
+    m_conflictPromptStrategy = strategy;
+}
+
+QString Profile::conflictConnectionBehavior() const
+{
+    return m_conflictConnectionBehavior;
+}
+
+void Profile::setConflictConnectionBehavior(const QString &behavior)
+{
+    m_conflictConnectionBehavior = behavior;
+}
+
+int Profile::conflictTimeoutSeconds() const
+{
+    return m_conflictTimeoutSeconds;
+}
+
+void Profile::setConflictTimeoutSeconds(int seconds)
+{
+    m_conflictTimeoutSeconds = qBound(15, seconds, 300);
+}
+
 bool Profile::conduitEnabled(const QString &conduitId) const
 {
     return m_conduitEnabled.value(conduitId, true);
@@ -254,6 +284,9 @@ bool Profile::load()
     m_conflictPolicy = settings.value("sync/conflictPolicy", DEFAULT_CONFLICT_POLICY).toString();
     m_conflictAutoResolve = settings.value("sync/conflictAutoResolve", "none").toString();
     m_conflictFallback = settings.value("sync/conflictFallback", "defer").toString();
+    m_conflictPromptStrategy = settings.value("sync/conflictPromptStrategy", "always_ask").toString();
+    m_conflictConnectionBehavior = settings.value("sync/conflictConnectionBehavior", "keep_alive").toString();
+    m_conflictTimeoutSeconds = settings.value("sync/conflictTimeoutSeconds", 60).toInt();
 
     // Conduit settings
     for (const QString &conduit : ALL_CONDUITS) {
@@ -347,6 +380,9 @@ bool Profile::save()
     settings.setValue("sync/conflictPolicy", m_conflictPolicy);
     settings.setValue("sync/conflictAutoResolve", m_conflictAutoResolve);
     settings.setValue("sync/conflictFallback", m_conflictFallback);
+    settings.setValue("sync/conflictPromptStrategy", m_conflictPromptStrategy);
+    settings.setValue("sync/conflictConnectionBehavior", m_conflictConnectionBehavior);
+    settings.setValue("sync/conflictTimeoutSeconds", m_conflictTimeoutSeconds);
 
     // Conduit settings
     for (const QString &conduit : ALL_CONDUITS) {

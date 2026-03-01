@@ -7,6 +7,7 @@
 class QCheckBox;
 class QComboBox;
 class QLineEdit;
+class QSpinBox;
 class Profile;
 class ConduitManager;
 
@@ -55,6 +56,9 @@ private:
     // Conflict page
     QComboBox *m_autoResolveCombo;
     QComboBox *m_fallbackCombo;
+    QComboBox *m_promptStrategyCombo;
+    QComboBox *m_connectionBehaviorCombo;
+    QSpinBox *m_timeoutSpinBox;
 };
 
 #endif // PROFILEPROPERTIESDIALOG_H

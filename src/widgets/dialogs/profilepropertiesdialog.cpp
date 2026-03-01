@@ -9,9 +9,11 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QScrollArea>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 // ========== Constructor ==========
@@ -164,9 +166,11 @@ QWidget* ProfilePropertiesDialog::createConduitsPage()
 QWidget* ProfilePropertiesDialog::createConflictPage()
 {
     auto *page = new QWidget;
-    auto *layout = new QFormLayout(page);
+    auto *mainLayout = new QVBoxLayout(page);
 
-    // Auto-resolve strategy
+    // Auto-resolve settings
+    auto *autoLayout = new QFormLayout;
+
     m_autoResolveCombo = new QComboBox(page);
     m_autoResolveCombo->addItem(i18n("None"),        QStringLiteral("none"));
     m_autoResolveCombo->addItem(i18n("Palm Wins"),   QStringLiteral("palm_wins"));
@@ -174,14 +178,47 @@ QWidget* ProfilePropertiesDialog::createConflictPage()
     m_autoResolveCombo->addItem(i18n("Newer Wins"),  QStringLiteral("newer_wins"));
     m_autoResolveCombo->addItem(i18n("Older Wins"),  QStringLiteral("older_wins"));
     m_autoResolveCombo->addItem(i18n("Duplicate"),   QStringLiteral("duplicate"));
-    layout->addRow(i18n("Auto-resolve strategy:"), m_autoResolveCombo);
+    autoLayout->addRow(i18n("Auto-resolve strategy:"), m_autoResolveCombo);
 
-    // Fallback behavior
     m_fallbackCombo = new QComboBox(page);
     m_fallbackCombo->addItem(i18n("Defer"),        QStringLiteral("defer"));
     m_fallbackCombo->addItem(i18n("Skip"),         QStringLiteral("skip"));
     m_fallbackCombo->addItem(i18n("Use Default"),  QStringLiteral("use_default"));
-    layout->addRow(i18n("Fallback behavior:"), m_fallbackCombo);
+    autoLayout->addRow(i18n("Fallback behavior:"), m_fallbackCombo);
+
+    mainLayout->addLayout(autoLayout);
+
+    // Interactive Conflict Resolution group
+    auto *interactiveGroup = new QGroupBox(i18n("Interactive Conflict Resolution"), page);
+    auto *interactiveLayout = new QFormLayout(interactiveGroup);
+
+    auto *interactiveNote = new QLabel(
+        i18n("These settings apply when auto-resolve is \"None\" or cannot resolve a conflict."),
+        interactiveGroup);
+    interactiveNote->setWordWrap(true);
+    interactiveNote->setStyleSheet(QStringLiteral("color: #666; font-size: 11px; margin-bottom: 6px;"));
+    interactiveLayout->addRow(interactiveNote);
+
+    m_promptStrategyCombo = new QComboBox(interactiveGroup);
+    m_promptStrategyCombo->addItem(i18n("Always Ask"),    QStringLiteral("always_ask"));
+    m_promptStrategyCombo->addItem(i18n("First Only"),    QStringLiteral("first_only"));
+    m_promptStrategyCombo->addItem(i18n("Batch at End"),  QStringLiteral("batch_at_end"));
+    interactiveLayout->addRow(i18n("Prompt strategy:"), m_promptStrategyCombo);
+
+    m_connectionBehaviorCombo = new QComboBox(interactiveGroup);
+    m_connectionBehaviorCombo->addItem(i18n("Keep Alive"),           QStringLiteral("keep_alive"));
+    m_connectionBehaviorCombo->addItem(i18n("Disconnect && Defer"),   QStringLiteral("disconnect_and_defer"));
+    m_connectionBehaviorCombo->addItem(i18n("Timeout && Defer"),      QStringLiteral("timeout_and_defer"));
+    interactiveLayout->addRow(i18n("Connection behavior:"), m_connectionBehaviorCombo);
+
+    m_timeoutSpinBox = new QSpinBox(interactiveGroup);
+    m_timeoutSpinBox->setRange(15, 300);
+    m_timeoutSpinBox->setValue(60);
+    m_timeoutSpinBox->setSuffix(i18n(" seconds"));
+    interactiveLayout->addRow(i18n("Dialog timeout:"), m_timeoutSpinBox);
+
+    mainLayout->addWidget(interactiveGroup);
+    mainLayout->addStretch();
 
     return page;
 }
@@ -216,6 +253,14 @@ void ProfilePropertiesDialog::loadSettings()
 
     int fallbackIdx = m_fallbackCombo->findData(m_profile->conflictFallback());
     if (fallbackIdx >= 0) m_fallbackCombo->setCurrentIndex(fallbackIdx);
+
+    int promptIdx = m_promptStrategyCombo->findData(m_profile->conflictPromptStrategy());
+    if (promptIdx >= 0) m_promptStrategyCombo->setCurrentIndex(promptIdx);
+
+    int connIdx = m_connectionBehaviorCombo->findData(m_profile->conflictConnectionBehavior());
+    if (connIdx >= 0) m_connectionBehaviorCombo->setCurrentIndex(connIdx);
+
+    m_timeoutSpinBox->setValue(m_profile->conflictTimeoutSeconds());
 }
 
 void ProfilePropertiesDialog::saveSettings()
@@ -241,6 +286,12 @@ void ProfilePropertiesDialog::saveSettings()
         m_autoResolveCombo->currentData().toString());
     m_profile->setConflictFallback(
         m_fallbackCombo->currentData().toString());
+    m_profile->setConflictPromptStrategy(
+        m_promptStrategyCombo->currentData().toString());
+    m_profile->setConflictConnectionBehavior(
+        m_connectionBehaviorCombo->currentData().toString());
+    m_profile->setConflictTimeoutSeconds(
+        m_timeoutSpinBox->value());
 
     m_profile->save();
 }

@@ -464,9 +464,11 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
         context.syncFolderPath = localBackend->basePath();
     }
 
-    // Set up new conflict handling system
-    // Create a handler that defers conflicts to the state's conflict store
-    QSyncCore::AutomaticConflictHandler conflictHandler(state->conflictStore());
+    // Set up conflict handling system
+    // Use external handler (e.g. InteractiveConflictHandler) if provided,
+    // otherwise fall back to a local AutomaticConflictHandler
+    QSyncCore::AutomaticConflictHandler autoHandler(state->conflictStore());
+    QSyncCore::ConflictHandler *conflictHandler = m_externalHandler ? m_externalHandler : &autoHandler;
 
     // Configure conflict policy from engine settings
     QSyncCore::ConflictPolicy conflictSettings;
@@ -495,7 +497,29 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
         conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
     }
 
-    context.conflictHandler = &conflictHandler;
+    // Prompt strategy
+    if (m_conflictPromptStrategy == "first_only") {
+        conflictSettings.promptStrategy = QSyncCore::PromptStrategy::OnFirstConflict;
+    } else if (m_conflictPromptStrategy == "batch_at_end") {
+        conflictSettings.promptStrategy = QSyncCore::PromptStrategy::Never;
+        conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
+    } else {
+        conflictSettings.promptStrategy = QSyncCore::PromptStrategy::Always;
+    }
+
+    // Connection behavior
+    if (m_conflictConnectionBehavior == "disconnect_and_defer") {
+        conflictSettings.connectionBehavior = QSyncCore::ConnectionBehavior::DisconnectAndDefer;
+    } else if (m_conflictConnectionBehavior == "timeout_and_defer") {
+        conflictSettings.connectionBehavior = QSyncCore::ConnectionBehavior::TimeoutThenDefer;
+    } else {
+        conflictSettings.connectionBehavior = QSyncCore::ConnectionBehavior::KeepAlive;
+    }
+
+    // Timeout
+    conflictSettings.promptTimeoutSeconds = m_conflictTimeoutSeconds;
+
+    context.conflictHandler = conflictHandler;
     context.conflictSettings = conflictSettings;
 
     // Pass cancellation check to conduit (SyncConduitBase only)
@@ -558,6 +582,26 @@ void SyncEngine::setConflictAutoResolve(const QString &strategy)
 void SyncEngine::setConflictFallback(const QString &fallback)
 {
     m_conflictFallback = fallback;
+}
+
+void SyncEngine::setConflictHandler(QSyncCore::ConflictHandler *handler)
+{
+    m_externalHandler = handler;
+}
+
+void SyncEngine::setConflictPromptStrategy(const QString &strategy)
+{
+    m_conflictPromptStrategy = strategy;
+}
+
+void SyncEngine::setConflictConnectionBehavior(const QString &behavior)
+{
+    m_conflictConnectionBehavior = behavior;
+}
+
+void SyncEngine::setConflictTimeoutSeconds(int seconds)
+{
+    m_conflictTimeoutSeconds = qBound(15, seconds, 300);
 }
 
 void SyncEngine::setStateDirectory(const QString &path)

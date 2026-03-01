@@ -222,6 +222,18 @@ public:
     QString conflictFallback() const;
     void setConflictFallback(const QString &fallback);
 
+    // Prompt strategy: "always_ask", "first_only", "batch_at_end"
+    QString conflictPromptStrategy() const;
+    void setConflictPromptStrategy(const QString &strategy);
+
+    // Connection behavior: "keep_alive", "disconnect_and_defer", "timeout_and_defer"
+    QString conflictConnectionBehavior() const;
+    void setConflictConnectionBehavior(const QString &behavior);
+
+    // Timeout in seconds for interactive conflict resolution
+    int conflictTimeoutSeconds() const;
+    void setConflictTimeoutSeconds(int seconds);
+
     // Conduit enable/disable
     bool conduitEnabled(const QString &conduitId) const;
     void setConduitEnabled(const QString &conduitId, bool enabled);
@@ -270,6 +282,9 @@ private:
     QString m_conflictPolicy;
     QString m_conflictAutoResolve = "none";
     QString m_conflictFallback = "defer";
+    QString m_conflictPromptStrategy = "always_ask";
+    QString m_conflictConnectionBehavior = "keep_alive";
+    int m_conflictTimeoutSeconds = 60;
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, QJsonObject> m_conduitSettings;
 

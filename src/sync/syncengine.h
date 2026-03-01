@@ -9,6 +9,7 @@
 #include "synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
+#include "qsynccore/conflictpolicy.h"
 #include "../core/iconduit.h"
 #include "../core/isyncconduit.h"
 
@@ -231,6 +232,36 @@ public:
     QString conflictFallback() const { return m_conflictFallback; }
 
     /**
+     * @brief Set an external conflict handler (e.g. InteractiveConflictHandler)
+     *
+     * When set, this handler is used instead of creating a local
+     * AutomaticConflictHandler in syncConduit(). The caller retains ownership.
+     */
+    void setConflictHandler(QSyncCore::ConflictHandler *handler);
+
+    /**
+     * @brief Get the external conflict handler
+     */
+    QSyncCore::ConflictHandler* conflictHandler() const { return m_externalHandler; }
+
+    /**
+     * @brief Set the prompt strategy for interactive conflict resolution
+     * @param strategy One of: "always_ask", "first_only", "batch_at_end"
+     */
+    void setConflictPromptStrategy(const QString &strategy);
+
+    /**
+     * @brief Set the connection behavior during conflict resolution
+     * @param behavior One of: "keep_alive", "disconnect_and_defer", "timeout_and_defer"
+     */
+    void setConflictConnectionBehavior(const QString &behavior);
+
+    /**
+     * @brief Set the timeout in seconds for conflict resolution dialogs
+     */
+    void setConflictTimeoutSeconds(int seconds);
+
+    /**
      * @brief Set the sync state directory
      *
      * Default: ~/.wildpalms/
@@ -293,6 +324,10 @@ private:
     ConflictResolution m_conflictPolicy = ConflictResolution::AskUser;
     QString m_conflictAutoResolve = "none";
     QString m_conflictFallback = "defer";
+    QSyncCore::ConflictHandler *m_externalHandler = nullptr;
+    QString m_conflictPromptStrategy = "always_ask";
+    QString m_conflictConnectionBehavior = "keep_alive";
+    int m_conflictTimeoutSeconds = 60;
 
     bool m_syncing = false;
     bool m_cancelled = false;
