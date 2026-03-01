@@ -112,6 +112,9 @@ log_info "Configuring build..."
 cmake "$PROJECT_DIR" \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DWILDPALMS_INSTALLED=ON \
+    -DKDE_INSTALL_PLUGINDIR=plugins \
     -DBUILD_TESTS=OFF
 
 # Build
@@ -132,6 +135,76 @@ fi
 if [ ! -f "$APPDIR/usr/share/icons/hicolor/scalable/apps/ca.vibekoder.wildpalms.svg" ]; then
     log_error "Icon not found in AppDir!"
     exit 1
+fi
+
+# Bundle Breeze icons — only the icons the app actually uses, at common sizes.
+# This avoids shipping the full 112 MB Breeze theme while ensuring the AppImage
+# looks correct on non-KDE desktops.
+BREEZE_ICONS="/usr/share/icons/breeze"
+APPDIR_ICONS="$APPDIR/usr/share/icons/breeze"
+
+if [ -d "$BREEZE_ICONS" ]; then
+    log_info "Bundling Breeze icons..."
+
+    # Icons used by Wild Palms (from QIcon::fromTheme calls)
+    ICON_NAMES=(
+        # Actions
+        document-new document-open document-open-folder document-save
+        document-import document-open-recent
+        edit-delete edit-clear edit-clear-history edit-copy edit-undo
+        view-refresh view-calendar view-preview view-task
+        view-pim-notes view-pim-contacts
+        folder-new folder-open folder-sync folder-documents folder
+        go-previous go-next list-add
+        network-connect network-disconnect
+        configure system-run download
+        # Devices
+        phone drive-removable-media
+        # Status / Dialog
+        dialog-ok-apply dialog-warning dialog-question dialog-cancel dialog-messages
+        user-identity preferences-plugin checkbox
+        # Mimetypes
+        text-html internet-web-browser
+        application-x-generic
+    )
+
+    SIZES=(16 22 24 32 48)
+
+    for size in "${SIZES[@]}"; do
+        for icon in "${ICON_NAMES[@]}"; do
+            for category in actions devices status mimetypes places apps; do
+                src="$BREEZE_ICONS/$category/$size/$icon.svg"
+                if [ -f "$src" ]; then
+                    dest="$APPDIR_ICONS/$category/$size"
+                    mkdir -p "$dest"
+                    cp "$src" "$dest/"
+                fi
+            done
+        done
+    done
+
+    # Copy the index.theme so Qt recognises this as a valid icon theme
+    if [ -f "$BREEZE_ICONS/index.theme" ]; then
+        cp "$BREEZE_ICONS/index.theme" "$APPDIR_ICONS/"
+    fi
+
+    ICON_COUNT=$(find "$APPDIR_ICONS" -name "*.svg" 2>/dev/null | wc -l)
+    log_info "Bundled $ICON_COUNT Breeze icon files"
+else
+    log_warn "Breeze icons not found at $BREEZE_ICONS — AppImage will rely on system theme"
+fi
+
+# Bundle Qt SVG icon engine — linuxdeploy-plugin-qt does NOT include this
+# automatically, and without it QIcon::fromTheme() cannot load .svg icons at all.
+QMAKE_PROBE=$(which qmake6 2>/dev/null || which qmake 2>/dev/null)
+QT_PLUGINS_SYS=$($QMAKE_PROBE -query QT_INSTALL_PLUGINS)
+SVG_ENGINE="$QT_PLUGINS_SYS/iconengines/libqsvgicon.so"
+if [ -f "$SVG_ENGINE" ]; then
+    mkdir -p "$APPDIR/usr/plugins/iconengines"
+    cp "$SVG_ENGINE" "$APPDIR/usr/plugins/iconengines/"
+    log_info "Bundled SVG icon engine plugin"
+else
+    log_warn "SVG icon engine not found at $SVG_ENGINE — themed icons will not render"
 fi
 
 # Find Qt's qmake

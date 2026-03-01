@@ -20,6 +20,11 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Widgets Network)
 qt_standard_project_setup()
 
+# KDE Extra CMake Modules — provides KDE_INSTALL_PLUGINDIR etc.
+find_package(ECM REQUIRED NO_MODULE)
+set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH} ${CMAKE_MODULE_PATH})
+include(KDEInstallDirs6)
+
 # Find KDE Frameworks
 find_package(KF6CalendarCore REQUIRED)
 find_package(KF6CoreAddons REQUIRED)

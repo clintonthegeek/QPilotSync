@@ -90,6 +90,8 @@ add_library(WildPalmsCore SHARED
     # Widgets - Dialogs
     widgets/dialogs/categoryeditordialog.cpp
     widgets/dialogs/categoryeditordialog.h
+    widgets/dialogs/conflictreviewdialog.cpp
+    widgets/dialogs/conflictreviewdialog.h
     widgets/dialogs/profilepropertiesdialog.cpp
     widgets/dialogs/profilepropertiesdialog.h
     widgets/dialogs/taskeditdialog.cpp
@@ -129,9 +131,18 @@ target_include_directories(WildPalmsCore PUBLIC
 )
 
 # For development builds: tell the app where to find wildpalmsui.rc
-# without requiring a full install
-target_compile_definitions(WildPalmsCore PRIVATE
-    WILDPALMS_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+# and Plucker data without requiring a full install.
+# Installed/AppImage builds set -DWILDPALMS_INSTALLED=ON so the app
+# uses standard KDE resource lookup instead.
+if(NOT WILDPALMS_INSTALLED)
+    target_compile_definitions(WildPalmsCore PRIVATE
+        WILDPALMS_DATA_DIR="${CMAKE_SOURCE_DIR}/data"
+    )
+endif()
+
+# Install the shared library
+install(TARGETS WildPalmsCore
+    LIBRARY DESTINATION lib
 )
 
 # Ensure pilot-link is built before WildPalmsCore

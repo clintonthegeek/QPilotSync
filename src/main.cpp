@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QIcon>
 
 #include <KAboutData>
 #include <KLocalizedString>
@@ -13,10 +14,23 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
+    // Ensure Breeze icons are available even outside a full KDE desktop
+    // (e.g. AppImage, GNOME, or minimal window managers).
+    QIcon::setFallbackThemeName(QStringLiteral("breeze"));
+
+    // Add bundled icons directory to the search path (for AppImage / installed builds).
+    // Qt only searches XDG_DATA_DIRS by default, which doesn't include the AppImage mount.
+    QDir appDir(QCoreApplication::applicationDirPath());
+    QString bundledIcons = appDir.absoluteFilePath(QStringLiteral("../share/icons"));
+    if (QDir(bundledIcons).exists()) {
+        QStringList paths = QIcon::themeSearchPaths();
+        paths.prepend(QDir(bundledIcons).canonicalPath());
+        QIcon::setThemeSearchPaths(paths);
+    }
+
     // Add the lib/ directory next to the executable as a plugin search path.
     // This allows KPluginMetaData::findPlugins() to discover conduit plugins
     // when running from the build directory without installing.
-    QDir appDir(QCoreApplication::applicationDirPath());
     QString localPluginDir = appDir.absoluteFilePath(QStringLiteral("lib"));
     if (QDir(localPluginDir).exists()) {
         QCoreApplication::addLibraryPath(localPluginDir);
