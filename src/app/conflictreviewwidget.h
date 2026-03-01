@@ -13,6 +13,7 @@
 #include <QWidget>
 #include "sync/qsynccore/conflictrecord.h"
 #include "sync/qsynccore/conflictstore.h"
+#include "core/isyncconduit.h"
 
 class QListWidget;
 class QListWidgetItem;
@@ -34,6 +35,11 @@ public:
     explicit ConflictReviewWidget(QSyncCore::ConflictStore *store,
                                   QWidget *parent = nullptr);
     ~ConflictReviewWidget() override;
+
+    /**
+     * @brief Set conduit lookup function for rich conflict display
+     */
+    void setConduitLookup(ConduitLookupFn fn) { m_conduitLookup = std::move(fn); }
 
     /**
      * @brief Refresh the conflict list
@@ -83,6 +89,7 @@ private:
     QIcon decisionToIcon(QSyncCore::ConflictDecision decision) const;
 
     QSyncCore::ConflictStore *m_store;
+    ConduitLookupFn m_conduitLookup;
     QString m_currentConflictId;
 
     // Filter

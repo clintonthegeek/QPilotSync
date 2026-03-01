@@ -2,8 +2,13 @@
 
 #include "iconduit.h"
 #include <QList>
+#include <functional>
 
 class PilotRecord;
+
+namespace QSyncCore {
+struct RecordSnapshot;
+}
 
 namespace Sync {
 class BackendRecord;
@@ -36,6 +41,14 @@ public:
     // Category support
     virtual QString categoryNameForIndex(int categoryIndex) const = 0;
     virtual bool writeModifiedCategories(SyncContext *context) = 0;
+
+    // Conflict display support
+    virtual void enrichConflictSnapshot(QSyncCore::RecordSnapshot &snapshot,
+                                         bool isSourceSide) const = 0;
+    virtual QString formatConflictRecordHtml(const QSyncCore::RecordSnapshot &snapshot) const = 0;
 };
+
+/// Lookup function to find an ISyncConduit by conduit ID
+using ConduitLookupFn = std::function<const ISyncConduit*(const QString &conduitId)>;
 
 Q_DECLARE_INTERFACE(ISyncConduit, "ca.vibekoder.ISyncConduit/1.0")

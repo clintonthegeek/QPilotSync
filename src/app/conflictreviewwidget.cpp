@@ -317,29 +317,41 @@ void ConflictReviewWidget::displayConflict(const ConflictRecord &conflict)
         .arg(statusText));
 
     // Display records
-    auto displayRecord = [](const RecordSnapshot &record, QTextEdit *text, QLabel *info) {
+    auto displayRecord = [this, &conflict](const RecordSnapshot &record,
+                                            QTextEdit *text, QLabel *info) {
         if (record.isDeleted()) {
             info->setText(tr("<b style='color:red;'>DELETED</b>"));
             text->setPlainText(tr("(Record has been deleted)"));
             text->setStyleSheet("background-color: #ffe0e0;");
-        } else if (record.isEmpty()) {
+            return;
+        }
+        if (record.isEmpty()) {
             info->setText(tr("<b style='color:orange;'>NEW</b>"));
             text->setPlainText(tr("(Does not exist)"));
             text->setStyleSheet("background-color: #fff0e0;");
-        } else {
-            QString infoStr = QString("ID: %1 | Modified: %2")
-                .arg(record.id)
-                .arg(record.lastModified.toString("yyyy-MM-dd hh:mm"));
-            if (!record.category.isEmpty()) {
-                infoStr += QString(" | %1").arg(record.category);
-            }
-            info->setText(infoStr);
-
-            // Display as text
-            QString content = QString::fromUtf8(record.content);
-            text->setPlainText(content);
-            text->setStyleSheet("");
+            return;
         }
+
+        QString infoStr = QString("ID: %1 | Modified: %2")
+            .arg(record.id)
+            .arg(record.lastModified.toString("yyyy-MM-dd hh:mm"));
+        if (!record.category.isEmpty())
+            infoStr += QString(" | %1").arg(record.category);
+        info->setText(infoStr);
+
+        // Try conduit formatter (rich HTML)
+        if (m_conduitLookup) {
+            const ISyncConduit *conduit = m_conduitLookup(conflict.conduitId);
+            if (conduit) {
+                text->setHtml(conduit->formatConflictRecordHtml(record));
+                text->setStyleSheet("");
+                return;
+            }
+        }
+
+        // Generic fallback
+        text->setPlainText(QString::fromUtf8(record.content));
+        text->setStyleSheet("");
     };
 
     displayRecord(conflict.source, m_sourceText, m_sourceInfoLabel);

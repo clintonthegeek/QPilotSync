@@ -15,6 +15,7 @@
 #include <QDialog>
 #include "sync/qsynccore/conflictrecord.h"
 #include "sync/qsynccore/conflictpolicy.h"
+#include "core/isyncconduit.h"
 
 class QTextEdit;
 class QLabel;
@@ -33,6 +34,7 @@ class ConflictDialog : public QDialog
 public:
     explicit ConflictDialog(const QSyncCore::ConflictRecord &conflict,
                             const QSyncCore::ConflictPolicy &policy,
+                            ConduitLookupFn conduitLookup = nullptr,
                             QWidget *parent = nullptr);
     ~ConflictDialog() override;
 
@@ -89,6 +91,7 @@ private:
     QSyncCore::ConflictPolicy m_policy;
     QSyncCore::ConflictDecision m_decision;
     bool m_applyToAll;
+    ConduitLookupFn m_conduitLookup;
 
     // UI elements
     QLabel *m_summaryLabel;

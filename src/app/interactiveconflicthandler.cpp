@@ -1,7 +1,10 @@
 #include "interactiveconflicthandler.h"
 #include "conflictdialog.h"
 
+#include <QApplication>
 #include <QDebug>
+#include <QMetaObject>
+#include <QThread>
 
 using namespace QSyncCore;
 
@@ -49,7 +52,7 @@ ConflictDecision InteractiveConflictHandler::handleConflict(ConflictRecord &conf
 {
     m_conflictsHandled++;
 
-    // 1. Check if "apply to all" is active from previous decision
+    // 1. Check if "apply to all" is active from previous decision (no GUI needed)
     if (m_applyToAllDecision != ConflictDecision::Pending) {
         conflict.decision = m_applyToAllDecision;
         conflict.resolvedAt = QDateTime::currentDateTime();
@@ -58,7 +61,7 @@ ConflictDecision InteractiveConflictHandler::handleConflict(ConflictRecord &conf
         return m_applyToAllDecision;
     }
 
-    // 2. Check for automatic resolution
+    // 2. Check for automatic resolution (no GUI needed)
     if (policy.shouldAutoResolve(conflict)) {
         if (policy.maxAutoResolvePerSync > 0 && m_autoResolvedCount >= policy.maxAutoResolvePerSync) {
             qDebug() << "[ConflictHandler] Auto-resolve limit reached, deferring";
@@ -76,22 +79,36 @@ ConflictDecision InteractiveConflictHandler::handleConflict(ConflictRecord &conf
         }
     }
 
-    // 3. Check if we should prompt
+    // 3. If not on GUI thread, bounce via BlockingQueuedConnection
+    //    Sync runs on a worker thread; ConflictDialog must show on the GUI thread.
+    if (QThread::currentThread() != qApp->thread()) {
+        ConflictDecision result = ConflictDecision::Pending;
+        QMetaObject::invokeMethod(this, [this, &conflict, &policy, &result]() {
+            result = handleConflictOnGuiThread(conflict, policy);
+        }, Qt::BlockingQueuedConnection);
+        return result;
+    }
+
+    return handleConflictOnGuiThread(conflict, policy);
+}
+
+ConflictDecision InteractiveConflictHandler::handleConflictOnGuiThread(
+    ConflictRecord &conflict, const ConflictPolicy &policy)
+{
+    // Check if we should prompt
     if (!canPrompt()) {
-        // No UI available - use fallback
         return handleFallback(conflict, policy);
     }
 
     if (!policy.shouldPrompt(conflict)) {
-        // Policy says don't prompt - use fallback
         return handleFallback(conflict, policy);
     }
 
-    // 4. Show dialog
+    // Show dialog on GUI thread
     m_keepAlive = (policy.connectionBehavior == ConnectionBehavior::KeepAlive ||
                    policy.connectionBehavior == ConnectionBehavior::TimeoutThenDefer);
 
-    ConflictDialog dialog(conflict, policy, m_parentWidget);
+    ConflictDialog dialog(conflict, policy, m_conduitLookup, m_parentWidget);
 
     // Connect tickle signal
     connect(&dialog, &ConflictDialog::keepAliveRequested,

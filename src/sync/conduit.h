@@ -327,6 +327,12 @@ public:
      */
     void setCancelCheck(std::function<bool()> callback) { m_cancelCheck = callback; }
 
+    // ========== Conflict Display ==========
+
+    void enrichConflictSnapshot(QSyncCore::RecordSnapshot &snapshot,
+                                 bool isSourceSide) const override;
+    QString formatConflictRecordHtml(const QSyncCore::RecordSnapshot &snapshot) const override;
+
     // ========== Record Conversion ==========
 
     /**

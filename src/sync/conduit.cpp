@@ -1026,7 +1026,7 @@ bool SyncConduitBase::resolveConflictWithHandler(PilotRecord *palmRecord,
         conflict.source.id = QString::number(palmRecord->id());
         conflict.source.description = palmRecordDescription(palmRecord);
         conflict.source.content = palmRecord->data();
-        conflict.source.contentType = "application/octet-stream";
+        conflict.source.contentType = backendRecord ? backendRecord->type : QStringLiteral("application/octet-stream");
         // Palm doesn't track modification time well, use current time
         conflict.source.lastModified = QDateTime::currentDateTime();
     }
@@ -1039,6 +1039,15 @@ bool SyncConduitBase::resolveConflictWithHandler(PilotRecord *palmRecord,
         conflict.target.contentHash = backendRecord->contentHash;
         conflict.target.contentType = backendRecord->type;  // Use type (memo, contact, etc.)
         conflict.target.lastModified = backendRecord->lastModified;
+    }
+
+    // Enrich snapshots with human-readable content and metadata
+    enrichConflictSnapshot(conflict.source, /*isSourceSide=*/true);
+    enrichConflictSnapshot(conflict.target, /*isSourceSide=*/false);
+
+    // Set category from Palm category index
+    if (palmRecord && !palmRecord->isDeleted()) {
+        conflict.source.category = categoryNameForIndex(palmRecord->category());
     }
 
     // Assess complexity
@@ -1579,6 +1588,55 @@ void SyncConduitBase::saveBaselineIncremental(SyncContext *context,
 SyncConduitBase::~SyncConduitBase()
 {
     delete m_categories;
+}
+
+// ========== Conflict Display Defaults ==========
+
+void SyncConduitBase::enrichConflictSnapshot(QSyncCore::RecordSnapshot &snapshot,
+                                              bool isSourceSide) const
+{
+    if (snapshot.content.isEmpty()) return;
+
+    // Best-effort: for source (Palm binary), try UTF-8 decode
+    // For target (PC text), content is already readable
+    if (isSourceSide) {
+        // Attempt UTF-8 decode of binary content
+        QString text = QString::fromUtf8(snapshot.content);
+        bool looksLikeText = true;
+        for (int i = 0; i < qMin(200, text.length()); ++i) {
+            QChar c = text[i];
+            if (!c.isPrint() && !c.isSpace()) {
+                looksLikeText = false;
+                break;
+            }
+        }
+        if (looksLikeText) {
+            snapshot.content = text.toUtf8();
+        }
+    }
+
+    snapshot.metadata[QStringLiteral("raw_size")] = snapshot.content.size();
+}
+
+QString SyncConduitBase::formatConflictRecordHtml(const QSyncCore::RecordSnapshot &snapshot) const
+{
+    QString html;
+
+    // Show metadata as a definition list if present
+    if (!snapshot.metadata.isEmpty()) {
+        html += QStringLiteral("<dl>");
+        for (auto it = snapshot.metadata.constBegin(); it != snapshot.metadata.constEnd(); ++it) {
+            html += QStringLiteral("<dt>%1</dt><dd>%2</dd>")
+                .arg(it.key().toHtmlEscaped(), it.value().toString().toHtmlEscaped());
+        }
+        html += QStringLiteral("</dl><hr>");
+    }
+
+    // Show content in <pre> with HTML escaping
+    QString content = QString::fromUtf8(snapshot.content);
+    html += QStringLiteral("<pre>%1</pre>").arg(content.toHtmlEscaped());
+
+    return html;
 }
 
 void SyncConduitBase::loadCategories(SyncContext *context)

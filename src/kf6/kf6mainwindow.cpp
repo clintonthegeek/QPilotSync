@@ -22,6 +22,8 @@
 #include "../sync/localfilebackend.h"
 #include "../sync/qsynccore/conflictstore.h"
 #include "../sync/syncstate.h"
+#include "../app/interactiveconflicthandler.h"
+#include "../widgets/dialogs/conflictreviewdialog.h"
 
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
@@ -57,7 +59,7 @@
 #include <QDebug>
 #include <cstring>
 
-#include <KAboutData>
+#include <KActionCollection>
 #include <KLocalizedString>
 #include <KNotification>
 #include <KPageWidget>
@@ -133,6 +135,18 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 #else
     setupGUI(Default, QStringLiteral("wildpalmsui.rc"));
 #endif
+
+    // Replace the KDE-branded About dialogs with our own.
+    // setupGUI(Default) creates a standard Help menu with "About KDE" and
+    // "About Wild Palms" (KAboutApplicationDialog). We use KDE Frameworks as
+    // a toolkit, but Wild Palms is not a KDE project.
+    if (QAction *aboutApp = actionCollection()->action(QStringLiteral("help_about_app"))) {
+        aboutApp->disconnect();
+        connect(aboutApp, &QAction::triggered, this, &KF6MainWindow::onAbout);
+    }
+    if (QAction *aboutKDE = actionCollection()->action(QStringLiteral("help_about_kde"))) {
+        aboutKDE->setVisible(false);
+    }
 
     // System tray
     m_trayIcon = new KStatusNotifierItem(this);
@@ -680,6 +694,34 @@ void KF6MainWindow::loadProfile(const QString &path)
     m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
     m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
+    m_syncEngine->setConflictPromptStrategy(m_currentProfile->conflictPromptStrategy());
+    m_syncEngine->setConflictConnectionBehavior(m_currentProfile->conflictConnectionBehavior());
+    m_syncEngine->setConflictTimeoutSeconds(m_currentProfile->conflictTimeoutSeconds());
+
+    // Set up interactive conflict handler
+    delete m_interactiveConflictHandler;
+    if (!m_conflictStore) {
+        m_conflictStore = new QSyncCore::ConflictStore(this);
+    }
+    m_interactiveConflictHandler = new InteractiveConflictHandler(
+        m_conflictStore, this, this);
+    m_syncEngine->setConflictHandler(m_interactiveConflictHandler);
+
+    // Set up conduit lookup for rich conflict display
+    m_interactiveConflictHandler->setConduitLookup(
+        [this](const QString &conduitId) -> const ISyncConduit* {
+            if (!m_conduitManager) return nullptr;
+            IConduit *c = m_conduitManager->conduit(conduitId);
+            return dynamic_cast<const ISyncConduit*>(c);
+        });
+
+    // Connect keepAlive signal to device session tickle
+    connect(m_interactiveConflictHandler, &InteractiveConflictHandler::keepAliveRequested,
+            this, [this]() {
+        if (m_session) {
+            m_session->resumeTickle();
+        }
+    });
 
     Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
     m_syncEngine->setBackend(backend);
@@ -1800,6 +1842,10 @@ void KF6MainWindow::onSyncStarted()
 {
     statusBar()->showMessage(i18n("Syncing..."));
 
+    if (m_interactiveConflictHandler) {
+        m_interactiveConflictHandler->onSyncStart();
+    }
+
     KNotification *notification = new KNotification(QStringLiteral("syncStarted"), KNotification::CloseOnTimeout, this);
     notification->setTitle(i18n("Sync Started"));
     notification->setText(i18n("Synchronization has started"));
@@ -1809,7 +1855,11 @@ void KF6MainWindow::onSyncStarted()
 
 void KF6MainWindow::onSyncFinished(const Sync::SyncResult &result)
 {
-    Q_UNUSED(result)
+    if (m_interactiveConflictHandler) {
+        bool hadConflicts = (result.palmStats.conflicts + result.pcStats.conflicts) > 0;
+        bool allResolved = m_interactiveConflictHandler->conflictsDeferred() == 0;
+        m_interactiveConflictHandler->onSyncEnd(hadConflicts, allResolved);
+    }
     statusBar()->showMessage(i18n("Sync complete"));
 }
 
@@ -1839,19 +1889,18 @@ void KF6MainWindow::onAsyncSyncResult(const Sync::SyncResult &result)
 
 void KF6MainWindow::onAbout()
 {
-    // KAboutApplicationDialog will be used via standard KDE mechanisms
-    // For now, show a simple about box
     QMessageBox::about(this, i18n("About Wild Palms"),
         i18n("<h3>Wild Palms %1</h3>"
-             "<p>Modern Palm Pilot synchronization for Linux</p>"
-             "<p>Built with:</p>"
-             "<ul>"
-             "<li>Qt %2</li>"
-             "<li>KDE Frameworks 6</li>"
-             "<li>pilot-link</li>"
-             "</ul>"
-             "<p>Bringing classic Palm Pilots into the modern era!</p>"
-             "<p>Licensed with the <a href=https://www.gnu.org/licenses/gpl-3.0.txt>GPL version 3.0</a> or later.</p>",
+             "<p>Modern Palm OS synchronization for Linux.</p>"
+             "<p>Copyright &copy; 2024–2026 Clinton Ignatov</p>"
+             "<p>Licensed under the "
+             "<a href=\"https://www.gnu.org/licenses/gpl-3.0.txt\">GNU General Public License v3.0</a> "
+             "or later.</p>"
+             "<hr>"
+             "<p style='font-size:small;'>Built with "
+             "<a href=\"https://www.qt.io\">Qt %2</a>, "
+             "<a href=\"https://develop.kde.org/frameworks/\">KDE Frameworks 6</a>, and "
+             "<a href=\"https://github.com/desrod/pilot-link\">pilot-link</a>.</p>",
              QString::fromLatin1(WILDPALMS_VERSION_STRING),
              QString::fromLatin1(QT_VERSION_STR)));
 }
@@ -1912,15 +1961,49 @@ void KF6MainWindow::onShowConflicts()
             i18n("There are no pending conflicts to review."));
     } else {
         m_logWidget->logInfo(i18n("Found %1 pending conflicts to review", totalConflicts));
-        // Full conflict review dialog will be implemented
-        QMessageBox::information(this, i18n("Conflicts Found"),
-            i18n("Found %1 conflict(s). Conflict review UI will be implemented.", totalConflicts));
+
+        auto conduitLookup = [this](const QString &conduitId) -> const ISyncConduit* {
+            if (!m_conduitManager) return nullptr;
+            IConduit *c = m_conduitManager->conduit(conduitId);
+            return dynamic_cast<const ISyncConduit*>(c);
+        };
+
+        ConflictReviewDialog dialog(m_conflictStore, conduitLookup, this);
+        connect(&dialog, &ConflictReviewDialog::applyResolutionsRequested,
+                this, &KF6MainWindow::onApplyConflictResolutions);
+        dialog.exec();
     }
 }
 
 void KF6MainWindow::onApplyConflictResolutions()
 {
-    // Will be implemented with conflict review widget
+    if (!m_conflictStore) return;
+
+    QList<QSyncCore::ConflictRecord> resolved = m_conflictStore->resolvedUnappliedConflicts();
+    if (resolved.isEmpty()) {
+        m_logWidget->logInfo(i18n("No resolved conflicts to apply"));
+        return;
+    }
+
+    // Write resolved conflicts back to each conduit's SyncState conflict store
+    QString userName = m_currentProfile ? m_currentProfile->deviceFingerprint().userName : QString();
+    QString statePath = m_currentProfile ? m_currentProfile->stateDirectoryPath() : QString();
+
+    int applied = 0;
+    for (const QSyncCore::ConflictRecord &conflict : resolved) {
+        Sync::SyncState state(userName, conflict.conduitId);
+        state.setStateDirectory(statePath);
+        state.load();
+
+        state.conflictStore()->resolveConflict(
+            conflict.conflictId, conflict.decision, conflict.resolvedBy);
+        state.save();
+        m_conflictStore->markApplied(conflict.conflictId);
+        applied++;
+    }
+
+    m_logWidget->logInfo(i18n("Applied %1 conflict resolution(s). "
+                              "Resolutions will take effect on next sync.", applied));
 }
 
 void KF6MainWindow::updateTrayState(const QString &status)

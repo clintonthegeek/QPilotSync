@@ -27,6 +27,8 @@ class SyncEngine;
 class SyncResult;
 }
 
+class InteractiveConflictHandler;
+
 namespace QSyncCore {
 class ConflictStore;
 }
@@ -186,6 +188,7 @@ private:
 
     // Conflict review
     QSyncCore::ConflictStore *m_conflictStore;
+    InteractiveConflictHandler *m_interactiveConflictHandler = nullptr;
 
     // Auto-detection and auto-sync
     PalmDeviceMonitor *m_deviceMonitor = nullptr;

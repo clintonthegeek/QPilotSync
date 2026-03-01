@@ -11,9 +11,11 @@
 
 #include "sync/qsynccore/conflictpolicy.h"
 #include "sync/qsynccore/conflictstore.h"
+#include "core/isyncconduit.h"
 
 #include <QObject>
 #include <QPointer>
+#include <QThread>
 
 class QWidget;
 class ConflictDialog;
@@ -56,6 +58,11 @@ public:
     void setParentWidget(QWidget *widget) { m_parentWidget = widget; }
 
     /**
+     * @brief Set conduit lookup function for rich conflict display
+     */
+    void setConduitLookup(ConduitLookupFn fn) { m_conduitLookup = std::move(fn); }
+
+    /**
      * @brief Get count of conflicts handled this session
      */
     int conflictsHandled() const { return m_conflictsHandled; }
@@ -91,9 +98,15 @@ signals:
      */
     void conflictProgress(int current, int total, const QString &description);
 
+private Q_SLOTS:
+    QSyncCore::ConflictDecision handleConflictOnGuiThread(
+        QSyncCore::ConflictRecord &conflict,
+        const QSyncCore::ConflictPolicy &policy);
+
 private:
     QSyncCore::ConflictStore *m_store;
     QWidget *m_parentWidget;
+    ConduitLookupFn m_conduitLookup;
 
     int m_conflictsHandled;
     int m_conflictsDeferred;

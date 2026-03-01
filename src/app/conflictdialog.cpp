@@ -17,12 +17,14 @@ using namespace QSyncCore;
 
 ConflictDialog::ConflictDialog(const ConflictRecord &conflict,
                                const ConflictPolicy &policy,
+                               ConduitLookupFn conduitLookup,
                                QWidget *parent)
     : QDialog(parent)
     , m_conflict(conflict)
     , m_policy(policy)
     , m_decision(ConflictDecision::Pending)
     , m_applyToAll(false)
+    , m_conduitLookup(std::move(conduitLookup))
     , m_timeoutTimer(nullptr)
     , m_tickleTimer(nullptr)
     , m_remainingSeconds(0)
@@ -187,59 +189,44 @@ void ConflictDialog::displayRecord(const RecordSnapshot &record,
                                     QTextEdit *textEdit,
                                     QLabel *infoLabel)
 {
-    // Info line
-    QString info;
+    // Handle deleted records
     if (record.isDeleted()) {
-        info = tr("<b style='color:red;'>DELETED</b>");
+        infoLabel->setText(tr("<b style='color:red;'>DELETED</b>"));
         textEdit->setPlainText(tr("(Record has been deleted)"));
         textEdit->setStyleSheet("background-color: #ffe0e0;");
-    } else if (record.isEmpty()) {
-        info = tr("<b style='color:orange;'>NEW</b>");
+        return;
+    }
+
+    // Handle empty/new records
+    if (record.isEmpty()) {
+        infoLabel->setText(tr("<b style='color:orange;'>NEW</b>"));
         textEdit->setPlainText(tr("(Record does not exist on this side)"));
         textEdit->setStyleSheet("background-color: #fff0e0;");
-    } else {
-        info = QString("ID: %1 | Modified: %2 | Size: %3 bytes")
-            .arg(record.id)
-            .arg(record.lastModified.toString("yyyy-MM-dd hh:mm"))
-            .arg(record.content.size());
+        return;
+    }
 
-        if (!record.category.isEmpty()) {
-            info += QString(" | Category: %1").arg(record.category);
-        }
+    // Info line
+    QString info = QString("ID: %1 | Modified: %2 | Size: %3 bytes")
+        .arg(record.id)
+        .arg(record.lastModified.toString("yyyy-MM-dd hh:mm"))
+        .arg(record.content.size());
+    if (!record.category.isEmpty())
+        info += QString(" | Category: %1").arg(record.category);
+    infoLabel->setText(info);
 
-        // Display content as text
-        // Try to interpret as UTF-8 text, fallback to hex dump for binary
-        QString contentStr = QString::fromUtf8(record.content);
-
-        // Check if it looks like valid text
-        bool isText = true;
-        for (int i = 0; i < qMin(1000, contentStr.length()); i++) {
-            QChar c = contentStr[i];
-            if (!c.isPrint() && !c.isSpace() && c != '\n' && c != '\r' && c != '\t') {
-                isText = false;
-                break;
-            }
-        }
-
-        if (isText) {
-            textEdit->setPlainText(contentStr);
+    // Try conduit formatter (rich HTML)
+    if (m_conduitLookup) {
+        const ISyncConduit *conduit = m_conduitLookup(m_conflict.conduitId);
+        if (conduit) {
+            textEdit->setHtml(conduit->formatConflictRecordHtml(record));
             textEdit->setStyleSheet("");
-        } else {
-            // Hex dump for binary
-            QString hex;
-            for (int i = 0; i < record.content.size(); i++) {
-                if (i > 0 && i % 16 == 0) hex += '\n';
-                else if (i > 0 && i % 8 == 0) hex += "  ";
-                else if (i > 0) hex += ' ';
-                hex += QString("%1").arg((unsigned char)record.content[i], 2, 16, QChar('0'));
-            }
-            textEdit->setPlainText(hex);
-            textEdit->setStyleSheet("font-family: monospace; background-color: #f0f0f0;");
-            info += " | <i>Binary content</i>";
+            return;
         }
     }
 
-    infoLabel->setText(info);
+    // Generic fallback: plain text
+    textEdit->setPlainText(QString::fromUtf8(record.content));
+    textEdit->setStyleSheet("");
 }
 
 void ConflictDialog::showEvent(QShowEvent *event)
