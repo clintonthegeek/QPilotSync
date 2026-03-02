@@ -164,3 +164,7 @@ docs/rfc*
 
 # Symlinks (personal development environment)
 kdepim-4.3.4
+
+# Personal scripts and configs
+cl.sh
+kdesrc
