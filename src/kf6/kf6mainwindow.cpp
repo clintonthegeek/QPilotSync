@@ -728,7 +728,14 @@ void KF6MainWindow::loadProfile(const QString &path)
 
     // Apply profile's conduit enabled settings
     for (const QString &conduitId : m_syncEngine->registeredConduits()) {
-        m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+        if (m_conduitManager && m_conduitManager->hasDatabaseClaims(conduitId)) {
+            // Sync conduit: enabled if it's the active handler for any of its claimed databases
+            QStringList activeDBs = m_conduitManager->activeDatabasesForConduit(conduitId, m_currentProfile);
+            m_syncEngine->setConduitEnabled(conduitId, !activeDBs.isEmpty());
+        } else {
+            // Standalone conduit: use simple enable/disable toggle
+            m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+        }
 
         QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
         if (!conduitSettings.isEmpty()) {
@@ -1613,7 +1620,14 @@ void KF6MainWindow::onProfileSettings()
     connect(dlg, &ProfilePropertiesDialog::settingsChanged, this, [this]() {
         // Re-apply conduit enabled settings to sync engine
         for (const QString &conduitId : m_syncEngine->registeredConduits()) {
-            m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+            if (m_conduitManager && m_conduitManager->hasDatabaseClaims(conduitId)) {
+                // Sync conduit: enabled if it's the active handler for any of its claimed databases
+                QStringList activeDBs = m_conduitManager->activeDatabasesForConduit(conduitId, m_currentProfile);
+                m_syncEngine->setConduitEnabled(conduitId, !activeDBs.isEmpty());
+            } else {
+                // Standalone conduit: use simple enable/disable toggle
+                m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
+            }
 
             QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
             if (!conduitSettings.isEmpty()) {
