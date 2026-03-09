@@ -187,7 +187,7 @@ public:
     // Identity
     virtual QString conduitId() const = 0;        // "calendar"
     virtual QString displayName() const = 0;      // "Calendar Sync"
-    virtual QString palmDatabaseName() const = 0; // "DatebookDB"
+    virtual QStringList palmDatabaseNames() const = 0; // {"DatebookDB"}
     virtual QString localFileExtension() const = 0; // ".ics"
 
     // Capabilities
