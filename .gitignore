@@ -155,6 +155,9 @@ exportAll/
 # Claude Code settings
 .claude/
 
+# Git worktrees
+.worktrees/
+
 # Reference docs (kept locally, not tracked)
 docs/archived/
 docs/plans/
