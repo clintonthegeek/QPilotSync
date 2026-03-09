@@ -115,7 +115,6 @@ QWidget* ProfilePropertiesDialog::createConduitsPage()
         return page;
     }
 
-    // Scroll area to handle many conduits
     auto *scrollArea = new QScrollArea(page);
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
@@ -123,37 +122,84 @@ QWidget* ProfilePropertiesDialog::createConduitsPage()
     auto *inner = new QWidget;
     auto *innerLayout = new QVBoxLayout(inner);
 
+    // === Database Handlers section ===
+    const QMap<QString, QStringList> claimMap = m_conduitManager->databaseClaimMap();
+
+    if (!claimMap.isEmpty()) {
+        auto *dbGroup = new QGroupBox(i18n("Database Handlers"), inner);
+        auto *dbLayout = new QFormLayout(dbGroup);
+
+        for (auto it = claimMap.constBegin(); it != claimMap.constEnd(); ++it) {
+            const QString &dbName = it.key();
+            const QStringList &claimants = it.value();
+
+            auto *combo = new QComboBox(dbGroup);
+
+            // Add "None" option if multiple claimants
+            if (claimants.size() > 1) {
+                combo->addItem(i18n("— Choose handler —"), QString());
+            }
+
+            for (const QString &conduitId : claimants) {
+                KPluginMetaData md = m_conduitManager->conduitMetaData(conduitId);
+                combo->addItem(md.name(), conduitId);
+            }
+
+            // Auto-select if only one claimant
+            if (claimants.size() == 1) {
+                combo->setCurrentIndex(0);
+            }
+
+            m_databaseHandlerCombos.insert(dbName, combo);
+
+            // Description label
+            auto *descLabel = new QLabel(dbGroup);
+            descLabel->setWordWrap(true);
+            descLabel->setStyleSheet(QStringLiteral("color: #666; font-size: 11px; margin-bottom: 8px;"));
+            m_claimDescriptionLabels.insert(dbName, descLabel);
+
+            // Update description when selection changes
+            connect(combo, &QComboBox::currentIndexChanged, this, [this, dbName, combo, descLabel]() {
+                QString conduitId = combo->currentData().toString();
+                if (conduitId.isEmpty()) {
+                    descLabel->clear();
+                } else {
+                    descLabel->setText(m_conduitManager->claimDescription(conduitId, dbName));
+                }
+            });
+
+            dbLayout->addRow(dbName, combo);
+            dbLayout->addRow(QString(), descLabel);
+        }
+
+        innerLayout->addWidget(dbGroup);
+    }
+
+    // === Standalone Conduits section ===
+    bool hasStandalone = false;
+    auto *standaloneGroup = new QGroupBox(i18n("Standalone Conduits"), inner);
+    auto *standaloneLayout = new QVBoxLayout(standaloneGroup);
+
     for (const ConduitManager::PluginInfo &info : plugins) {
-        // Determine conduit ID: prefer X-WildPalms-ConduitId, fall back to pluginId
         QString conduitId = info.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
         if (conduitId.isEmpty()) {
             conduitId = info.metaData.pluginId();
         }
-        if (conduitId.isEmpty()) {
-            continue;
-        }
+        if (conduitId.isEmpty()) continue;
 
-        auto *cb = new QCheckBox(info.metaData.name(), inner);
-        innerLayout->addWidget(cb);
-        m_conduitChecks.insert(conduitId, cb);
+        // Skip conduits with database claims
+        if (!info.databaseClaims.isEmpty()) continue;
 
-        // Mutual-exclusion: when a conduit is checked, uncheck any other conduit
-        // that shares the same Palm creator ID (only one conduit per Palm DB).
-        connect(cb, &QCheckBox::toggled, this, [this, conduitId](bool checked) {
-            if (!checked) return;
+        hasStandalone = true;
+        auto *cb = new QCheckBox(info.metaData.name(), standaloneGroup);
+        standaloneLayout->addWidget(cb);
+        m_standaloneChecks.insert(conduitId, cb);
+    }
 
-            const QString myCreatorId = m_conduitManager->palmCreatorId(conduitId);
-            if (myCreatorId.isEmpty()) return;
-
-            for (auto it = m_conduitChecks.constBegin(); it != m_conduitChecks.constEnd(); ++it) {
-                if (it.key() == conduitId) continue;
-
-                const QString otherCreatorId = m_conduitManager->palmCreatorId(it.key());
-                if (otherCreatorId == myCreatorId && it.value()->isChecked()) {
-                    it.value()->setChecked(false);
-                }
-            }
-        });
+    if (hasStandalone) {
+        innerLayout->addWidget(standaloneGroup);
+    } else {
+        delete standaloneGroup;
     }
 
     innerLayout->addStretch();
@@ -242,8 +288,29 @@ void ProfilePropertiesDialog::loadSettings()
     int syncTypeIdx = m_defaultSyncTypeCombo->findData(m_profile->defaultSyncType());
     if (syncTypeIdx >= 0) m_defaultSyncTypeCombo->setCurrentIndex(syncTypeIdx);
 
-    // Conduits page
-    for (auto it = m_conduitChecks.constBegin(); it != m_conduitChecks.constEnd(); ++it) {
+    // Database Handlers
+    for (auto it = m_databaseHandlerCombos.constBegin(); it != m_databaseHandlerCombos.constEnd(); ++it) {
+        const QString &dbName = it.key();
+        QComboBox *combo = it.value();
+        QString activeHandler = m_profile->activeDatabaseHandler(dbName);
+
+        if (activeHandler.isEmpty()) {
+            if (combo->count() == 1) {
+                combo->setCurrentIndex(0);
+            } else {
+                combo->setCurrentIndex(0);  // "Choose handler" placeholder
+            }
+        } else {
+            int idx = combo->findData(activeHandler);
+            if (idx >= 0) combo->setCurrentIndex(idx);
+        }
+
+        // Trigger description update
+        Q_EMIT combo->currentIndexChanged(combo->currentIndex());
+    }
+
+    // Standalone Conduits
+    for (auto it = m_standaloneChecks.constBegin(); it != m_standaloneChecks.constEnd(); ++it) {
         it.value()->setChecked(m_profile->conduitEnabled(it.key()));
     }
 
@@ -276,8 +343,15 @@ void ProfilePropertiesDialog::saveSettings()
     m_profile->setDefaultSyncType(
         m_defaultSyncTypeCombo->currentData().toString());
 
-    // Conduits page
-    for (auto it = m_conduitChecks.constBegin(); it != m_conduitChecks.constEnd(); ++it) {
+    // Database Handlers
+    for (auto it = m_databaseHandlerCombos.constBegin(); it != m_databaseHandlerCombos.constEnd(); ++it) {
+        const QString &dbName = it.key();
+        QString conduitId = it.value()->currentData().toString();
+        m_profile->setActiveDatabaseHandler(dbName, conduitId);
+    }
+
+    // Standalone Conduits
+    for (auto it = m_standaloneChecks.constBegin(); it != m_standaloneChecks.constEnd(); ++it) {
         m_profile->setConduitEnabled(it.key(), it.value()->isChecked());
     }
 

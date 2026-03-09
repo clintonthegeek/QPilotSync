@@ -6,6 +6,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QLabel;
 class QLineEdit;
 class QSpinBox;
 class Profile;
@@ -50,8 +51,12 @@ private:
     QCheckBox *m_autoSyncCheck;
     QComboBox *m_defaultSyncTypeCombo;
 
-    // Conduits page
-    QMap<QString, QCheckBox*> m_conduitChecks;
+    // Database Handlers section
+    QMap<QString, QComboBox*> m_databaseHandlerCombos;  ///< dbName -> handler dropdown
+    QMap<QString, QLabel*> m_claimDescriptionLabels;     ///< dbName -> description label
+
+    // Standalone Conduits section
+    QMap<QString, QCheckBox*> m_standaloneChecks;         ///< conduitId -> enable checkbox
 
     // Conflict page
     QComboBox *m_autoResolveCombo;
