@@ -10,7 +10,7 @@
 const QString Profile::DEFAULT_CONFLICT_POLICY = "ask";
 const QString Profile::DEFAULT_DEVICE_PATH = "/dev/ttyUSB0";
 const QString Profile::DEFAULT_BAUD_RATE = "115200";
-const QStringList Profile::ALL_CONDUITS = {"memos", "contacts", "calendar", "todos", "webcalendar"};
+
 
 Profile::Profile(const QString &syncFolderPath)
     : m_syncFolderPath(syncFolderPath)
@@ -18,11 +18,6 @@ Profile::Profile(const QString &syncFolderPath)
     , m_baudRate(DEFAULT_BAUD_RATE)
     , m_conflictPolicy(DEFAULT_CONFLICT_POLICY)
 {
-    // Enable all conduits by default
-    for (const QString &conduit : ALL_CONDUITS) {
-        m_conduitEnabled[conduit] = true;
-    }
-
     // Try to load existing settings if path is set
     if (!m_syncFolderPath.isEmpty()) {
         load();
@@ -218,9 +213,9 @@ void Profile::setConduitEnabled(const QString &conduitId, bool enabled)
 QStringList Profile::enabledConduits() const
 {
     QStringList enabled;
-    for (const QString &conduit : ALL_CONDUITS) {
-        if (conduitEnabled(conduit)) {
-            enabled << conduit;
+    for (auto it = m_conduitEnabled.constBegin(); it != m_conduitEnabled.constEnd(); ++it) {
+        if (it.value()) {
+            enabled << it.key();
         }
     }
     return enabled;
@@ -309,21 +304,23 @@ bool Profile::load()
     m_conflictConnectionBehavior = settings.value("sync/conflictConnectionBehavior", "keep_alive").toString();
     m_conflictTimeoutSeconds = settings.value("sync/conflictTimeoutSeconds", 60).toInt();
 
-    // Conduit settings
-    for (const QString &conduit : ALL_CONDUITS) {
-        m_conduitEnabled[conduit] = settings.value(
-            QString("conduits/%1/enabled").arg(conduit), true).toBool();
+    // Conduit settings (standalone conduits: enable/disable + per-conduit config)
+    settings.beginGroup(QStringLiteral("conduits"));
+    const QStringList conduitKeys = settings.childGroups();
+    for (const QString &conduit : conduitKeys) {
+        settings.beginGroup(conduit);
+        m_conduitEnabled[conduit] = settings.value(QStringLiteral("enabled"), true).toBool();
 
-        // Load conduit-specific settings as JSON
-        QString settingsStr = settings.value(
-            QString("conduits/%1/settings").arg(conduit)).toString();
+        QString settingsStr = settings.value(QStringLiteral("settings")).toString();
         if (!settingsStr.isEmpty()) {
             QJsonDocument doc = QJsonDocument::fromJson(settingsStr.toUtf8());
             if (!doc.isNull() && doc.isObject()) {
                 m_conduitSettings[conduit] = doc.object();
             }
         }
+        settings.endGroup();
     }
+    settings.endGroup();
 
     // Database handler preferences
     m_databaseHandlers.clear();
@@ -418,16 +415,13 @@ bool Profile::save()
     settings.setValue("sync/conflictTimeoutSeconds", m_conflictTimeoutSeconds);
 
     // Conduit settings
-    for (const QString &conduit : ALL_CONDUITS) {
-        settings.setValue(QString("conduits/%1/enabled").arg(conduit),
-                          m_conduitEnabled.value(conduit, true));
-
-        // Save conduit-specific settings as JSON string
-        if (m_conduitSettings.contains(conduit)) {
-            QJsonDocument doc(m_conduitSettings[conduit]);
-            settings.setValue(QString("conduits/%1/settings").arg(conduit),
-                              QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-        }
+    for (auto it = m_conduitEnabled.constBegin(); it != m_conduitEnabled.constEnd(); ++it) {
+        settings.setValue(QString("conduits/%1/enabled").arg(it.key()), it.value());
+    }
+    for (auto it = m_conduitSettings.constBegin(); it != m_conduitSettings.constEnd(); ++it) {
+        QJsonDocument doc(it.value());
+        settings.setValue(QString("conduits/%1/settings").arg(it.key()),
+                          QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
     }
 
     // Database handler preferences

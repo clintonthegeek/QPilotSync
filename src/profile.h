@@ -298,7 +298,7 @@ private:
     static const QString DEFAULT_CONFLICT_POLICY;
     static const QString DEFAULT_DEVICE_PATH;
     static const QString DEFAULT_BAUD_RATE;
-    static const QStringList ALL_CONDUITS;
+
 };
 
 #endif // PROFILE_H
