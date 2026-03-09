@@ -38,10 +38,14 @@ SyncResult SyncConduitBase::sync(SyncContext *context)
     emit logMessage(QString("Starting %1 sync...").arg(displayName()));
 
     // Open Palm database
-    m_dbHandle = context->deviceLink->openDatabase(palmDatabaseName(), true);
+    QString dbName = context->palmDatabase;
+    if (dbName.isEmpty() && !palmDatabaseNames().isEmpty()) {
+        dbName = palmDatabaseNames().first();
+    }
+    m_dbHandle = context->deviceLink->openDatabase(dbName, true);
     if (m_dbHandle < 0) {
         result.success = false;
-        result.errorMessage = QString("Failed to open Palm database: %1").arg(palmDatabaseName());
+        result.errorMessage = QString("Failed to open Palm database: %1").arg(dbName);
         result.endTime = QDateTime::currentDateTime();
         return result;
     }

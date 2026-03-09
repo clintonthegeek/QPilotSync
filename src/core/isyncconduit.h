@@ -22,7 +22,7 @@ class ISyncConduit : public IConduit
 {
 public:
     // Palm database identity
-    virtual QString palmDatabaseName() const = 0;
+    virtual QStringList palmDatabaseNames() const = 0;
     virtual QString fileExtension() const = 0;
     virtual bool canSyncToPalm() const = 0;
     virtual bool canSyncFromPalm() const = 0;

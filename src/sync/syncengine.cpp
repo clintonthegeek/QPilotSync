@@ -449,10 +449,14 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     context.conflictPolicy = m_conflictPolicy;
     context.userName = m_palmUserName;
 
-    // Only ISyncConduit-derived conduits have a Palm database name
+    // Only ISyncConduit-derived conduits have Palm database names
     ISyncConduit *syncCond = dynamic_cast<ISyncConduit*>(cond);
     if (syncCond) {
-        context.palmDatabase = syncCond->palmDatabaseName();
+        const QStringList dbNames = syncCond->palmDatabaseNames();
+        if (!dbNames.isEmpty()) {
+            context.palmDatabase = dbNames.first();
+        }
+        context.activeDatabases = dbNames;
     }
 
     // Determine collection ID for this conduit

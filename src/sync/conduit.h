@@ -48,6 +48,7 @@ public:
     QSyncCore::ConflictPolicy conflictSettings;             ///< Conflict resolution settings
 
     QString palmDatabase;    ///< Palm database name (e.g., "MemoDB")
+    QStringList activeDatabases;  ///< Databases this conduit is active for (subset of its claims)
     QString collectionId;    ///< Backend collection ID
     QString userName;        ///< Palm username
     QString syncSessionId;   ///< Unique ID for this sync session
@@ -112,11 +113,11 @@ public:
     QString displayName() const override = 0;
 
     /**
-     * @brief Palm database name this conduit handles
+     * @brief Palm database names this conduit handles
      *
-     * Examples: "MemoDB", "AddressDB", "DatebookDB", "ToDoDB"
+     * Examples: {"MemoDB"}, {"AddressDB"}, {"DatebookDB"}, {"ToDoDB"}
      */
-    QString palmDatabaseName() const override = 0;
+    QStringList palmDatabaseNames() const override = 0;
 
     /**
      * @brief File extension for this conduit's export format
