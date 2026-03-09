@@ -746,6 +746,13 @@ void KF6MainWindow::loadProfile(const QString &path)
         }
     }
 
+    // Set up database reference resolver for @ sigil in dependency ordering
+    if (m_conduitManager && m_currentProfile) {
+        m_syncEngine->setDatabaseResolver([this](const QString &dbName) -> QString {
+            return m_conduitManager->activeConduitForDatabase(dbName, m_currentProfile);
+        });
+    }
+
     // Apply connection mode to session
     if (m_session) {
         m_session->setConnectionMode(m_currentProfile->connectionMode());

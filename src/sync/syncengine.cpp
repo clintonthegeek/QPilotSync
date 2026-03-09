@@ -608,6 +608,11 @@ void SyncEngine::setConflictTimeoutSeconds(int seconds)
     m_conflictTimeoutSeconds = qBound(15, seconds, 300);
 }
 
+void SyncEngine::setDatabaseResolver(std::function<QString(const QString &dbName)> resolver)
+{
+    m_dbResolver = resolver;
+}
+
 void SyncEngine::setStateDirectory(const QString &path)
 {
     m_stateDirectory = path;
@@ -725,7 +730,12 @@ QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
         }
 
         // "I must run before X" means edge: id -> X
-        for (const QString &beforeId : beforeList) {
+        for (const QString &rawRef : beforeList) {
+            QString beforeId = rawRef;
+            if (rawRef.startsWith(QLatin1Char('@')) && m_dbResolver) {
+                beforeId = m_dbResolver(rawRef.mid(1));
+                if (beforeId.isEmpty()) continue;
+            }
             if (conduitIds.contains(beforeId)) {
                 mustRunBefore[id].append(beforeId);
                 inDegree[beforeId]++;
@@ -733,7 +743,12 @@ QStringList SyncEngine::resolveConduitOrder(const QStringList &conduitIds)
         }
 
         // "I must run after X" means edge: X -> id
-        for (const QString &afterId : afterList) {
+        for (const QString &rawRef : afterList) {
+            QString afterId = rawRef;
+            if (rawRef.startsWith(QLatin1Char('@')) && m_dbResolver) {
+                afterId = m_dbResolver(rawRef.mid(1));
+                if (afterId.isEmpty()) continue;
+            }
             if (conduitIds.contains(afterId)) {
                 mustRunBefore[afterId].append(id);
                 inDegree[id]++;
@@ -804,13 +819,23 @@ QString SyncEngine::checkCircularDependencies(const QStringList &conduitIds)
             afterList = m_conduitRunAfter.value(id);
         }
 
-        for (const QString &beforeId : beforeList) {
+        for (const QString &rawRef : beforeList) {
+            QString beforeId = rawRef;
+            if (rawRef.startsWith(QLatin1Char('@')) && m_dbResolver) {
+                beforeId = m_dbResolver(rawRef.mid(1));
+                if (beforeId.isEmpty()) continue;
+            }
             if (conduitIds.contains(beforeId)) {
                 edges[id].append(beforeId);
             }
         }
 
-        for (const QString &afterId : afterList) {
+        for (const QString &rawRef : afterList) {
+            QString afterId = rawRef;
+            if (rawRef.startsWith(QLatin1Char('@')) && m_dbResolver) {
+                afterId = m_dbResolver(rawRef.mid(1));
+                if (afterId.isEmpty()) continue;
+            }
             if (conduitIds.contains(afterId)) {
                 edges[afterId].append(id);
             }

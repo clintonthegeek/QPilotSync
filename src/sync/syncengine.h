@@ -261,6 +261,9 @@ public:
      */
     void setConflictTimeoutSeconds(int seconds);
 
+    /** @brief Set a function to resolve @ sigil database references to conduit IDs */
+    void setDatabaseResolver(std::function<QString(const QString &dbName)> resolver);
+
     /**
      * @brief Set the sync state directory
      *
@@ -337,6 +340,7 @@ private:
     // External callbacks for worker thread integration
     std::function<void(int, int, const QString&)> m_progressCallback;
     std::function<bool()> m_cancelCheck;
+    std::function<QString(const QString &dbName)> m_dbResolver;
 };
 
 } // namespace Sync
