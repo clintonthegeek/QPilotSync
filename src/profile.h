@@ -234,6 +234,11 @@ public:
     int conflictTimeoutSeconds() const;
     void setConflictTimeoutSeconds(int seconds);
 
+    // Database handler preferences (which conduit handles which database)
+    QString activeDatabaseHandler(const QString &dbName) const;
+    void setActiveDatabaseHandler(const QString &dbName, const QString &conduitId);
+    QMap<QString, QString> allDatabaseHandlers() const;
+
     // Conduit enable/disable
     bool conduitEnabled(const QString &conduitId) const;
     void setConduitEnabled(const QString &conduitId, bool enabled);
@@ -287,6 +292,7 @@ private:
     int m_conflictTimeoutSeconds = 60;
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, QJsonObject> m_conduitSettings;
+    QMap<QString, QString> m_databaseHandlers; ///< database name -> active conduit ID
 
     // Default values
     static const QString DEFAULT_CONFLICT_POLICY;

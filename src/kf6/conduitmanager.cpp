@@ -1,11 +1,13 @@
 #include "conduitmanager.h"
 #include "../core/iconduit.h"
+#include "../profile.h"
 
 #include <KPluginFactory>
 
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QDebug>
+#include <QRegularExpression>
 
 // ========== Construction / Destruction ==========
 
@@ -57,6 +59,7 @@ void ConduitManager::discoverConduits()
         info.metaData       = md;
         info.instance       = nullptr;
         info.palmCreatorId  = metaValue(md, QStringLiteral("X-WildPalms-PalmCreatorId"));
+        info.databaseClaims = metaStringList(md, QStringLiteral("X-WildPalms-PalmDatabases"));
         info.defaultEnabled = metaBool(md, QStringLiteral("X-WildPalms-DefaultEnabled"), true);
         info.sortOrder      = metaInt(md, QStringLiteral("X-WildPalms-SortOrder"), 0);
 
@@ -65,6 +68,7 @@ void ConduitManager::discoverConduits()
         qDebug() << "[ConduitManager] Discovered conduit:" << conduitId
                  << "creatorId:" << (info.palmCreatorId.isEmpty()
                                       ? QStringLiteral("(none)") : info.palmCreatorId)
+                 << "databases:" << info.databaseClaims
                  << "sortOrder:" << info.sortOrder
                  << "defaultEnabled:" << info.defaultEnabled;
     }
@@ -179,9 +183,92 @@ QString ConduitManager::palmCreatorId(const QString &pluginId) const
     return QString();
 }
 
+// ========== Database Claim System ==========
+
+QMap<QString, QStringList> ConduitManager::databaseClaimMap() const
+{
+    QMap<QString, QStringList> map;
+    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
+        for (const QString &claim : it->databaseClaims) {
+            map[claim].append(it.key());
+        }
+    }
+    return map;
+}
+
+bool ConduitManager::hasDatabaseClaims(const QString &conduitId) const
+{
+    auto it = m_plugins.constFind(conduitId);
+    if (it != m_plugins.constEnd()) {
+        return !it->databaseClaims.isEmpty();
+    }
+    return false;
+}
+
+QString ConduitManager::activeConduitForDatabase(const QString &dbName, const Profile *profile) const
+{
+    if (!profile) return QString();
+
+    // Check profile's explicit selection
+    QString selected = profile->activeDatabaseHandler(dbName);
+    if (!selected.isEmpty() && m_plugins.contains(selected)) {
+        return selected;
+    }
+
+    // Auto-select if only one conduit claims this database
+    QStringList claimants;
+    for (auto it = m_plugins.constBegin(); it != m_plugins.constEnd(); ++it) {
+        for (const QString &claim : it->databaseClaims) {
+            if (claim == dbName) {
+                claimants.append(it.key());
+            } else if (claim.contains(QLatin1Char('*')) || claim.contains(QLatin1Char('?'))) {
+                QRegularExpression re(QRegularExpression::wildcardToRegularExpression(claim));
+                if (re.match(dbName).hasMatch()) {
+                    claimants.append(it.key());
+                }
+            }
+        }
+    }
+
+    if (claimants.size() == 1) {
+        return claimants.first();
+    }
+
+    return QString();
+}
+
+QStringList ConduitManager::activeDatabasesForConduit(const QString &conduitId, const Profile *profile) const
+{
+    auto it = m_plugins.constFind(conduitId);
+    if (it == m_plugins.constEnd()) return {};
+
+    QStringList active;
+    for (const QString &claim : it->databaseClaims) {
+        if (activeConduitForDatabase(claim, profile) == conduitId) {
+            active.append(claim);
+        }
+    }
+    return active;
+}
+
+QString ConduitManager::claimDescription(const QString &conduitId, const QString &dbName) const
+{
+    auto it = m_plugins.constFind(conduitId);
+    if (it == m_plugins.constEnd()) return QString();
+
+    const QJsonObject raw = it->metaData.rawData();
+    const QJsonObject descriptions = raw.value(QStringLiteral("X-WildPalms-ClaimDescriptions")).toObject();
+    QString desc = descriptions.value(dbName).toString();
+    if (desc.isEmpty()) {
+        desc = it->metaData.description();
+    }
+    return desc;
+}
+
 // ========== Ordering ==========
 
-QStringList ConduitManager::resolveExecutionOrder(const QStringList &enabledConduitIds) const
+QStringList ConduitManager::resolveExecutionOrder(const QStringList &enabledConduitIds,
+                                                   const Profile *profile) const
 {
     QStringList conduitIds = enabledConduitIds;
 
@@ -204,7 +291,12 @@ QStringList ConduitManager::resolveExecutionOrder(const QStringList &enabledCond
         // "I must run before X"  ->  edge: id -> X
         const QStringList before =
             metaStringList(info.metaData, QStringLiteral("X-WildPalms-RunBefore"));
-        for (const QString &beforeId : before) {
+        for (const QString &rawRef : before) {
+            QString beforeId = rawRef;
+            if (rawRef.startsWith(QLatin1Char('@')) && profile) {
+                beforeId = activeConduitForDatabase(rawRef.mid(1), profile);
+                if (beforeId.isEmpty()) continue;
+            }
             if (conduitIds.contains(beforeId)) {
                 mustRunBefore[id].append(beforeId);
                 inDegree[beforeId]++;
@@ -214,7 +306,12 @@ QStringList ConduitManager::resolveExecutionOrder(const QStringList &enabledCond
         // "I must run after X"  ->  edge: X -> id
         const QStringList after =
             metaStringList(info.metaData, QStringLiteral("X-WildPalms-RunAfter"));
-        for (const QString &afterId : after) {
+        for (const QString &rawRef : after) {
+            QString afterId = rawRef;
+            if (rawRef.startsWith(QLatin1Char('@')) && profile) {
+                afterId = activeConduitForDatabase(rawRef.mid(1), profile);
+                if (afterId.isEmpty()) continue;
+            }
             if (conduitIds.contains(afterId)) {
                 mustRunBefore[afterId].append(id);
                 inDegree[id]++;

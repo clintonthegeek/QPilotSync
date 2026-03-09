@@ -10,6 +10,7 @@
 #include <KPluginMetaData>
 
 class IConduit;
+class Profile;
 
 /**
  * @brief Discovers, loads, and manages conduit plugins
@@ -41,6 +42,7 @@ public:
         KPluginMetaData metaData;
         IConduit *instance = nullptr;
         QString palmCreatorId;     ///< Palm OS 4-char creator ID (empty if not a Palm-app conduit)
+        QStringList databaseClaims;    ///< Database names/patterns claimed (from X-WildPalms-PalmDatabases)
         bool defaultEnabled = false;
         int sortOrder = 0;
     };
@@ -92,6 +94,23 @@ public:
     /** @brief Return the Palm creator ID for a conduit (empty if none) */
     QString palmCreatorId(const QString &pluginId) const;
 
+    // ========== Database Claim System ==========
+
+    /** @brief Return database name -> list of conduit IDs that claim it */
+    QMap<QString, QStringList> databaseClaimMap() const;
+
+    /** @brief Return the active conduit ID for a database, consulting the profile */
+    QString activeConduitForDatabase(const QString &dbName, const Profile *profile) const;
+
+    /** @brief Return which databases a conduit is active for */
+    QStringList activeDatabasesForConduit(const QString &conduitId, const Profile *profile) const;
+
+    /** @brief Check if a conduit has any database claims */
+    bool hasDatabaseClaims(const QString &conduitId) const;
+
+    /** @brief Get claim description for a conduit's database claim */
+    QString claimDescription(const QString &conduitId, const QString &dbName) const;
+
     // ========== Ordering ==========
 
     /**
@@ -103,7 +122,8 @@ public:
      *
      * @return Ordered list of conduit IDs (enabled only)
      */
-    QStringList resolveExecutionOrder(const QStringList &enabledConduitIds) const;
+    QStringList resolveExecutionOrder(const QStringList &enabledConduitIds,
+                                       const Profile *profile = nullptr) const;
 
 Q_SIGNALS:
     /** Emitted after a conduit has been successfully loaded */

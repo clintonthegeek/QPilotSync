@@ -236,6 +236,27 @@ void Profile::setConduitSettings(const QString &conduitId, const QJsonObject &se
     m_conduitSettings[conduitId] = settings;
 }
 
+// ========== Database Handler Preferences ==========
+
+QString Profile::activeDatabaseHandler(const QString &dbName) const
+{
+    return m_databaseHandlers.value(dbName);
+}
+
+void Profile::setActiveDatabaseHandler(const QString &dbName, const QString &conduitId)
+{
+    if (conduitId.isEmpty()) {
+        m_databaseHandlers.remove(dbName);
+    } else {
+        m_databaseHandlers[dbName] = conduitId;
+    }
+}
+
+QMap<QString, QString> Profile::allDatabaseHandlers() const
+{
+    return m_databaseHandlers;
+}
+
 bool Profile::load()
 {
     QString configPath = configFilePath();
@@ -303,6 +324,18 @@ bool Profile::load()
             }
         }
     }
+
+    // Database handler preferences
+    m_databaseHandlers.clear();
+    settings.beginGroup(QStringLiteral("databaseHandlers"));
+    const QStringList dbKeys = settings.childKeys();
+    for (const QString &key : dbKeys) {
+        QString handler = settings.value(key).toString();
+        if (!handler.isEmpty()) {
+            m_databaseHandlers[key] = handler;
+        }
+    }
+    settings.endGroup();
 
     return true;
 }
@@ -396,6 +429,15 @@ bool Profile::save()
                               QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
         }
     }
+
+    // Database handler preferences
+    settings.beginGroup(QStringLiteral("databaseHandlers"));
+    // Clear existing keys first so removed handlers don't persist
+    settings.remove(QString());
+    for (auto it = m_databaseHandlers.constBegin(); it != m_databaseHandlers.constEnd(); ++it) {
+        settings.setValue(it.key(), it.value());
+    }
+    settings.endGroup();
 
     settings.sync();
     return settings.status() == QSettings::NoError;
