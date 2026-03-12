@@ -45,13 +45,13 @@ Multi-database conduits use `context->palmDatabase` to dispatch to the correct c
 
 ### SyncConduitBase (`src/sync/conduit.h`)
 
-Same signature changes to the overrides. All internal call sites in `conduit.cpp` thread `context` through:
+Same signature changes to the overrides.
 
-- `syncRecord()` — passes context to `recordsEqual()`
-- `firstSync()` — passes context to `findMatch()` and `palmRecordDescription()`
-- `hotSync()`, `fullSync()` — pass context to `recordsEqual()`
-- `resolveConflict()`, `resolveConflictWithHandler()`, `resolveConflictLegacy()` — pass context to `recordsEqual()`
-- `findMatch()` default implementation — passes context to `palmRecordDescription()`
+**`palmRecordDescription`** is called from many locations throughout `conduit.cpp` — `hotSync()` (category change logging), `syncRecord()` (new record logging), `resolveConflict()` (conflict signal), `resolveConflictWithHandler()` (conflict record building), `restore()`, and the default `findMatch()`. All call sites must have `context` threaded through.
+
+**`recordsEqual`** is not currently called from `conduit.cpp` — the base class uses baseline hash comparison and dirty flags for change detection. Adding `SyncContext*` to this method is forward-looking: multi-database conduits will need it when their override dispatches to different equality logic based on `context->palmDatabase`. Existing single-database conduits ignore the parameter.
+
+**`findMatch`** default implementation calls `palmRecordDescription()`, so it receives context transitively.
 
 ## Section 2: Sync Engine — Per-Database Iteration
 
@@ -82,9 +82,16 @@ New flow:
 
 ### Per-database SyncState
 
-`stateForConduit()` currently keys on conduit ID alone. It changes to key on `conduitId + "/" + databaseName`:
+`stateForConduit()` currently takes one argument (conduit ID) and is declared in `syncengine.h`. It gains a second parameter:
 
 ```cpp
+// syncengine.h — updated declaration
+SyncState* stateForConduit(const QString &conduitId,
+                            const QString &databaseName);
+```
+
+```cpp
+// syncengine.cpp — updated implementation
 SyncState* SyncEngine::stateForConduit(const QString &conduitId,
                                         const QString &databaseName)
 {
@@ -101,25 +108,41 @@ SyncState* SyncEngine::stateForConduit(const QString &conduitId,
 }
 ```
 
+The current single call to `stateForConduit(conduitId)` in `syncConduit()` moves inside the per-database loop and becomes `stateForConduit(conduitId, databaseName)`.
+
+Note: Since `SyncState` constructs its file path as `baseDir/userName/key/`, a composite key like `"memos/MemoDB"` creates a nested directory `baseDir/userName/memos/MemoDB/`. This is intentional — it groups all databases for a conduit under one parent directory.
+
 For single-database conduits this is functionally identical — `"memos/MemoDB"` instead of `"memos"`. The state file path changes, so existing state files will need migration or the first sync after this change will be treated as a first sync.
+
+### Per-database collectionId
+
+Currently `syncConduit()` sets `context.collectionId = conduitId`. For the per-database loop, this changes to `context.collectionId = conduitId + "/" + databaseName`, matching the state key. This ensures each database's backend records live in a separate collection — a ShadowPlan conduit syncing 5+ databases into one collection would be unworkable.
+
+### Per-database context fields
+
+In the per-database loop:
+- `context.palmDatabase` — set to the specific database name for this iteration
+- `context.collectionId` — set to `conduitId + "/" + databaseName`
+- `context.state` — set to the per-database SyncState
+- `context.activeDatabases` — retains the full list of all active databases for this conduit (not just the current one), so the conduit can see the broader context if needed
 
 ### Result accumulation
 
 Results from each per-database `sync()` call accumulate into the conduit's overall result using the same addition pattern already used for per-conduit accumulation in `syncAll()`.
 
+### Error handling within per-database iteration
+
+If one database's `sync()` fails, the engine logs the error, marks the conduit's overall result as failed, and **continues** with the remaining databases. Rationale: a failure syncing `ShadTags` shouldn't prevent `ShadP-*` lists from syncing — partial sync is better than no sync. The conduit's accumulated result reflects all failures. Cancellation (user-initiated) stops immediately.
+
 ### Single-database conduits are unaffected
 
-A conduit claiming `{"MemoDB"}` gets exactly one `sync()` call with `context->palmDatabase = "MemoDB"`. The only observable difference is the state file key gaining a `/MemoDB` suffix.
+A conduit claiming `{"MemoDB"}` gets exactly one `sync()` call with `context->palmDatabase = "MemoDB"`. The only observable difference is the state file path gaining a `/MemoDB` suffix.
 
 ## Section 3: Database List Discovery
 
-### New method on KPilotDeviceLink
+### Existing method on KPilotDeviceLink
 
-```cpp
-QStringList KPilotDeviceLink::listDatabases();
-```
-
-Calls `dlp_FindDBInfo` in a loop (iterator-style — increment index until error). Returns all database names on the device.
+`KPilotDeviceLink::listDatabases()` already exists and is fully implemented (calls `dlp_FindDBInfo` in a loop, returns all database names). It is already used by the UI layer. No new method needed — the sync engine just needs to call it.
 
 ### When called
 
@@ -153,9 +176,13 @@ QString palmRecordDescription(PilotRecord *record,
                                const SyncContext *context) const override;
 ```
 
-### WebCalendar and Plucker
+### WebCalendar
 
-Unaffected. These are tool conduits that don't implement `ISyncConduit`.
+`WebCalendarConduit` extends `SyncConduitBase` and overrides both `recordsEqual` and `palmRecordDescription`. It needs the same signature update as the other sync conduits — add `const SyncContext*`, ignore it.
+
+### Plucker
+
+Unaffected. Plucker is a tool conduit (`IToolConduit`) and does not implement `ISyncConduit`.
 
 ### State file migration
 
@@ -214,11 +241,11 @@ Using mock conduits (a test conduit claiming multiple databases that records inv
 | `src/sync/conduit.cpp` | Thread `context` through all call sites | Base class |
 | `src/sync/syncengine.h` | Add `m_palmDatabaseList`, update `stateForConduit` signature | Engine |
 | `src/sync/syncengine.cpp` | Per-database iteration in `syncConduit()`, glob expansion, database list caching | Engine |
-| `src/palm/kpilotdevicelink.h/cpp` | Add `listDatabases()` | Device |
 | `src/plugins/calendar/*` | Add `SyncContext*` parameter (unused) | Plugin |
 | `src/plugins/contacts/*` | Add `SyncContext*` parameter (unused) | Plugin |
 | `src/plugins/memo/*` | Add `SyncContext*` parameter (unused) | Plugin |
 | `src/plugins/todos/*` | Add `SyncContext*` parameter (unused) | Plugin |
+| `src/plugins/webcalendar/*` | Add `SyncContext*` parameter (unused) | Plugin |
 | `docs/plugin-developer-guide.md` | Multi-database docs, ordering semantics, updated signatures | Docs |
 | `docs/SYNC_ENGINE_ARCHITECTURE.md` | Architecture updates | Docs |
 | `tests/` | New multi-database and regression tests | Tests |
