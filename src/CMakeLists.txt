@@ -143,6 +143,7 @@ target_include_directories(WildPalmsCore PRIVATE
 set_target_properties(WildPalmsCore PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
+    EXPORT_NAME Core
 )
 
 # For development builds: tell the app where to find wildpalmsui.rc
