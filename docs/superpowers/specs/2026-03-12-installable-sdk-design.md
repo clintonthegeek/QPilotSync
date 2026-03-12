@@ -25,7 +25,18 @@ These changes are required before the export/install machinery will work:
 
 `SyncContext::deviceLink` in `src/sync/conduit.h` is currently typed as `KPilotDeviceLink*` (the concrete implementation). It must be changed to `KPilotLink*` (the abstract interface). Without this, the public header `conduit.h` requires `kpilotdevicelink.h` which is an application internal.
 
-**Files:** `src/sync/conduit.h` (forward declaration + member type), `src/sync/syncengine.cpp` (creates `SyncContext`, may need `static_cast` or update)
+`conduit.cpp` calls three methods on `deviceLink` that exist only on `KPilotDeviceLink`, not on the abstract `KPilotLink`:
+- `isConnected()` — connection state check
+- `cleanUpDatabase(int dbHandle)` — post-sync database cleanup
+- `resetSyncFlags(int dbHandle)` — reset dirty flags after sync
+
+These are legitimate device operations that any link implementation should support. Promote them to pure virtual methods on `KPilotLink`.
+
+**Files:**
+- `src/palm/kpilotlink.h` — add `isConnected()`, `cleanUpDatabase()`, `resetSyncFlags()` as pure virtuals
+- `src/sync/conduit.h` — change forward declaration and member type from `KPilotDeviceLink*` to `KPilotLink*`
+- `src/sync/syncengine.cpp` — update SyncContext construction (already has a `KPilotDeviceLink*`, assign to `KPilotLink*` — implicit upcast)
+- `src/sync/conduit.cpp` — no changes needed once methods are on the abstract interface
 
 ### 2. Change `pisock` linkage to PRIVATE
 
@@ -45,12 +56,16 @@ Most KF6 dependencies on `WildPalmsCore` are application UI concerns that plugin
 - `Qt::Network` — used by device communication, not plugin API
 - `KF6::CalendarCore` — only used by calendar/todo conduits internally
 - `KF6::CoreAddons` — plugins find this themselves for `kcoreaddons_add_plugin()`
-- `KF6::XmlGui` — `IConduit::createGUIClient()` returns nullptr by default
+- `KF6::XmlGui` — `IConduit::createGUIClient()` returns nullptr by default; plugins needing XML GUI integration must `find_package(KF6XmlGui)` themselves (same pattern as KF6CoreAddons)
 - `KF6::WidgetsAddons` — application dialogs
 - `KF6::ConfigCore`, `KF6::ConfigWidgets` — application configuration
 - `KF6::Notifications`, `KF6::StatusNotifierItem` — application UI
 - `pisock` — symbols embedded in .so
 - `${UDEV_LIBRARIES}` — device monitoring
+
+Note: `iconduit.h` forward-declares `KXMLGUIClient` and declares `createGUIClient()` returning `KXMLGUIClient*`. Since it's a forward declaration and the default returns nullptr, plugins that don't override this method don't need KF6::XmlGui. Plugins that do must find it themselves.
+
+Similarly, conduits that work with calendar types (KCalendarCore::Event, etc.) must `find_package(KF6CalendarCore)` themselves.
 
 **File:** `src/CMakeLists.txt` — split `target_link_libraries` into PUBLIC and PRIVATE sections
 
@@ -245,6 +260,7 @@ target_link_libraries(wildpalms_shadowplan
 | `cmake/WildPalmsConfig.cmake.in` | **New** — config template |
 | `CMakeLists.txt` | Add RPATH policy, package config generation, export install |
 | `src/CMakeLists.txt` | Split PUBLIC/PRIVATE link deps and include dirs, add SOVERSION, export on install, header install rules |
+| `src/palm/kpilotlink.h` | Promote `isConnected()`, `cleanUpDatabase()`, `resetSyncFlags()` to abstract interface |
 | `src/sync/conduit.h` | Change `SyncContext::deviceLink` from `KPilotDeviceLink*` to `KPilotLink*` |
 | `src/sync/syncengine.cpp` | Update SyncContext construction for new deviceLink type |
 | `lib/CMakeLists.txt` | Install pilot-link headers |
