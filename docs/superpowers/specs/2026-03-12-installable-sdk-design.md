@@ -109,7 +109,7 @@ Installed under `include/wildpalms/` with subdirectory structure preserved:
 ### 3. CMake package files
 
 Installed to `lib/cmake/WildPalms/`:
-- `WildPalmsConfig.cmake` — finds transitive dependencies (Qt6, KF6CoreAddons), includes targets
+- `WildPalmsConfig.cmake` — finds transitive dependencies (Qt6 Core/Widgets, KF6I18n), includes targets
 - `WildPalmsConfigVersion.cmake` — version compatibility check (`SameMajorVersion`)
 - `WildPalmsTargets.cmake` — exported `WildPalms::Core` target
 
