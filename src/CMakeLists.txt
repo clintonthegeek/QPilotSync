@@ -118,6 +118,8 @@ target_link_libraries(WildPalmsCore
         KF6::Notifications
         KF6::StatusNotifierItem
         pisock
+        bluetooth  # pilot-link transitive dep (Bluetooth HotSync)
+        usb        # pilot-link transitive dep (USB HotSync)
         ${UDEV_LIBRARIES}
 )
 

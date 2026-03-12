@@ -80,9 +80,6 @@ target_link_libraries(wildpalms
         KF6::Notifications
         KF6::StatusNotifierItem
         WildPalmsCore
-        pisock  # pilot-link library
-        bluetooth  # Required by pilot-link for Bluetooth support
-        usb  # Required by pilot-link for USB support
 )
 
 # Install target
