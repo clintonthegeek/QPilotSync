@@ -106,6 +106,8 @@ add_wildpalms_test(test_profile
     test_profile.cpp
 )
 
+add_wildpalms_test(test_multidatabase test_multidatabase.cpp)
+
 # ============================================================
 # Unit Tests - Plucker Config
 # ============================================================
