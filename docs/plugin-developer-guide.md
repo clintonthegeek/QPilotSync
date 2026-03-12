@@ -241,27 +241,39 @@ plugin is the designated handler for contention resolution. A web calendar
 conduit, for example, doesn't claim `DatebookDB` -- it writes to it indirectly
 by running before the calendar conduit.
 
-**Check `activeDatabases` at runtime.** The `SyncContext` tells you which of
-your claimed databases are active for this sync run:
+**Understand per-database sync iteration.** The sync engine calls your `sync()`
+method once per claimed database. For each call, `context->palmDatabase` tells
+you which database to sync, and `context->state` provides an isolated SyncState
+for that database. You don't need to loop over databases yourself — the engine
+handles it.
 
-```cpp
-Sync::SyncResult MyConduit::sync(Sync::SyncContext *context)
-{
-    // Which of our claims are active?
-    const QStringList &active = context->activeDatabases;
+**Array order determines sync order.** Databases in your
+`X-WildPalms-PalmDatabases` array are synced in the order declared. Place
+companion/metadata databases before data databases to ensure referential
+integrity:
 
-    // context->palmDatabase is set to the first active database
-    // for backwards compatibility
-
-    for (const QString &dbName : active) {
-        // Sync this database...
-    }
-}
+```json
+"X-WildPalms-PalmDatabases": ["ShadTags", "ShadViews", "ShadFilters", "ShadCat", "ShadP-*"]
 ```
 
+Tags, views, filters, and categories sync before task lists.
+
+**Per-database state isolation.** Each database gets its own `SyncState`
+(ID mappings, baselines), keyed by `conduitId/databaseName`. This means
+`memos/MemoDB` and a hypothetical `memos/MemoArchive` would have completely
+independent sync state.
+
+**Per-database collection IDs.** The `context->collectionId` is set to
+`conduitId/databaseName` for multi-database conduits, ensuring each database's
+backend records live in a separate collection.
+
+**Error isolation.** If one database's sync fails, the engine logs the error and
+continues with remaining databases. A failure syncing metadata shouldn't prevent
+data databases from syncing.
+
 **Design for partial activation.** If you claim `DatebookDB` and `AddressDB`
-but the user only selects you for `AddressDB`, your conduit must handle that
-gracefully. Don't assume all your claims are active.
+but the user only selects you for `AddressDB`, you'll only receive `sync()`
+calls for `AddressDB`.
 
 ## Example: Simple Single-Database Plugin
 
@@ -318,8 +330,10 @@ public:
     // Record conversion
     BackendRecord *palmToBackend(PilotRecord *record, SyncContext *ctx) override;
     PilotRecord *backendToPalm(BackendRecord *record, SyncContext *ctx) override;
-    bool recordsEqual(PilotRecord *palm, BackendRecord *backend) const override;
-    QString palmRecordDescription(PilotRecord *record) const override;
+    bool recordsEqual(PilotRecord *palm, BackendRecord *backend,
+                       const SyncContext *context) const override;
+    QString palmRecordDescription(PilotRecord *record,
+                                   const SyncContext *context) const override;
 };
 
 } // namespace Sync
@@ -390,32 +404,63 @@ KDE PIM.
 }
 ```
 
-### Handling Partial Activation
+### Per-Database Dispatch
 
-The user might select this plugin for `AddressDB` but keep the built-in
-calendar conduit for `DatebookDB`. Your code must handle this:
+The engine calls `sync()` once per database. Use `context->palmDatabase` to
+dispatch to the correct handler:
 
 ```cpp
 Sync::SyncResult AkonadiConduit::sync(Sync::SyncContext *context)
 {
-    SyncResult result;
-    result.success = true;
-
-    for (const QString &db : context->activeDatabases) {
-        if (db == "DatebookDB") {
-            auto r = syncCalendar(context);
-            result.merge(r);
-        } else if (db == "AddressDB") {
-            auto r = syncContacts(context);
-            result.merge(r);
-        }
+    // The engine calls sync() once per database.
+    // context->palmDatabase tells us which one.
+    if (context->palmDatabase == "DatebookDB") {
+        return syncCalendar(context);
+    } else if (context->palmDatabase == "AddressDB") {
+        return syncContacts(context);
     }
 
+    // Unknown database (shouldn't happen if claims are correct)
+    SyncResult result;
+    result.success = true;
     return result;
 }
 ```
 
-If `activeDatabases` is `["AddressDB"]`, the calendar sync is simply skipped.
+If the user only selects this plugin for `AddressDB`, the engine only calls
+`sync()` with `context->palmDatabase == "AddressDB"`.
+
+### Multi-Database Record Conversion
+
+For multi-database conduits, the record conversion methods (`recordsEqual`,
+`palmRecordDescription`, `findMatch`) receive a `const SyncContext*` parameter.
+Use `context->palmDatabase` to dispatch to the correct codec:
+
+```cpp
+bool AkonadiConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend,
+                                   const SyncContext *context) const
+{
+    if (context->palmDatabase == "DatebookDB") {
+        return compareCalendarRecords(palm, backend);
+    } else if (context->palmDatabase == "AddressDB") {
+        return compareContactRecords(palm, backend);
+    }
+    return false;
+}
+
+QString AkonadiConduit::palmRecordDescription(PilotRecord *record,
+                                                const SyncContext *context) const
+{
+    if (context->palmDatabase == "DatebookDB") {
+        return describeCalendarRecord(record);
+    } else if (context->palmDatabase == "AddressDB") {
+        return describeContactRecord(record);
+    }
+    return {};
+}
+```
+
+Single-database conduits can safely ignore the `context` parameter.
 
 ### Contention Scenario
 
