@@ -148,14 +148,34 @@ The same dispatch pattern applies to `palmRecordDescription()`, `palmToBackend()
 
 If syncing one database fails (e.g., `ShadTags` corrupted), the engine logs the error and continues with the remaining databases. A failure syncing metadata shouldn't prevent task lists from syncing.
 
+### Sync granularity: not all databases are equal
+
+ShadowStan developers have identified that per-record sync is **unsafe for two of the five database types**. The sync granularity must vary:
+
+| Database | Granularity | Record Identity | Why |
+|---|---|---|---|
+| `ShadTags` | Per-record | `created` timestamp (bytes 32-35) | Independent 52-byte entries, no ordering dependency |
+| `ShadViews` | Per-record | `created` timestamp (bytes 32-35) | Independent 66-byte entries, self-contained |
+| `ShadFilters` | Per-record | `created` timestamp (bytes 32-35) | Independent entries with variable-length rules |
+| `ShadP-*` | **Whole-file** | N/A (atomic unit) | Stack-based level encoding makes records order-dependent (see below) |
+| `ShadCat` | **Whole-file** | N/A (single record) | One record containing a flat `filename=category` map, no per-entry identity |
+
+**The level encoding problem:** ShadP-* records use a `level` byte that encodes tree structure *relative to the preceding record* (3=push+child, 2=child, 1=sibling, 0=pop). Inserting, deleting, or reordering records changes the meaning of all subsequent records. A naive per-record sync that independently deletes and modifies records will silently corrupt the tree hierarchy. See `docs/ShadowStanQs.md` for a concrete failure example.
+
+**Consequence:** The sync engine currently runs per-record algorithms for every database. ShadP-* and ShadCat databases need an **atomic sync mode** where the entire database is treated as one unit for change detection and conflict resolution. This is a new WildPalms engine requirement (see Dependencies).
+
+For per-record databases (tags, views, filters), the 4-byte `created` timestamp serves as a stable unique identifier assigned at creation time. The conduit's `findMatch()` implementation should use this as the pairing key.
+
+**Future enhancement:** Per-record dirty flags on ShadP-* nodes could feed a tree-aware merge algorithm — decode both sides into `ShadowNode` hierarchies, diff structurally using `createdDate` as node identity, merge non-conflicting subtree changes, re-encode with correct level bytes. This is substantially more complex and should only be pursued after whole-file sync is proven stable.
+
 ### What remains to be determined
 
-- Whether `SyncConduitBase`'s default sync algorithms work well for all five database types, or whether ShadowPlan overrides `sync()` entirely for some databases (e.g., companion databases with simple structure vs. hierarchical task lists)
+- How the atomic sync mode integrates with the engine — whether it's a per-database flag in metadata, a conduit method override, or a new `SyncMode` variant
 - How the custom PDB-based backend integrates — the per-database state isolation and collection IDs are now in place, but the backend implementation itself is still needed (see Section 3)
 
 ### Preparation
 
-ShadowStan developers should ensure codecs in `libs/shadow` have clean per-record encode/decode entry points. The existing JSON serialization layer covers this — records can be individually serialized and compared.
+ShadowStan developers should ensure codecs in `libs/shadow` have clean per-record encode/decode entry points for the per-record databases (tags, views, filters). The existing JSON serialization layer covers this. For whole-file databases, round-trip fidelity is already proven — `PdbReader`/`PdbWriter` preserve all record data and metadata faithfully.
 
 ## Section 3: Custom Sync Backend — PDB Storage
 
@@ -166,9 +186,9 @@ Existing conduits use `LocalFileBackend` (one file per record). ShadowPlan's nat
 A custom `SyncBackend` implementation (e.g., `PdbSyncBackend`) that:
 
 - Stores PC-side data as `.pdb` files in the sync folder
-- Exposes individual records within containers to WildPalms's sync engine for diffing/pairing
 - Uses `PdbReader`/`PdbWriter` from `libs/pdb` for I/O
-- Maps WildPalms record IDs to Palm record unique IDs (already embedded in `.pdb` records)
+- **For per-record databases** (ShadTags, ShadViews, ShadFilters): exposes individual records within containers to WildPalms's sync engine for diffing/pairing, using the 4-byte `created` timestamp (bytes 32-35) as the record identity key
+- **For whole-file databases** (ShadP-*, ShadCat): presents the entire `.pdb` as a single atomic unit — change detection via PDB header `modificationDate` or content hash, conflict resolution at the whole-file level
 
 ### Why this works
 
@@ -230,11 +250,13 @@ The conduit receives the sync folder path from WildPalms. The view wrapper scans
 
 ## Section 5: Conflict Display
 
-When WildPalms detects a conflict (same record modified on both Palm and PC), it calls `enrichConflictSnapshot()` and `formatConflictRecordHtml()` to show both sides.
+Conflict presentation differs by sync granularity.
 
-### ShadowPlan node conflicts
+### ShadP-* list conflicts (whole-file)
 
-A ShadowPlan node carries: title, memo, priority, progress, dates (created, target, start, finish), color, bold flag, auto-number, tag IDs, checked state, and links. The conflict HTML should focus on what humans care about:
+Because list databases sync as atomic units, conflicts are whole-tree: "Palm version" vs "PC version" of the complete list. The conduit should decode both `.pdb` versions into `ShadowNode` hierarchies and present a structural tree diff — highlighting added, removed, and modified nodes. Node identity for diffing uses `ShadowNode::createdDate`.
+
+For individual nodes within the diff, the conflict HTML should focus on what humans care about:
 
 ```html
 <b>☐ Buy groceries</b>
@@ -245,9 +267,13 @@ Memo: Don't forget the milk
 
 Fields that differ between sides should be highlighted. Display resolved names (tag names, not tag IDs; category names, not indices) — this requires the codec layer to provide lookup utilities.
 
-### Companion database conflicts
+### ShadCat conflicts (whole-file)
 
-Tags, views, filters, and categories are structural data. Conflicts should be described plainly — "Tag 'Work' category assignment changed" rather than raw binary diffs.
+The category database is a single record with a flat `filename=category` map. Conflicts should show a side-by-side diff of the map entries — which assignments changed on each side.
+
+### Companion database conflicts (per-record)
+
+Tags, views, and filters use per-record sync, so conflicts are at the individual record level. These are structural data — conflicts should be described plainly: "Tag 'Work' category assignment changed" rather than raw binary diffs.
 
 ### Preparation
 
@@ -332,6 +358,8 @@ WildPalms must provide an installable CMake config (`WildPalmsConfig.cmake`) tha
 
 **Array order is sync order.** The engine iterates `X-WildPalms-PalmDatabases` left-to-right, expanding globs against the device's database list. Companion databases are listed before `ShadP-*` to ensure referential integrity — tag and filter definitions exist before the task lists that reference them.
 
+**Creator ID:** ShadowPlan uses two creator IDs — `"Shad"` for the Palm application itself, and `"Coog"` for all data databases (ShadP-*, ShadTags, ShadViews, ShadFilters, ShadCat). Since `X-WildPalms-PalmCreatorId` should match the databases being synced, this is set to `"Coog"`. WildPalms currently matches conduits to databases primarily by `X-WildPalms-PalmDatabases` name patterns — the creator ID is used as a secondary filter. If a future conduit needs to claim databases with different creator IDs, the field may need to accept an array.
+
 ```json
 {
     "KPlugin": {
@@ -345,7 +373,7 @@ WildPalms must provide an installable CMake config (`WildPalmsConfig.cmake`) tha
     },
     "X-WildPalms-ConduitId": "shadowplan",
     "X-WildPalms-ConduitType": "sync",
-    "X-WildPalms-PalmCreatorId": "Shad",
+    "X-WildPalms-PalmCreatorId": "Coog",
     "X-WildPalms-PalmDatabases": ["ShadTags", "ShadViews", "ShadFilters", "ShadCat", "ShadP-*"],
     "X-WildPalms-ClaimDescriptions": {
         "ShadP-*": "Full ShadowPlan tree editor with bidirectional sync",
@@ -403,13 +431,15 @@ Currently `WorkspaceIO::load()` opens a `ShadP-*.pdb` and auto-discovers compani
 
 ## Dependencies on Future WildPalms Work
 
-This design assumes three WildPalms improvements, designed and implemented separately:
+This design assumes four WildPalms improvements, designed and implemented separately:
 
 1. **Sync status infrastructure** — Per-object tracking of sync state (synced, local-only, modified-since-sync) with UI indicators or a dashboard. All conduits benefit, not just ShadowPlan. *Status: not yet started.*
 
 2. ~~**Multi-database conduit support**~~ — **Done.** The sync engine now supports per-database iteration, glob expansion, `const SyncContext*` on record conversion methods, per-database SyncState isolation, and per-database collection IDs. See Section 2 for details.
 
 3. **Installable WildPalms SDK** — A `WildPalmsConfig.cmake` that exports `WildPalmsCore` with public headers, enabling 3rd-party plugin compilation. *Status: not yet started.*
+
+4. **Atomic/whole-file sync mode** — The current engine runs per-record sync algorithms for every database. ShadP-* list databases (order-dependent level encoding) and ShadCat (single-record flat map) require an atomic sync mode where the entire database is treated as one unit for change detection and conflict resolution. This could be a per-database flag in metadata, a conduit method override, or a new `SyncMode` variant. See Section 2 "Sync granularity" for rationale. *Status: not yet started.*
 
 ## Summary of Prescribed Changes for ShadowStan
 
