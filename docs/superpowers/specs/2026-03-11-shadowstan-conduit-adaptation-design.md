@@ -50,10 +50,11 @@ libs/editor/     [NEW] — ShadowEditorWidget and all GUI components
     PropertiesPanel        — moved from src/
     Commands               — moved from src/ (undo/redo)
     FilterManagerDialog    — moved from src/
-    ViewManagerDialog      — moved from src/
+    ViewManagerDialog      — moved from src/ (includes ViewDetailDialog, ColumnPickerDialog)
     TagManagerDialog       — moved from src/
-    ColumnPickerDialog     — moved from src/
-    ColorPalette           — moved from src/
+    ListPropertiesDialog   — moved from src/
+    ColumnsDialog          — moved from src/
+    colorpalette.h         — moved from src/ (inline color lookup functions)
     ViewConfig             — moved from src/
 src/                   — standalone app (MainWindow wraps ShadowEditorWidget in MDI)
 src/wildpalms-conduit/ [NEW] — WildPalms conduit plugin
@@ -65,11 +66,11 @@ src/wildpalms-conduit/ [NEW] — WildPalms conduit plugin
 class ShadowEditorWidget : public QWidget {
     Q_OBJECT
 public:
-    // Load a single ShadP-*.pdb with its companions from a directory
-    void loadList(const QString &pdbPath, const QString &companionDir);
-    void saveList();
+    // Load a pre-parsed list (caller owns the ShadowList lifetime)
+    void loadList(ShadowList *list);
+    void unloadList();
 
-    // Data access for sync integration
+    // Data access
     ShadowList *currentList() const;
     bool isDirty() const;
 
@@ -86,6 +87,8 @@ signals:
     void listModified();
 };
 ```
+
+The editor widget receives an already-parsed `ShadowList*` rather than file paths. This keeps I/O responsibility with the shell (standalone MainWindow uses `WorkspaceIO::load()`, conduit view uses the sync backend). The editor is purely a view/edit component.
 
 ### How the two shells use it
 
@@ -144,7 +147,7 @@ A custom `SyncBackend` implementation (e.g., `PdbSyncBackend`) that:
 
 ### Why this works
 
-`libs/pdb` already round-trips cleanly — it preserves unknown bytes (`trailingEntries`, `tailPadding`). The backend can read a `.pdb`, let the sync engine modify individual records, and write it back without corruption. `PdbDatabase` already exposes records by index and unique ID, mapping naturally to backend record enumeration.
+`libs/pdb` preserves raw record data faithfully through round-trips, and `libs/shadow`'s codec layer preserves unknown per-node bytes (`trailingEntries`, `tailPadding`). Together, the backend can read a `.pdb`, let the sync engine modify individual records, and write it back without corruption. `PdbDatabase` already exposes records by index and unique ID, mapping naturally to backend record enumeration.
 
 ### Uncertain
 
@@ -349,7 +352,7 @@ Currently `MainWindow` owns one `QUndoStack`. When the editor becomes multi-list
 
 ### Injectable companion data
 
-Currently `AppDatabases` loads tags/views/filters/categories from `~/.local/share/ShadowStan/`. In conduit mode, these come from `.pdb` files in the sync folder. In standalone MDI mode, they come from the workspace directory. `ShadowEditorWidget` receives companion data through setters or constructor injection — it doesn't care where the data came from.
+Currently `AppDatabases` loads tags/views/filters/categories from `QStandardPaths::AppDataLocation` (resolves to `~/.local/share/ShadowStan/` on Linux). In conduit mode, these come from `.pdb` files in the sync folder. In standalone MDI mode, they come from the workspace directory. `ShadowEditorWidget` receives companion data through setters or constructor injection — it doesn't care where the data came from.
 
 ### Clean load/unload cycle
 
@@ -365,7 +368,7 @@ Currently `WorkspaceIO::load()` opens a `ShadP-*.pdb` and auto-discovers compani
 
 ## Dependencies on Future WildPalms Work
 
-This design assumes two WildPalms improvements that will be designed and implemented separately:
+This design assumes three WildPalms improvements that will be designed and implemented separately:
 
 1. **Sync status infrastructure** — Per-object tracking of sync state (synced, local-only, modified-since-sync) with UI indicators or a dashboard. All conduits benefit, not just ShadowPlan.
 
