@@ -106,10 +106,11 @@ target_link_libraries(WildPalmsCore
     PUBLIC
         Qt::Core
         Qt::Widgets
+        KF6::I18n
+    PRIVATE
         Qt::Network
         KF6::CalendarCore
         KF6::CoreAddons
-        KF6::I18n
         KF6::XmlGui
         KF6::WidgetsAddons
         KF6::ConfigCore
@@ -121,10 +122,19 @@ target_link_libraries(WildPalmsCore
 )
 
 target_include_directories(WildPalmsCore PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/sync>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/palm>
+    $<INSTALL_INTERFACE:include/wildpalms>
+    $<INSTALL_INTERFACE:include/wildpalms/core>
+    $<INSTALL_INTERFACE:include/wildpalms/sync>
+    $<INSTALL_INTERFACE:include/wildpalms/palm>
+    $<INSTALL_INTERFACE:include/wildpalms/pilot-link>
+)
+
+target_include_directories(WildPalmsCore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/app
-    ${CMAKE_CURRENT_SOURCE_DIR}/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/sync
     ${CMAKE_CURRENT_SOURCE_DIR}/kf6
     ${CMAKE_CURRENT_SOURCE_DIR}/widgets
     ${UDEV_INCLUDE_DIRS}
