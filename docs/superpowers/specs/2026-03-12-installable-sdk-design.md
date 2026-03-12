@@ -17,11 +17,48 @@ target_link_libraries(wildpalms_shadowplan WildPalms::Core KF6::CoreAddons)
 
 Single-target SDK. Add standard CMake install rules to the existing `WildPalmsCore` shared library. Install public headers, bundle pilot-link headers, and generate a CMake config-file package. No library splitting or source restructuring.
 
+## Prerequisite Code Changes
+
+These changes are required before the export/install machinery will work:
+
+### 1. Refactor `SyncContext::deviceLink` type
+
+`SyncContext::deviceLink` in `src/sync/conduit.h` is currently typed as `KPilotDeviceLink*` (the concrete implementation). It must be changed to `KPilotLink*` (the abstract interface). Without this, the public header `conduit.h` requires `kpilotdevicelink.h` which is an application internal.
+
+**Files:** `src/sync/conduit.h` (forward declaration + member type), `src/sync/syncengine.cpp` (creates `SyncContext`, may need `static_cast` or update)
+
+### 2. Change `pisock` linkage to PRIVATE
+
+`pisock` is an `IMPORTED STATIC` target linked `PUBLIC` to `WildPalmsCore`. CMake cannot export an imported target from the same project. Since `libpisock.a` is statically linked into `libWildPalmsCore.so` (its symbols are embedded), the linkage should be `PRIVATE`.
+
+**File:** `src/CMakeLists.txt` — move `pisock` from PUBLIC to PRIVATE link libraries
+
+### 3. Split PUBLIC/PRIVATE link dependencies
+
+Most KF6 dependencies on `WildPalmsCore` are application UI concerns that plugins never use. Leaving them PUBLIC means the config file must `find_dependency()` for all of them, imposing unnecessary requirements on plugin developers. Refactor to:
+
+**PUBLIC** (plugins need these):
+- `Qt::Core`, `Qt::Widgets` — fundamental types in the API
+- `KF6::I18n` — plugins may use i18n
+
+**PRIVATE** (application internals):
+- `Qt::Network` — used by device communication, not plugin API
+- `KF6::CalendarCore` — only used by calendar/todo conduits internally
+- `KF6::CoreAddons` — plugins find this themselves for `kcoreaddons_add_plugin()`
+- `KF6::XmlGui` — `IConduit::createGUIClient()` returns nullptr by default
+- `KF6::WidgetsAddons` — application dialogs
+- `KF6::ConfigCore`, `KF6::ConfigWidgets` — application configuration
+- `KF6::Notifications`, `KF6::StatusNotifierItem` — application UI
+- `pisock` — symbols embedded in .so
+- `${UDEV_LIBRARIES}` — device monitoring
+
+**File:** `src/CMakeLists.txt` — split `target_link_libraries` into PUBLIC and PRIVATE sections
+
 ## What Gets Installed
 
 ### 1. Shared library
 
-`libWildPalmsCore.so` installed to `lib/`. Already partially in place — needs `EXPORT` added.
+`libWildPalmsCore.so` installed to `lib/` with proper soname symlinks. Needs `EXPORT`, `VERSION`, and `SOVERSION` properties.
 
 ### 2. Public headers
 
@@ -30,6 +67,7 @@ Installed under `include/wildpalms/` with subdirectory structure preserved:
 **Core interfaces:**
 - `core/iconduit.h` — minimal conduit interface
 - `core/isyncconduit.h` — sync conduit interface with record conversion methods
+- `core/itoolconduit.h` — tool conduit interface (for non-sync conduits like Plucker)
 
 **Sync infrastructure:**
 - `sync/conduit.h` — `SyncConduitBase` (the base class plugins extend) and `SyncContext`
@@ -78,10 +116,10 @@ These are WildPalms application internals, not part of the plugin API:
 
 Template for the installed config file. Responsibilities:
 - Call `find_dependency(Qt6 6.2 COMPONENTS Core Widgets)` for transitive Qt deps
-- Call `find_dependency(KF6CoreAddons)` for the plugin macro
+- Call `find_dependency(KF6I18n)` for i18n support
 - Include `WildPalmsTargets.cmake` to define `WildPalms::Core`
 
-Plugin authors only need `find_package(WildPalms)` — transitive dependencies resolve automatically. Plugin authors still need `find_package(KF6CoreAddons)` separately for `kcoreaddons_add_plugin()`, since that's a CMake macro, not a link dependency.
+Only PUBLIC dependencies need `find_dependency()` calls. After the prerequisite refactoring (step 3), this is just Qt6 Core/Widgets and KF6I18n. Plugin authors still need `find_package(KF6CoreAddons)` separately for `kcoreaddons_add_plugin()`, since that's a CMake macro, not a link dependency of WildPalmsCore.
 
 ### `lib/CMakeLists.txt` changes
 
@@ -93,31 +131,41 @@ install(DIRECTORY ${PILOT_LINK_INSTALL_DIR}/include/
 
 ### `src/CMakeLists.txt` changes
 
-1. **Generator expressions for include dirs** — replace flat `PUBLIC` include paths with build/install split:
+1. **Split include dirs into PUBLIC and PRIVATE** — PUBLIC for plugin-facing headers (with build/install generator expressions), PRIVATE for application internals:
 ```cmake
 target_include_directories(WildPalmsCore PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/sync>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/palm>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/kf6>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/app>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/widgets>
-    $<BUILD_INTERFACE:${UDEV_INCLUDE_DIRS}>
     $<INSTALL_INTERFACE:include/wildpalms>
     $<INSTALL_INTERFACE:include/wildpalms/core>
     $<INSTALL_INTERFACE:include/wildpalms/sync>
     $<INSTALL_INTERFACE:include/wildpalms/palm>
     $<INSTALL_INTERFACE:include/wildpalms/pilot-link>
 )
+
+target_include_directories(WildPalmsCore PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/kf6
+    ${CMAKE_CURRENT_SOURCE_DIR}/widgets
+    ${UDEV_INCLUDE_DIRS}
+)
 ```
 
-2. **Export target on install:**
+2. **Set library version properties:**
+```cmake
+set_target_properties(WildPalmsCore PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
+```
+
+3. **Export target on install:**
 ```cmake
 install(TARGETS WildPalmsCore
     EXPORT WildPalmsTargets
     LIBRARY DESTINATION lib
-    INCLUDES DESTINATION include/wildpalms
 )
 ```
 
@@ -125,9 +173,13 @@ install(TARGETS WildPalmsCore
 
 ### `CMakeLists.txt` (top-level) changes
 
-Add at the end, after the existing install rules:
+Add RPATH policy and package config generation after the existing install rules:
 
 ```cmake
+# RPATH for installed binaries/libraries
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+
 include(CMakePackageConfigHelpers)
 
 write_basic_package_version_file(
@@ -191,14 +243,18 @@ target_link_libraries(wildpalms_shadowplan
 | File | Change |
 |---|---|
 | `cmake/WildPalmsConfig.cmake.in` | **New** — config template |
-| `CMakeLists.txt` | Add package config generation and export install |
-| `src/CMakeLists.txt` | Generator expressions for include dirs, export on install, header install rules |
+| `CMakeLists.txt` | Add RPATH policy, package config generation, export install |
+| `src/CMakeLists.txt` | Split PUBLIC/PRIVATE link deps and include dirs, add SOVERSION, export on install, header install rules |
+| `src/sync/conduit.h` | Change `SyncContext::deviceLink` from `KPilotDeviceLink*` to `KPilotLink*` |
+| `src/sync/syncengine.cpp` | Update SyncContext construction for new deviceLink type |
 | `lib/CMakeLists.txt` | Install pilot-link headers |
 
 ## Testing
 
 After implementation, verify by:
 1. `cmake --install build --prefix /tmp/wildpalms-sdk`
-2. Confirm header tree under `/tmp/wildpalms-sdk/include/wildpalms/`
-3. Confirm `lib/cmake/WildPalms/WildPalmsConfig.cmake` exists and contains correct paths
-4. Build a minimal test plugin against the installed SDK using `find_package(WildPalms)`
+2. Confirm header tree under `/tmp/wildpalms-sdk/include/wildpalms/` — verify public headers are present and application-internal headers are NOT installed
+3. Confirm soname symlinks: `libWildPalmsCore.so` → `libWildPalmsCore.so.0` → `libWildPalmsCore.so.0.1.1`
+4. Confirm `lib/cmake/WildPalms/WildPalmsConfig.cmake` exists and contains correct `find_dependency()` calls
+5. Build a minimal test plugin against the installed SDK using `find_package(WildPalms)` — verify it compiles, links, and the resulting `.so` loads at runtime
+6. Confirm pilot-link headers resolve correctly — `#include <pi-appinfo.h>` in `categoryinfo.h` must work from the installed include path
