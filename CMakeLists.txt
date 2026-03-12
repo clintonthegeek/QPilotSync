@@ -25,6 +25,10 @@ find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH} ${CMAKE_MODULE_PATH})
 include(KDEInstallDirs6)
 
+# RPATH for installed binaries/libraries
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+
 # Find KDE Frameworks
 find_package(KF6CalendarCore REQUIRED)
 find_package(KF6CoreAddons REQUIRED)

@@ -140,6 +140,11 @@ target_include_directories(WildPalmsCore PRIVATE
     ${UDEV_INCLUDE_DIRS}
 )
 
+set_target_properties(WildPalmsCore PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
+
 # For development builds: tell the app where to find wildpalmsui.rc
 # and Plucker data without requiring a full install.
 # Installed/AppImage builds set -DWILDPALMS_INSTALLED=ON so the app
