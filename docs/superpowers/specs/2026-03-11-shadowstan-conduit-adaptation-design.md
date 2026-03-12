@@ -98,7 +98,7 @@ The editor widget receives an already-parsed `ShadowList*` rather than file path
 
 The `ShadowEditorWidget` knows nothing about files, sync, or multi-list navigation. It receives a loaded list and emits signals when things change.
 
-## Section 2: The Conduit Class — Multi-Database Direction
+## Section 2: The Conduit Class — Multi-Database Sync
 
 ShadowPlan is unlike existing WildPalms conduits. It handles five database types with different record structures. Existing conduits each handle one flat-record database.
 
@@ -106,27 +106,52 @@ ShadowPlan is unlike existing WildPalms conduits. It handles five database types
 
 The companion databases are semantically dependent on the ShadP-* lists. Tag IDs referenced by nodes must be consistent with the tag definitions. Syncing them independently is meaningless. The user sees "ShadowPlan" as one thing.
 
-### Ideal sync interface (speculative)
+### How multi-database sync works (implemented)
 
-The current WildPalms sync interface has single-database heritage. For ShadowPlan, the ideal case would be:
+WildPalms now supports multi-database conduits natively. The sync engine drives per-database iteration — the conduit does not need to loop over databases itself. Here's how it works for ShadowPlan:
 
-- Record conversion methods (`palmToBackend`/`backendToPalm`) receive the database name alongside the record, so one conduit can dispatch to different codecs
-- The sync engine supports a multi-pass model: a conduit declares ordering among its own claimed databases (companions first, then lists)
-- The backend storage model accommodates container-format databases (one `.pdb` with many records) alongside the existing one-file-per-record model
+1. The conduit declares its databases in the JSON metadata array: `["ShadTags", "ShadViews", "ShadFilters", "ShadCat", "ShadP-*"]`
+2. **Array order is sync order.** Companion databases are listed first to ensure referential integrity — tags and views exist before the lists that reference them.
+3. At sync time, the engine expands `ShadP-*` against the Palm's actual database list (e.g., `ShadP-Personal`, `ShadP-Work`).
+4. The engine calls `sync(context)` once per resolved database, with:
+   - `context->palmDatabase` — the specific database name (e.g., `"ShadTags"`, `"ShadP-Personal"`)
+   - `context->state` — per-database SyncState (ID mappings, baselines), keyed by `shadowplan/ShadTags`, `shadowplan/ShadP-Personal`, etc.
+   - `context->collectionId` — `"shadowplan/ShadTags"`, `"shadowplan/ShadP-Personal"`, etc.
+   - `context->activeDatabases` — the full list of resolved databases for this sync run
 
-**What will depend on WildPalms sync engine revisions (next project):**
+### Record conversion dispatch
 
-- Whether `SyncConduitBase`'s default algorithms can be extended for multi-database passes, or whether ShadowPlan overrides `sync()` entirely
-- Whether record conversion methods gain a database name parameter, or a new interface variant is introduced
-- How the custom PDB-based backend integrates with sync state tracking (ID mappings, baselines) — currently scoped per-collection, may need per-database-within-conduit scoping
+The record conversion methods receive a `const SyncContext*` parameter. ShadowPlan uses `context->palmDatabase` to dispatch to the correct codec:
 
-**What IS clear regardless:**
+```cpp
+bool ShadowPlanConduit::recordsEqual(PilotRecord *palm, BackendRecord *backend,
+                                      const SyncContext *context) const
+{
+    if (context->palmDatabase == "ShadTags") {
+        return compareTagRecords(palm, backend);
+    } else if (context->palmDatabase == "ShadViews") {
+        return compareViewRecords(palm, backend);
+    } else if (context->palmDatabase == "ShadFilters") {
+        return compareFilterRecords(palm, backend);
+    } else if (context->palmDatabase == "ShadCat") {
+        return compareCategoryRecords(palm, backend);
+    } else {
+        // ShadP-* list databases
+        return compareNodeRecords(palm, backend);
+    }
+}
+```
 
-- One conduit, one `createView()`, one entry in the UI
-- Claims: `{"ShadP-*", "ShadTags", "ShadViews", "ShadFilters", "ShadCat"}`
-- The mapper layer already exists: `ShadowCodec`, `ShadTagsCodec`, `ShadViewsCodec`, `ShadFiltersCodec`, `ShadCatCodec` handle all binary pack/unpack
-- Companion databases sync before list databases (ordering within the conduit)
-- JSON serialization in `libs/shadow` provides a per-record path if binary per-record operations prove awkward
+The same dispatch pattern applies to `palmRecordDescription()`, `palmToBackend()`, and `backendToPalm()`.
+
+### Error isolation
+
+If syncing one database fails (e.g., `ShadTags` corrupted), the engine logs the error and continues with the remaining databases. A failure syncing metadata shouldn't prevent task lists from syncing.
+
+### What remains to be determined
+
+- Whether `SyncConduitBase`'s default sync algorithms work well for all five database types, or whether ShadowPlan overrides `sync()` entirely for some databases (e.g., companion databases with simple structure vs. hierarchical task lists)
+- How the custom PDB-based backend integrates — the per-database state isolation and collection IDs are now in place, but the backend implementation itself is still needed (see Section 3)
 
 ### Preparation
 
@@ -149,9 +174,17 @@ A custom `SyncBackend` implementation (e.g., `PdbSyncBackend`) that:
 
 `libs/pdb` preserves raw record data faithfully through round-trips, and `libs/shadow`'s codec layer preserves unknown per-node bytes (`trailingEntries`, `tailPadding`). Together, the backend can read a `.pdb`, let the sync engine modify individual records, and write it back without corruption. `PdbDatabase` already exposes records by index and unique ID, mapping naturally to backend record enumeration.
 
+### Per-database state and collection IDs
+
+The sync engine now provides per-database `SyncState` and `collectionId` automatically. For ShadowPlan this means:
+
+- `ShadTags` gets its own SyncState keyed as `shadowplan/ShadTags`, with `collectionId = "shadowplan/ShadTags"`
+- Each `ShadP-*` list gets its own SyncState (e.g., `shadowplan/ShadP-Personal`), with its own ID mappings and baselines
+- The backend can use `context->collectionId` to scope its storage — one `.pdb` file per collection ID maps naturally
+
 ### Uncertain
 
-Whether the custom backend lives in `libs/shadow` (portable, no WildPalms dependency) as an adapter class, or in `src/wildpalms-conduit/` as conduit-specific code. Depends on the `SyncBackend` interface shape after WildPalms revisions. ShadowStan developers should be aware they'll need to implement one but shouldn't build it until the WildPalms sync engine interface stabilizes.
+Whether the custom backend lives in `libs/shadow` (portable, no WildPalms dependency) as an adapter class, or in `src/wildpalms-conduit/` as conduit-specific code. Depends on the `SyncBackend` interface shape. ShadowStan developers should be aware they'll need to implement one but shouldn't build it until the WildPalms SDK is available (see Dependencies).
 
 ## Section 4: The Conduit View — List Selection and Editor
 
@@ -297,6 +330,8 @@ WildPalms must provide an installable CMake config (`WildPalmsConfig.cmake`) tha
 
 ## Section 7: JSON Plugin Metadata
 
+**Array order is sync order.** The engine iterates `X-WildPalms-PalmDatabases` left-to-right, expanding globs against the device's database list. Companion databases are listed before `ShadP-*` to ensure referential integrity — tag and filter definitions exist before the task lists that reference them.
+
 ```json
 {
     "KPlugin": {
@@ -311,7 +346,7 @@ WildPalms must provide an installable CMake config (`WildPalmsConfig.cmake`) tha
     "X-WildPalms-ConduitId": "shadowplan",
     "X-WildPalms-ConduitType": "sync",
     "X-WildPalms-PalmCreatorId": "Shad",
-    "X-WildPalms-PalmDatabases": ["ShadP-*", "ShadTags", "ShadViews", "ShadFilters", "ShadCat"],
+    "X-WildPalms-PalmDatabases": ["ShadTags", "ShadViews", "ShadFilters", "ShadCat", "ShadP-*"],
     "X-WildPalms-ClaimDescriptions": {
         "ShadP-*": "Full ShadowPlan tree editor with bidirectional sync",
         "ShadTags": "Tag definitions and category assignments",
@@ -368,13 +403,13 @@ Currently `WorkspaceIO::load()` opens a `ShadP-*.pdb` and auto-discovers compani
 
 ## Dependencies on Future WildPalms Work
 
-This design assumes three WildPalms improvements that will be designed and implemented separately:
+This design assumes three WildPalms improvements, designed and implemented separately:
 
-1. **Sync status infrastructure** — Per-object tracking of sync state (synced, local-only, modified-since-sync) with UI indicators or a dashboard. All conduits benefit, not just ShadowPlan.
+1. **Sync status infrastructure** — Per-object tracking of sync state (synced, local-only, modified-since-sync) with UI indicators or a dashboard. All conduits benefit, not just ShadowPlan. *Status: not yet started.*
 
-2. **Multi-database conduit support** — Revisions to the sync engine and conduit interfaces to cleanly support conduits that claim and sync multiple databases with different record structures. Includes: database name in record conversion methods, multi-pass sync ordering within a conduit, and per-database sync state scoping.
+2. ~~**Multi-database conduit support**~~ — **Done.** The sync engine now supports per-database iteration, glob expansion, `const SyncContext*` on record conversion methods, per-database SyncState isolation, and per-database collection IDs. See Section 2 for details.
 
-3. **Installable WildPalms SDK** — A `WildPalmsConfig.cmake` that exports `WildPalmsCore` with public headers, enabling 3rd-party plugin compilation.
+3. **Installable WildPalms SDK** — A `WildPalmsConfig.cmake` that exports `WildPalmsCore` with public headers, enabling 3rd-party plugin compilation. *Status: not yet started.*
 
 ## Summary of Prescribed Changes for ShadowStan
 
