@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QDebug>
 #include <QFileInfo>
+#include <QRegularExpression>
 
 #include <pi-dlp.h>
 
@@ -146,6 +147,13 @@ SyncResult SyncEngine::syncAll(SyncMode mode)
 
     if (m_palmUserName.isEmpty()) {
         m_palmUserName = "default";
+    }
+
+    // Cache the device's database list for glob expansion
+    m_palmDatabaseList.clear();
+    if (m_deviceLink) {
+        m_palmDatabaseList = m_deviceLink->listDatabases();
+        emit logMessage(QString("Device has %1 databases").arg(m_palmDatabaseList.size()));
     }
 
     m_syncing = true;
@@ -308,6 +316,13 @@ SyncResult SyncEngine::syncAllOrdered(const QStringList &orderedIds, SyncMode mo
         m_palmUserName = "default";
     }
 
+    // Cache the device's database list for glob expansion
+    m_palmDatabaseList.clear();
+    if (m_deviceLink) {
+        m_palmDatabaseList = m_deviceLink->listDatabases();
+        emit logMessage(QString("Device has %1 databases").arg(m_palmDatabaseList.size()));
+    }
+
     m_syncing = true;
     m_cancelled = false;
     m_pendingInstalls.clear();
@@ -437,114 +452,156 @@ SyncResult SyncEngine::syncConduit(const QString &conduitId, SyncMode mode)
     emit conduitStarted(conduitId);
     emit logMessage(QString("=== %1 ===").arg(cond->displayName()));
 
-    // Get or create sync state for this conduit
-    SyncState *state = stateForConduit(conduitId);
-
-    // Build sync context
-    SyncContext context;
-    context.deviceLink = m_deviceLink;
-    context.backend = m_backend;
-    context.state = state;
-    context.mode = mode;
-    context.conflictPolicy = m_conflictPolicy;
-    context.userName = m_palmUserName;
-
-    // Only ISyncConduit-derived conduits have Palm database names
+    // Determine databases to sync
     ISyncConduit *syncCond = dynamic_cast<ISyncConduit*>(cond);
+    QStringList databasesToSync;
+
     if (syncCond) {
-        const QStringList dbNames = syncCond->palmDatabaseNames();
-        if (!dbNames.isEmpty()) {
-            context.palmDatabase = dbNames.first();
+        for (const QString &nameOrGlob : syncCond->palmDatabaseNames()) {
+            QStringList expanded = expandDatabaseName(nameOrGlob);
+            if (expanded.isEmpty()) {
+                emit logMessage(QString("  Database '%1' not found on device, skipping")
+                                .arg(nameOrGlob));
+            }
+            databasesToSync.append(expanded);
         }
-        context.activeDatabases = dbNames;
     }
 
-    // Determine collection ID for this conduit
-    // For now, use conduit ID as collection ID
-    context.collectionId = conduitId;
-
-    // Populate sync folder path from backend (if local file backend)
-    if (auto *localBackend = dynamic_cast<LocalFileBackend*>(m_backend)) {
-        context.syncFolderPath = localBackend->basePath();
+    if (databasesToSync.isEmpty() && syncCond) {
+        databasesToSync.append(QString());
     }
 
-    // Set up conflict handling system
-    // Use external handler (e.g. InteractiveConflictHandler) if provided,
-    // otherwise fall back to a local AutomaticConflictHandler
-    QSyncCore::AutomaticConflictHandler autoHandler(state->conflictStore());
-    QSyncCore::ConflictHandler *conflictHandler = m_externalHandler ? m_externalHandler : &autoHandler;
-
-    // Configure conflict policy from engine settings
-    QSyncCore::ConflictPolicy conflictSettings;
-
-    // Auto-resolve strategy
-    if (m_conflictAutoResolve == "palm_wins") {
-        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::SourceAlwaysWins;
-    } else if (m_conflictAutoResolve == "pc_wins") {
-        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::TargetAlwaysWins;
-    } else if (m_conflictAutoResolve == "newer_wins") {
-        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::NewerWins;
-    } else if (m_conflictAutoResolve == "older_wins") {
-        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::OlderWins;
-    } else if (m_conflictAutoResolve == "duplicate") {
-        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::DuplicateAll;
-    } else {
-        conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::None;
+    if (!syncCond) {
+        databasesToSync = {QString()};
     }
 
-    // Fallback behavior
-    if (m_conflictFallback == "skip") {
-        conflictSettings.fallback = QSyncCore::FallbackBehavior::Skip;
-    } else if (m_conflictFallback == "use_default") {
-        conflictSettings.fallback = QSyncCore::FallbackBehavior::UseDefault;
-    } else {
-        conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
-    }
+    result.success = true;
 
-    // Prompt strategy
-    if (m_conflictPromptStrategy == "first_only") {
-        conflictSettings.promptStrategy = QSyncCore::PromptStrategy::OnFirstConflict;
-    } else if (m_conflictPromptStrategy == "batch_at_end") {
-        conflictSettings.promptStrategy = QSyncCore::PromptStrategy::Never;
-        conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
-    } else {
-        conflictSettings.promptStrategy = QSyncCore::PromptStrategy::Always;
-    }
+    for (const QString &dbName : databasesToSync) {
+        if (m_cancelled || (m_cancelCheck && m_cancelCheck())) {
+            emit logMessage("Sync cancelled by user");
+            break;
+        }
 
-    // Connection behavior
-    if (m_conflictConnectionBehavior == "disconnect_and_defer") {
-        conflictSettings.connectionBehavior = QSyncCore::ConnectionBehavior::DisconnectAndDefer;
-    } else if (m_conflictConnectionBehavior == "timeout_and_defer") {
-        conflictSettings.connectionBehavior = QSyncCore::ConnectionBehavior::TimeoutThenDefer;
-    } else {
-        conflictSettings.connectionBehavior = QSyncCore::ConnectionBehavior::KeepAlive;
-    }
+        if (!dbName.isEmpty()) {
+            emit logMessage(QString("  Syncing database: %1").arg(dbName));
+        }
 
-    // Timeout
-    conflictSettings.promptTimeoutSeconds = m_conflictTimeoutSeconds;
+        SyncState *state = dbName.isEmpty()
+            ? stateForConduit(conduitId, conduitId)
+            : stateForConduit(conduitId, dbName);
 
-    context.conflictHandler = conflictHandler;
-    context.conflictSettings = conflictSettings;
+        SyncContext context;
+        context.deviceLink = m_deviceLink;
+        context.backend = m_backend;
+        context.state = state;
+        context.mode = mode;
+        context.conflictPolicy = m_conflictPolicy;
+        context.userName = m_palmUserName;
+        context.palmDatabase = dbName;
+        context.collectionId = dbName.isEmpty()
+            ? conduitId
+            : conduitId + QStringLiteral("/") + dbName;
 
-    // Pass cancellation check to conduit (SyncConduitBase only)
-    auto *syncBase = dynamic_cast<SyncConduitBase*>(cond);
-    if (syncBase && m_cancelCheck) {
-        syncBase->setCancelCheck(m_cancelCheck);
-    }
+        if (syncCond) {
+            context.activeDatabases = databasesToSync;
+        }
 
-    // Run the sync
-    result = cond->sync(&context);
+        if (auto *localBackend = dynamic_cast<LocalFileBackend*>(m_backend)) {
+            context.syncFolderPath = localBackend->basePath();
+        }
 
-    // Capture any files queued for installation by this conduit
-    if (!context.installQueue.isEmpty()) {
-        m_pendingInstalls.append(context.installQueue);
-        emit logMessage(QString("%1 queued %2 file(s) for installation")
-                        .arg(cond->displayName()).arg(context.installQueue.size()));
-    }
+        QSyncCore::AutomaticConflictHandler autoHandler(state->conflictStore());
+        QSyncCore::ConflictHandler *conflictHandler =
+            m_externalHandler ? m_externalHandler : &autoHandler;
 
-    // Clear cancellation check
-    if (syncBase) {
-        syncBase->setCancelCheck(nullptr);
+        QSyncCore::ConflictPolicy conflictSettings;
+
+        if (m_conflictAutoResolve == "palm_wins") {
+            conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::SourceAlwaysWins;
+        } else if (m_conflictAutoResolve == "pc_wins") {
+            conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::TargetAlwaysWins;
+        } else if (m_conflictAutoResolve == "newer_wins") {
+            conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::NewerWins;
+        } else if (m_conflictAutoResolve == "older_wins") {
+            conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::OlderWins;
+        } else if (m_conflictAutoResolve == "duplicate") {
+            conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::DuplicateAll;
+        } else {
+            conflictSettings.autoResolve = QSyncCore::AutoResolveStrategy::None;
+        }
+
+        if (m_conflictFallback == "skip") {
+            conflictSettings.fallback = QSyncCore::FallbackBehavior::Skip;
+        } else if (m_conflictFallback == "use_default") {
+            conflictSettings.fallback = QSyncCore::FallbackBehavior::UseDefault;
+        } else {
+            conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
+        }
+
+        if (m_conflictPromptStrategy == "first_only") {
+            conflictSettings.promptStrategy = QSyncCore::PromptStrategy::OnFirstConflict;
+        } else if (m_conflictPromptStrategy == "batch_at_end") {
+            conflictSettings.promptStrategy = QSyncCore::PromptStrategy::Never;
+            conflictSettings.fallback = QSyncCore::FallbackBehavior::Defer;
+        } else {
+            conflictSettings.promptStrategy = QSyncCore::PromptStrategy::Always;
+        }
+
+        if (m_conflictConnectionBehavior == "disconnect_and_defer") {
+            conflictSettings.connectionBehavior =
+                QSyncCore::ConnectionBehavior::DisconnectAndDefer;
+        } else if (m_conflictConnectionBehavior == "timeout_and_defer") {
+            conflictSettings.connectionBehavior =
+                QSyncCore::ConnectionBehavior::TimeoutThenDefer;
+        } else {
+            conflictSettings.connectionBehavior =
+                QSyncCore::ConnectionBehavior::KeepAlive;
+        }
+
+        conflictSettings.promptTimeoutSeconds = m_conflictTimeoutSeconds;
+
+        context.conflictHandler = conflictHandler;
+        context.conflictSettings = conflictSettings;
+
+        auto *syncBase = dynamic_cast<SyncConduitBase*>(cond);
+        if (syncBase && m_cancelCheck) {
+            syncBase->setCancelCheck(m_cancelCheck);
+        }
+
+        SyncResult dbResult = cond->sync(&context);
+
+        if (syncBase) {
+            syncBase->setCancelCheck(nullptr);
+        }
+
+        if (!context.installQueue.isEmpty()) {
+            m_pendingInstalls.append(context.installQueue);
+            emit logMessage(QString("%1 queued %2 file(s) for installation")
+                            .arg(cond->displayName()).arg(context.installQueue.size()));
+        }
+
+        result.palmStats.created += dbResult.palmStats.created;
+        result.palmStats.updated += dbResult.palmStats.updated;
+        result.palmStats.deleted += dbResult.palmStats.deleted;
+        result.palmStats.unchanged += dbResult.palmStats.unchanged;
+        result.palmStats.conflicts += dbResult.palmStats.conflicts;
+        result.palmStats.errors += dbResult.palmStats.errors;
+
+        result.pcStats.created += dbResult.pcStats.created;
+        result.pcStats.updated += dbResult.pcStats.updated;
+        result.pcStats.deleted += dbResult.pcStats.deleted;
+        result.pcStats.unchanged += dbResult.pcStats.unchanged;
+        result.pcStats.conflicts += dbResult.pcStats.conflicts;
+        result.pcStats.errors += dbResult.pcStats.errors;
+
+        result.warnings.append(dbResult.warnings);
+
+        if (!dbResult.success) {
+            result.success = false;
+            emit logMessage(QString("  Database '%1' sync failed: %2")
+                            .arg(dbName, dbResult.errorMessage));
+        }
     }
 
     result.endTime = QDateTime::currentDateTime();
@@ -618,21 +675,41 @@ void SyncEngine::setStateDirectory(const QString &path)
     m_stateDirectory = path;
 }
 
-SyncState* SyncEngine::stateForConduit(const QString &conduitId)
+SyncState* SyncEngine::stateForConduit(const QString &conduitId,
+                                        const QString &databaseName)
 {
-    if (!m_states.contains(conduitId)) {
+    QString key = conduitId + QStringLiteral("/") + databaseName;
+    if (!m_states.contains(key)) {
         QString userName = m_palmUserName.isEmpty() ? "default" : m_palmUserName;
-        SyncState *state = new SyncState(userName, conduitId, this);
+        SyncState *state = new SyncState(userName, key, this);
 
-        // Use the configured state directory (within PalmSync/.state/)
         if (!m_stateDirectory.isEmpty()) {
             state->setStateDirectory(m_stateDirectory);
         }
 
         state->load();
-        m_states[conduitId] = state;
+        m_states[key] = state;
     }
-    return m_states[conduitId];
+    return m_states[key];
+}
+
+QStringList SyncEngine::expandDatabaseName(const QString &nameOrGlob) const
+{
+    if (!nameOrGlob.contains(QLatin1Char('*')) && !nameOrGlob.contains(QLatin1Char('?'))) {
+        if (m_palmDatabaseList.contains(nameOrGlob)) {
+            return {nameOrGlob};
+        }
+        return {};
+    }
+
+    QRegularExpression re(QRegularExpression::wildcardToRegularExpression(nameOrGlob));
+    QStringList matches;
+    for (const QString &dbName : m_palmDatabaseList) {
+        if (re.match(dbName).hasMatch()) {
+            matches.append(dbName);
+        }
+    }
+    return matches;
 }
 
 // ========== Private Slots ==========

@@ -43,6 +43,11 @@ public:
                        QObject *parent = nullptr);
     ~SyncState();
 
+    /**
+     * @brief Get the conduit ID (or composite key) for this state
+     */
+    QString conduitId() const { return m_conduitId; }
+
     // ========== ID Mapping Operations ==========
     // These delegate to the underlying IdMappingStore
 

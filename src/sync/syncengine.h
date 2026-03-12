@@ -274,7 +274,11 @@ public:
     /**
      * @brief Get the sync state for a conduit
      */
-    SyncState* stateForConduit(const QString &conduitId);
+    SyncState* stateForConduit(const QString &conduitId,
+                                const QString &databaseName);
+
+    /// Test support: inject a Palm database list without a device connection
+    void setPalmDatabaseList(const QStringList &list) { m_palmDatabaseList = list; }
 
 signals:
     void syncStarted();
@@ -307,6 +311,17 @@ private:
     QStringList resolveConduitOrder(const QStringList &conduitIds);
 
     /**
+     * @brief Expand a database name (possibly a glob) against the device list
+     *
+     * Literal names are checked for membership in m_palmDatabaseList.
+     * Globs (containing * or ?) are matched via QRegularExpression::wildcardToRegularExpression.
+     *
+     * @param nameOrGlob Database name or glob pattern
+     * @return Matching database names in device-list order, or empty if none
+     */
+    QStringList expandDatabaseName(const QString &nameOrGlob) const;
+
+    /**
      * @brief Check for circular dependencies
      *
      * @return Error message if circular, empty string if OK
@@ -336,6 +351,7 @@ private:
     bool m_cancelled = false;
     QString m_currentConduit;
     QStringList m_pendingInstalls;  ///< Files queued for post-conduit installation
+    QStringList m_palmDatabaseList;  ///< Cached list of databases on the Palm device
 
     // External callbacks for worker thread integration
     std::function<void(int, int, const QString&)> m_progressCallback;
