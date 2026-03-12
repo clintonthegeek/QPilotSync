@@ -101,3 +101,31 @@ install(FILES data/ca.vibekoder.wildpalms.svg
 install(FILES data/wildpalmsui.rc
     DESTINATION ${KDE_INSTALL_KXMLGUIDIR}/wildpalms
 )
+
+# === SDK: CMake config-file package ===
+
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/WildPalmsConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    cmake/WildPalmsConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/WildPalmsConfig.cmake
+    INSTALL_DESTINATION lib/cmake/WildPalms
+)
+
+install(EXPORT WildPalmsTargets
+    FILE WildPalmsTargets.cmake
+    NAMESPACE WildPalms::
+    DESTINATION lib/cmake/WildPalms
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/WildPalmsConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/WildPalmsConfigVersion.cmake
+    DESTINATION lib/cmake/WildPalms
+)
