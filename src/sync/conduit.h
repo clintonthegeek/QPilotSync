@@ -361,7 +361,8 @@ public:
      *
      * Used for conflict detection and duplicate matching.
      */
-    bool recordsEqual(PilotRecord *palm, BackendRecord *backend) const override = 0;
+    bool recordsEqual(PilotRecord *palm, BackendRecord *backend,
+                       const SyncContext *context) const override = 0;
 
     /**
      * @brief Find a matching backend record for a Palm record
@@ -370,12 +371,14 @@ public:
      * Default implementation uses description matching.
      */
     BackendRecord* findMatch(PilotRecord *palmRecord,
-                              const QList<BackendRecord*> &candidates) override;
+                              const QList<BackendRecord*> &candidates,
+                              const SyncContext *context) override;
 
     /**
      * @brief Get a description for a Palm record (for matching/display)
      */
-    QString palmRecordDescription(PilotRecord *record) const override = 0;
+    QString palmRecordDescription(PilotRecord *record,
+                                   const SyncContext *context) const override = 0;
 
     /**
      * @brief Get category name for a Palm category index

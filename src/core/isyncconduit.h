@@ -33,10 +33,13 @@ public:
     virtual PilotRecord *backendToPalm(BackendRecord *record,
                                         SyncContext *context) = 0;
     virtual bool recordsEqual(PilotRecord *palmRecord,
-                               BackendRecord *backendRecord) const = 0;
-    virtual QString palmRecordDescription(PilotRecord *record) const = 0;
+                               BackendRecord *backendRecord,
+                               const SyncContext *context) const = 0;
+    virtual QString palmRecordDescription(PilotRecord *record,
+                                           const SyncContext *context) const = 0;
     virtual BackendRecord *findMatch(PilotRecord *palmRecord,
-                                      const QList<BackendRecord *> &candidates) = 0;
+                                      const QList<BackendRecord *> &candidates,
+                                      const SyncContext *context) = 0;
 
     // Category support
     virtual QString categoryNameForIndex(int categoryIndex) const = 0;

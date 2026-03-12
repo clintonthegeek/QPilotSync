@@ -259,11 +259,11 @@ SyncResult SyncConduitBase::hotSync(SyncContext *context)
 
         if (normalizedStored.compare(normalizedCurrent, Qt::CaseInsensitive) != 0) {
             qDebug() << "[HotSync] Phase 4: Category change detected:"
-                     << palmRecordDescription(palmRecord)
+                     << palmRecordDescription(palmRecord, context)
                      << "stored=" << (storedCategory.isEmpty() ? "Unfiled" : storedCategory)
                      << "current=" << (currentCategory.isEmpty() ? "Unfiled" : currentCategory);
             emit logMessage(QString("Category changed on Palm: %1 (%2 → %3)")
-                .arg(palmRecordDescription(palmRecord))
+                .arg(palmRecordDescription(palmRecord, context))
                 .arg(storedCategory.isEmpty() ? QStringLiteral("Unfiled") : storedCategory)
                 .arg(currentCategory.isEmpty() ? QStringLiteral("Unfiled") : currentCategory));
 
@@ -491,12 +491,12 @@ SyncResult SyncConduitBase::firstSync(SyncContext *context)
         }
 
         // Try to find a match
-        BackendRecord *match = findMatch(palmRecord, candidates);
+        BackendRecord *match = findMatch(palmRecord, candidates, context);
 
         if (match) {
             // Found match - create mapping
             emit logMessage(QString("Matched: %1 ↔ %2")
-                .arg(palmRecordDescription(palmRecord))
+                .arg(palmRecordDescription(palmRecord, context))
                 .arg(match->description()));
 
             context->state->mapIds(palmId, match->id);
@@ -785,7 +785,7 @@ SyncResult SyncConduitBase::restore(SyncContext *context)
                 context->state->removePalmMapping(palmId);
                 result.palmStats.deleted++;
                 emit logMessage(QString("Deleted from Palm: %1")
-                    .arg(palmRecordDescription(existingRecord)));
+                    .arg(palmRecordDescription(existingRecord, context)));
             }
         }
     }
@@ -891,7 +891,7 @@ void SyncConduitBase::syncRecord(PilotRecord *palmRecord,
                 if (normalizedStored.compare(normalizedCurrent, Qt::CaseInsensitive) != 0) {
                     // Category changed on Palm - update backend
                     emit logMessage(QString("Category changed: %1 (%2 → %3)")
-                        .arg(palmRecordDescription(palmRecord))
+                        .arg(palmRecordDescription(palmRecord, context))
                         .arg(storedCategory.isEmpty() ? "Unfiled" : storedCategory)
                         .arg(currentCategory.isEmpty() ? "Unfiled" : currentCategory));
 
@@ -926,7 +926,7 @@ void SyncConduitBase::syncRecord(PilotRecord *palmRecord,
         } else {
             // New on Palm - create on backend
             emit logMessage(QString("Creating PC file from Palm record %1: %2")
-                .arg(palmRecord->id()).arg(palmRecordDescription(palmRecord)));
+                .arg(palmRecord->id()).arg(palmRecordDescription(palmRecord, context)));
             BackendRecord *newRecord = palmToBackend(palmRecord, context);
             if (newRecord) {
                 emit logMessage(QString("  Converted to backend record, size=%1 bytes").arg(newRecord->data.size()));
@@ -985,7 +985,7 @@ bool SyncConduitBase::resolveConflict(PilotRecord *palmRecord,
                                SyncStats &pcStats)
 {
     emit conflictDetected(
-        palmRecordDescription(palmRecord),
+        palmRecordDescription(palmRecord, context),
         backendRecord->description()
     );
 
@@ -1028,7 +1028,7 @@ bool SyncConduitBase::resolveConflictWithHandler(PilotRecord *palmRecord,
     // Create source snapshot (Palm)
     if (palmRecord && !palmRecord->isDeleted()) {
         conflict.source.id = QString::number(palmRecord->id());
-        conflict.source.description = palmRecordDescription(palmRecord);
+        conflict.source.description = palmRecordDescription(palmRecord, context);
         conflict.source.content = palmRecord->data();
         conflict.source.contentType = backendRecord ? backendRecord->type : QStringLiteral("application/octet-stream");
         // Palm doesn't track modification time well, use current time
@@ -1476,9 +1476,10 @@ int SyncConduitBase::applyResolvedConflicts(SyncContext *context,
 }
 
 BackendRecord* SyncConduitBase::findMatch(PilotRecord *palmRecord,
-                                   const QList<BackendRecord*> &candidates)
+                                   const QList<BackendRecord*> &candidates,
+                                   const SyncContext *context)
 {
-    QString palmDesc = palmRecordDescription(palmRecord).toLower().trimmed();
+    QString palmDesc = palmRecordDescription(palmRecord, context).toLower().trimmed();
     if (palmDesc.isEmpty()) return nullptr;
 
     for (BackendRecord *candidate : candidates) {
