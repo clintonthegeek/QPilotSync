@@ -34,3 +34,8 @@ include_directories(SYSTEM ${PILOT_LINK_INSTALL_DIR}/include)
 # Export variables for use in other CMakeLists
 set(PILOT_LINK_INCLUDE_DIR ${PILOT_LINK_INSTALL_DIR}/include PARENT_SCOPE)
 set(PILOT_LINK_LIB_DIR ${PILOT_LINK_INSTALL_DIR}/lib PARENT_SCOPE)
+
+# Install pilot-link headers for SDK consumers
+install(DIRECTORY ${PILOT_LINK_INSTALL_DIR}/include/
+    DESTINATION include/wildpalms/pilot-link
+)

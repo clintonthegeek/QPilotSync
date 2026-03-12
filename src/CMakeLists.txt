@@ -155,9 +155,43 @@ if(NOT WILDPALMS_INSTALLED)
     )
 endif()
 
-# Install the shared library
+# Install the shared library with export
 install(TARGETS WildPalmsCore
+    EXPORT WildPalmsTargets
     LIBRARY DESTINATION lib
+)
+
+# Install public SDK headers
+install(FILES
+    core/iconduit.h
+    core/isyncconduit.h
+    core/itoolconduit.h
+    DESTINATION include/wildpalms/core
+)
+
+install(FILES
+    sync/conduit.h
+    sync/synctypes.h
+    sync/syncstate.h
+    sync/syncbackend.h
+    DESTINATION include/wildpalms/sync
+)
+
+install(FILES
+    sync/qsynccore/synccommon.h
+    sync/qsynccore/idmappingstore.h
+    sync/qsynccore/baselinestore.h
+    sync/qsynccore/conflictrecord.h
+    sync/qsynccore/conflictstore.h
+    sync/qsynccore/conflictpolicy.h
+    DESTINATION include/wildpalms/sync/qsynccore
+)
+
+install(FILES
+    palm/pilotrecord.h
+    palm/categoryinfo.h
+    palm/kpilotlink.h
+    DESTINATION include/wildpalms/palm
 )
 
 # Ensure pilot-link is built before WildPalmsCore
