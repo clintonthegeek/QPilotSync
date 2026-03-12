@@ -95,6 +95,9 @@ private slots:
     void testPerDatabaseStateIsolation();
     void testPerDatabaseCollectionId();
     void testMissingDatabaseSkipped();
+    void testCancellationStopsIteration();
+    void testContextPalmDatabaseCorrect();
+    void testEmptyDatabaseListRunsOnce();
 };
 
 void TestMultiDatabase::testPerDatabaseIteration()
@@ -228,6 +231,67 @@ void TestMultiDatabase::testMissingDatabaseSkipped()
     // Only CompanionA should be synced
     QCOMPARE(conduit.syncedDatabases.size(), 1);
     QCOMPARE(conduit.syncedDatabases.first(), "CompanionA");
+}
+
+void TestMultiDatabase::testCancellationStopsIteration()
+{
+    SyncEngine engine;
+    QTemporaryDir tempDir;
+    engine.setStateDirectory(tempDir.path());
+    engine.setBackend(new LocalFileBackend(tempDir.path() + "/sync"));
+    engine.setPalmDatabaseList({"CompanionA", "CompanionB", "MainDB-Personal", "MainDB-Work"});
+
+    MockMultiDbConduit conduit;
+    engine.registerConduit(&conduit);
+
+    // Cancel after first database
+    int callCount = 0;
+    engine.setCancelCheck([&callCount]() -> bool {
+        return callCount++ > 0;
+    });
+
+    engine.syncConduit("mockMulti");
+
+    // Should have stopped after first database
+    QCOMPARE(conduit.syncedDatabases.size(), 1);
+    QCOMPARE(conduit.syncedDatabases.first(), "CompanionA");
+}
+
+void TestMultiDatabase::testContextPalmDatabaseCorrect()
+{
+    SyncEngine engine;
+    QTemporaryDir tempDir;
+    engine.setStateDirectory(tempDir.path());
+    engine.setBackend(new LocalFileBackend(tempDir.path() + "/sync"));
+    engine.setPalmDatabaseList({"CompanionA", "CompanionB"});
+
+    MockMultiDbConduit conduit;
+    engine.registerConduit(&conduit);
+
+    engine.syncConduit("mockMulti");
+
+    // The mock records context->palmDatabase in syncedDatabases
+    QCOMPARE(conduit.syncedDatabases.size(), 2);
+    QCOMPARE(conduit.syncedDatabases.at(0), "CompanionA");
+    QCOMPARE(conduit.syncedDatabases.at(1), "CompanionB");
+}
+
+void TestMultiDatabase::testEmptyDatabaseListRunsOnce()
+{
+    SyncEngine engine;
+    QTemporaryDir tempDir;
+    engine.setStateDirectory(tempDir.path());
+    engine.setBackend(new LocalFileBackend(tempDir.path() + "/sync"));
+    engine.setPalmDatabaseList({});  // Empty device
+
+    MockMultiDbConduit conduit;
+    engine.registerConduit(&conduit);
+
+    engine.syncConduit("mockMulti");
+
+    // Should run once with empty database name
+    QCOMPARE(conduit.syncedDatabases.size(), 1);
+    QVERIFY(conduit.syncedDatabases.first().isEmpty());
 }
 
 QTEST_MAIN(TestMultiDatabase)
