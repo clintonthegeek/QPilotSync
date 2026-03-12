@@ -94,7 +94,7 @@ public:
     LinkStatus status() const override { return m_status; }
 
     // Check if fully connected (async connection complete)
-    bool isConnected() const { return m_isConnected; }
+    bool isConnected() const override { return m_isConnected; }
 
     // Check if connection attempt is in progress
     bool isConnecting() const { return m_workerThread != nullptr && m_workerThread->isRunning(); }
@@ -148,7 +148,7 @@ public:
      * Removes records marked for deletion from the Palm database.
      * Should be called after sync to finalize deletions.
      */
-    bool cleanUpDatabase(int dbHandle);
+    bool cleanUpDatabase(int dbHandle) override;
 
     /**
      * @brief Reset sync flags (dirty bits) on all records
@@ -156,7 +156,7 @@ public:
      * Clears the "modified" flag on all records in the database.
      * Should be called after a successful sync.
      */
-    bool resetSyncFlags(int dbHandle);
+    bool resetSyncFlags(int dbHandle) override;
 
     /**
      * @brief Install a .pdb/.prc file onto the Palm device

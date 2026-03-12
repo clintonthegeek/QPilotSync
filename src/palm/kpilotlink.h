@@ -74,6 +74,11 @@ public:
     virtual bool beginSync() = 0;
     virtual bool endSync() = 0;
 
+    // Post-sync operations
+    virtual bool isConnected() const = 0;
+    virtual bool cleanUpDatabase(int dbHandle) = 0;
+    virtual bool resetSyncFlags(int dbHandle) = 0;
+
 signals:
     void statusChanged(LinkStatus status);
     void deviceReady(const QString &userName, const QString &deviceName);

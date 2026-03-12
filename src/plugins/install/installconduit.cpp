@@ -120,7 +120,14 @@ Sync::SyncResult InstallConduit::sync(Sync::SyncContext *context)
         return result;
     }
 
-    int socket = context->deviceLink->socketDescriptor();
+    auto *devLink = dynamic_cast<KPilotDeviceLink*>(context->deviceLink);
+    if (!devLink) {
+        result.success = false;
+        result.errorMessage = QStringLiteral("Install conduit requires a real device connection");
+        result.endTime = QDateTime::currentDateTime();
+        return result;
+    }
+    int socket = devLink->socketDescriptor();
 
     for (const QString &filePath : files) {
         if (context->cancelled) {

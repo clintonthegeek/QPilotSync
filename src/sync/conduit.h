@@ -21,7 +21,7 @@
 class QWidget;
 
 // Forward declarations
-class KPilotDeviceLink;
+class KPilotLink;
 class PilotRecord;
 
 namespace Sync {
@@ -34,7 +34,7 @@ namespace Sync {
 class SyncContext
 {
 public:
-    KPilotDeviceLink *deviceLink = nullptr;  ///< Connection to Palm device
+    KPilotLink *deviceLink = nullptr;  ///< Connection to Palm device
     SyncBackend *backend = nullptr;          ///< PC-side storage
     SyncState *state = nullptr;              ///< ID mappings and baseline
     SyncMode mode = SyncMode::HotSync;       ///< Current sync mode
