@@ -187,7 +187,7 @@ public:
     // Identity
     virtual QString conduitId() const = 0;        // "calendar"
     virtual QString displayName() const = 0;      // "Calendar Sync"
-    virtual QStringList palmDatabaseNames() const = 0; // {"DatebookDB"}
+    virtual QStringList palmDatabaseNames() const = 0; // {"DatebookDB"} — per-database iteration
     virtual QString localFileExtension() const = 0; // ".ics"
 
     // Capabilities
@@ -487,6 +487,74 @@ private:
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Per-Database Conduit Iteration
+
+Multi-database conduits (conduits that claim multiple Palm databases via
+`palmDatabaseNames()`) are synced using a per-database iteration pattern.
+
+### Flow
+
+When `syncConduit()` is called for a multi-database conduit:
+
+1. Read the conduit's `palmDatabaseNames()` — array order is sync order
+2. For each entry, expand globs against the Palm's cached database list
+3. For each resolved database name, call `sync(context)` with:
+   - `context->palmDatabase` = the specific database name
+   - `context->state` = per-database SyncState (keyed by `conduitId/databaseName`)
+   - `context->collectionId` = `conduitId/databaseName`
+   - `context->activeDatabases` = full list of resolved databases
+
+```
+syncConduit("shadowplan")
+  → sync(context)  // context.palmDatabase = "ShadTags"
+  → sync(context)  // context.palmDatabase = "ShadViews"
+  → sync(context)  // context.palmDatabase = "ShadFilters"
+  → sync(context)  // context.palmDatabase = "ShadCat"
+  → sync(context)  // context.palmDatabase = "ShadP-Personal"
+  → sync(context)  // context.palmDatabase = "ShadP-Work"
+```
+
+### Database List Discovery
+
+`KPilotDeviceLink::listDatabases()` is called once at the start of
+`syncAll()`/`syncAllOrdered()`, before the conduit loop. The result is
+cached as `m_palmDatabaseList` for the duration of the sync session.
+
+### Glob Expansion
+
+Database claims containing `*` or `?` are expanded against the cached
+database list using `QRegularExpression::wildcardToRegularExpression()`.
+Literal names are checked for membership. Databases not found on the
+device are skipped with a log message.
+
+### Per-Database SyncState
+
+`stateForConduit(conduitId, databaseName)` uses a composite key
+`conduitId/databaseName`. This creates isolated state directories:
+
+```
+baseDir/userName/memos/MemoDB/       — single-database conduit
+baseDir/userName/shadowplan/ShadTags/  — multi-database conduit
+baseDir/userName/shadowplan/ShadP-Personal/
+```
+
+### Error Handling
+
+Per-database failures are logged and the engine continues with remaining
+databases. Cancellation (user-initiated) stops immediately.
+
+### Record Conversion Methods
+
+Three methods carry a `const SyncContext*` parameter:
+- `recordsEqual(PilotRecord*, BackendRecord*, const SyncContext*)`
+- `palmRecordDescription(PilotRecord*, const SyncContext*)`
+- `findMatch(PilotRecord*, const QList<BackendRecord*>&, const SyncContext*)`
+
+Multi-database conduits use `context->palmDatabase` to dispatch to the
+correct codec. Single-database conduits ignore the parameter.
 
 ---
 
