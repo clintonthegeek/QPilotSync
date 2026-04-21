@@ -2,7 +2,7 @@
 #define WILDPALMS_SYNC_MOCKPALMDATABASEACCESS_H
 
 #include <QHash>
-#include <QMap>
+#include <QMultiMap>
 
 #include "ipalmdatabaseaccess.h"
 
@@ -48,9 +48,11 @@ public:
 
 private:
     struct Database {
-        QHash<std::uint32_t, PalmRecord> records;
-        QMap<QDateTime, std::uint32_t>   deletionLog; // deletedAt -> recordId
-        std::uint32_t                    nextId = 1;
+        QHash<std::uint32_t, PalmRecord>   records;
+        // Multimap so concurrent same-millisecond deletions don't
+        // collapse onto one key (QDateTime resolution is ms).
+        QMultiMap<QDateTime, std::uint32_t> deletionLog;
+        std::uint32_t                       nextId = 1;
     };
 
     QHash<QString, Database> m_dbs;

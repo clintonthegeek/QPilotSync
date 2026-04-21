@@ -39,6 +39,10 @@ private slots:
     void updateRecordWritesBack();
     void deleteRecordRemovesFromDevice();
     void contentHashIsSha256OfData();
+
+    void modifiedSinceFiltersByTimestamp();
+    void deletedSincePropagatesEncodedIds();
+    void supportsDeleteTrackingFollowsDevice();
 };
 
 void TestPalmBackend::identity()
@@ -238,6 +242,62 @@ void TestPalmBackend::contentHashIsSha256OfData()
     const auto expected = QCryptographicHash::hash(
         QByteArrayLiteral("abc"), QCryptographicHash::Sha256).toHex();
     QCOMPARE(got->contentHash, QString::fromLatin1(expected));
+}
+
+void TestPalmBackend::modifiedSinceFiltersByTimestamp()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmRecord oldRec;
+    oldRec.data = QByteArrayLiteral("old");
+    oldRec.lastModified = QDateTime::fromString(
+        QStringLiteral("2020-01-01T00:00:00Z"), Qt::ISODate).toUTC();
+    dev.createRecord(QStringLiteral("MemoDB"), oldRec);
+
+    PalmRecord freshRec;
+    freshRec.data = QByteArrayLiteral("fresh");
+    dev.createRecord(QStringLiteral("MemoDB"), freshRec);
+
+    PalmBackend backend(&dev);
+    const auto cutoff = QDateTime::fromString(
+        QStringLiteral("2024-01-01T00:00:00Z"), Qt::ISODate).toUTC();
+    const auto modified = backend.modifiedSince(
+        QStringLiteral("palm:memo"), cutoff);
+
+    QCOMPARE(modified.size(), 1);
+    QCOMPARE(modified.first().data, QByteArrayLiteral("fresh"));
+}
+
+void TestPalmBackend::deletedSincePropagatesEncodedIds()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    const auto idA = dev.createRecord(
+        QStringLiteral("MemoDB"), makePalm(0, QByteArrayLiteral("a")));
+    const auto idB = dev.createRecord(
+        QStringLiteral("MemoDB"), makePalm(0, QByteArrayLiteral("b")));
+
+    const auto before = QDateTime::currentDateTimeUtc().addSecs(-1);
+    QVERIFY(dev.deleteRecord(QStringLiteral("MemoDB"), idA));
+    QVERIFY(dev.deleteRecord(QStringLiteral("MemoDB"), idB));
+
+    PalmBackend backend(&dev);
+    const auto deleted = backend.deletedSince(
+        QStringLiteral("palm:memo"), before);
+    QStringList sorted = deleted;
+    std::sort(sorted.begin(), sorted.end());
+    QCOMPARE(sorted, QStringList()
+             << PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), idA)
+             << PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), idB));
+}
+
+void TestPalmBackend::supportsDeleteTrackingFollowsDevice()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend backend(&dev);
+    QVERIFY(backend.supportsDeleteTracking()); // mock returns true
 }
 
 QTEST_MAIN(TestPalmBackend)

@@ -237,14 +237,31 @@ bool PalmBackend::deleteRecord(const QString &recordId)
 }
 
 QList<Kalburator::Sync::BackendRecord> PalmBackend::modifiedSince(
-    const QString &, const QDateTime &)
+    const QString &collectionId, const QDateTime &since)
 {
-    return {};
+    QString dbName;
+    if (!decodeCollectionId(collectionId, &dbName)) return {};
+    if (!m_device) return {};
+
+    QList<Kalburator::Sync::BackendRecord> out;
+    for (const auto &pr : m_device->recordsModifiedSince(dbName, since)) {
+        out.append(palmToBackend(dbName, pr));
+    }
+    return out;
 }
 
-QStringList PalmBackend::deletedSince(const QString &, const QDateTime &)
+QStringList PalmBackend::deletedSince(const QString &collectionId,
+                                      const QDateTime &since)
 {
-    return {};
+    QString dbName;
+    if (!decodeCollectionId(collectionId, &dbName)) return {};
+    if (!m_device) return {};
+
+    QStringList out;
+    for (auto id : m_device->recordsDeletedSince(dbName, since)) {
+        out.append(encodeRecordId(dbName, id));
+    }
+    return out;
 }
 
 bool PalmBackend::supportsDeleteTracking() const
