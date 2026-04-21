@@ -29,3 +29,8 @@ add_palm_device_test(tst_mockkpilotlink
     tst_mockkpilotlink.cpp
     mockkpilotlink.cpp
 )
+
+add_palm_device_test(tst_pilotlinkpalmdatabaseaccess
+    tst_pilotlinkpalmdatabaseaccess.cpp
+    mockkpilotlink.cpp
+)
