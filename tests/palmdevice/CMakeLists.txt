@@ -24,3 +24,8 @@ function(add_palm_device_test TEST_NAME)
 endfunction()
 
 add_palm_device_test(tst_palmrecord_bridge tst_palmrecord_bridge.cpp)
+
+add_palm_device_test(tst_mockkpilotlink
+    tst_mockkpilotlink.cpp
+    mockkpilotlink.cpp
+)
