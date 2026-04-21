@@ -11,6 +11,25 @@ namespace WildPalms::PalmSync {
 
 namespace {
 constexpr const char kCollectionPrefix[] = "palm:";
+
+QString collectionTypeForDb(const QString &dbName)
+{
+    if (dbName == QStringLiteral("MemoDB"))     return QStringLiteral("memos");
+    if (dbName == QStringLiteral("DatebookDB")) return QStringLiteral("calendar");
+    if (dbName == QStringLiteral("AddressDB"))  return QStringLiteral("contacts");
+    if (dbName == QStringLiteral("ToDoDB"))     return QStringLiteral("todos");
+    return QStringLiteral("binary");
+}
+
+Kalburator::Sync::CollectionInfo makeCollectionInfo(const QString &dbName)
+{
+    Kalburator::Sync::CollectionInfo info;
+    info.id   = PalmBackend::encodeCollectionId(dbName);
+    info.name = dbName;
+    info.type = collectionTypeForDb(dbName);
+    return info;
+}
+
 } // namespace
 
 PalmBackend::PalmBackend(IPalmDatabaseAccess *device, QObject *parent)
@@ -98,17 +117,31 @@ bool PalmBackend::decodeRecordId(const QString &encoded,
 
 QList<Kalburator::Sync::CollectionInfo> PalmBackend::availableCollections()
 {
-    return {};
+    if (!m_device) return {};
+    QList<Kalburator::Sync::CollectionInfo> out;
+    for (const auto &dbName : m_device->availableDatabases()) {
+        out.append(makeCollectionInfo(dbName));
+    }
+    return out;
 }
 
-Kalburator::Sync::CollectionInfo PalmBackend::collectionInfo(const QString &)
+Kalburator::Sync::CollectionInfo PalmBackend::collectionInfo(
+    const QString &collectionId)
 {
-    return {};
+    QString dbName;
+    if (!decodeCollectionId(collectionId, &dbName)) return {};
+    if (!m_device || !m_device->hasDatabase(dbName)) return {};
+    return makeCollectionInfo(dbName);
 }
 
-QString PalmBackend::createCollection(const Kalburator::Sync::CollectionInfo &)
+QString PalmBackend::createCollection(
+    const Kalburator::Sync::CollectionInfo &info)
 {
-    return {};
+    QString dbName;
+    if (!decodeCollectionId(info.id, &dbName)) return {};
+    if (!m_device) return {};
+    if (!m_device->createDatabase(dbName)) return {};
+    return info.id;
 }
 
 QList<Kalburator::Sync::BackendRecord> PalmBackend::loadRecords(const QString &)

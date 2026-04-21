@@ -1,5 +1,7 @@
 #include <QtTest/QtTest>
 
+#include "backendrecord.h"
+#include "collectioninfo.h"
 #include "mockpalmdatabaseaccess.h"
 #include "palmbackend.h"
 
@@ -14,6 +16,10 @@ private slots:
     void collectionIdRoundTrip();
     void recordIdRoundTrip();
     void decodeCollectionIdRejectsRecordIds();
+
+    void availableCollectionsReflectsDevice();
+    void collectionInfoReturnsEmptyForUnknown();
+    void createCollectionDelegatesToDevice();
 };
 
 void TestPalmBackend::identity()
@@ -69,6 +75,44 @@ void TestPalmBackend::decodeCollectionIdRejectsRecordIds()
     QString db;
     QVERIFY(!PalmBackend::decodeCollectionId(
         QStringLiteral("palm:memo:42"), &db));
+}
+
+void TestPalmBackend::availableCollectionsReflectsDevice()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+    dev.createDatabase(QStringLiteral("DatebookDB"));
+
+    PalmBackend backend(&dev);
+    const auto cols = backend.availableCollections();
+    QStringList ids;
+    for (const auto &c : cols) ids.append(c.id);
+    std::sort(ids.begin(), ids.end());
+    QCOMPARE(ids, QStringList()
+             << QStringLiteral("palm:datebook")
+             << QStringLiteral("palm:memo"));
+}
+
+void TestPalmBackend::collectionInfoReturnsEmptyForUnknown()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend backend(&dev);
+    const auto info = backend.collectionInfo(
+        QStringLiteral("palm:nonexistent"));
+    QCOMPARE(info.id, QString());
+}
+
+void TestPalmBackend::createCollectionDelegatesToDevice()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend backend(&dev);
+
+    Kalburator::Sync::CollectionInfo info;
+    info.id = QStringLiteral("palm:memo");
+    info.type = QStringLiteral("memos");
+    const auto created = backend.createCollection(info);
+    QCOMPARE(created, QStringLiteral("palm:memo"));
+    QVERIFY(dev.hasDatabase(QStringLiteral("MemoDB")));
 }
 
 QTEST_MAIN(TestPalmBackend)
