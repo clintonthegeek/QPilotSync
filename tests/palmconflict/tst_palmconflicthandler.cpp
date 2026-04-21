@@ -52,6 +52,9 @@ private slots:
     void deferFallbackAccumulatesPending();
     void skipFallbackReturnsSkip();
     void nonPalmIdsFallThroughUnchanged();
+    void archivedSourceSurvivesModifiedVsDeleted();
+    void archivedTargetSurvivesDeletedVsModified();
+    void nonArchivedRecordGetsDeleted();
 };
 
 void TestPalmConflictHandler::sourceAlwaysWinsPolicyYieldsUseSource()
@@ -161,6 +164,98 @@ void TestPalmConflictHandler::nonPalmIdsFallThroughUnchanged()
 
     ConflictPolicy policy = ConflictPolicy::autoSourceWins();
     QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseSource);
+    QVERIFY(handler.lastOverlay().isEmpty());
+}
+
+void TestPalmConflictHandler::archivedSourceSurvivesModifiedVsDeleted()
+{
+    // Palm source record is live and archived; other side deleted it.
+    // Base TargetAlwaysWins on ModifiedVsDeleted → DeleteBoth. Overlay
+    // must preserve the archived source via UseSource.
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+    PalmRecord archived;
+    archived.recordId = 7;
+    archived.attributes = PalmRecord::AttrArchived;
+    archived.data = QByteArrayLiteral("archived-body");
+    archived.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), archived);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr;
+    cr.type = Kalburator::Sync::QSyncCore::ConflictType::ModifiedVsDeleted;
+    cr.source.id = PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 7);
+    cr.source.content = QByteArrayLiteral("archived-body");
+    cr.source.lastModified = QDateTime::currentDateTimeUtc();
+    cr.target.id = QStringLiteral("local:memo:7");
+    cr.target.content.clear();
+    cr.target.lastModified = QDateTime::currentDateTimeUtc();
+
+    auto policy = ConflictPolicy::autoTargetWins();
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseSource);
+    QCOMPARE(handler.lastOverlay(), QStringLiteral("archive"));
+}
+
+void TestPalmConflictHandler::archivedTargetSurvivesDeletedVsModified()
+{
+    // Palm target record is live and archived; source (some other
+    // backend) deleted its copy. Base SourceAlwaysWins on
+    // DeletedVsModified → DeleteBoth. Overlay flips to UseTarget.
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+    PalmRecord archived;
+    archived.recordId = 11;
+    archived.attributes = PalmRecord::AttrArchived;
+    archived.data = QByteArrayLiteral("archived-body");
+    archived.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), archived);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr;
+    cr.type = Kalburator::Sync::QSyncCore::ConflictType::DeletedVsModified;
+    cr.source.id = QStringLiteral("local:memo:11");
+    cr.source.content.clear();
+    cr.source.lastModified = QDateTime::currentDateTimeUtc();
+    cr.target.id = PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 11);
+    cr.target.content = QByteArrayLiteral("archived-body");
+    cr.target.lastModified = QDateTime::currentDateTimeUtc();
+
+    auto policy = ConflictPolicy::autoSourceWins();
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseTarget);
+    QCOMPARE(handler.lastOverlay(), QStringLiteral("archive"));
+}
+
+void TestPalmConflictHandler::nonArchivedRecordGetsDeleted()
+{
+    // Control: Palm record live but NOT archived. Overlay must not
+    // fire — base decision stands.
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+    PalmRecord plain;
+    plain.recordId = 13;
+    plain.attributes = 0;
+    plain.data = QByteArrayLiteral("plain");
+    plain.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), plain);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr;
+    cr.type = Kalburator::Sync::QSyncCore::ConflictType::ModifiedVsDeleted;
+    cr.source.id = PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 13);
+    cr.source.content = QByteArrayLiteral("plain");
+    cr.source.lastModified = QDateTime::currentDateTimeUtc();
+    cr.target.id = QStringLiteral("local:memo:13");
+    cr.target.content.clear();
+    cr.target.lastModified = QDateTime::currentDateTimeUtc();
+
+    auto policy = ConflictPolicy::autoTargetWins();
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::DeleteBoth);
     QVERIFY(handler.lastOverlay().isEmpty());
 }
 

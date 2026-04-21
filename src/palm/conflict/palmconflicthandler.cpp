@@ -106,9 +106,40 @@ std::optional<PalmRecord> PalmConflictHandler::lookupPalmRecord(
 }
 
 ConflictDecision PalmConflictHandler::applyOverlays(
-    ConflictRecord &, ConflictDecision baseDecision)
+    ConflictRecord &conflict, ConflictDecision baseDecision)
 {
-    // Filled in by Tasks 3/4/5.
+    using Kalburator::Sync::QSyncCore::ConflictType;
+
+    // Archive-bit safety: never destroy an archived record on the Palm
+    // side. Only fires on destructive decisions (DeleteBoth, UseTarget
+    // for a DeletedVsModified, UseSource for a ModifiedVsDeleted).
+    const auto sourcePalm = lookupPalmRecord(conflict.source.id);
+    const auto targetPalm = lookupPalmRecord(conflict.target.id);
+    const bool sourceArchived = sourcePalm && sourcePalm->isArchived();
+    const bool targetArchived = targetPalm && targetPalm->isArchived();
+
+    if (sourceArchived || targetArchived) {
+        // Destructive directional decisions: a decision that removes
+        // the archived side must flip to preserve it.
+        if (baseDecision == ConflictDecision::DeleteBoth) {
+            m_lastOverlay = QStringLiteral("archive");
+            if (sourceArchived) return ConflictDecision::UseSource;
+            return ConflictDecision::UseTarget;
+        }
+        if (baseDecision == ConflictDecision::UseTarget
+            && conflict.type == ConflictType::ModifiedVsDeleted
+            && sourceArchived) {
+            m_lastOverlay = QStringLiteral("archive");
+            return ConflictDecision::UseSource;
+        }
+        if (baseDecision == ConflictDecision::UseSource
+            && conflict.type == ConflictType::DeletedVsModified
+            && targetArchived) {
+            m_lastOverlay = QStringLiteral("archive");
+            return ConflictDecision::UseTarget;
+        }
+    }
+
     return baseDecision;
 }
 
