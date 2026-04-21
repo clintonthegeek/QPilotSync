@@ -207,3 +207,8 @@ add_subdirectory(plugins)
 # integration). Keeps the Kalburator::Sync dependency out of WildPalmsCore
 # until Phase F wires the UI.
 add_subdirectory(fullsync)
+
+# Palm-side Kalburator::Sync integration (Phase E.3+ of libkalburator
+# integration). PalmBackend : IBlobBackend + device-access abstraction.
+# Does not link pisock; the real pilot-link adapter lands in E.4.
+add_subdirectory(palm/sync)

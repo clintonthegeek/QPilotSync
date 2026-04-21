@@ -1,0 +1,61 @@
+#ifndef WILDPALMS_SYNC_MOCKPALMDATABASEACCESS_H
+#define WILDPALMS_SYNC_MOCKPALMDATABASEACCESS_H
+
+#include <QHash>
+#include <QMap>
+
+#include "ipalmdatabaseaccess.h"
+
+namespace WildPalms::PalmSync {
+
+/**
+ * @brief In-memory IPalmDatabaseAccess for tests.
+ *
+ * Stores records in per-database hash maps keyed by recordId. Assigns
+ * new record IDs as monotonically increasing 32-bit counters per
+ * database, mirroring Palm DLP's assignment semantics closely enough
+ * for scaffold-level tests.
+ *
+ * Tracks deletions by keeping a per-database list of
+ * (recordId, deletedAt) pairs so recordsDeletedSince() can answer
+ * queries without a full scan. Not thread-safe; PalmBackend serialises
+ * access.
+ */
+class MockPalmDatabaseAccess : public IPalmDatabaseAccess {
+public:
+    MockPalmDatabaseAccess() = default;
+
+    QStringList availableDatabases() const override;
+    bool hasDatabase(const QString &dbName) const override;
+    bool createDatabase(const QString &dbName) override;
+
+    QList<PalmRecord> readAllRecords(const QString &dbName) const override;
+    std::optional<PalmRecord> readRecord(const QString &dbName,
+                                         std::uint32_t recordId) const override;
+
+    std::uint32_t createRecord(const QString &dbName,
+                               const PalmRecord &record) override;
+    bool updateRecord(const QString &dbName,
+                      const PalmRecord &record) override;
+    bool deleteRecord(const QString &dbName,
+                      std::uint32_t recordId) override;
+
+    QList<PalmRecord> recordsModifiedSince(
+        const QString &dbName, const QDateTime &since) const override;
+    QList<std::uint32_t> recordsDeletedSince(
+        const QString &dbName, const QDateTime &since) const override;
+    bool supportsDeleteTracking() const override { return true; }
+
+private:
+    struct Database {
+        QHash<std::uint32_t, PalmRecord> records;
+        QMap<QDateTime, std::uint32_t>   deletionLog; // deletedAt -> recordId
+        std::uint32_t                    nextId = 1;
+    };
+
+    QHash<QString, Database> m_dbs;
+};
+
+} // namespace WildPalms::PalmSync
+
+#endif // WILDPALMS_SYNC_MOCKPALMDATABASEACCESS_H

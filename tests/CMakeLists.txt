@@ -149,6 +149,12 @@ add_fullsync_test(test_fullsync_syncconfigstore    test_fullsync_syncconfigstore
 add_fullsync_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
 
 # ============================================================
+# Phase E.3 — PalmBackend + mock device access
+# ============================================================
+
+add_subdirectory(palmsync)
+
+# ============================================================
 # Smoke Test - libkalburator linkage (Phase A)
 # ============================================================
 # Deliberately does NOT go through add_wildpalms_test(); the smoke test
