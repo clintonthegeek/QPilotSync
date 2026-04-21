@@ -1,7 +1,9 @@
 # Phase E — libkalburator adoption + WP plugin ABI rewrite
 
 **Date:** 2026-04-21
-**Status:** Design approved 2026-04-21. Implementation starts next.
+**Status:** Design approved 2026-04-21. **E.1 + E.2 landed upstream 2026-04-21**
+(tags `v0.7-phase-b3-baseline`, `v0.8-phase-b4-engine-conflicts`). WP-side
+sub-phases E.3+ are next.
 **Pointers:**
 
 - `docs/LIBKALBURATOR.md` — short status/coordination pointer.
@@ -9,9 +11,17 @@
   row will be superseded by this spec's sub-phases when implementation starts).
 - `docs/plans/2026-04-20-libkalburator-integration-design.md` — original
   high-level design; this spec concretises Phase E.
+- `docs/superpowers/plans/2026-04-21-phase-e1-blob-baseline-store.md` —
+  executed E.1 plan (upstream landed as libkalburator Phase B3).
+- `docs/superpowers/plans/2026-04-21-phase-e2-engine-conflict-wiring.md` —
+  executed E.2 plan (upstream landed as libkalburator Phase B4).
 - `~/dev/libkalburator/docs/phase0/README.md` — living upstream index.
 - `~/dev/libkalburator/docs/phase0/04h-blob-layer-design.md` — Phase B2 blob
   layer; "Explicitly deferred" list feeds this spec's upstream scope.
+- `~/dev/libkalburator/docs/phase0/04i-blob-baseline-store-design.md` — E.1
+  landed as Phase B3.
+- `~/dev/libkalburator/docs/phase0/04j-engine-conflict-wiring-design.md` —
+  E.2 landed as Phase B4.
 - `~/dev/PlanStan/docs/proposals/2026-04-20-sync-library-extraction.md` —
   cross-repo proposal.
 
@@ -382,16 +392,24 @@ COLUMN` migrations, per-mapping queries).
 
 Tag: `v0.7-phase-b3-baseline`.
 
-### E.2 — `BlobSyncEngine` ↔ `ConflictStore` + `registerConflictHandler`
+### E.2 — `BlobSyncEngine::twoWayWithBaseline` + `ConflictStore` wiring
 
 **Purpose:** Make `BlobSyncEngine` correctness-complete. Integrate the
 baseline store from E.1. Surface blob-level conflicts through the existing
 `ConflictHandlerRegistry` so `PalmConflictHandler` can actually receive them.
 
-**New engine operation:**
+**Design decision (pinned during E.2 execution):** The registry is passed
+into the engine as a borrowed pointer. The engine does **not** own a
+registry and does **not** expose `registerConflictHandler(...)`. Callers
+(`SyncCoordinator` in shared code; the WP runtime constructed in E.15)
+own a registry and hand it to each `twoWayWithBaseline` call. This keeps
+the engine stateless and matches the existing `SyncCoordinator::conflictRegistry()`
+pattern.
+
+**Engine operation (as landed):**
 
 ```cpp
-class BlobSyncEngine {
+class BlobSyncEngine : public QObject {
 public:
     // Replaces twoWayNaive for production use. Consults baseline store;
     // consults per-backend handler registry on conflict.
@@ -405,28 +423,45 @@ public:
         QSyncCore::ConflictStore *conflicts,
         const QSyncCore::ConflictPolicy &policy);
 
-    // twoWayNaive retained for MockBlobBackend tests and for backends that
-    // don't need baselining (rare).
+    // twoWayNaive + mirror retained for MockBlobBackend tests and for
+    // backends that don't need baselining (rare).
 };
 ```
 
-Conflict detection logic (3-way diff):
+`BlobSyncStats` gained a `conflicts` counter. `BlobSyncResult` is unchanged
+in shape; the counter lives on both `sourceStats` and `targetStats`.
 
-- For each record ID seen on either side:
-  - `baseline=B, a=A, b=B` → no change → skip.
+Conflict detection logic (3-way diff, as landed — nine cases):
+
+- For each record ID seen on either side or in the baseline:
+  - `baseline=B, a=B, b=B` → no change → skip.
   - `baseline=B, a=A', b=B` → modified on A only → propagate to B.
   - `baseline=B, a=B, b=B'` → modified on B only → propagate to A.
   - `baseline=B, a=A', b=B'`, A'≠B' → **conflict**. Call
-    `handlers->handlerFor(sourceBackendId)->handleConflict(...)`. Apply
-    decision (UseSource / UseTarget / Skip / Merge). Persist unresolved
-    decisions via `conflicts`.
+    `handlers->handlerFor(a->backendId())->handleConflict(...)`. Apply
+    decision (UseSource / UseTarget immediately; Skip / Pending / unsupported
+    are persisted via `conflicts->addConflict(...)` and the baseline is
+    left at its previous value so the conflict recurs next sync). `Merge`,
+    `Duplicate`, `UseBoth`, `DeleteBoth` decisions are treated as Skip in
+    B4; they'll be re-examined in a follow-up upstream phase when a
+    concrete consumer needs them.
   - `baseline=B, a=missing, b=B` → deleted on A since baseline → delete on B.
   - `baseline=B, a=A, b=missing` → deleted on B since baseline → delete on A.
   - `baseline=missing, a=A, b=missing` → new on A → create on B.
+  - `baseline=missing, a=missing, b=B` → new on B → create on A.
+  - `baseline=missing, a=A, b=B` (both sides present, no baseline) → no
+    action. The landed implementation deliberately falls through this
+    combo per the in-code comment "Other edge cases (both missing, or
+    impossible combos) fall through." Record IDs are normally scoped to
+    their backend so this case is rare in practice, but it can surface
+    when WP's `PalmBackend` and a target backend both hold a pre-sync
+    record with a coincidentally-identical ID. Handling is an upstream
+    micro-phase, tracked under risks as R8; the first WP integration
+    test that exercises this will force its resolution.
 
-`BlobSyncResult` extends with a conflict-count field.
+`BlobSyncStats` gained a `conflicts` counter.
 
-Tag: `v0.8-phase-b4-engine-conflicts`.
+Tag landed: `v0.8-phase-b4-engine-conflicts` (2026-04-21).
 
 ### Upstream commit gate
 
@@ -534,11 +569,15 @@ Each sub-phase is one commit (or a small handful of commits when the diff
 warrants). Tree stays buildable; runtime may be incomplete mid-phase per
 decision #6 (CMake toggles disable in-flight plugins).
 
+Legend: ✅ = landed. Others have no marker yet. Tracking state lives here
+rather than in a separate doc so this spec stays the single source of truth
+for Phase-E sub-phase state.
+
 | # | Scope | Repo | Dep | Exit gate |
 |---|---|---|---|---|
-| **E.0** | Spec lands. This doc. | WP | — | Committed to `docs/superpowers/specs/`. |
-| **E.1** | `BlobBaselineStore`. SQLite store sharing `.planstan-sync.db`. Library-side tests. | libkalburator | E.0 | libkalburator ctest + PlanStan ctest (86/26/112) hold. Tag `v0.7-phase-b3-baseline`. |
-| **E.2** | `BlobSyncEngine::twoWayWithBaseline` + `ConflictStore` integration + `registerConflictHandler`. | libkalburator | E.1 | libkalburator ctest + PlanStan ctest hold. Tag `v0.8-phase-b4-engine-conflicts`. |
+| ✅ **E.0** | Spec lands. This doc. Committed `2a484ca` 2026-04-21. | WP | — | Committed to `docs/superpowers/specs/`. |
+| ✅ **E.1** | `BlobBaselineStore`. SQLite store sharing `.planstan-sync.db`. Library-side tests. Landed 2026-04-21 as upstream Phase B3, tag `v0.7-phase-b3-baseline`. Plan: `docs/superpowers/plans/2026-04-21-phase-e1-blob-baseline-store.md`. | libkalburator | E.0 | libkalburator ctest + PlanStan ctest baseline held. Tag `v0.7-phase-b3-baseline`. |
+| ✅ **E.2** | `BlobSyncEngine::twoWayWithBaseline` + `ConflictStore` wiring via externally-owned `ConflictHandlerRegistry`. Landed 2026-04-21 as upstream Phase B4, tag `v0.8-phase-b4-engine-conflicts`. Plan: `docs/superpowers/plans/2026-04-21-phase-e2-engine-conflict-wiring.md`. | libkalburator | E.1 | libkalburator ctest + PlanStan ctest hold. Tag `v0.8-phase-b4-engine-conflicts`. |
 | **E.3** | `PalmBackend : IBlobBackend` scaffold. Implements all `IBlobBackend` methods against a mock device (no real pilot-link yet). Unit tests against `BlobSyncEngine` with `MockBlobBackend` as counterparty. | WP | E.2 | `ctest` passes; `PalmBackend` can round-trip synthetic `BackendRecord`s through the engine. |
 | **E.4** | `PalmBackend` wired to real pilot-link. Reads/writes live Datebook/AddressDB/MemoDB/ToDoDB via DLP. `src/palm/codecs/` relocated from plugin mappers. | WP | E.3 | WP ctest passes; manual smoke test against POSE64 emulator optional. |
 | **E.5** | `PalmConflictHandler` + `PalmBackendConfig` + `ConnectionBehavior`. Registers with `ConflictHandlerRegistry`. Unit tests with synthesized conflicts exercising archive/secret/category semantics. | WP | E.4 | WP ctest passes; handler can resolve each conflict shape per Palm semantics. |
@@ -639,11 +678,10 @@ E.5/E.6. Every sub-phase's exit gate includes a green `ctest` run.
 
 ## Risks / open items
 
-**R1 — upstream API shape for `twoWayWithBaseline`.** The signature sketched
-in E.2 is provisional; exact parameter list will firm up during E.2's
-design-in-implementation. Whether `ConflictPolicy` is passed per-call or
-held on the engine is a small design choice that will surface when writing
-tests. Low risk; localised to E.2.
+**R1 — upstream API shape for `twoWayWithBaseline`** (resolved 2026-04-21).
+The signature landed matches the sketch exactly. `ConflictPolicy` is passed
+per-call. `ConflictHandlerRegistry` is a borrowed pointer, not engine-owned
+(see §E.2 "Design decision"). No residual risk.
 
 **R2 — `PalmDeviceConnection` ownership across plugins.** Today
 `PalmDeviceConnection` (or equivalent) is owned by the device session. Each
@@ -680,6 +718,20 @@ runtime. E.17 includes this migration; spec is straightforward.
 **R7 — Test harness for `PalmDeviceConnection`.** Unit tests for
 `PalmBackend` need a mockable device. WP already has a test infrastructure
 (per `src/plugins/*/tests/`); we'll extend or mirror it. Low risk.
+
+**R8 — `twoWayWithBaseline` unhandled edge case: both-sides-present,
+no-baseline.** The landed Phase B4 implementation has explicit branches
+for seven of the nine logically possible (hasA, hasB, hasBase) combos.
+The `hasA && hasB && !hasBase` case falls through silently per the
+in-code comment "Other edge cases (both missing, or impossible combos)
+fall through." In practice this is rare because record IDs are backend-
+scoped — two independent backends producing the same ID collide only
+under unusual conditions. Risk materialises if `PalmBackend` exposes
+stable record IDs (`UniqueID`s from DLP) and the target backend happens
+to reuse the same ID space. E.18 integration tests will exercise this;
+if it shows up, the fix is a small upstream micro-phase adding an
+explicit branch (likely "both identical → treat as convergent, no-op +
+baseline" / "both different → treat as conflict"). Not blocking E.3+.
 
 ---
 
