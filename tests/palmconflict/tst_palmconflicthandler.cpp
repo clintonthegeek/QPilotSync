@@ -58,6 +58,8 @@ private slots:
     void secretSourceOverridesDuplicateAll();
     void secretTargetOverridesDuplicateAll();
     void neitherSecretLeavesDuplicateAll();
+    void categoryTieBreakFavoursNonUnfiledSide();
+    void categoryTieBreakInactiveWhenTimestampsDiffer();
 };
 
 void TestPalmConflictHandler::sourceAlwaysWinsPolicyYieldsUseSource()
@@ -371,6 +373,87 @@ void TestPalmConflictHandler::neitherSecretLeavesDuplicateAll()
     policy.requireConfirmForDeletes = false;
 
     QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseBoth);
+    QVERIFY(handler.lastOverlay().isEmpty());
+}
+
+void TestPalmConflictHandler::categoryTieBreakFavoursNonUnfiledSide()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmRecord unfiled;
+    unfiled.recordId = 51;
+    unfiled.category = 0;
+    unfiled.data = QByteArrayLiteral("u");
+    unfiled.lastModified = QDateTime::fromMSecsSinceEpoch(1000);
+    dev.createRecord(QStringLiteral("MemoDB"), unfiled);
+
+    PalmRecord categorised;
+    categorised.recordId = 52;
+    categorised.category = 3;
+    categorised.data = QByteArrayLiteral("c");
+    categorised.lastModified = QDateTime::fromMSecsSinceEpoch(1000);
+    dev.createRecord(QStringLiteral("MemoDB"), categorised);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr = makeBothModifiedConflict(
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 51),
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 52),
+        QDateTime::fromMSecsSinceEpoch(1000),
+        QDateTime::fromMSecsSinceEpoch(1000));
+
+    ConflictPolicy policy;
+    policy.autoResolve = AutoResolveStrategy::NewerWins;
+    policy.promptStrategy = PromptStrategy::Never;
+    policy.fallback = FallbackBehavior::UseDefault;
+    policy.requireConfirmForDeletes = false;
+
+    // Base NewerWins on equal timestamps returns UseTarget (upstream
+    // ties go to target); overlay should flip to UseTarget (categorised
+    // side) anyway — the assertion is that the categorised side wins.
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseTarget);
+    QCOMPARE(handler.lastOverlay(), QStringLiteral("category"));
+}
+
+void TestPalmConflictHandler::categoryTieBreakInactiveWhenTimestampsDiffer()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmRecord unfiled;
+    unfiled.recordId = 61;
+    unfiled.category = 0;
+    unfiled.data = QByteArrayLiteral("u");
+    unfiled.lastModified = QDateTime::fromMSecsSinceEpoch(2000);
+    dev.createRecord(QStringLiteral("MemoDB"), unfiled);
+
+    PalmRecord categorised;
+    categorised.recordId = 62;
+    categorised.category = 3;
+    categorised.data = QByteArrayLiteral("c");
+    categorised.lastModified = QDateTime::fromMSecsSinceEpoch(1000);
+    dev.createRecord(QStringLiteral("MemoDB"), categorised);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr = makeBothModifiedConflict(
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 61),
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 62),
+        QDateTime::fromMSecsSinceEpoch(2000),
+        QDateTime::fromMSecsSinceEpoch(1000));
+
+    ConflictPolicy policy;
+    policy.autoResolve = AutoResolveStrategy::NewerWins;
+    policy.promptStrategy = PromptStrategy::Never;
+    policy.fallback = FallbackBehavior::UseDefault;
+    policy.requireConfirmForDeletes = false;
+
+    // Timestamps differ → NewerWins base decision (UseSource on
+    // source-newer) stands. Category overlay inactive.
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseSource);
     QVERIFY(handler.lastOverlay().isEmpty());
 }
 

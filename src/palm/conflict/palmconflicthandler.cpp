@@ -64,7 +64,7 @@ ConflictDecision PalmConflictHandler::handleConflict(
     }
 
     // Stage 2: Palm overlays may override.
-    const auto finalDecision = applyOverlays(conflict, baseDecision);
+    const auto finalDecision = applyOverlays(conflict, policy, baseDecision);
 
     conflict.decision = finalDecision;
     conflict.resolvedAt = QDateTime::currentDateTime();
@@ -106,25 +106,23 @@ std::optional<PalmRecord> PalmConflictHandler::lookupPalmRecord(
 }
 
 ConflictDecision PalmConflictHandler::applyOverlays(
-    ConflictRecord &conflict, ConflictDecision baseDecision)
+    ConflictRecord &conflict, const ConflictPolicy &policy,
+    ConflictDecision baseDecision)
 {
+    using Kalburator::Sync::QSyncCore::AutoResolveStrategy;
     using Kalburator::Sync::QSyncCore::ConflictType;
 
-    // Archive-bit safety: never destroy an archived record on the Palm
-    // side. Only fires on destructive decisions (DeleteBoth, UseTarget
-    // for a DeletedVsModified, UseSource for a ModifiedVsDeleted).
     const auto sourcePalm = lookupPalmRecord(conflict.source.id);
     const auto targetPalm = lookupPalmRecord(conflict.target.id);
     const bool sourceArchived = sourcePalm && sourcePalm->isArchived();
     const bool targetArchived = targetPalm && targetPalm->isArchived();
 
+    // Archive safety.
     if (sourceArchived || targetArchived) {
-        // Destructive directional decisions: a decision that removes
-        // the archived side must flip to preserve it.
         if (baseDecision == ConflictDecision::DeleteBoth) {
             m_lastOverlay = QStringLiteral("archive");
-            if (sourceArchived) return ConflictDecision::UseSource;
-            return ConflictDecision::UseTarget;
+            return sourceArchived ? ConflictDecision::UseSource
+                                  : ConflictDecision::UseTarget;
         }
         if (baseDecision == ConflictDecision::UseTarget
             && conflict.type == ConflictType::ModifiedVsDeleted
@@ -140,9 +138,7 @@ ConflictDecision PalmConflictHandler::applyOverlays(
         }
     }
 
-    // Secret-flag protection: UseBoth on a BothModified where exactly
-    // one side is secret would duplicate the record without the secret
-    // bit; flip to keep only the secret side.
+    // Secret protection.
     const bool sourceSecret = sourcePalm && sourcePalm->isSecret();
     const bool targetSecret = targetPalm && targetPalm->isSecret();
     if (baseDecision == ConflictDecision::UseBoth
@@ -151,6 +147,23 @@ ConflictDecision PalmConflictHandler::applyOverlays(
         m_lastOverlay = QStringLiteral("secret");
         return sourceSecret ? ConflictDecision::UseSource
                             : ConflictDecision::UseTarget;
+    }
+
+    // Category tie-break.
+    const bool timestampStrategy =
+        policy.autoResolve == AutoResolveStrategy::NewerWins
+        || policy.autoResolve == AutoResolveStrategy::OlderWins;
+    if (timestampStrategy
+        && conflict.type == ConflictType::BothModified
+        && conflict.source.lastModified == conflict.target.lastModified
+        && sourcePalm && targetPalm) {
+        const bool sourceUnfiled = sourcePalm->category == 0;
+        const bool targetUnfiled = targetPalm->category == 0;
+        if (sourceUnfiled != targetUnfiled) {
+            m_lastOverlay = QStringLiteral("category");
+            return sourceUnfiled ? ConflictDecision::UseTarget
+                                 : ConflictDecision::UseSource;
+        }
     }
 
     return baseDecision;

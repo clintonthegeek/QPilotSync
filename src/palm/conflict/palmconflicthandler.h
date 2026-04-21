@@ -76,6 +76,7 @@ private:
     // Overlay application — each returns the (possibly adjusted) decision.
     Kalburator::Sync::QSyncCore::ConflictDecision applyOverlays(
         Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
+        const Kalburator::Sync::QSyncCore::ConflictPolicy &policy,
         Kalburator::Sync::QSyncCore::ConflictDecision baseDecision);
 
     WildPalms::PalmSync::IPalmDatabaseAccess *m_device = nullptr;
