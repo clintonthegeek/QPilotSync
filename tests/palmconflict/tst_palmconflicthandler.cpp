@@ -60,6 +60,9 @@ private slots:
     void neitherSecretLeavesDuplicateAll();
     void categoryTieBreakFavoursNonUnfiledSide();
     void categoryTieBreakInactiveWhenTimestampsDiffer();
+    void keepAliveMatchesConfig();
+    void nullConfigKeepsConnectionAlive();
+    void onSyncStartClearsPendingAndOverlay();
 };
 
 void TestPalmConflictHandler::sourceAlwaysWinsPolicyYieldsUseSource()
@@ -454,6 +457,53 @@ void TestPalmConflictHandler::categoryTieBreakInactiveWhenTimestampsDiffer()
     // Timestamps differ → NewerWins base decision (UseSource on
     // source-newer) stands. Category overlay inactive.
     QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseSource);
+    QVERIFY(handler.lastOverlay().isEmpty());
+}
+
+void TestPalmConflictHandler::keepAliveMatchesConfig()
+{
+    MockPalmDatabaseAccess dev;
+
+    PalmBackendConfig keep;
+    keep.connectionBehavior = ConnectionBehavior::KeepAlive;
+    PalmConflictHandler hKeep(&dev, &keep);
+    QVERIFY(hKeep.shouldKeepConnectionAlive());
+
+    PalmBackendConfig disconnect;
+    disconnect.connectionBehavior = ConnectionBehavior::DisconnectAndDefer;
+    PalmConflictHandler hDisconnect(&dev, &disconnect);
+    QVERIFY(!hDisconnect.shouldKeepConnectionAlive());
+
+    PalmBackendConfig timeout;
+    timeout.connectionBehavior = ConnectionBehavior::TimeoutThenDefer;
+    PalmConflictHandler hTimeout(&dev, &timeout);
+    QVERIFY(hTimeout.shouldKeepConnectionAlive());
+}
+
+void TestPalmConflictHandler::nullConfigKeepsConnectionAlive()
+{
+    MockPalmDatabaseAccess dev;
+    PalmConflictHandler h(&dev, nullptr);
+    QVERIFY(h.shouldKeepConnectionAlive());
+}
+
+void TestPalmConflictHandler::onSyncStartClearsPendingAndOverlay()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    // Accumulate a pending conflict via deferAll.
+    ConflictRecord cr = makeBothModifiedConflict(
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 1),
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 1),
+        QDateTime::currentDateTimeUtc(),
+        QDateTime::currentDateTimeUtc());
+    handler.handleConflict(cr, ConflictPolicy::deferAll());
+    QCOMPARE(handler.pendingConflicts().size(), 1);
+
+    handler.onSyncStart();
+    QVERIFY(handler.pendingConflicts().isEmpty());
     QVERIFY(handler.lastOverlay().isEmpty());
 }
 
