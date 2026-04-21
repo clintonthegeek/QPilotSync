@@ -46,6 +46,14 @@ find_package(KF6StatusNotifierItem REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)
 
+# libkalburator — shared calendar-sync substrate, consumed via a sibling
+# checkout at ~/dev/libkalburator. See docs/LIBKALBURATOR.md and
+# docs/plans/2026-04-20-libkalburator-integration.md.
+# Phase A: linked only by the smoke test; no WP source consumes it yet.
+set(KALBURATOR_HAVE_ORG_IO OFF CACHE BOOL "" FORCE)
+set(KALBURATOR_HAVE_AKONADI OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../libkalburator libkalburator EXCLUDE_FROM_ALL)
+
 # Build pilot-link first
 add_subdirectory(lib)
 
