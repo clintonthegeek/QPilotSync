@@ -212,3 +212,8 @@ add_subdirectory(fullsync)
 # integration). PalmBackend : IBlobBackend + device-access abstraction.
 # Does not link pisock; the real pilot-link adapter lands in E.4.
 add_subdirectory(palm/sync)
+
+# Pilot-link adapter for IPalmDatabaseAccess (Phase E.4 of libkalburator
+# integration). Bridges WildPalmsCore (pisock) and WildPalmsPalmSync
+# (Kalburator::Sync).
+add_subdirectory(palm/device)

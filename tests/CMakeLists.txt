@@ -155,6 +155,12 @@ add_fullsync_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
 add_subdirectory(palmsync)
 
 # ============================================================
+# Phase E.4 — Pilot-link adapter for PalmBackend
+# ============================================================
+
+add_subdirectory(palmdevice)
+
+# ============================================================
 # Smoke Test - libkalburator linkage (Phase A)
 # ============================================================
 # Deliberately does NOT go through add_wildpalms_test(); the smoke test
