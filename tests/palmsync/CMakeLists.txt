@@ -19,3 +19,4 @@ function(add_palm_sync_test TEST_NAME)
 endfunction()
 
 add_palm_sync_test(tst_mockpalmdatabaseaccess tst_mockpalmdatabaseaccess.cpp)
+add_palm_sync_test(tst_palmbackend              tst_palmbackend.cpp)
