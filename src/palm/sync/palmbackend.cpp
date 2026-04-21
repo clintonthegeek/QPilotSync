@@ -30,6 +30,37 @@ Kalburator::Sync::CollectionInfo makeCollectionInfo(const QString &dbName)
     return info;
 }
 
+QString hashForData(const QByteArray &data)
+{
+    return QString::fromLatin1(
+        QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
+}
+
+Kalburator::Sync::BackendRecord palmToBackend(const QString &dbName,
+                                              const PalmRecord &pr)
+{
+    Kalburator::Sync::BackendRecord br;
+    br.id = PalmBackend::encodeRecordId(dbName, pr.recordId);
+    br.type = collectionTypeForDb(dbName);
+    br.data = pr.data;
+    br.contentHash = hashForData(pr.data);
+    br.lastModified = pr.lastModified;
+    br.isDeleted = pr.isDeleted();
+    return br;
+}
+
+PalmRecord backendToPalm(const Kalburator::Sync::BackendRecord &br,
+                         std::uint32_t existingId = 0)
+{
+    PalmRecord pr;
+    pr.recordId = existingId;
+    pr.data = br.data;
+    pr.lastModified = br.lastModified.isValid()
+        ? br.lastModified
+        : QDateTime::currentDateTimeUtc();
+    return pr;
+}
+
 } // namespace
 
 PalmBackend::PalmBackend(IPalmDatabaseAccess *device, QObject *parent)
@@ -144,31 +175,65 @@ QString PalmBackend::createCollection(
     return info.id;
 }
 
-QList<Kalburator::Sync::BackendRecord> PalmBackend::loadRecords(const QString &)
+QList<Kalburator::Sync::BackendRecord> PalmBackend::loadRecords(
+    const QString &collectionId)
 {
-    return {};
+    QString dbName;
+    if (!decodeCollectionId(collectionId, &dbName)) return {};
+    if (!m_device) return {};
+
+    QList<Kalburator::Sync::BackendRecord> out;
+    for (const auto &pr : m_device->readAllRecords(dbName)) {
+        out.append(palmToBackend(dbName, pr));
+    }
+    return out;
 }
 
 std::optional<Kalburator::Sync::BackendRecord> PalmBackend::loadRecord(
-    const QString &)
+    const QString &recordId)
 {
-    return std::nullopt;
+    QString dbName;
+    std::uint32_t numericId = 0;
+    if (!decodeRecordId(recordId, &dbName, &numericId)) return std::nullopt;
+    if (!m_device) return std::nullopt;
+
+    const auto palm = m_device->readRecord(dbName, numericId);
+    if (!palm.has_value()) return std::nullopt;
+    return palmToBackend(dbName, *palm);
 }
 
-QString PalmBackend::createRecord(const QString &,
-                                  const Kalburator::Sync::BackendRecord &)
+QString PalmBackend::createRecord(
+    const QString &collectionId,
+    const Kalburator::Sync::BackendRecord &record)
 {
-    return {};
+    QString dbName;
+    if (!decodeCollectionId(collectionId, &dbName)) return {};
+    if (!m_device) return {};
+
+    PalmRecord pr = backendToPalm(record);
+    const auto newId = m_device->createRecord(dbName, pr);
+    if (newId == 0) return {};
+    return encodeRecordId(dbName, newId);
 }
 
-bool PalmBackend::updateRecord(const Kalburator::Sync::BackendRecord &)
+bool PalmBackend::updateRecord(const Kalburator::Sync::BackendRecord &record)
 {
-    return false;
+    QString dbName;
+    std::uint32_t numericId = 0;
+    if (!decodeRecordId(record.id, &dbName, &numericId)) return false;
+    if (!m_device) return false;
+
+    PalmRecord pr = backendToPalm(record, numericId);
+    return m_device->updateRecord(dbName, pr);
 }
 
-bool PalmBackend::deleteRecord(const QString &)
+bool PalmBackend::deleteRecord(const QString &recordId)
 {
-    return false;
+    QString dbName;
+    std::uint32_t numericId = 0;
+    if (!decodeRecordId(recordId, &dbName, &numericId)) return false;
+    if (!m_device) return false;
+    return m_device->deleteRecord(dbName, numericId);
 }
 
 QList<Kalburator::Sync::BackendRecord> PalmBackend::modifiedSince(
