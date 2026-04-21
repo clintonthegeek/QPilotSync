@@ -19,3 +19,4 @@ function(add_palm_conflict_test TEST_NAME)
 endfunction()
 
 add_palm_conflict_test(tst_palmbackendconfig tst_palmbackendconfig.cpp)
+add_palm_conflict_test(tst_palmconflicthandler tst_palmconflicthandler.cpp)
