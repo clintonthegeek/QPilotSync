@@ -124,6 +124,31 @@ set_tests_properties(test_pluckerconfig PROPERTIES
 )
 
 # ============================================================
+# Helper for fullsync-only tests (Phase D). Links WildPalmsFullSync +
+# Kalburator::Sync, stays out of the WildPalmsCore/pisock link line.
+# ============================================================
+
+function(add_fullsync_test TEST_NAME)
+    set(TEST_SOURCES ${ARGN})
+    add_executable(${TEST_NAME} ${TEST_SOURCES})
+    target_link_libraries(${TEST_NAME}
+        PRIVATE
+            Qt::Core
+            Qt::Test
+            Kalburator::Sync
+            WildPalmsFullSync
+    )
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    set_tests_properties(${TEST_NAME} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
+endfunction()
+
+add_fullsync_test(test_fullsync_calendarcollection test_fullsync_calendarcollection.cpp)
+add_fullsync_test(test_fullsync_syncconfigstore    test_fullsync_syncconfigstore.cpp)
+add_fullsync_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
+
+# ============================================================
 # Smoke Test - libkalburator linkage (Phase A)
 # ============================================================
 # Deliberately does NOT go through add_wildpalms_test(); the smoke test

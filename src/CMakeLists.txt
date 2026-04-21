@@ -202,3 +202,8 @@ add_dependencies(WildPalmsCore pilot-link-external)
 
 # Plugin subdirectory (conduit plugins that link against WildPalmsCore)
 add_subdirectory(plugins)
+
+# Full Sync Mode host-interface implementations (Phase D of libkalburator
+# integration). Keeps the Kalburator::Sync dependency out of WildPalmsCore
+# until Phase F wires the UI.
+add_subdirectory(fullsync)
