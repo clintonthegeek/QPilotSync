@@ -20,3 +20,5 @@ endfunction()
 
 add_palm_conflict_test(tst_palmbackendconfig tst_palmbackendconfig.cpp)
 add_palm_conflict_test(tst_palmconflicthandler tst_palmconflicthandler.cpp)
+add_palm_conflict_test(tst_palmconflicthandler_registration
+    tst_palmconflicthandler_registration.cpp)
