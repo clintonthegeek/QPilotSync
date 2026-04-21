@@ -217,3 +217,8 @@ add_subdirectory(palm/sync)
 # integration). Bridges WildPalmsCore (pisock) and WildPalmsPalmSync
 # (Kalburator::Sync).
 add_subdirectory(palm/device)
+
+# Palm-aware ConflictHandler + BackendConfig (Phase E.5 of libkalburator
+# integration). Registers under backend id "palm" in
+# Kalburator::Sync::QSyncCore::ConflictHandlerRegistry.
+add_subdirectory(palm/conflict)

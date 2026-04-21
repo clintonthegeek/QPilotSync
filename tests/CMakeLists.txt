@@ -161,6 +161,12 @@ add_subdirectory(palmsync)
 add_subdirectory(palmdevice)
 
 # ============================================================
+# Phase E.5 — Palm-aware ConflictHandler + BackendConfig
+# ============================================================
+
+add_subdirectory(palmconflict)
+
+# ============================================================
 # Smoke Test - libkalburator linkage (Phase A)
 # ============================================================
 # Deliberately does NOT go through add_wildpalms_test(); the smoke test

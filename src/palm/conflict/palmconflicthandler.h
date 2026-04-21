@@ -1,0 +1,4 @@
+// Placeholder — filled in by Phase E.5 task 2.
+#ifndef WILDPALMS_CONFLICT_PALMCONFLICTHANDLER_H
+#define WILDPALMS_CONFLICT_PALMCONFLICTHANDLER_H
+#endif
