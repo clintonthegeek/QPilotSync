@@ -55,6 +55,9 @@ private slots:
     void archivedSourceSurvivesModifiedVsDeleted();
     void archivedTargetSurvivesDeletedVsModified();
     void nonArchivedRecordGetsDeleted();
+    void secretSourceOverridesDuplicateAll();
+    void secretTargetOverridesDuplicateAll();
+    void neitherSecretLeavesDuplicateAll();
 };
 
 void TestPalmConflictHandler::sourceAlwaysWinsPolicyYieldsUseSource()
@@ -256,6 +259,118 @@ void TestPalmConflictHandler::nonArchivedRecordGetsDeleted()
 
     auto policy = ConflictPolicy::autoTargetWins();
     QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::DeleteBoth);
+    QVERIFY(handler.lastOverlay().isEmpty());
+}
+
+void TestPalmConflictHandler::secretSourceOverridesDuplicateAll()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmRecord secret;
+    secret.recordId = 21;
+    secret.attributes = PalmRecord::AttrSecret;
+    secret.data = QByteArrayLiteral("secret-src");
+    secret.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), secret);
+
+    PalmRecord visible;
+    visible.recordId = 22;
+    visible.attributes = 0;
+    visible.data = QByteArrayLiteral("plain-tgt");
+    visible.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), visible);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr = makeBothModifiedConflict(
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 21),
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 22),
+        QDateTime::currentDateTimeUtc(),
+        QDateTime::currentDateTimeUtc());
+
+    ConflictPolicy policy;
+    policy.autoResolve = AutoResolveStrategy::DuplicateAll;
+    policy.promptStrategy = PromptStrategy::Never;
+    policy.fallback = FallbackBehavior::UseDefault;
+    policy.requireConfirmForDeletes = false;
+
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseSource);
+    QCOMPARE(handler.lastOverlay(), QStringLiteral("secret"));
+}
+
+void TestPalmConflictHandler::secretTargetOverridesDuplicateAll()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmRecord visible;
+    visible.recordId = 31;
+    visible.attributes = 0;
+    visible.data = QByteArrayLiteral("plain-src");
+    visible.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), visible);
+
+    PalmRecord secret;
+    secret.recordId = 32;
+    secret.attributes = PalmRecord::AttrSecret;
+    secret.data = QByteArrayLiteral("secret-tgt");
+    secret.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), secret);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr = makeBothModifiedConflict(
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 31),
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 32),
+        QDateTime::currentDateTimeUtc(),
+        QDateTime::currentDateTimeUtc());
+
+    ConflictPolicy policy;
+    policy.autoResolve = AutoResolveStrategy::DuplicateAll;
+    policy.promptStrategy = PromptStrategy::Never;
+    policy.fallback = FallbackBehavior::UseDefault;
+    policy.requireConfirmForDeletes = false;
+
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseTarget);
+    QCOMPARE(handler.lastOverlay(), QStringLiteral("secret"));
+}
+
+void TestPalmConflictHandler::neitherSecretLeavesDuplicateAll()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmRecord a;
+    a.recordId = 41;
+    a.data = QByteArrayLiteral("a");
+    a.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), a);
+
+    PalmRecord b;
+    b.recordId = 42;
+    b.data = QByteArrayLiteral("b");
+    b.lastModified = QDateTime::currentDateTimeUtc();
+    dev.createRecord(QStringLiteral("MemoDB"), b);
+
+    PalmBackendConfig cfg;
+    PalmConflictHandler handler(&dev, &cfg);
+
+    ConflictRecord cr = makeBothModifiedConflict(
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 41),
+        PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 42),
+        QDateTime::currentDateTimeUtc(),
+        QDateTime::currentDateTimeUtc());
+
+    ConflictPolicy policy;
+    policy.autoResolve = AutoResolveStrategy::DuplicateAll;
+    policy.promptStrategy = PromptStrategy::Never;
+    policy.fallback = FallbackBehavior::UseDefault;
+    policy.requireConfirmForDeletes = false;
+
+    QCOMPARE(handler.handleConflict(cr, policy), ConflictDecision::UseBoth);
     QVERIFY(handler.lastOverlay().isEmpty());
 }
 

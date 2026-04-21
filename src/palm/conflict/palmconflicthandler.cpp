@@ -140,6 +140,19 @@ ConflictDecision PalmConflictHandler::applyOverlays(
         }
     }
 
+    // Secret-flag protection: UseBoth on a BothModified where exactly
+    // one side is secret would duplicate the record without the secret
+    // bit; flip to keep only the secret side.
+    const bool sourceSecret = sourcePalm && sourcePalm->isSecret();
+    const bool targetSecret = targetPalm && targetPalm->isSecret();
+    if (baseDecision == ConflictDecision::UseBoth
+        && conflict.type == ConflictType::BothModified
+        && (sourceSecret != targetSecret)) {
+        m_lastOverlay = QStringLiteral("secret");
+        return sourceSecret ? ConflictDecision::UseSource
+                            : ConflictDecision::UseTarget;
+    }
+
     return baseDecision;
 }
 
