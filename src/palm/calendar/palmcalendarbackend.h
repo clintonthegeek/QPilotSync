@@ -1,0 +1,4 @@
+// Placeholder — filled in by Phase E.6 task 4.
+#ifndef WILDPALMS_CALENDAR_PALMCALENDARBACKEND_H
+#define WILDPALMS_CALENDAR_PALMCALENDARBACKEND_H
+#endif

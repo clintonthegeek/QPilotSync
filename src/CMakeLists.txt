@@ -222,3 +222,8 @@ add_subdirectory(palm/device)
 # integration). Registers under backend id "palm" in
 # Kalburator::Sync::QSyncCore::ConflictHandlerRegistry.
 add_subdirectory(palm/conflict)
+
+# Calendar-typed SyncBackend adapter for Palm Datebook (Phase E.6 of
+# libkalburator integration). Exposes virtual sub-calendars per Palm
+# category slot via PalmCalendarBackend : SyncBackend.
+add_subdirectory(palm/calendar)

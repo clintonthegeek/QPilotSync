@@ -167,6 +167,12 @@ add_subdirectory(palmdevice)
 add_subdirectory(palmconflict)
 
 # ============================================================
+# Phase E.6 — PalmCalendarBackend + DatebookCodec
+# ============================================================
+
+add_subdirectory(palmcalendar)
+
+# ============================================================
 # Smoke Test - libkalburator linkage (Phase A)
 # ============================================================
 # Deliberately does NOT go through add_wildpalms_test(); the smoke test
