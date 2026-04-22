@@ -22,3 +22,4 @@ endfunction()
 
 add_palm_calendar_test(tst_categorymappingstore tst_categorymappingstore.cpp)
 add_palm_calendar_test(tst_datebookcodec tst_datebookcodec.cpp)
+add_palm_calendar_test(tst_palmcalendarbackend tst_palmcalendarbackend.cpp)
