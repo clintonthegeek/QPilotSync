@@ -1,6 +1,7 @@
 #include "palmcalendarbackend.h"
 
 #include <QRegularExpression>
+#include <QTimeZone>
 
 #include "syncoperation.h"
 
@@ -86,23 +87,131 @@ QString PalmCalendarBackend::calendarIdForSlot(int slot)
         .arg(slot);
 }
 
-// ========== Legacy pure-virtual stubs (Task 6 fills these) ==========
-void PalmCalendarBackend::loadItems(KCalendarCore::MemoryCalendar *,
-                                     bool) {}
+void PalmCalendarBackend::loadItems(KCalendarCore::MemoryCalendar *cal,
+                                     bool suppressSignals)
+{
+    if (!cal || !m_device) {
+        return;
+    }
+
+    // Legacy API has no calendarId context — we load all DatebookDB
+    // records into the given MemoryCalendar regardless of slot.
+    // Callers preferring slot routing use fetchItems(calendarId).
+    const auto records = m_device->readAllRecords(QLatin1String(DatabaseName));
+    for (const auto &rec : records) {
+        const auto decoded = DatebookCodec::decode(rec);
+        if (!decoded.isValid()) continue;
+        cal->addIncidence(decoded.event);
+        if (!suppressSignals) {
+            emit itemLoaded(cal, decoded.event, QString{});
+        }
+    }
+    if (!suppressSignals) {
+        emit calendarLoaded(cal);
+    }
+}
+
 void PalmCalendarBackend::storeCalendars(
-    const QString &, const QList<KCalendarCore::MemoryCalendar *> &) {}
+    const QString &, const QList<KCalendarCore::MemoryCalendar *> &)
+{
+    // Palm calendar slots are implicit (created/renamed via the device's
+    // category editor). No storage action at this level.
+}
+
 void PalmCalendarBackend::storeItems(
     KCalendarCore::MemoryCalendar *,
-    const QList<KCalendarCore::Incidence::Ptr> &) {}
+    const QList<KCalendarCore::Incidence::Ptr> &items)
+{
+    // Legacy API lacks calendarId, so we route to Unfiled (slot 0) —
+    // callers needing slot control use pushItems(calendarId, items).
+    if (items.isEmpty()) return;
+    auto *op = pushItems(QStringLiteral("palm:calendar/0"), items);
+    if (op) op->deleteLater();
+}
+
 void PalmCalendarBackend::updateItem(
-    KCalendarCore::MemoryCalendar *, const KCalendarCore::Incidence::Ptr &,
-    const QString &) {}
+    KCalendarCore::MemoryCalendar *, const KCalendarCore::Incidence::Ptr &item,
+    const QString &icalData)
+{
+    if (!item) return;
+
+    KCalendarCore::Incidence::Ptr effective = item;
+    if (!icalData.isEmpty()) {
+        // Parse icalData and take the first event if present.
+        KCalendarCore::ICalFormat fmt;
+        auto tempCal = KCalendarCore::MemoryCalendar::Ptr::create(
+            QTimeZone::UTC);
+        if (fmt.fromString(tempCal, icalData)) {
+            const auto events = tempCal->events();
+            if (!events.isEmpty()) {
+                effective = events.first().staticCast<KCalendarCore::Incidence>();
+            }
+        }
+    }
+
+    // Route to whichever slot the event carries, or 0.
+    int slot = 0;
+    const auto slotStr = effective->customProperty(
+        "KCalendarCore",
+        QByteArray(DatebookCodec::CategorySlotProperty));
+    if (!slotStr.isEmpty()) {
+        bool ok = false;
+        const int parsed = slotStr.toInt(&ok);
+        if (ok && parsed >= 0 && parsed <= 15) slot = parsed;
+    }
+    auto *op = pushItems(calendarIdForSlot(slot), { effective });
+    if (op) op->deleteLater();
+}
+
 void PalmCalendarBackend::startSync(
     const QString &, KCalendarCore::MemoryCalendar *,
-    const QList<KCalendarCore::Incidence::Ptr> &,
-    const QList<KCalendarCore::Incidence::Ptr> &,
-    const QMap<QString, QString> &) {}
-void PalmCalendarBackend::removeItem(const QString &, const QString &) {}
+    const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
+    const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
+    const QMap<QString, QString> &stagedDeletions)
+{
+    // Route by each incidence's X-WP-PALM-CATEGORY-SLOT property,
+    // else 0.
+    auto slotForIncidence = [](const KCalendarCore::Incidence::Ptr &inc) {
+        if (!inc) return 0;
+        const auto s = inc->customProperty(
+            "KCalendarCore",
+            QByteArray(DatebookCodec::CategorySlotProperty));
+        if (s.isEmpty()) return 0;
+        bool ok = false;
+        const int n = s.toInt(&ok);
+        return (ok && n >= 0 && n <= 15) ? n : 0;
+    };
+
+    // Creations + updates both go through pushItems (the codec
+    // preserves recordId from the property, so pushItems' own
+    // "recordId==0 ? create : update" logic handles both).
+    QHash<int, QList<KCalendarCore::Incidence::Ptr>> bySlot;
+    for (const auto &inc : stagedCreations) bySlot[slotForIncidence(inc)].append(inc);
+    for (const auto &inc : stagedUpdates)   bySlot[slotForIncidence(inc)].append(inc);
+    for (auto it = bySlot.constBegin(); it != bySlot.constEnd(); ++it) {
+        auto *op = pushItems(calendarIdForSlot(it.key()), it.value());
+        if (op) op->deleteLater();
+    }
+
+    // Deletions: map<uid, calendarId>. Group by calendarId.
+    QHash<QString, QStringList> delByCal;
+    for (auto it = stagedDeletions.constBegin();
+         it != stagedDeletions.constEnd(); ++it) {
+        delByCal[it.value()].append(it.key());
+    }
+    for (auto it = delByCal.constBegin(); it != delByCal.constEnd(); ++it) {
+        auto *op = deleteItems(it.key(), it.value());
+        if (op) op->deleteLater();
+    }
+}
+
+void PalmCalendarBackend::removeItem(const QString &calId,
+                                      const QString &itemUid)
+{
+    auto *op = deleteItems(calId, QStringList{ itemUid });
+    if (op) op->deleteLater();
+    emit itemRemoved(calId, itemUid);
+}
 
 // ========== Operation API (Task 5) ==========
 FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
@@ -130,14 +239,12 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
     emit fetchStarted(calendarId, records.size());
 
     QList<KCalendarCore::Incidence::Ptr> items;
-    int skipped = 0;
     for (const auto &rec : records) {
         if (static_cast<int>(rec.category) != slot) {
             continue;
         }
         const auto decoded = DatebookCodec::decode(rec);
         if (!decoded.isValid()) {
-            ++skipped;
             continue;
         }
         items.append(decoded.event);
