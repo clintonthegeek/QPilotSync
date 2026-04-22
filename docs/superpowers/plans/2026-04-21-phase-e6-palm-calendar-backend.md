@@ -710,7 +710,7 @@ DatebookCodec::decode(const PalmRecord &record)
                      static_cast<std::size_t>(record.data.size()));
 
     const int rc = unpack_Appointment(&appt.a, buf.buf, datebook_v1);
-    if (rc <= 0) {
+    if (rc < 0) {
         result.failureReason = QStringLiteral("unpack-failed:rc=%1").arg(rc);
         return result;
     }
@@ -718,10 +718,10 @@ DatebookCodec::decode(const PalmRecord &record)
     // Build the Event scaffold — content-carrying fields land in task 3.
     auto event = KCalendarCore::Event::Ptr::create();
     event->setCustomProperty("KCalendarCore",
-                             QByteArrayLiteral(DatebookCodec::RecordIdProperty),
+                             QByteArray(DatebookCodec::RecordIdProperty),
                              QString::number(record.recordId));
     event->setCustomProperty("KCalendarCore",
-                             QByteArrayLiteral(DatebookCodec::CategorySlotProperty),
+                             QByteArray(DatebookCodec::CategorySlotProperty),
                              QString::number(record.category));
 
     // Generate a stable UID derived from recordId so repeated decodes
@@ -744,7 +744,7 @@ PalmRecord DatebookCodec::encode(const KCalendarCore::Event::Ptr &event,
 
     // Record ID from X-WP-PALM-RECORDID if present.
     const auto idStr = event->customProperty(
-        "KCalendarCore", QByteArrayLiteral(DatebookCodec::RecordIdProperty));
+        "KCalendarCore", QByteArray(DatebookCodec::RecordIdProperty));
     if (!idStr.isEmpty()) {
         bool ok = false;
         const auto id = idStr.toUInt(&ok);
@@ -777,7 +777,7 @@ PalmRecord DatebookCodec::encode(const KCalendarCore::Event::Ptr &event,
         return {};
     }
     const int rc = pack_Appointment(&appt.a, buf.buf, datebook_v1);
-    if (rc <= 0) {
+    if (rc < 0) {
         return {};
     }
 
@@ -862,7 +862,7 @@ void TestDatebookCodec::recordIdPreservedThroughDecode()
     QVERIFY(result.isValid());
     QCOMPARE(result.event->customProperty(
                  "KCalendarCore",
-                 QByteArrayLiteral(DatebookCodec::RecordIdProperty)),
+                 QByteArray(DatebookCodec::RecordIdProperty)),
              QStringLiteral("42"));
 }
 
@@ -874,7 +874,7 @@ void TestDatebookCodec::categorySlotPreservedThroughDecode()
     QCOMPARE(result.slot, 7);
     QCOMPARE(result.event->customProperty(
                  "KCalendarCore",
-                 QByteArrayLiteral(DatebookCodec::CategorySlotProperty)),
+                 QByteArray(DatebookCodec::CategorySlotProperty)),
              QStringLiteral("7"));
 }
 
@@ -896,7 +896,7 @@ void TestDatebookCodec::encodeReadsRecordIdFromProperty()
 {
     auto ev = KCalendarCore::Event::Ptr::create();
     ev->setCustomProperty("KCalendarCore",
-                          QByteArrayLiteral(DatebookCodec::RecordIdProperty),
+                          QByteArray(DatebookCodec::RecordIdProperty),
                           QStringLiteral("99"));
     const auto rec = DatebookCodec::encode(ev, 0);
     QCOMPARE(rec.recordId, 99u);
@@ -1011,10 +1011,10 @@ Find this block:
     // Build the Event scaffold — content-carrying fields land in task 3.
     auto event = KCalendarCore::Event::Ptr::create();
     event->setCustomProperty("KCalendarCore",
-                             QByteArrayLiteral(DatebookCodec::RecordIdProperty),
+                             QByteArray(DatebookCodec::RecordIdProperty),
                              QString::number(record.recordId));
     event->setCustomProperty("KCalendarCore",
-                             QByteArrayLiteral(DatebookCodec::CategorySlotProperty),
+                             QByteArray(DatebookCodec::CategorySlotProperty),
                              QString::number(record.category));
 
     // Generate a stable UID derived from recordId so repeated decodes
@@ -1031,10 +1031,10 @@ Replace with:
     // Build the Event and populate content.
     auto event = KCalendarCore::Event::Ptr::create();
     event->setCustomProperty("KCalendarCore",
-                             QByteArrayLiteral(DatebookCodec::RecordIdProperty),
+                             QByteArray(DatebookCodec::RecordIdProperty),
                              QString::number(record.recordId));
     event->setCustomProperty("KCalendarCore",
-                             QByteArrayLiteral(DatebookCodec::CategorySlotProperty),
+                             QByteArray(DatebookCodec::CategorySlotProperty),
                              QString::number(record.category));
     event->setUid(QStringLiteral("palm-datebook-%1").arg(record.recordId));
 
@@ -1262,9 +1262,9 @@ inline void rruleToPalmRepeat(const KCalendarCore::Event::Ptr &event,
         case Recurrence::rMonthlyPos:
             a.repeatType = repeatMonthlyByDate;
             break;
-        case Recurrence::rYearly:
-        case Recurrence::rYearlyDay:
         case Recurrence::rYearlyMonth:
+        case Recurrence::rYearlyDay:
+        case Recurrence::rYearlyPos:
             a.repeatType = repeatYearly;
             break;
         default:
@@ -1351,7 +1351,7 @@ parsing (starting at the `ScopedAppointment appt;` line) with:
         return {};
     }
     const int rc = pack_Appointment(&appt.a, buf.buf, datebook_v1);
-    if (rc <= 0) {
+    if (rc < 0) {
         return {};
     }
 
@@ -1544,7 +1544,7 @@ void TestDatebookCodec::roundTripYearlyRepeatForever()
     QVERIFY(rt);
     QVERIFY(rt->recurs());
     QCOMPARE(rt->recurrence()->recurrenceType(),
-             KCalendarCore::Recurrence::rYearly);
+             KCalendarCore::Recurrence::rYearlyMonth);
     QCOMPARE(rt->recurrence()->duration(), -1);  // -1 == forever
 }
 
@@ -2135,7 +2135,7 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
         return op;
     }
 
-    op->start();
+    op->setState(SyncOperation::Running);
 
     const auto records = m_device->readAllRecords(QLatin1String(DatabaseName));
     emit fetchStarted(calendarId, records.size());
@@ -2190,7 +2190,7 @@ PushOperation *PalmCalendarBackend::pushItems(
     // DatebookDB as a hard error; the mock creates lazily.
     m_device->createDatabase(QLatin1String(DatabaseName));
 
-    op->start();
+    op->setState(SyncOperation::Running);
     emit writeStarted(calendarId, items.size());
 
     for (const auto &incidence : items) {
@@ -2217,7 +2217,7 @@ PushOperation *PalmCalendarBackend::pushItems(
             // carrying the Incidence onward see the server-side ID.
             event->setCustomProperty(
                 "KCalendarCore",
-                QByteArrayLiteral(DatebookCodec::RecordIdProperty),
+                QByteArray(DatebookCodec::RecordIdProperty),
                 QString::number(newId));
             op->addSucceededUid(event->uid());
         } else {
@@ -2255,7 +2255,7 @@ DeleteOperation *PalmCalendarBackend::deleteItems(
         return op;
     }
 
-    op->start();
+    op->setState(SyncOperation::Running);
 
     // UIDs from DatebookCodec have the form "palm-datebook-<recordId>".
     static const QRegularExpression kUidRe(
@@ -2426,7 +2426,7 @@ void TestPalmCalendarBackend::pushItemsUpdatesExistingRecord()
     ev->setAllDay(true);
     ev->setDtStart(QDateTime(QDate(2026, 7, 2), QTime(0, 0), Qt::LocalTime));
     ev->setCustomProperty("KCalendarCore",
-                          QByteArrayLiteral(DatebookCodec::RecordIdProperty),
+                          QByteArray(DatebookCodec::RecordIdProperty),
                           QString::number(existing.recordId));
 
     auto *op = backend.pushItems(QStringLiteral("palm:calendar/2"),
@@ -2658,7 +2658,7 @@ void PalmCalendarBackend::updateItem(
     int slot = 0;
     const auto slotStr = effective->customProperty(
         "KCalendarCore",
-        QByteArrayLiteral(DatebookCodec::CategorySlotProperty));
+        QByteArray(DatebookCodec::CategorySlotProperty));
     if (!slotStr.isEmpty()) {
         bool ok = false;
         const int parsed = slotStr.toInt(&ok);
@@ -2680,7 +2680,7 @@ void PalmCalendarBackend::startSync(
         if (!inc) return 0;
         const auto s = inc->customProperty(
             "KCalendarCore",
-            QByteArrayLiteral(DatebookCodec::CategorySlotProperty));
+            QByteArray(DatebookCodec::CategorySlotProperty));
         if (s.isEmpty()) return 0;
         bool ok = false;
         const int n = s.toInt(&ok);
