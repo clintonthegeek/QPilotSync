@@ -33,6 +33,9 @@ private slots:
     void deleteItemsRemovesFromDevice();
     void deleteItemsMissingRecordReportsFailed();
     void pushThenFetchRoundTripsIncidence();
+    void pushToUnnamedSlotStillStores();
+    void deleteItemsInvalidCalendarIdFails();
+    void fetchItemsEmptySlotReturnsEmpty();
 };
 
 void TestPalmCalendarBackend::identity()
@@ -346,6 +349,57 @@ void TestPalmCalendarBackend::pushThenFetchRoundTripsIncidence()
     QCOMPARE(rt->description(), QStringLiteral("Gate B12"));
     QCOMPARE(rt.staticCast<Event>()->dtStart().time(), QTime(10, 0));
     fetchOp->deleteLater();
+}
+
+void TestPalmCalendarBackend::pushToUnnamedSlotStillStores()
+{
+    // Slot 12 is not in the store, but we can still push to it.
+    // loadCalendars won't surface the slot, but the record persists.
+    MockPalmDatabaseAccess dev;
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&dev, &store);
+
+    auto ev = Event::Ptr::create();
+    ev->setSummary(QStringLiteral("Unnamed slot"));
+    ev->setAllDay(true);
+    ev->setDtStart(QDateTime(QDate(2026, 9, 1), QTime(0, 0), Qt::LocalTime));
+
+    auto *op = backend.pushItems(QStringLiteral("palm:calendar/12"),
+                                 { ev.staticCast<Incidence>() });
+    QCOMPARE(op->state(), SyncOperation::Succeeded);
+    op->deleteLater();
+
+    const auto stored = dev.readAllRecords(QStringLiteral("DatebookDB"));
+    QCOMPARE(stored.size(), 1);
+    QCOMPARE(static_cast<int>(stored.first().category), 12);
+}
+
+void TestPalmCalendarBackend::deleteItemsInvalidCalendarIdFails()
+{
+    MockPalmDatabaseAccess dev;
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&dev, &store);
+
+    auto *op = backend.deleteItems(
+        QStringLiteral("local:memo:1"),
+        QStringList{ QStringLiteral("palm-datebook-1") });
+    QCOMPARE(op->state(), SyncOperation::Failed);
+    op->deleteLater();
+}
+
+void TestPalmCalendarBackend::fetchItemsEmptySlotReturnsEmpty()
+{
+    MockPalmDatabaseAccess dev;
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&dev, &store);
+
+    // Stage records for slot 3 only; fetch slot 4.
+    stageDatebookRecord(dev, 3, QStringLiteral("foo"));
+
+    auto *op = backend.fetchItems(QStringLiteral("palm:calendar/4"));
+    QCOMPARE(op->state(), SyncOperation::Succeeded);
+    QVERIFY(op->fetchedItems().isEmpty());
+    op->deleteLater();
 }
 
 QTEST_MAIN(TestPalmCalendarBackend)
