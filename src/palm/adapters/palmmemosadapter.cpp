@@ -2,9 +2,7 @@
 
 #include <QLoggingCategory>
 
-#include "backendrecord.h"
 #include "categorymappingstore.h"
-#include "collectioninfo.h"
 #include "palmbackend.h"
 #include "palmrecord.h"
 

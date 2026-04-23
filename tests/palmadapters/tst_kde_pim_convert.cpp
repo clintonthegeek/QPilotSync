@@ -56,7 +56,7 @@ Todo makeTodoSample()
     t.description = QStringLiteral("Review Phase-E spec");
     t.note        = QStringLiteral("Focus on E.10+ consumers.");
     t.hasIndefiniteDue = false;
-    t.due = QDateTime(QDate(2026, 5, 15), QTime(0, 0), Qt::LocalTime);
+    t.due = QDateTime(QDate(2026, 5, 15), QTime(0, 0));
     t.priority = 2;
     t.isComplete = false;
     return t;
