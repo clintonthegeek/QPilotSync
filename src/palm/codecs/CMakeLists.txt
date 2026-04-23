@@ -15,6 +15,8 @@
 add_library(WildPalmsPalmCodecs STATIC
     palmtext.h
     palmtext.cpp
+    memocodec.h
+    memocodec.cpp
 )
 
 target_include_directories(WildPalmsPalmCodecs

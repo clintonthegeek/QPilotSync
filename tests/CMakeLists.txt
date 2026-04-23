@@ -173,6 +173,12 @@ add_subdirectory(palmconflict)
 add_subdirectory(palmcalendar)
 
 # ============================================================
+# Phase E.7 — Codec + Adapter Tests for Contact/Memo/Todo
+# ============================================================
+
+add_subdirectory(palmadapters)
+
+# ============================================================
 # Smoke Test - libkalburator linkage (Phase A)
 # ============================================================
 # Deliberately does NOT go through add_wildpalms_test(); the smoke test
