@@ -227,3 +227,7 @@ add_subdirectory(palm/conflict)
 # libkalburator integration). Exposes virtual sub-calendars per Palm
 # category slot via PalmCalendarBackend : SyncBackend.
 add_subdirectory(palm/calendar)
+
+# Typed adapters for Palm Contacts/Memos/Todos (Phase E.7 of libkalburator
+# integration). Encode/decode PODs to/from KDE PIM types (Addressee, Event, Todo).
+add_subdirectory(palm/codecs)
