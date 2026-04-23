@@ -13,6 +13,8 @@ add_library(WildPalmsPalmAdapters STATIC
     palmmemosadapter.cpp
     palmcontactsadapter.h
     palmcontactsadapter.cpp
+    palmtodosadapter.h
+    palmtodosadapter.cpp
 )
 
 target_include_directories(WildPalmsPalmAdapters
