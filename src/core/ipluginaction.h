@@ -13,6 +13,30 @@ class PalmDeviceConnection;
 namespace WildPalms {
 
 /**
+ * @brief Abstract progress/log/cancel proxy for IPluginAction::execute().
+ *
+ * Declared at namespace scope (not as an inner class of IPluginAction) so
+ * that MOC can process its Q_OBJECT macro. IPluginAction::ActionContext is
+ * a type alias for this class for backward-compatible spelling.
+ */
+class IActionContext : public QObject
+{
+    Q_OBJECT
+public:
+    using QObject::QObject;
+    ~IActionContext() override = default;
+
+    virtual void setTotal(int total)      = 0;
+    virtual void setCurrent(int current)  = 0;
+    virtual void log(const QString &msg)  = 0;
+    virtual bool isCancelled() const      = 0;
+
+Q_SIGNALS:
+    void progress(int current, int total);
+    void message(const QString &msg);
+};
+
+/**
  * @brief One-shot triggerable plugin kind.
  *
  * Actions do not participate in record-level sync. Used for
@@ -25,22 +49,8 @@ namespace WildPalms {
 class IPluginAction : public IPlugin
 {
 public:
-    class ActionContext : public QObject
-    {
-        Q_OBJECT
-    public:
-        using QObject::QObject;
-        ~ActionContext() override = default;
-
-        virtual void setTotal(int total)      = 0;
-        virtual void setCurrent(int current)  = 0;
-        virtual void log(const QString &msg)  = 0;
-        virtual bool isCancelled() const      = 0;
-
-    Q_SIGNALS:
-        void progress(int current, int total);
-        void message(const QString &msg);
-    };
+    /// Type alias — keeps the IPluginAction::ActionContext spelling valid.
+    using ActionContext = IActionContext;
 
     /// Runs the action. Returns true on success. Called on a worker
     /// thread by PluginActionManager::runAction(); actions MUST NOT

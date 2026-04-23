@@ -14,6 +14,10 @@ add_library(WildPalmsRuntime STATIC
     pluginmetadatahelpers.cpp
     backendpluginmanager.h
     backendpluginmanager.cpp
+    pluginactionmanager.h
+    pluginactionmanager.cpp
+    simpleactioncontext.h
+    simpleactioncontext.cpp
 )
 
 target_include_directories(WildPalmsRuntime

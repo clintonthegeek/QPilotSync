@@ -4,6 +4,10 @@ add_library(WildPalmsCore SHARED
     wildpalms_core.cpp
     wildpalms_version.h
 
+    # Plugin ABI interfaces (Q_OBJECT meta-object for ActionContext)
+    core/ipluginaction.h
+    core/ipluginaction.cpp
+
     # Application UI
     app/logwidget.cpp
     app/logwidget.h
