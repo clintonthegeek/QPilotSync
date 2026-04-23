@@ -231,3 +231,7 @@ add_subdirectory(palm/calendar)
 # Typed adapters for Palm Contacts/Memos/Todos (Phase E.7 of libkalburator
 # integration). Encode/decode PODs to/from KDE PIM types (Addressee, Event, Todo).
 add_subdirectory(palm/codecs)
+
+# Stateless typed wrappers over PalmBackend for WP-internal UI consumption
+# (Phase E.7 of libkalburator integration). Not on the plugin ABI.
+add_subdirectory(palm/adapters)
