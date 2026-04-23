@@ -60,7 +60,7 @@ void TestTodoCodec::concreteDueDateRoundTrips()
     Todo t{};
     t.description = QStringLiteral("x");
     t.hasIndefiniteDue = false;
-    t.due = QDateTime(QDate(2026, 5, 1), QTime(0, 0), Qt::LocalTime);
+    t.due = QDateTime(QDate(2026, 5, 1), QTime(0, 0));
     t.priority = 2;
     const auto decoded = decodeTodo(encodeTodo(t));
     QVERIFY(decoded.has_value());
