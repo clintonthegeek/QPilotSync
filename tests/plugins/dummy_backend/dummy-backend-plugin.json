@@ -1,6 +1,5 @@
 {
     "KPlugin": {
-        "Id": "dummy_backend",
         "Name": "Dummy Backend Plugin",
         "Description": "E.8 test fixture — does nothing useful.",
         "Icon": "application-x-executable",

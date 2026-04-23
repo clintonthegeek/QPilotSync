@@ -22,3 +22,9 @@ add_wildpalms_runtime_test(tst_pluginmetadatahelpers tst_pluginmetadatahelpers.c
 add_wildpalms_runtime_test(tst_backendpluginmanager tst_backendpluginmanager.cpp)
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
+add_wildpalms_runtime_test(tst_plugin_factory_roundtrip tst_plugin_factory_roundtrip.cpp)
+# Force the dummy .so files to be built before running this test.
+add_dependencies(tst_plugin_factory_roundtrip
+    dummy_backend
+    dummy_action
+)
