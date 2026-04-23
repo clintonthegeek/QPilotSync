@@ -12,6 +12,8 @@ find_package(KF6 REQUIRED COMPONENTS CoreAddons)
 add_library(WildPalmsRuntime STATIC
     pluginmetadatahelpers.h
     pluginmetadatahelpers.cpp
+    backendpluginmanager.h
+    backendpluginmanager.cpp
 )
 
 target_include_directories(WildPalmsRuntime

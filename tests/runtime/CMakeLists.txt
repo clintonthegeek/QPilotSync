@@ -19,3 +19,4 @@ function(add_wildpalms_runtime_test TEST_NAME)
 endfunction()
 
 add_wildpalms_runtime_test(tst_pluginmetadatahelpers tst_pluginmetadatahelpers.cpp)
+add_wildpalms_runtime_test(tst_backendpluginmanager tst_backendpluginmanager.cpp)
