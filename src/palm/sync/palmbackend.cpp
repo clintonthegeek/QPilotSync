@@ -269,4 +269,26 @@ bool PalmBackend::supportsDeleteTracking() const
     return m_device && m_device->supportsDeleteTracking();
 }
 
+// --- Palm-level record access (category-aware) ---
+
+QList<PalmRecord> PalmBackend::loadPalmRecords(const QString &dbName)
+{
+    if (!m_device) return {};
+    return m_device->readAllRecords(dbName);
+}
+
+std::optional<PalmRecord> PalmBackend::loadPalmRecord(const QString &dbName,
+                                                       std::uint32_t recordId)
+{
+    if (!m_device) return std::nullopt;
+    return m_device->readRecord(dbName, recordId);
+}
+
+std::uint32_t PalmBackend::createPalmRecord(const QString &dbName,
+                                             const PalmRecord &record)
+{
+    if (!m_device) return 0;
+    return m_device->createRecord(dbName, record);
+}
+
 } // namespace WildPalms::PalmSync

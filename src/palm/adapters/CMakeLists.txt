@@ -9,7 +9,8 @@
 # (CategoryMappingStore).
 
 add_library(WildPalmsPalmAdapters STATIC
-    palmadapters_placeholder.cpp
+    palmmemosadapter.h
+    palmmemosadapter.cpp
 )
 
 target_include_directories(WildPalmsPalmAdapters

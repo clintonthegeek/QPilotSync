@@ -1,7 +1,13 @@
 #ifndef WILDPALMS_SYNC_PALMBACKEND_H
 #define WILDPALMS_SYNC_PALMBACKEND_H
 
+#include <cstdint>
+#include <optional>
+
+#include <QList>
+
 #include "iblobbackend.h"
+#include "palmrecord.h"
 
 namespace WildPalms::PalmSync {
 
@@ -68,6 +74,15 @@ public:
     static QString  encodeCollectionId(const QString &dbName);
     static bool     decodeCollectionId(const QString &collectionId,
                                        QString *dbNameOut);
+
+    // --- Palm-level record access (category-aware) ---
+    // These bypass BackendRecord (which has no properties map) so that
+    // adapters can read/write the category slot directly.
+    QList<PalmRecord> loadPalmRecords(const QString &dbName);
+    std::optional<PalmRecord> loadPalmRecord(const QString &dbName,
+                                             std::uint32_t recordId);
+    std::uint32_t createPalmRecord(const QString &dbName,
+                                   const PalmRecord &record);
 
 private:
     IPalmDatabaseAccess *m_device = nullptr;

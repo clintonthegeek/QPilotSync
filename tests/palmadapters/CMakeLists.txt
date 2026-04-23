@@ -11,6 +11,9 @@ function(add_palm_adapter_test TEST_NAME)
             Qt::Core
             Qt::Test
             WildPalmsPalmCodecs
+            WildPalmsPalmAdapters
+            WildPalmsPalmSync
+            WildPalmsPalmCalendar
     )
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     set_tests_properties(${TEST_NAME} PROPERTIES
@@ -22,4 +25,4 @@ add_palm_adapter_test(tst_memocodec tst_memocodec.cpp)
 add_palm_adapter_test(tst_contactcodec tst_contactcodec.cpp)
 add_palm_adapter_test(tst_todocodec tst_todocodec.cpp)
 add_palm_adapter_test(tst_kde_pim_convert tst_kde_pim_convert.cpp)
-# Adapter tests are appended in later tasks.
+add_palm_adapter_test(tst_palmmemosadapter tst_palmmemosadapter.cpp)
