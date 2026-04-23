@@ -93,7 +93,7 @@ std::optional<Todo> decodeTodo(QByteArrayView bytes)
     if (!todo.hasIndefiniteDue) {
         QDate d(t.due.tm_year + 1900, t.due.tm_mon + 1, t.due.tm_mday);
         if (d.isValid()) {
-            todo.due = QDateTime(d, QTime(0, 0), Qt::LocalTime);
+            todo.due = QDateTime(d, QTime(0, 0));
         }
     }
     todo.priority    = t.priority;
