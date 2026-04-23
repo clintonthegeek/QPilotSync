@@ -6,7 +6,6 @@
 #include "palmtodosadapter.h"
 #include "todocodec.h"
 
-using WildPalms::Palm::Adapters::TodoRow;
 using WildPalms::Palm::Adapters::readAllTodos;
 using WildPalms::Palm::Adapters::readTodo;
 using WildPalms::Palm::Adapters::writeTodo;

@@ -6,7 +6,6 @@
 #include "palmbackend.h"
 #include "palmcontactsadapter.h"
 
-using WildPalms::Palm::Adapters::ContactRow;
 using WildPalms::Palm::Adapters::readAllContacts;
 using WildPalms::Palm::Adapters::readContact;
 using WildPalms::Palm::Adapters::writeContact;
