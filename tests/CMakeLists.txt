@@ -203,3 +203,8 @@ set_tests_properties(test_libkalburator_smoke PROPERTIES
 
 # Copy test data files to build directory
 file(COPY testdata DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+# Phase E.8 — new-ABI plugin manager tests.
+add_subdirectory(runtime)
+# Dummy plugins land in Task 9 / 10.
+# add_subdirectory(plugins)

@@ -238,3 +238,9 @@ add_subdirectory(palm/codecs)
 # Stateless typed wrappers over PalmBackend for WP-internal UI consumption
 # (Phase E.7 of libkalburator integration). Not on the plugin ABI.
 add_subdirectory(palm/adapters)
+
+# New-ABI plugin managers (Phase E.8 of libkalburator integration).
+# Consumes the plugin-ABI headers from src/core/ and Kalburator::Sync.
+# Leaves src/fullsync/ alone — the fullsync → runtime relocation lands
+# in E.15.
+add_subdirectory(runtime)
