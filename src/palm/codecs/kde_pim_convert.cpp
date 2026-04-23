@@ -127,13 +127,42 @@ Contact fromAddressee(const KContacts::Addressee &a)
     return c;
 }
 
-// Todo converters land in Task 6. These stubs return a minimal
-// non-null object so the test binary doesn't crash; the tests will
-// still fail because no real data is populated.
-KCalendarCore::Todo::Ptr toKCalTodo(const Todo &)
+KCalendarCore::Todo::Ptr toKCalTodo(const Todo &t)
 {
-    return KCalendarCore::Todo::Ptr(new KCalendarCore::Todo);
+    auto kcal = KCalendarCore::Todo::Ptr(new KCalendarCore::Todo);
+    kcal->setSummary(t.description);
+    kcal->setDescription(t.note);
+    if (!t.hasIndefiniteDue && t.due.isValid()) {
+        kcal->setDtDue(t.due, true);
+        kcal->setAllDay(true);
+    }
+    // Palm priority 1..5 maps 1:1 to iCal priority 1..5.
+    kcal->setPriority(qBound(1, t.priority, 5));
+    if (t.isComplete) {
+        kcal->setCompleted(QDateTime::currentDateTime());
+    }
+    return kcal;
 }
-Todo fromKCalTodo(const KCalendarCore::Todo::Ptr &) { return {}; }
+
+Todo fromKCalTodo(const KCalendarCore::Todo::Ptr &kcal)
+{
+    Todo t;
+    if (!kcal) return t;
+    t.description = kcal->summary();
+    t.note        = kcal->description();
+    if (kcal->hasDueDate() && kcal->dtDue().isValid()) {
+        t.hasIndefiniteDue = false;
+        t.due = kcal->dtDue();
+    } else {
+        t.hasIndefiniteDue = true;
+    }
+    // iCal priority 0 ("no priority") -> 1. 6..9 clamp to 5.
+    const int p = kcal->priority();
+    if      (p <= 0) t.priority = 1;
+    else if (p > 5)  t.priority = 5;
+    else             t.priority = p;
+    t.isComplete = kcal->isCompleted();
+    return t;
+}
 
 } // namespace WildPalms::PalmCodecs
