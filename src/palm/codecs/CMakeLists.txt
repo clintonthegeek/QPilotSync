@@ -19,6 +19,8 @@ add_library(WildPalmsPalmCodecs STATIC
     memocodec.cpp
     contactcodec.h
     contactcodec.cpp
+    todocodec.h
+    todocodec.cpp
 )
 
 target_include_directories(WildPalmsPalmCodecs
