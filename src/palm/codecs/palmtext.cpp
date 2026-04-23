@@ -31,6 +31,10 @@ QString decodePalmText(const char *palmText)
         if (byte >= 0x80 && byte <= 0x9F) {
             ushort unicode = kCp1252ToUnicode[byte - 0x80];
             fixed.append(QString(QChar(unicode)).toUtf8());
+        } else if (byte >= 0xA0) {
+            // 0xA0-0xFF: same code points as Latin-1 / Unicode; emit
+            // the proper 2-byte UTF-8 sequence rather than a raw byte.
+            fixed.append(QString(QChar(static_cast<ushort>(byte))).toUtf8());
         } else {
             fixed.append(static_cast<char>(byte));
         }

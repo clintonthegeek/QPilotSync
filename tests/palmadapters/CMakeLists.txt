@@ -19,5 +19,6 @@ function(add_palm_adapter_test TEST_NAME)
 endfunction()
 
 add_palm_adapter_test(tst_memocodec tst_memocodec.cpp)
-# tst_contactcodec, tst_todocodec, tst_kde_pim_convert, and adapter
-# tests are appended in later tasks.
+add_palm_adapter_test(tst_contactcodec tst_contactcodec.cpp)
+# tst_todocodec, tst_kde_pim_convert, and adapter tests are appended
+# in later tasks.
