@@ -3,6 +3,8 @@
 
 #include "core/ipluginaction.h"
 
+#include <atomic>
+
 namespace WildPalms {
 
 /**
@@ -28,9 +30,9 @@ public:
     int  current() const { return m_current; }
 
 private:
-    int  m_total     = 0;
-    int  m_current   = 0;
-    bool m_cancelled = false;
+    int               m_total     = 0;
+    int               m_current   = 0;
+    std::atomic<bool> m_cancelled{false};
 };
 
 } // namespace WildPalms

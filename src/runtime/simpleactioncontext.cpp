@@ -24,8 +24,14 @@ void SimpleActionContext::log(const QString &msg)
     emit message(msg);
 }
 
-bool SimpleActionContext::isCancelled() const { return m_cancelled; }
+bool SimpleActionContext::isCancelled() const
+{
+    return m_cancelled.load(std::memory_order_acquire);
+}
 
-void SimpleActionContext::cancel() { m_cancelled = true; }
+void SimpleActionContext::cancel()
+{
+    m_cancelled.store(true, std::memory_order_release);
+}
 
 } // namespace WildPalms
