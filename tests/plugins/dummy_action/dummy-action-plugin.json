@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Id": "dummy_action",
+        "Name": "Dummy Action Plugin",
+        "Description": "E.8 test fixture — triggerable no-op.",
+        "Icon": "system-run",
+        "Version": "1.0"
+    },
+    "X-WildPalms-PluginType": "action"
+}

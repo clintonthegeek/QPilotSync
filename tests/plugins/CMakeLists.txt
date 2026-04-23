@@ -5,4 +5,4 @@
 find_package(KF6 REQUIRED COMPONENTS CoreAddons)
 
 add_subdirectory(dummy_backend)
-# add_subdirectory(dummy_action)  # lands in Task 9
+add_subdirectory(dummy_action)
