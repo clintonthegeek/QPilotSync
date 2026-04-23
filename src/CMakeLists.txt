@@ -169,6 +169,9 @@ install(FILES
     core/iconduit.h
     core/isyncconduit.h
     core/itoolconduit.h
+    core/iplugin.h
+    core/ibackendplugin.h
+    core/ipluginaction.h
     DESTINATION include/wildpalms/core
 )
 
