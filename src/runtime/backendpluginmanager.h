@@ -80,6 +80,13 @@ Q_SIGNALS:
     void pluginLoaded(IBackendPlugin *plugin);
     void pluginUnloading(IBackendPlugin *plugin);
 
+protected:
+    /// Test-only hook: inject a pre-built IBackendPlugin* into the
+    /// catalogue as if KPluginFactory had loaded it. The manager takes
+    /// ownership of `instance` via QObject parenting. Returns false if
+    /// `pluginId` already has a live instance.
+    bool registerInstanceForTest(const QString &pluginId, IBackendPlugin *instance);
+
 private:
     QString m_subdir;
     QMap<QString, PluginInfo> m_plugins;
