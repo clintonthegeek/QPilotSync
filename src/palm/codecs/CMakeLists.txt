@@ -5,12 +5,13 @@
 # WildPalmsPalmSync (E.3), WildPalmsPalmDevice (E.4),
 # WildPalmsPalmConflict (E.5), WildPalmsPalmCalendar (E.6).
 #
-# Links Qt::Core (for QString/QByteArray) and pisock (for pack_*/unpack_*).
-# Later tasks grow the target:
-#   T5 adds find_package(KF6 ... Contacts CalendarCore) + promotes them to
-#   PUBLIC when kde_pim_convert.{h,cpp} land.
+# Links Qt::Core (for QString/QByteArray), pisock (for pack_*/unpack_*),
+# KF6::Contacts (for the optional Addressee converter TU), and
+# KF6::CalendarCore (for the optional KCalendarCore::Todo converter TU).
 # Deliberately does NOT link WildPalmsCore — codecs must stay usable
 # without the Qt::Widgets / KF6::XmlGui transitive deps.
+
+find_package(KF6 REQUIRED COMPONENTS Contacts CalendarCore)
 
 add_library(WildPalmsPalmCodecs STATIC
     palmtext.h
@@ -21,6 +22,8 @@ add_library(WildPalmsPalmCodecs STATIC
     contactcodec.cpp
     todocodec.h
     todocodec.cpp
+    kde_pim_convert.h
+    kde_pim_convert.cpp
 )
 
 target_include_directories(WildPalmsPalmCodecs
@@ -31,6 +34,8 @@ target_include_directories(WildPalmsPalmCodecs
 target_link_libraries(WildPalmsPalmCodecs
     PUBLIC
         Qt::Core
+        KF6::Contacts
+        KF6::CalendarCore
     PRIVATE
         pisock
 )
