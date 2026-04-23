@@ -22,12 +22,14 @@ struct Contact {
     /// Five Palm phone slots. Slot labels are in `phoneLabels`.
     std::array<QString, 5> phone {};
 
-    /// Five Palm-labeled phone slot labels. Order matches `phone`.
-    /// Typical entries: Work, Home, Fax, Other, E-mail, Main, Pager,
-    /// Mobile. The Palm device stores these as per-record small
-    /// integers indexing into the AddressAppInfo's label table; the
-    /// codec resolves them to strings on decode and reverses on
-    /// encode.
+    /// Phone slot labels — one per **non-empty** `phone` slot, in
+    /// matching order. Size ranges 0..5. Empty-phone slots carry no
+    /// label (so `Contact{}` round-trips with an empty list rather
+    /// than five defaults). Typical entries: Work, Home, Fax, Other,
+    /// E-mail, Main, Pager, Mobile. The Palm device stores these as
+    /// per-record small integers indexing into the AddressAppInfo's
+    /// label table; the codec resolves them to strings on decode and
+    /// reverses on encode.
     QStringList phoneLabels;
 
     /// Which phone slot (0..4) is the "preferred" one for UI display.
