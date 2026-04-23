@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Id": "dummy_backend",
+        "Name": "Dummy Backend Plugin",
+        "Description": "E.8 test fixture — does nothing useful.",
+        "Icon": "application-x-executable",
+        "Version": "1.0"
+    },
+    "X-WildPalms-PluginType": "backend",
+    "X-WildPalms-PalmDatabases": ["DummyDB"],
+    "X-WildPalms-ClaimDescriptions": {
+        "DummyDB": "E.8 fixture claim."
+    },
+    "X-WildPalms-DefaultEnabled": true,
+    "X-WildPalms-SortOrder": 100
+}
