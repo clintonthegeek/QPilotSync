@@ -19,3 +19,23 @@ target_link_libraries(tst_memomarkdown
         Qt::Core
 )
 add_test(NAME tst_memomarkdown COMMAND tst_memomarkdown)
+
+add_executable(tst_memoblobbackend
+    tst_memoblobbackend.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memomarkdown.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memoblobbackend.cpp
+)
+target_include_directories(tst_memoblobbackend
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_memoblobbackend
+    PRIVATE
+        WildPalmsPalmSync
+        WildPalmsPalmCodecs
+        WildPalmsPalmCalendar   # CategoryMappingStore
+        WildPalmsCore
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_memoblobbackend COMMAND tst_memoblobbackend)
