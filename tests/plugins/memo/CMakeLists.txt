@@ -65,3 +65,27 @@ target_link_libraries(tst_memobackendplugin
         Qt::Core
 )
 add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
+
+# Task 9: end-to-end test that loads the real .so through
+# BackendPluginManager and drives BlobSyncEngine::twoWayWithBaseline.
+add_executable(tst_memo_v2 tst_memo_v2.cpp)
+target_compile_definitions(tst_memo_v2
+    PRIVATE
+        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
+target_sources(tst_memo_v2 PRIVATE ${MEMO_PLUGIN_SRC_DIR}/memomarkdown.cpp)
+target_include_directories(tst_memo_v2
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_memo_v2
+    PRIVATE
+        WildPalmsRuntime
+        WildPalmsPalmSync
+        WildPalmsPalmCodecs
+        WildPalmsCore
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_dependencies(tst_memo_v2 wildpalms_memo_v2)
+add_test(NAME tst_memo_v2 COMMAND tst_memo_v2)
