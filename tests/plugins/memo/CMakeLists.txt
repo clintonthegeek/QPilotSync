@@ -39,3 +39,29 @@ target_link_libraries(tst_memoblobbackend
         Qt::Core
 )
 add_test(NAME tst_memoblobbackend COMMAND tst_memoblobbackend)
+
+add_executable(tst_memobackendplugin
+    tst_memobackendplugin.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memomarkdown.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memoblobbackend.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memobackendplugin.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memoview.cpp
+)
+target_include_directories(tst_memobackendplugin
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_memobackendplugin
+    PRIVATE
+        WildPalmsPalmSync
+        WildPalmsPalmCodecs
+        WildPalmsPalmCalendar
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CoreAddons
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
