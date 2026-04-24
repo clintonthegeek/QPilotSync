@@ -210,3 +210,6 @@ add_subdirectory(plugins)
 
 # Phase E.9 — core plugin-ABI unit tests (IBackendPlugin defaults).
 add_subdirectory(core)
+
+# Phase E.9 — concrete PalmDeviceConnection aggregator.
+add_subdirectory(palm)

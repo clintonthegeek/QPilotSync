@@ -16,11 +16,19 @@ add_library(WildPalmsPalmSync STATIC
     mockpalmdatabaseaccess.h
     palmbackend.cpp
     palmbackend.h
+    # Phase E.9 — concrete PalmDeviceConnection aggregator, lives in
+    # src/palm/ so the forward declaration in src/core/ibackendplugin.h
+    # (class PalmDeviceConnection in the global namespace) resolves
+    # against the same physical file plugins will eventually include.
+    ../palmdeviceconnection.cpp
+    ../palmdeviceconnection.h
 )
 
 target_include_directories(WildPalmsPalmSync
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
 )
 
 target_link_libraries(WildPalmsPalmSync
