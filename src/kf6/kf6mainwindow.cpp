@@ -16,6 +16,8 @@
 #include "../profile.h"
 
 #include "../core/iconduit.h"
+#include "../core/ibackendplugin.h"
+#include "../runtime/backendpluginmanager.h"
 #include "../sync/syncengine.h"
 #include "../sync/synctypes.h"
 #include "../sync/conduit.h"
@@ -529,6 +531,25 @@ void KF6MainWindow::initializeConduits()
         }
         m_conduitManager->loadConduit(conduitId);
     }
+
+    // Phase E.9 — new-ABI plugins discovered from wildpalms/plugins/.
+    // Runs alongside ConduitManager until E.16. Host/device/coordinator
+    // are nullptr here; runtime wiring (which owns the real
+    // PalmDeviceConnection) lands in E.15/E.17.
+    m_backendPluginManager = new WildPalms::BackendPluginManager(
+        /*host=*/nullptr, /*device=*/nullptr, /*coordinator=*/nullptr, this);
+    m_backendPluginManager->discoverPlugins();
+
+    connect(m_backendPluginManager, &WildPalms::BackendPluginManager::pluginLoaded,
+            this, &KF6MainWindow::onBackendPluginLoaded);
+    connect(m_backendPluginManager, &WildPalms::BackendPluginManager::pluginUnloading,
+            this, &KF6MainWindow::onBackendPluginUnloading);
+
+    for (const auto &info : m_backendPluginManager->catalogue()) {
+        if (info.defaultEnabled) {
+            m_backendPluginManager->loadPlugin(info.metaData.pluginId());
+        }
+    }
 }
 
 void KF6MainWindow::onConduitLoaded(IConduit *conduit)
@@ -596,6 +617,36 @@ void KF6MainWindow::onConduitUnloading(IConduit *conduit)
     m_syncEngine->unregisterConduit(id);
 
     qDebug() << "[KF6MainWindow] Conduit unloading:" << id;
+}
+
+// Phase E.9 — new-ABI plugin view loop. Mirrors onConduitLoaded for
+// plugins that opt in to `hasMainView()`. Sync-engine registration is
+// deliberately absent here; the new-ABI sync path comes online in
+// E.15/E.17 once the runtime owns the PalmDeviceConnection.
+void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPlugin *plugin)
+{
+    if (!plugin || !plugin->hasMainView()) return;
+
+    QWidget *view = plugin->createMainView(this);
+    if (!view) return;
+    auto *page = new KPageWidgetItem(view, plugin->mainViewName());
+    page->setIcon(plugin->mainViewIcon());
+    page->setHeaderVisible(false);
+    m_pageWidget->addPage(page);
+    m_backendPluginPages[plugin->pluginId()] = page;
+
+    qDebug() << "[KF6MainWindow] Backend plugin loaded:" << plugin->pluginId()
+             << "(" << plugin->mainViewName() << ")";
+}
+
+void KF6MainWindow::onBackendPluginUnloading(WildPalms::IBackendPlugin *plugin)
+{
+    if (!plugin) return;
+    if (auto *page = m_backendPluginPages.take(plugin->pluginId())) {
+        m_pageWidget->removePage(page);
+        page->deleteLater();
+    }
+    qDebug() << "[KF6MainWindow] Backend plugin unloading:" << plugin->pluginId();
 }
 
 void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString &operationName)

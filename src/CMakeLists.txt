@@ -128,6 +128,12 @@ target_link_libraries(WildPalmsCore
         bluetooth  # pilot-link transitive dep (Bluetooth HotSync)
         usb        # pilot-link transitive dep (USB HotSync)
         ${UDEV_LIBRARIES}
+        # Phase E.9 — new-ABI plugin manager used by KF6MainWindow.
+        # WildPalmsRuntime PUBLIC-links WildPalmsCore; linking it PRIVATE
+        # here embeds its static objects without creating a consumer
+        # cycle. The fullsync→runtime relocation deferred to E.15 keeps
+        # this dependency light.
+        WildPalmsRuntime
 )
 
 target_include_directories(WildPalmsCore PUBLIC

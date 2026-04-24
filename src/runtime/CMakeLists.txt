@@ -29,7 +29,17 @@ target_include_directories(WildPalmsRuntime
 target_link_libraries(WildPalmsRuntime
     PUBLIC
         Qt::Core
+        Qt::Widgets   # QIcon, QWidget in core headers (ibackendplugin.h)
         KF6::CoreAddons
+    # WildPalmsCore is exposed only on the INTERFACE link line — consumers
+    # that pull in WildPalmsRuntime get the shared lib — but WildPalmsRuntime
+    # itself does NOT link WildPalmsCore. This breaks the Phase-E.9 cycle
+    # where KF6MainWindow (inside WildPalmsCore) needs BackendPluginManager.
+    # WildPalmsCore is the SHARED consumer; linking Runtime PRIVATE there
+    # embeds these static objects, and the Core-side symbols they need
+    # (ipluginaction.cpp / ibackendplugin.cpp) are already compiled into
+    # the same .so.
+    INTERFACE
         WildPalmsCore
 )
 

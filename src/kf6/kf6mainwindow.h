@@ -22,6 +22,10 @@ class KStatusNotifierItem;
 class PalmDeviceMonitor;
 class AutoSyncOrchestrator;
 
+// Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
+// until E.16 retires the old surface.
+namespace WildPalms { class BackendPluginManager; class IBackendPlugin; }
+
 namespace Sync {
 class SyncEngine;
 class SyncResult;
@@ -111,6 +115,11 @@ private Q_SLOTS:
     void onConduitLoaded(IConduit *conduit);
     void onConduitUnloading(IConduit *conduit);
 
+    // Phase E.9 — new-ABI plugin lifecycle. Runs alongside the conduit
+    // loop until E.16 retires ConduitManager.
+    void onBackendPluginLoaded(WildPalms::IBackendPlugin *plugin);
+    void onBackendPluginUnloading(WildPalms::IBackendPlugin *plugin);
+
     // Auto-sync detection
     void onAutoDeviceDetected(Profile *profile, const QStringList &ports);
 
@@ -159,6 +168,11 @@ private:
 
     // Conduit manager
     ConduitManager *m_conduitManager = nullptr;
+
+    // Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
+    // until E.16 retires the old surface.
+    WildPalms::BackendPluginManager   *m_backendPluginManager = nullptr;
+    QMap<QString, KPageWidgetItem *>   m_backendPluginPages;
 
     // Action manager
     ActionManager *m_actionManager;
