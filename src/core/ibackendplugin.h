@@ -3,7 +3,10 @@
 
 #include "iplugin.h"
 
+#include <QIcon>
 #include <QStringList>
+
+class QWidget;
 
 // Forward-declare upstream types so this header stays Kalburator-free.
 namespace Kalburator::Sync {
@@ -12,10 +15,11 @@ namespace Kalburator::Sync {
     class SyncBackend;
     namespace QSyncCore {
         class ConflictHandler;
+        struct RecordSnapshot;
     }
 }
 
-class PalmDeviceConnection; // concrete type lands in a later sub-phase (E.10+)
+class PalmDeviceConnection; // concrete type lands in Phase E.9 as src/palm/palmdeviceconnection.h
 
 namespace WildPalms {
 
@@ -65,6 +69,43 @@ public:
     // ids of other backend plugins.
     virtual QStringList runBefore() const { return {}; }
     virtual QStringList runAfter() const  { return {}; }
+
+    // ========== Main view surface (Phase E.9) ==========
+    //
+    // Returns a dockable main-window widget (e.g. MemoView, CalendarView).
+    // Default: no view. When `hasMainView()` returns true, the main window
+    // adds a KPageWidgetItem created from `createMainView(parent)` with
+    // title `mainViewName()` and icon `mainViewIcon()`.
+    virtual bool     hasMainView() const { return false; }
+    virtual QWidget *createMainView(QWidget *parent)
+    {
+        Q_UNUSED(parent)
+        return nullptr;
+    }
+    virtual QString mainViewName() const { return {}; }
+    virtual QIcon   mainViewIcon() const { return {}; }
+
+    // ========== Conflict presentation (Phase E.9) ==========
+    //
+    // enrichConflictSnapshot: mutate `snapshot` in place so the
+    // downstream ConflictDialog has content/metadata/contentType set
+    // to plugin-friendly values. `isSourceSide` is true when the
+    // snapshot holds this plugin's own wire bytes (Palm), false when
+    // it carries target-backend bytes (already in the plugin's
+    // canonical form, e.g. Markdown).
+    //
+    // formatConflictRecordHtml: produce HTML for ConflictDialog's
+    // detail pane. Default implementation UTF-8-decodes
+    // `snapshot.content` into a `<pre>` block.
+    virtual void enrichConflictSnapshot(
+        Kalburator::Sync::QSyncCore::RecordSnapshot &snapshot,
+        bool isSourceSide) const
+    {
+        Q_UNUSED(snapshot)
+        Q_UNUSED(isSourceSide)
+    }
+    virtual QString formatConflictRecordHtml(
+        const Kalburator::Sync::QSyncCore::RecordSnapshot &snapshot) const;
 };
 
 } // namespace WildPalms

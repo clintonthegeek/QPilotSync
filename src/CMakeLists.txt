@@ -7,6 +7,8 @@ add_library(WildPalmsCore SHARED
     # Plugin ABI interfaces (Q_OBJECT meta-object for ActionContext)
     core/ipluginaction.h
     core/ipluginaction.cpp
+    core/ibackendplugin.h
+    core/ibackendplugin.cpp
 
     # Application UI
     app/logwidget.cpp
@@ -112,6 +114,7 @@ target_link_libraries(WildPalmsCore
         Qt::Widgets
         KF6::I18n
     PRIVATE
+        Kalburator::Sync
         Qt::Network
         KF6::CalendarCore
         KF6::CoreAddons

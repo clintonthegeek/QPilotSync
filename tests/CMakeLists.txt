@@ -207,3 +207,6 @@ file(COPY testdata DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 # Phase E.8 — new-ABI plugin manager tests + dummy plugins.
 add_subdirectory(runtime)
 add_subdirectory(plugins)
+
+# Phase E.9 — core plugin-ABI unit tests (IBackendPlugin defaults).
+add_subdirectory(core)
