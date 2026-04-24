@@ -31,6 +31,7 @@ private slots:
     void palmSideRecordPropagatesToMock();
     void mockSideRecordPropagatesToPalm();
     void deletionOnPalmPropagatesToMockViaBaseline();
+    void updatePalmRecordPreservesCategory();
 
 private:
     static QString dbPathIn(const QTemporaryDir &dir)
@@ -165,6 +166,33 @@ void TestPalmBackendRoundTrip::deletionOnPalmPropagatesToMockViaBaseline()
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
     QCOMPARE(r2.targetStats.deleted, 1);
     QCOMPARE(mock.loadRecords(QStringLiteral("palm:memo")).size(), 0);
+}
+
+void TestPalmBackendRoundTrip::updatePalmRecordPreservesCategory()
+{
+    WildPalms::PalmSync::MockPalmDatabaseAccess dev;
+    dev.createDatabase("MemoDB");
+
+    WildPalms::PalmSync::PalmRecord pr;
+    pr.category = 3;
+    pr.data = QByteArrayLiteral("hello");
+    pr.lastModified = QDateTime::currentDateTimeUtc();
+    const std::uint32_t id = dev.createRecord("MemoDB", pr);
+    QVERIFY(id != 0);
+
+    WildPalms::PalmSync::PalmBackend backend(&dev);
+
+    WildPalms::PalmSync::PalmRecord updated;
+    updated.recordId = id;
+    updated.category = 7;  // <-- move to a different slot
+    updated.data = QByteArrayLiteral("hello world");
+    updated.lastModified = QDateTime::currentDateTimeUtc();
+    QVERIFY(backend.updatePalmRecord("MemoDB", updated));
+
+    const auto stored = dev.readRecord("MemoDB", id);
+    QVERIFY(stored.has_value());
+    QCOMPARE(stored->category, 7);
+    QCOMPARE(stored->data, QByteArrayLiteral("hello world"));
 }
 
 QTEST_MAIN(TestPalmBackendRoundTrip)

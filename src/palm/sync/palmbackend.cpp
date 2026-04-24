@@ -291,4 +291,10 @@ std::uint32_t PalmBackend::createPalmRecord(const QString &dbName,
     return m_device->createRecord(dbName, record);
 }
 
+bool PalmBackend::updatePalmRecord(const QString &dbName, const PalmRecord &record)
+{
+    if (!m_device) return false;
+    return m_device->updateRecord(dbName, record);
+}
+
 } // namespace WildPalms::PalmSync

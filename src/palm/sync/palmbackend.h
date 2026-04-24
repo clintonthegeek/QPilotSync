@@ -83,6 +83,7 @@ public:
                                              std::uint32_t recordId);
     std::uint32_t createPalmRecord(const QString &dbName,
                                    const PalmRecord &record);
+    bool updatePalmRecord(const QString &dbName, const PalmRecord &record);
 
 private:
     IPalmDatabaseAccess *m_device = nullptr;
