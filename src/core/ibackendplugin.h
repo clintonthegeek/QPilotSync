@@ -77,7 +77,7 @@ public:
     // adds a KPageWidgetItem created from `createMainView(parent)` with
     // title `mainViewName()` and icon `mainViewIcon()`.
     virtual bool     hasMainView() const { return false; }
-    virtual QWidget *createMainView(QWidget *parent)
+    virtual QWidget *createMainView(QWidget *parent) const
     {
         Q_UNUSED(parent)
         return nullptr;
