@@ -6,3 +6,6 @@ find_package(KF6 REQUIRED COMPONENTS CoreAddons)
 
 add_subdirectory(dummy_backend)
 add_subdirectory(dummy_action)
+
+# Phase E.9 Task 4 — MemoMarkdown encoder/decoder tests.
+add_subdirectory(memo)
