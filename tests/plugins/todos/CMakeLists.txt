@@ -65,3 +65,35 @@ target_link_libraries(tst_todoconflicthandler
         Qt::Core
 )
 add_test(NAME tst_todoconflicthandler COMMAND tst_todoconflicthandler)
+
+# --- Task 5: TodoBackendPlugin (in-process, no .so loading) ---
+add_executable(tst_todobackendplugin
+    tst_todobackendplugin.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todobackendplugin.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todoblobbackend.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todoconflicthandler.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todoicstranscoder.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/taskview.cpp
+)
+target_include_directories(tst_todobackendplugin
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${PILOT_LINK_INCLUDE_DIR}
+)
+target_link_libraries(tst_todobackendplugin
+    PRIVATE
+        WildPalmsPalmCalendar    # CategoryMappingStore + parseCategoryAppInfo
+        WildPalmsPalmConflict
+        WildPalmsPalmCodecs
+        WildPalmsPalmSync
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CoreAddons
+        KF6::CalendarCore
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        ${PILOT_LINK_LIBRARIES}
+)
+add_test(NAME tst_todobackendplugin COMMAND tst_todobackendplugin)
