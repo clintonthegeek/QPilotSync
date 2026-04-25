@@ -85,6 +85,12 @@ public:
                                    const PalmRecord &record);
     bool updatePalmRecord(const QString &dbName, const PalmRecord &record);
 
+    /// AppInfo-block accessor. Forwards to IPalmDatabaseAccess; returns
+    /// empty QByteArray on missing database or read failure. Used by
+    /// plugins (CalendarBackendPlugin) to populate per-database
+    /// CategoryMappingStore at session start.
+    QByteArray readAppBlock(const QString &dbName) const;
+
 private:
     IPalmDatabaseAccess *m_device = nullptr;
 };

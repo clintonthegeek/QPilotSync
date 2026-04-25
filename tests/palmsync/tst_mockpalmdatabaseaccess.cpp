@@ -17,6 +17,7 @@ private slots:
     void deleteRecordLogsDeletion();
     void modifiedSinceFiltersByTimestamp();
     void deletedSinceFiltersByTimestamp();
+    void appBlockRoundTrip();
 };
 
 void TestMockPalmDatabaseAccess::createDatabaseMakesItVisible()
@@ -141,6 +142,24 @@ void TestMockPalmDatabaseAccess::deletedSinceFiltersByTimestamp()
     const auto future = QDateTime::currentDateTimeUtc().addSecs(3600);
     QCOMPARE(dev.recordsDeletedSince(QStringLiteral("MemoDB"), future),
              QList<std::uint32_t>());
+}
+
+void TestMockPalmDatabaseAccess::appBlockRoundTrip()
+{
+    MockPalmDatabaseAccess dev;
+
+    // Empty for unknown database.
+    QCOMPARE(dev.readAppBlock(QStringLiteral("DatebookDB")), QByteArray());
+
+    // setAppBlock auto-creates database.
+    const QByteArray bytes("\x01\x02\x03appinfo-payload", 19);
+    dev.setAppBlock(QStringLiteral("DatebookDB"), bytes);
+    QCOMPARE(dev.readAppBlock(QStringLiteral("DatebookDB")), bytes);
+
+    // Overwriting works.
+    const QByteArray bytes2("other", 5);
+    dev.setAppBlock(QStringLiteral("DatebookDB"), bytes2);
+    QCOMPARE(dev.readAppBlock(QStringLiteral("DatebookDB")), bytes2);
 }
 
 QTEST_MAIN(TestMockPalmDatabaseAccess)

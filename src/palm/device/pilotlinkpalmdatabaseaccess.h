@@ -70,6 +70,8 @@ public:
                             const QDateTime &since) const override;
     bool supportsDeleteTracking() const override { return false; }
 
+    QByteArray readAppBlock(const QString &dbName) const override;
+
 private:
     // Scope guard opens a database on construction, closes on
     // destruction. Handle is -1 if the open failed.

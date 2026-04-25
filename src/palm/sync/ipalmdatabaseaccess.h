@@ -73,6 +73,14 @@ public:
     virtual QList<std::uint32_t> recordsDeletedSince(
         const QString &dbName, const QDateTime &since) const = 0;
 
+    /// Read the database's AppInfo block (raw bytes, layout
+    /// database-specific). Returns empty QByteArray if the database
+    /// has no AppInfo or on read error. PalmBackend forwards calls
+    /// straight through; plugins (e.g. CalendarBackendPlugin) parse
+    /// the bytes via a database-specific reader (e.g. CategoryAppInfo
+    /// for Datebook/Address/Memo/Todo).
+    virtual QByteArray readAppBlock(const QString &dbName) const = 0;
+
     /// Whether the impl tracks deletions natively. PalmBackend surfaces
     /// this via IBlobBackend::supportsDeleteTracking().
     virtual bool supportsDeleteTracking() const = 0;

@@ -143,4 +143,22 @@ PilotLinkPalmDatabaseAccess::recordsDeletedSince(const QString &,
     return {};
 }
 
+QByteArray PilotLinkPalmDatabaseAccess::readAppBlock(const QString &dbName) const
+{
+    if (!m_link) return {};
+    DbScope scope(m_link, dbName, /*rw=*/false);
+    if (!scope.ok()) return {};
+
+    // Pisock convention: try a generous buffer; the actual returned
+    // size determines what we keep. AppInfo blocks are typically
+    // < 1 KiB; 4 KiB is plenty for any pathological case.
+    QByteArray buf(4096, '\0');
+    std::size_t actualSize = static_cast<std::size_t>(buf.size());
+    const bool ok = m_link->readAppBlock(scope.handle(),
+        reinterpret_cast<unsigned char *>(buf.data()), &actualSize);
+    if (!ok) return {};
+    buf.resize(static_cast<int>(actualSize));
+    return buf;
+}
+
 } // namespace WildPalms::PalmDevice

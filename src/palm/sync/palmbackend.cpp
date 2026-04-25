@@ -297,4 +297,9 @@ bool PalmBackend::updatePalmRecord(const QString &dbName, const PalmRecord &reco
     return m_device->updateRecord(dbName, record);
 }
 
+QByteArray PalmBackend::readAppBlock(const QString &dbName) const
+{
+    return m_device ? m_device->readAppBlock(dbName) : QByteArray();
+}
+
 } // namespace WildPalms::PalmSync

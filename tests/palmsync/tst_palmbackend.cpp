@@ -43,6 +43,7 @@ private slots:
     void modifiedSinceFiltersByTimestamp();
     void deletedSincePropagatesEncodedIds();
     void supportsDeleteTrackingFollowsDevice();
+    void readAppBlockForwardsToDevice();
 };
 
 void TestPalmBackend::identity()
@@ -298,6 +299,19 @@ void TestPalmBackend::supportsDeleteTrackingFollowsDevice()
     MockPalmDatabaseAccess dev;
     PalmBackend backend(&dev);
     QVERIFY(backend.supportsDeleteTracking()); // mock returns true
+}
+
+void TestPalmBackend::readAppBlockForwardsToDevice()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend backend(&dev);
+
+    // Empty when unset.
+    QCOMPARE(backend.readAppBlock(QStringLiteral("DatebookDB")), QByteArray());
+
+    const QByteArray bytes("\x10\x20mock-appinfo", 14);
+    dev.setAppBlock(QStringLiteral("DatebookDB"), bytes);
+    QCOMPARE(backend.readAppBlock(QStringLiteral("DatebookDB")), bytes);
 }
 
 QTEST_MAIN(TestPalmBackend)

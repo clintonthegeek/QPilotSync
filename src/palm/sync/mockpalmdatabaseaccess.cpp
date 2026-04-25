@@ -106,4 +106,21 @@ QList<std::uint32_t> MockPalmDatabaseAccess::recordsDeletedSince(
     return out;
 }
 
+QByteArray MockPalmDatabaseAccess::readAppBlock(const QString &dbName) const
+{
+    auto it = m_dbs.constFind(dbName);
+    return (it == m_dbs.cend()) ? QByteArray() : it->appInfo;
+}
+
+void MockPalmDatabaseAccess::setAppBlock(const QString &dbName,
+                                         const QByteArray &bytes)
+{
+    // Auto-create the database if absent so test setup order doesn't
+    // matter.
+    if (!m_dbs.contains(dbName)) {
+        m_dbs.insert(dbName, Database{});
+    }
+    m_dbs[dbName].appInfo = bytes;
+}
+
 } // namespace WildPalms::PalmSync

@@ -46,6 +46,12 @@ public:
         const QString &dbName, const QDateTime &since) const override;
     bool supportsDeleteTracking() const override { return true; }
 
+    QByteArray readAppBlock(const QString &dbName) const override;
+
+    /// Test setter: stores `bytes` under `dbName`. Subsequent
+    /// readAppBlock(dbName) returns `bytes` verbatim.
+    void setAppBlock(const QString &dbName, const QByteArray &bytes);
+
 private:
     struct Database {
         QHash<std::uint32_t, PalmRecord>   records;
@@ -53,6 +59,7 @@ private:
         // collapse onto one key (QDateTime resolution is ms).
         QMultiMap<QDateTime, std::uint32_t> deletionLog;
         std::uint32_t                       nextId = 1;
+        QByteArray                          appInfo;
     };
 
     QHash<QString, Database> m_dbs;
