@@ -66,3 +66,22 @@ target_link_libraries(tst_calendarblobbackend
         Qt::Core
 )
 add_test(NAME tst_calendarblobbackend COMMAND tst_calendarblobbackend)
+
+# --- Task 5: CalendarConflictHandler ---
+add_executable(tst_calendarconflicthandler
+    tst_calendarconflicthandler.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarconflicthandler.cpp
+)
+target_include_directories(tst_calendarconflicthandler
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_calendarconflicthandler
+    PRIVATE
+        WildPalmsPalmConflict
+        WildPalmsPalmSync
+        Kalburator::Sync
+        KF6::CalendarCore
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_calendarconflicthandler COMMAND tst_calendarconflicthandler)
