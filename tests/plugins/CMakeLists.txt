@@ -12,3 +12,6 @@ add_subdirectory(memo)
 
 # Phase E.10 — Calendar plugin tests.
 add_subdirectory(calendar)
+
+# Phase E.11 — ToDo plugin tests.
+add_subdirectory(todos)
