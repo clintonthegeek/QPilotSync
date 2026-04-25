@@ -44,3 +44,24 @@ target_link_libraries(tst_todoblobbackend
         Qt::Core
 )
 add_test(NAME tst_todoblobbackend COMMAND tst_todoblobbackend)
+
+# --- Task 4: TodoConflictHandler ---
+add_executable(tst_todoconflicthandler
+    tst_todoconflicthandler.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todoconflicthandler.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todoicstranscoder.cpp
+)
+target_include_directories(tst_todoconflicthandler
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_todoconflicthandler
+    PRIVATE
+        WildPalmsPalmConflict   # PalmConflictHandler
+        WildPalmsPalmCodecs     # decodeTodo / encodeTodo
+        WildPalmsPalmSync       # PalmRecord, MockPalmDatabaseAccess
+        Kalburator::Sync
+        KF6::CalendarCore
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_todoconflicthandler COMMAND tst_todoconflicthandler)
