@@ -85,3 +85,35 @@ target_link_libraries(tst_calendarconflicthandler
         Qt::Core
 )
 add_test(NAME tst_calendarconflicthandler COMMAND tst_calendarconflicthandler)
+
+# --- Task 6: CalendarBackendPlugin (in-process, no .so loading) ---
+add_executable(tst_calendarbackendplugin
+    tst_calendarbackendplugin.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarbackendplugin.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarconflicthandler.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/categoryappinforeader.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarview.cpp
+)
+target_include_directories(tst_calendarbackendplugin
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${PILOT_LINK_INCLUDE_DIR}
+)
+target_link_libraries(tst_calendarbackendplugin
+    PRIVATE
+        WildPalmsPalmCalendar
+        WildPalmsPalmConflict
+        WildPalmsPalmSync
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CoreAddons
+        KF6::CalendarCore
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        ${PILOT_LINK_LIBRARIES}
+)
+add_test(NAME tst_calendarbackendplugin COMMAND tst_calendarbackendplugin)
