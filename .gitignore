@@ -118,6 +118,8 @@ backups/
 calendars/
 contacts/
 memos/
+# But the test fixtures and plugin tests live under tests/, not user data.
+!tests/plugins/contacts/
 
 # Test export directories
 cal1/

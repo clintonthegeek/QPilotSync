@@ -15,3 +15,6 @@ add_subdirectory(calendar)
 
 # Phase E.11 — ToDo plugin tests.
 add_subdirectory(todos)
+
+# Phase E.12 — Contacts plugin tests.
+add_subdirectory(contacts)
