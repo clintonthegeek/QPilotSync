@@ -16,6 +16,8 @@ find_package(KF6 REQUIRED COMPONENTS CalendarCore)
 add_library(WildPalmsPalmCalendar STATIC
     categorymappingstore.h
     categorymappingstore.cpp
+    categoryappinforeader.h
+    categoryappinforeader.cpp
     datebookcodec.h
     datebookcodec.cpp
     palmcalendarbackend.h

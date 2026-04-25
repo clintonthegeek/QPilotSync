@@ -11,7 +11,6 @@ set(CALENDAR_PLUGIN_SRC_DIR ${CMAKE_SOURCE_DIR}/src/plugins/calendar)
 # libpisock.a transitively.
 add_executable(tst_categoryappinforeader
     tst_categoryappinforeader.cpp
-    ${CALENDAR_PLUGIN_SRC_DIR}/categoryappinforeader.cpp
 )
 target_include_directories(tst_categoryappinforeader
     PRIVATE
@@ -92,7 +91,6 @@ add_executable(tst_calendarbackendplugin
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarbackendplugin.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarconflicthandler.cpp
-    ${CALENDAR_PLUGIN_SRC_DIR}/categoryappinforeader.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarview.cpp
 )

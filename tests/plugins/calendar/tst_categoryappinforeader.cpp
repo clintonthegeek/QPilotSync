@@ -4,12 +4,12 @@
 
 #include <pi-appinfo.h>
 
-#include "plugins/calendar/categoryappinforeader.h"
+#include "palm/calendar/categoryappinforeader.h"
 #include "palm/calendar/categorymappingstore.h"
 
-using WildPalms::CalendarPlugin::CategoryNames;
-using WildPalms::CalendarPlugin::parseDatebookAppInfo;
-using WildPalms::CalendarPlugin::populateFromAppInfo;
+using WildPalms::PalmCalendar::CategoryNames;
+using WildPalms::PalmCalendar::parseCategoryAppInfo;
+using WildPalms::PalmCalendar::populateFromAppInfo;
 using WildPalms::PalmCalendar::CategoryMappingStore;
 
 namespace {
@@ -63,7 +63,7 @@ void TestCategoryAppInfoReader::parseEmptyReturnsUnfiledOnly()
     QByteArray bytes = buildAppInfoBytes(none);
     QVERIFY(!bytes.isEmpty());
 
-    auto result = parseDatebookAppInfo(bytes);
+    auto result = parseCategoryAppInfo(bytes);
     QVERIFY(result.has_value());
     QCOMPARE(result->names[0], QStringLiteral("Unfiled"));
     for (int i = 1; i < 16; ++i) {
@@ -78,7 +78,7 @@ void TestCategoryAppInfoReader::parsePopulatedReturnsNames()
     names << QStringLiteral("Unfiled")     // 0
           << QStringLiteral("Work")        // 1
           << QStringLiteral("Personal");   // 2
-    auto result = parseDatebookAppInfo(buildAppInfoBytes(names));
+    auto result = parseCategoryAppInfo(buildAppInfoBytes(names));
     QVERIFY(result.has_value());
     QCOMPARE(result->names[0], QStringLiteral("Unfiled"));
     QCOMPARE(result->names[1], QStringLiteral("Work"));
@@ -88,7 +88,7 @@ void TestCategoryAppInfoReader::parsePopulatedReturnsNames()
 
 void TestCategoryAppInfoReader::parseTruncatedReturnsNullopt()
 {
-    auto result = parseDatebookAppInfo(QByteArray("\x00\x01", 2));
+    auto result = parseCategoryAppInfo(QByteArray("\x00\x01", 2));
     QVERIFY(!result.has_value());
 }
 
@@ -98,7 +98,7 @@ void TestCategoryAppInfoReader::slotZeroForcedToUnfiledWhenBlank()
     QStringList names;
     names << QString()                     // 0 — blank, expect "Unfiled"
           << QStringLiteral("Work");
-    auto result = parseDatebookAppInfo(buildAppInfoBytes(names));
+    auto result = parseCategoryAppInfo(buildAppInfoBytes(names));
     QVERIFY(result.has_value());
     QCOMPARE(result->names[0], QStringLiteral("Unfiled"));
     QCOMPARE(result->names[1], QStringLiteral("Work"));
