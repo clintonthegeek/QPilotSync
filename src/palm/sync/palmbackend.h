@@ -84,6 +84,10 @@ public:
     std::uint32_t createPalmRecord(const QString &dbName,
                                    const PalmRecord &record);
     bool updatePalmRecord(const QString &dbName, const PalmRecord &record);
+    /// Category-aware delete that takes the database name explicitly,
+    /// avoiding the asymmetric round-trip in decodeRecordId for db names
+    /// with internal capitals (e.g. "ToDoDB" -> "palm:todo:N" -> "TodoDB").
+    bool deletePalmRecord(const QString &dbName, std::uint32_t recordId);
 
     /// AppInfo-block accessor. Forwards to IPalmDatabaseAccess; returns
     /// empty QByteArray on missing database or read failure. Used by

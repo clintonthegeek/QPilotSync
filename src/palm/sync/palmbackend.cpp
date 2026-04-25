@@ -297,6 +297,12 @@ bool PalmBackend::updatePalmRecord(const QString &dbName, const PalmRecord &reco
     return m_device->updateRecord(dbName, record);
 }
 
+bool PalmBackend::deletePalmRecord(const QString &dbName, std::uint32_t recordId)
+{
+    if (!m_device) return false;
+    return m_device->deleteRecord(dbName, recordId);
+}
+
 QByteArray PalmBackend::readAppBlock(const QString &dbName) const
 {
     return m_device ? m_device->readAppBlock(dbName) : QByteArray();
