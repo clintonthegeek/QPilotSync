@@ -98,3 +98,38 @@ target_link_libraries(tst_contactsbackendplugin
         ${PILOT_LINK_LIBRARIES}
 )
 add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
+
+# --- Task 5: tst_contacts_v2 — end-to-end via BackendPluginManager ---
+# Loads the real wildpalms_contacts_v2.so off the build tree, drives
+# BlobSyncEngine::twoWayWithBaseline against a MockBlobBackend target
+# across multiple AddressDB category slots. Mirrors tst_todo_v2.
+add_executable(tst_contacts_v2
+    tst_contacts_v2.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+)
+target_compile_definitions(tst_contacts_v2
+    PRIVATE
+        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
+target_include_directories(tst_contacts_v2
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${PILOT_LINK_INCLUDE_DIR}
+)
+target_link_libraries(tst_contacts_v2
+    PRIVATE
+        WildPalmsRuntime          # BackendPluginManager
+        WildPalmsPalmCalendar     # CategoryMappingStore + AppInfo helper
+        WildPalmsPalmCodecs       # Contact POD + encodeContact/decodeContact
+        WildPalmsPalmSync         # PalmRecord, MockPalmDatabaseAccess, PalmBackend
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CoreAddons
+        KF6::Contacts
+        Qt::Test
+        Qt::Core
+        ${PILOT_LINK_LIBRARIES}
+)
+add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
+add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
