@@ -47,6 +47,7 @@ private slots:
     void createRecordRoutesToSlot();
     void updateRecordPreservesSlot();
     void deleteRecordForwards();
+    void deletedSinceReturnsAllSlots();
     void slotParsingHelpers();
 };
 
@@ -189,6 +190,34 @@ void TestCalendarBlobBackend::deleteRecordForwards()
     QCOMPARE(recs.size(), 1);
     QVERIFY(backend.deleteRecord(recs.first().id));
     QVERIFY(!dev.readRecord(QStringLiteral("DatebookDB"), seedId).has_value());
+}
+
+void TestCalendarBlobBackend::deletedSinceReturnsAllSlots()
+{
+    // Documents the current intentional limitation: deletedSince does
+    // not filter by collection slot because the deleted record's
+    // category is not retained. BlobSyncEngine tolerates over-broad
+    // returns. See KNOWN LIMITATION comment in calendarblobbackend.cpp.
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("DatebookDB"));
+    auto idA = dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("a", 0));
+    auto idB = dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("b", 1));
+
+    const QDateTime t0 = QDateTime::currentDateTimeUtc().addSecs(-5);
+    QVERIFY(dev.deleteRecord(QStringLiteral("DatebookDB"), idA));
+    QVERIFY(dev.deleteRecord(QStringLiteral("DatebookDB"), idB));
+
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("DatebookDB"), 1, QStringLiteral("Work"));
+    CalendarBlobBackend backend(&pb, &store);
+
+    // Both ids appear regardless of which collection we ask about.
+    auto fromUnfiled = backend.deletedSince(QStringLiteral("palm:calendar/0"), t0);
+    auto fromWork    = backend.deletedSince(QStringLiteral("palm:calendar/1"), t0);
+    QCOMPARE(fromUnfiled.size(), 2);
+    QCOMPARE(fromWork.size(),    2);
+    QCOMPARE(fromUnfiled, fromWork);
 }
 
 void TestCalendarBlobBackend::slotParsingHelpers()
