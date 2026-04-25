@@ -45,3 +45,24 @@ target_link_libraries(tst_icstranscoder
         Qt::Core
 )
 add_test(NAME tst_icstranscoder COMMAND tst_icstranscoder)
+
+# --- Task 4: CalendarBlobBackend ---
+add_executable(tst_calendarblobbackend
+    tst_calendarblobbackend.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+)
+target_include_directories(tst_calendarblobbackend
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_calendarblobbackend
+    PRIVATE
+        WildPalmsPalmCalendar
+        WildPalmsPalmSync
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CalendarCore
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_calendarblobbackend COMMAND tst_calendarblobbackend)
