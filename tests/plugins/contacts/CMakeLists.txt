@@ -67,3 +67,34 @@ target_link_libraries(tst_contactsconflicthandler
         Qt::Core
 )
 add_test(NAME tst_contactsconflicthandler COMMAND tst_contactsconflicthandler)
+
+# --- Task 4: ContactsBackendPlugin (in-process, no .so loading) ---
+add_executable(tst_contactsbackendplugin
+    tst_contactsbackendplugin.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsbackendplugin.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsconflicthandler.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+)
+target_include_directories(tst_contactsbackendplugin
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${PILOT_LINK_INCLUDE_DIR}
+)
+target_link_libraries(tst_contactsbackendplugin
+    PRIVATE
+        WildPalmsPalmCalendar    # CategoryMappingStore + parseCategoryAppInfo
+        WildPalmsPalmConflict
+        WildPalmsPalmCodecs
+        WildPalmsPalmSync
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CoreAddons
+        KF6::Contacts
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        ${PILOT_LINK_LIBRARIES}
+)
+add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
