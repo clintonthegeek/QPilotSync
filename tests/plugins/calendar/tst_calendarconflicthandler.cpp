@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 
 #include <KCalendarCore/Alarm>
+#include <KCalendarCore/Attendee>
 #include <KCalendarCore/Event>
 #include <KCalendarCore/ICalFormat>
 #include <KCalendarCore/MemoryCalendar>
@@ -90,6 +91,7 @@ private slots:
     void alarmOnlyDiffMergesAlarms();
     void exdateOnlyDiffMergesExdates();
     void tzOnlyDiffPrefersFloating();
+    void alarmPlusAttendeeDiffDelegates();
     void unrelatedDiffsDelegateToPalm();
     void undecodableContentDelegatesToPalm();
 };
@@ -150,6 +152,27 @@ void TestCalendarConflictHandler::tzOnlyDiffPrefersFloating()
     QCOMPARE(h.lastOverlay(), QStringLiteral("tz"));
     // Merged content should reflect the floating side (no TZID).
     QVERIFY(!cr.mergedContent.contains("TZID="));
+}
+
+void TestCalendarConflictHandler::alarmPlusAttendeeDiffDelegates()
+{
+    // Pins the fix for the EventDiff field-coverage gap: when alarms
+    // differ AND attendees differ, the handler must NOT misclassify
+    // as "only alarms differ" and silently overwrite attendees.
+    MockPalmDatabaseAccess dev;
+    PalmBackendConfig cfg;
+    CalendarConflictHandler h(&dev, &cfg);
+
+    auto src = withAlarm(15);
+    auto tgt = withAlarm(60);
+    KCalendarCore::Attendee alice(QStringLiteral("Alice"),
+                                  QStringLiteral("alice@example.com"));
+    tgt->addAttendee(alice);
+
+    auto cr = makeConflict(serialiseEvent(src), serialiseEvent(tgt));
+    ConflictPolicy policy;
+    h.handleConflict(cr, policy);
+    QCOMPARE(h.lastOverlay(), QStringLiteral("delegated"));
 }
 
 void TestCalendarConflictHandler::unrelatedDiffsDelegateToPalm()
