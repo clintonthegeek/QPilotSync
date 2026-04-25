@@ -26,3 +26,22 @@ target_link_libraries(tst_categoryappinforeader
         Qt::Core
 )
 add_test(NAME tst_categoryappinforeader COMMAND tst_categoryappinforeader)
+
+# --- Task 3: IcsTranscoder ---
+add_executable(tst_icstranscoder
+    tst_icstranscoder.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+)
+target_include_directories(tst_icstranscoder
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_icstranscoder
+    PRIVATE
+        WildPalmsPalmCalendar   # DatebookCodec
+        WildPalmsPalmSync       # PalmRecord
+        KF6::CalendarCore
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_icstranscoder COMMAND tst_icstranscoder)
