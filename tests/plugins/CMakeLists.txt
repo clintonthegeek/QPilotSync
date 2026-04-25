@@ -9,3 +9,6 @@ add_subdirectory(dummy_action)
 
 # Phase E.9 Task 4 — MemoMarkdown encoder/decoder tests.
 add_subdirectory(memo)
+
+# Phase E.10 — Calendar plugin tests.
+add_subdirectory(calendar)
