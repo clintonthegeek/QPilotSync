@@ -97,72 +97,6 @@ QString sha256Hex(const QByteArray &bytes)
         QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
 }
 
-// Thin IBlobBackend wrapper that fills BackendRecord::contentHash on
-// every read. CalendarBlobBackend (in the calendar submodule) does not
-// compute hashes; the BlobBaselineStore however REQUIRES non-NULL
-// content_hash on every commit (NOT NULL constraint). Computing hashes
-// in the plugin is a known follow-up — this proxy keeps Task 7's e2e
-// test parent-only by patching reads to satisfy the engine without
-// touching submodule code.
-class HashingBackendProxy : public Kalburator::Sync::IBlobBackend
-{
-public:
-    explicit HashingBackendProxy(Kalburator::Sync::IBlobBackend *inner)
-        : m_inner(inner) {}
-
-    QString backendId()   const override { return m_inner->backendId(); }
-    QString displayName() const override { return m_inner->displayName(); }
-    bool    isAvailable() const override { return m_inner->isAvailable(); }
-
-    QList<Kalburator::Sync::CollectionInfo> availableCollections() override
-    { return m_inner->availableCollections(); }
-    Kalburator::Sync::CollectionInfo collectionInfo(const QString &id) override
-    { return m_inner->collectionInfo(id); }
-    QString createCollection(const Kalburator::Sync::CollectionInfo &info) override
-    { return m_inner->createCollection(info); }
-
-    QList<Kalburator::Sync::BackendRecord> loadRecords(const QString &cid) override
-    {
-        auto records = m_inner->loadRecords(cid);
-        for (auto &r : records) {
-            if (r.contentHash.isEmpty()) {
-                r.contentHash = QString::fromLatin1(
-                    QCryptographicHash::hash(r.data,
-                        QCryptographicHash::Sha256).toHex());
-            }
-        }
-        return records;
-    }
-    std::optional<Kalburator::Sync::BackendRecord> loadRecord(const QString &id) override
-    {
-        auto r = m_inner->loadRecord(id);
-        if (r && r->contentHash.isEmpty()) {
-            r->contentHash = QString::fromLatin1(
-                QCryptographicHash::hash(r->data,
-                    QCryptographicHash::Sha256).toHex());
-        }
-        return r;
-    }
-    QString createRecord(const QString &cid,
-                         const Kalburator::Sync::BackendRecord &record) override
-    { return m_inner->createRecord(cid, record); }
-    bool updateRecord(const Kalburator::Sync::BackendRecord &record) override
-    { return m_inner->updateRecord(record); }
-    bool deleteRecord(const QString &id) override
-    { return m_inner->deleteRecord(id); }
-
-    QList<Kalburator::Sync::BackendRecord> modifiedSince(
-        const QString &cid, const QDateTime &since) override
-    { return m_inner->modifiedSince(cid, since); }
-    QStringList deletedSince(const QString &cid, const QDateTime &since) override
-    { return m_inner->deletedSince(cid, since); }
-    bool supportsDeleteTracking() const override
-    { return m_inner->supportsDeleteTracking(); }
-
-private:
-    Kalburator::Sync::IBlobBackend *m_inner = nullptr;
-};
-
 CollectionInfo collectionForSlot(int slot)
 {
     CollectionInfo info;
@@ -240,7 +174,6 @@ void TestCalendarV2::freshSyncCreatesPerCategoryRecords()
 
     auto provided = plugin->createBackends(nullptr, &conn);
     QVERIFY(provided.blob != nullptr);
-    HashingBackendProxy source(provided.blob);
 
     // Target side: one MockBlobBackend with a collection per slot.
     Kalburator::Sync::MockBlobBackend target;
@@ -261,7 +194,7 @@ void TestCalendarV2::freshSyncCreatesPerCategoryRecords()
         const QString mappingId =
             QStringLiteral("e10-fresh-%1").arg(slot);
         auto result = engine.twoWayWithBaseline(
-            &source, &target, cid, mappingId,
+            provided.blob, &target, cid, mappingId,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
     }
@@ -293,7 +226,6 @@ void TestCalendarV2::modifyTargetPropagatesToPalm()
     QVERIFY(plugin != nullptr);
     auto provided = plugin->createBackends(nullptr, &conn);
     QVERIFY(provided.blob != nullptr);
-    HashingBackendProxy source(provided.blob);
 
     Kalburator::Sync::MockBlobBackend target;
     target.createCollection(collectionForSlot(1));
@@ -311,7 +243,7 @@ void TestCalendarV2::modifyTargetPropagatesToPalm()
 
     // First sync.
     auto r1 = engine.twoWayWithBaseline(
-        &source, &target, cid, mappingId,
+        provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
 
@@ -338,7 +270,7 @@ void TestCalendarV2::modifyTargetPropagatesToPalm()
 
     // Re-sync; expect Palm side to pick up the change.
     auto r2 = engine.twoWayWithBaseline(
-        &source, &target, cid, mappingId,
+        provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
 
@@ -376,7 +308,6 @@ void TestCalendarV2::deletePalmRemovesTargetRecord()
     QVERIFY(plugin != nullptr);
     auto provided = plugin->createBackends(nullptr, &conn);
     QVERIFY(provided.blob != nullptr);
-    HashingBackendProxy source(provided.blob);
 
     Kalburator::Sync::MockBlobBackend target;
     target.createCollection(collectionForSlot(2));
@@ -393,7 +324,7 @@ void TestCalendarV2::deletePalmRemovesTargetRecord()
     const QString mappingId = QStringLiteral("e10-del");
 
     auto r1 = engine.twoWayWithBaseline(
-        &source, &target, cid, mappingId,
+        provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
 
@@ -412,7 +343,7 @@ void TestCalendarV2::deletePalmRemovesTargetRecord()
     QVERIFY(deleted);
 
     auto r2 = engine.twoWayWithBaseline(
-        &source, &target, cid, mappingId,
+        provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
 
@@ -439,7 +370,6 @@ void TestCalendarV2::idempotentNoopSyncChangesNothing()
     QVERIFY(plugin != nullptr);
     auto provided = plugin->createBackends(nullptr, &conn);
     QVERIFY(provided.blob != nullptr);
-    HashingBackendProxy source(provided.blob);
 
     Kalburator::Sync::MockBlobBackend target;
     target.createCollection(collectionForSlot(1));
@@ -457,7 +387,7 @@ void TestCalendarV2::idempotentNoopSyncChangesNothing()
 
     // First sync.
     auto r1 = engine.twoWayWithBaseline(
-        &source, &target, cid, mappingId,
+        provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
     auto recsAfterFirst = target.loadRecords(cid);
@@ -469,7 +399,7 @@ void TestCalendarV2::idempotentNoopSyncChangesNothing()
 
     // Second sync should be a noop.
     auto r2 = engine.twoWayWithBaseline(
-        &source, &target, cid, mappingId,
+        provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
     QCOMPARE(r2.sourceStats.created, 0);
