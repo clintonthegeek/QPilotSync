@@ -46,3 +46,24 @@ target_link_libraries(tst_contactsblobbackend
         Qt::Core
 )
 add_test(NAME tst_contactsblobbackend COMMAND tst_contactsblobbackend)
+
+# --- Task 3: ContactsConflictHandler ---
+add_executable(tst_contactsconflicthandler
+    tst_contactsconflicthandler.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsconflicthandler.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+)
+target_include_directories(tst_contactsconflicthandler
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_contactsconflicthandler
+    PRIVATE
+        WildPalmsPalmConflict   # PalmConflictHandler
+        WildPalmsPalmCodecs     # decodeContact / encodeContact
+        WildPalmsPalmSync       # PalmRecord, MockPalmDatabaseAccess
+        Kalburator::Sync
+        KF6::Contacts
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_contactsconflicthandler COMMAND tst_contactsconflicthandler)
