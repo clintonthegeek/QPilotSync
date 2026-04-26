@@ -45,3 +45,31 @@ target_link_libraries(tst_webcalblobbackend
         Kalburator::Sync
 )
 add_test(NAME tst_webcalblobbackend COMMAND tst_webcalblobbackend)
+
+# --- Task 5: WebcalBackendPlugin ---
+add_executable(tst_webcalbackendplugin
+    tst_webcalbackendplugin.cpp
+    ${WEBCAL_PLUGIN_SRC_DIR}/webcalbackendplugin.cpp
+    ${WEBCAL_PLUGIN_SRC_DIR}/webcalblobbackend.cpp
+    ${WEBCAL_PLUGIN_SRC_DIR}/webcalfeed.cpp
+)
+target_include_directories(tst_webcalbackendplugin
+    PRIVATE
+        ${WEBCAL_PLUGIN_SRC_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_webcalbackendplugin BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_webcalbackendplugin
+    PRIVATE
+        WildPalmsCore
+        Qt::Test
+        Qt::Core
+        Qt::Network
+        KF6::CalendarCore
+        KF6::CoreAddons
+        Kalburator::Sync
+)
+add_test(NAME tst_webcalbackendplugin COMMAND tst_webcalbackendplugin)
