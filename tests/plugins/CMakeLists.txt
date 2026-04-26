@@ -18,3 +18,6 @@ add_subdirectory(todos)
 
 # Phase E.12 — Contacts plugin tests.
 add_subdirectory(contacts)
+
+# Phase E.13 — WebCalendar plugin tests.
+add_subdirectory(webcalendar)
