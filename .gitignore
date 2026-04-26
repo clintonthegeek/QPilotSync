@@ -129,6 +129,8 @@ todo1/
 todo2/
 *.vcf
 *.ics
+# Override: webcalendar plugin's test fixtures live in tests/plugins/webcalendar/fixtures/.
+!tests/plugins/webcalendar/fixtures/*.ics
 
 # Test Palm apps/databases
 PlanStanLite

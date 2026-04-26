@@ -19,3 +19,29 @@ target_link_libraries(tst_webcalfeed
         Qt::Core
 )
 add_test(NAME tst_webcalfeed COMMAND tst_webcalfeed)
+
+# --- Task 4: WebcalBlobBackend ---
+set(WEBCAL_FIXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+
+add_executable(tst_webcalblobbackend
+    tst_webcalblobbackend.cpp
+    ${WEBCAL_PLUGIN_SRC_DIR}/webcalblobbackend.cpp
+    ${WEBCAL_PLUGIN_SRC_DIR}/webcalfeed.cpp
+)
+target_compile_definitions(tst_webcalblobbackend
+    PRIVATE
+        WEBCAL_FIXTURE_DIR="${WEBCAL_FIXTURE_DIR}"
+)
+target_include_directories(tst_webcalblobbackend
+    PRIVATE
+        ${WEBCAL_PLUGIN_SRC_DIR}
+)
+target_link_libraries(tst_webcalblobbackend
+    PRIVATE
+        Qt::Test
+        Qt::Core
+        Qt::Network
+        KF6::CalendarCore
+        Kalburator::Sync
+)
+add_test(NAME tst_webcalblobbackend COMMAND tst_webcalblobbackend)
