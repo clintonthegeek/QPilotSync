@@ -170,11 +170,20 @@ moot; it inherits for free when a second plugin lands.
 - (C) Alphabetic by collection-id. Rejected — couples ordering to
   naming choices forever.
 
-### Decision #4 — UI trigger via auto-populated `Tools → Actions →` menu
+### Decision #4 — UI trigger deferred to E.17
 
-`KF6MainWindow` gains a `Tools → Actions` submenu populated from
-`PluginActionManager::actions()` on plugin load. Each action becomes
-one menu entry labelled `IPlugin::displayName()`. Selecting an entry:
+The parent spec's E.17 row owns app-layer call-site migration —
+specifically `kf6mainwindow`, `devicesession`, `deviceworker`,
+`conflictdialog`, `conflictreviewwidget`, `interactiveconflicthandler`,
+and `profile`. `PluginActionManager` and `PalmDeviceConnection`
+construction are not yet wired into `KF6MainWindow` (existing
+inline comments at `kf6mainwindow.cpp:538,625` confirm "lands in
+E.15/E.17"). E.15a delivers the action + abstraction + collector;
+**E.17 owns the menu wiring**.
+
+The intended UI shape (recorded here so E.17 inherits it cleanly):
+generic auto-populated `Tools → Actions →` submenu listing every
+loaded `IPluginAction`. Selecting an entry:
 
 1. Builds an `InstallSourceCollector::Result` (folder path from the
    active sync profile; backend-plugin-manager from the runtime).
@@ -182,19 +191,19 @@ one menu entry labelled `IPlugin::displayName()`. Selecting an entry:
 3. Constructs a `SimpleActionContext`; wires `progress`/`message`
    signals into the existing log widget.
 4. Runs `QtConcurrent::run([=]() { action->execute(ctx, device, params); })`.
-5. On completion (success or failure), the `Result` destructor cleans
-   up the temp dir; folder-sourced files that succeeded get moved to
-   `installed/`; the log widget shows the final status.
+5. On completion, calls `collector.moveSucceededToInstalled(result, succeededPaths)`.
 
-For E.15a we wire one entry — "Install Files…" — but the menu is
-**generic**: future actions (Backup, Restore, Format Card) get a
-free menu item without UI work.
-
-**Why generic over hardcoded:** the design intent of `IPluginAction`
-is a pluggable extension point; hardcoding a single menu binding
-defeats it. The generic submenu is ~30 lines in `KF6MainWindow`.
+For E.15a the action ships behind `WILDPALMS_INSTALL_PLUGIN_V2=ON`
+without a UI trigger. Verifying the plugin against an in-memory
+mock — exit criterion "action executes against mock device; progress
+signals fire" — happens via `tst_installactionplugin`. The legacy
+`InstallView` continues to provide drag-drop UX while V2 plumbing
+matures.
 
 **Alternatives considered:**
+- (A) Land minimal MainWindow wiring in E.15a. Rejected — touches
+  DeviceWorker/PluginActionManager construction not in scope; defers
+  cleanly to E.17.
 - (B) Hardcoded `File → Install Files…`. Rejected — every future
   action becomes custom UI work.
 - (C) New "Install" tab/dock with drag-drop staging area. Rejected
@@ -585,73 +594,12 @@ it to `moveSucceededToInstalled()` after `execute()` returns.
 `X-WildPalms-PluginType: "action"` — distinguishes from `"backend"`,
 filtered by `PluginActionManager` at discovery.
 
-### UI — `KF6MainWindow` `Tools → Actions` submenu
+### UI — deferred to E.17
 
-After `BackendPluginManager` and `PluginActionManager` finish loading
-in `MainWindow::loadPlugins()`:
-
-```cpp
-auto *toolsActionsMenu = menuBar()->findChild<QMenu*>("toolsActions");
-if (!toolsActionsMenu) {
-    auto *toolsMenu = menuBar()->findChild<QMenu*>("toolsMenu");
-    toolsActionsMenu = toolsMenu->addMenu(tr("Actions"));
-    toolsActionsMenu->setObjectName("toolsActions");
-}
-toolsActionsMenu->clear();
-for (auto *action : m_actionManager->actions()) {
-    auto *menuAction = toolsActionsMenu->addAction(action->displayName());
-    connect(menuAction, &QAction::triggered, this, [this, action] {
-        runActionWithCollector(action);
-    });
-}
-```
-
-`runActionWithCollector()`:
-
-```cpp
-void KF6MainWindow::runActionWithCollector(WildPalms::IPluginAction *action)
-{
-    InstallSourceCollector collector;
-    const QString folderPath = m_currentProfile->syncFolderPath()
-        + QStringLiteral("/install");
-    auto result = collector.collect(folderPath, m_backendManager);
-
-    QJsonArray filesArr;
-    for (const auto &f : result.files) {
-        QJsonObject o;
-        o["path"]         = f.path;
-        o["display_name"] = f.displayName;
-        filesArr.append(o);
-    }
-    QJsonObject params;
-    params["files"] = filesArr;
-
-    auto *ctx = new SimpleActionContext(this);
-    connect(ctx, &IActionContext::message, this, [this](const QString &m) {
-        appendToLog(m);
-    });
-
-    QStringList succeeded;
-    connect(action, SIGNAL(fileInstalled(QString)),
-            this, [&succeeded](const QString &p) { succeeded.append(p); });
-
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
-    connect(watcher, &QFutureWatcher<bool>::finished, this,
-            [this, watcher, ctx, action, result, &succeeded] {
-        const bool ok = watcher->result();
-        InstallSourceCollector().moveSucceededToInstalled(result, succeeded);
-        ctx->deleteLater();
-        watcher->deleteLater();
-    });
-    watcher->setFuture(QtConcurrent::run([action, ctx, this, params] {
-        return action->execute(ctx, m_palmDeviceConnection, params);
-    }));
-}
-```
-
-(The lambda captures and signal/slot setup are sketched here; the
-real implementation needs careful lifetime management — see Task 5
-of the plan for the polished version.)
+E.15a does not modify `KF6MainWindow`. The intended wiring shape is
+documented in Decision #4; E.17's plan inherits it. The
+`InstallSourceCollector` API shape is fixed at this phase so E.17 only
+has to wire it.
 
 ### Plucker `availableCollections()` order swap
 
@@ -779,9 +727,11 @@ MODIFIED (parent repo):
   src/palm/sync/CMakeLists.txt             build mockpalmfileinstaller
   src/runtime/CMakeLists.txt               build installsourcecollector
   src/plugins/install/CMakeLists.txt       add WILDPALMS_INSTALL_PLUGIN_V2 toggle
-  src/kf6/kf6mainwindow.{h,cpp}            Tools → Actions submenu + runActionWithCollector
   tests/plugins/CMakeLists.txt             add_subdirectory(install)
   tests/plugins/dummy_action/...           untouched (separate test fixture)
+
+NOT MODIFIED IN E.15a (deferred to E.17):
+  src/kf6/kf6mainwindow.{h,cpp}            Tools → Actions submenu + worker plumbing
 
 MODIFIED (plucker submodule):
   src/plugins/plucker/pluckerblobbackend.cpp  swap availableCollections() order to {bootstrap, channels}
