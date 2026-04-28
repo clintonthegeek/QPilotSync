@@ -125,11 +125,12 @@ set_tests_properties(test_pluckerconfig PROPERTIES
 )
 
 # ============================================================
-# Helper for fullsync-only tests (Phase D). Links WildPalmsFullSync +
-# Kalburator::Sync, stays out of the WildPalmsCore/pisock link line.
+# Helper for runtime-only tests (Phase D originally; consolidated under
+# WildPalmsRuntime in E.15b). Links WildPalmsRuntime + Kalburator::Sync,
+# stays out of the WildPalmsCore/pisock link line.
 # ============================================================
 
-function(add_fullsync_test TEST_NAME)
+function(add_runtime_test TEST_NAME)
     set(TEST_SOURCES ${ARGN})
     add_executable(${TEST_NAME} ${TEST_SOURCES})
     target_link_libraries(${TEST_NAME}
@@ -137,7 +138,7 @@ function(add_fullsync_test TEST_NAME)
             Qt::Core
             Qt::Test
             Kalburator::Sync
-            WildPalmsFullSync
+            WildPalmsRuntime
     )
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     set_tests_properties(${TEST_NAME} PROPERTIES
@@ -145,9 +146,9 @@ function(add_fullsync_test TEST_NAME)
     )
 endfunction()
 
-add_fullsync_test(test_fullsync_calendarcollection test_fullsync_calendarcollection.cpp)
-add_fullsync_test(test_fullsync_syncconfigstore    test_fullsync_syncconfigstore.cpp)
-add_fullsync_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
+add_runtime_test(test_fullsync_calendarcollection test_fullsync_calendarcollection.cpp)
+add_runtime_test(test_fullsync_syncconfigstore    test_fullsync_syncconfigstore.cpp)
+add_runtime_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
 
 # ============================================================
 # Phase E.3 — PalmBackend + mock device access

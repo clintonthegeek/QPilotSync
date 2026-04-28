@@ -131,8 +131,7 @@ target_link_libraries(WildPalmsCore
         # Phase E.9 — new-ABI plugin manager used by KF6MainWindow.
         # WildPalmsRuntime PUBLIC-links WildPalmsCore; linking it PRIVATE
         # here embeds its static objects without creating a consumer
-        # cycle. The fullsync→runtime relocation deferred to E.15 keeps
-        # this dependency light.
+        # cycle.
         WildPalmsRuntime
 )
 
@@ -219,11 +218,6 @@ add_dependencies(WildPalmsCore pilot-link-external)
 # Plugin subdirectory (conduit plugins that link against WildPalmsCore)
 add_subdirectory(plugins)
 
-# Full Sync Mode host-interface implementations (Phase D of libkalburator
-# integration). Keeps the Kalburator::Sync dependency out of WildPalmsCore
-# until Phase F wires the UI.
-add_subdirectory(fullsync)
-
 # Palm-side Kalburator::Sync integration (Phase E.3+ of libkalburator
 # integration). PalmBackend : IBlobBackend + device-access abstraction.
 # Does not link pisock; the real pilot-link adapter lands in E.4.
@@ -252,8 +246,7 @@ add_subdirectory(palm/codecs)
 # (Phase E.7 of libkalburator integration). Not on the plugin ABI.
 add_subdirectory(palm/adapters)
 
-# New-ABI plugin managers (Phase E.8 of libkalburator integration).
-# Consumes the plugin-ABI headers from src/core/ and Kalburator::Sync.
-# Leaves src/fullsync/ alone — the fullsync → runtime relocation lands
-# in E.15.
+# Plugin runtime — managers, simple action context, install source
+# collector, and (since E.15b) the Full-Sync host-interface
+# implementations consumed by libkalburator.
 add_subdirectory(runtime)
