@@ -21,3 +21,24 @@ target_link_libraries(tst_pluckerchannel
         Qt::Core
 )
 add_test(NAME tst_pluckerchannel COMMAND tst_pluckerchannel)
+
+# --- Task 4: PluckerFetcher ---
+add_executable(tst_pluckerfetcher
+    tst_pluckerfetcher.cpp
+    ${PLUCKER_PLUGIN_SRC_DIR}/pluckerfetcher.cpp
+    ${PLUCKER_PLUGIN_SRC_DIR}/pluckerchannel.cpp
+)
+target_compile_definitions(tst_pluckerfetcher
+    PRIVATE
+        PLUCKER_FIXTURE_DIR="${PLUCKER_FIXTURE_DIR}"
+)
+target_include_directories(tst_pluckerfetcher
+    PRIVATE
+        ${PLUCKER_PLUGIN_SRC_DIR}
+)
+target_link_libraries(tst_pluckerfetcher
+    PRIVATE
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_pluckerfetcher COMMAND tst_pluckerfetcher)
