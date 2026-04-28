@@ -6,7 +6,7 @@
 #include <QList>
 #include <QMap>
 #include <functional>
-#include "synctypes.h"
+#include "../core/synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
 #include "qsynccore/conflictpolicy.h"

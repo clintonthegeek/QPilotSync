@@ -3,7 +3,7 @@
 #include "tickleworker.h"
 #include "kpilotdevicelink.h"
 #include "../sync/syncengine.h"
-#include "../sync/synctypes.h"
+#include "../core/synctypes.h"
 
 #include <QDebug>
 #include <QMetaObject>

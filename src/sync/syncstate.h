@@ -6,7 +6,7 @@
 #include <QDateTime>
 #include <QMap>
 #include <QJsonObject>
-#include "synctypes.h"
+#include "../core/synctypes.h"
 #include "qsynccore/idmappingstore.h"
 #include "qsynccore/baselinestore.h"
 #include "qsynccore/conflictstore.h"

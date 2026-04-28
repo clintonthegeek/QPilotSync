@@ -31,6 +31,10 @@ add_library(WildPalmsRuntime STATIC
     syncconfigstore_wp.cpp
     synchost_wp.h
     synchost_wp.cpp
+    # Phase E.16 — single orchestrator for the new ABI; replaces
+    # legacy Sync::SyncEngine driving IConduit derivatives.
+    syncrunner_wp.h
+    syncrunner_wp.cpp
 )
 
 target_include_directories(WildPalmsRuntime

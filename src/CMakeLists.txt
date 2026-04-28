@@ -57,8 +57,10 @@ add_library(WildPalmsCore SHARED
     sync/qsynccore/conflictpolicy.cpp
     sync/qsynccore/conflictpolicy.h
 
+    # Shared sync-related types (relocated from src/sync/ in E.16; survives the sync-tree deletion)
+    core/synctypes.h
+
     # Sync engine (Phase 4)
-    sync/synctypes.h
     sync/syncstate.cpp
     sync/syncstate.h
     sync/syncbackend.h
@@ -189,10 +191,14 @@ install(FILES
 
 install(FILES
     sync/conduit.h
-    sync/synctypes.h
     sync/syncstate.h
     sync/syncbackend.h
     DESTINATION include/wildpalms/sync
+)
+
+install(FILES
+    core/synctypes.h
+    DESTINATION include/wildpalms/core
 )
 
 install(FILES

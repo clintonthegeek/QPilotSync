@@ -19,7 +19,7 @@
 #include "../core/ibackendplugin.h"
 #include "../runtime/backendpluginmanager.h"
 #include "../sync/syncengine.h"
-#include "../sync/synctypes.h"
+#include "../core/synctypes.h"
 #include "../sync/conduit.h"
 #include "../sync/localfilebackend.h"
 #include "../sync/qsynccore/conflictstore.h"

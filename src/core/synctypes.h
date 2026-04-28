@@ -1,5 +1,5 @@
-#ifndef SYNCTYPES_H
-#define SYNCTYPES_H
+#ifndef WILDPALMS_CORE_SYNCTYPES_H
+#define WILDPALMS_CORE_SYNCTYPES_H
 
 #include <QString>
 #include <QDateTime>
@@ -188,4 +188,4 @@ struct CollectionInfo {
 Q_DECLARE_METATYPE(Sync::SyncResult)
 Q_DECLARE_METATYPE(Sync::SyncStats)
 
-#endif // SYNCTYPES_H
+#endif // WILDPALMS_CORE_SYNCTYPES_H

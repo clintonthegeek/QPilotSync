@@ -1,6 +1,6 @@
 #include "installconduit.h"
 #include "installview.h"
-#include "sync/synctypes.h"
+#include "core/synctypes.h"
 #include "sync/conduit.h"
 #include "palm/kpilotdevicelink.h"
 

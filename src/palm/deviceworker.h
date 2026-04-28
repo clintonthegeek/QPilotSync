@@ -6,7 +6,7 @@
 #include <atomic>
 #include <functional>
 
-#include "../sync/synctypes.h"
+#include "../core/synctypes.h"
 
 // Forward declarations
 namespace Sync {

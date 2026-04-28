@@ -6,7 +6,7 @@
 #include <QList>
 #include <QByteArray>
 #include <QVariant>
-#include "synctypes.h"
+#include "../core/synctypes.h"
 
 namespace Sync {
 

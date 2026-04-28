@@ -10,7 +10,7 @@
 #include <QJsonObject>
 #include <QDateTime>
 #include <functional>
-#include "synctypes.h"
+#include "../core/synctypes.h"
 #include "syncstate.h"
 #include "syncbackend.h"
 #include "qsynccore/conflictpolicy.h"
