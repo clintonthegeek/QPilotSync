@@ -24,3 +24,6 @@ add_subdirectory(webcalendar)
 
 # Phase E.14 — Plucker plugin tests.
 add_subdirectory(plucker)
+
+# Phase E.15a — Install action tests.
+add_subdirectory(install)

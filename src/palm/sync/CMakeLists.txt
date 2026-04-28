@@ -16,6 +16,9 @@ add_library(WildPalmsPalmSync STATIC
     mockpalmdatabaseaccess.h
     palmbackend.cpp
     palmbackend.h
+    # Phase E.15a — IPalmFileInstaller mock recorder.
+    mockpalmfileinstaller.cpp
+    mockpalmfileinstaller.h
     # Phase E.9 — concrete PalmDeviceConnection aggregator, lives in
     # src/palm/ so the forward declaration in src/core/ibackendplugin.h
     # (class PalmDeviceConnection in the global namespace) resolves
