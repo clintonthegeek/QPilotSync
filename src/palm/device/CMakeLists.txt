@@ -11,6 +11,9 @@ add_library(WildPalmsPalmDevice STATIC
     palmrecord_bridge.cpp
     pilotlinkpalmdatabaseaccess.h
     pilotlinkpalmdatabaseaccess.cpp
+    # Phase E.15a — pisock IPalmFileInstaller real impl.
+    pilotlinkpalmfileinstaller.h
+    pilotlinkpalmfileinstaller.cpp
 )
 
 target_include_directories(WildPalmsPalmDevice
