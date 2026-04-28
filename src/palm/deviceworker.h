@@ -14,6 +14,10 @@ class SyncEngine;
 enum class SyncMode;
 }
 
+namespace WildPalms::Runtime {
+class SyncRunner;
+}
+
 /**
  * @brief Worker object for executing blocking DLP operations
  *
@@ -71,6 +75,18 @@ public slots:
                 Sync::SyncEngine *engine,
                 const QString &stateDir,
                 const QString &syncPath);
+
+    /**
+     * @brief Phase E.16: Execute a SyncRunner-driven sync.
+     *
+     * Mirror of doSync(SyncEngine*) targeting the new IBackendPlugin
+     * runtime. Same threading + cancellation semantics as the legacy
+     * overload; the runner internally drives BlobSyncEngine per
+     * loaded plugin.
+     */
+    void doSyncRunner(int mode,
+                      const QStringList &enabledPluginIds,
+                      WildPalms::Runtime::SyncRunner *runner);
 
     /**
      * @brief Request cancellation of current operation

@@ -78,6 +78,18 @@ public:
     QString syncPath() const  { return m_syncPath; }
     QString stateDir() const  { return m_stateDir; }
 
+    /// Update where the per-plugin local store lives (called when the
+    /// app loads / changes profile).
+    void setSyncPath(const QString &path) { m_syncPath = path; }
+
+    /// Update where baselines live (per-profile state dir).
+    void setStateDir(const QString &dir) { m_stateDir = dir; }
+
+    /// Late-binding device wiring; KF6MainWindow only has a real
+    /// PalmDeviceConnection once a device session is established.
+    void setDevice(PalmDeviceConnection *device) { m_device = device; }
+    void setHost(Kalburator::Sync::ISyncHost *host) { m_host = host; }
+
 signals:
     void started(int mode);
     void progress(int current, int total, const QString &message);
@@ -108,5 +120,7 @@ private:
 };
 
 } // namespace WildPalms::Runtime
+
+Q_DECLARE_METATYPE(WildPalms::Runtime::SyncRunner *)
 
 #endif // WILDPALMS_RUNTIME_SYNCRUNNER_WP_H

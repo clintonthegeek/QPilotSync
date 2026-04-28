@@ -16,6 +16,7 @@
 #include "../profile.h"
 
 #include "../core/iconduit.h"
+#include "../runtime/syncrunner_wp.h"
 #include "../core/ibackendplugin.h"
 #include "../runtime/backendpluginmanager.h"
 #include "../sync/syncengine.h"
@@ -550,6 +551,21 @@ void KF6MainWindow::initializeConduits()
             m_backendPluginManager->loadPlugin(info.metaData.pluginId());
         }
     }
+
+    // Phase E.16 — orchestrator that drives BlobSyncEngine for each
+    // loaded IBackendPlugin in response to Tools-menu actions. syncPath
+    // + stateDir get rebound when a profile is loaded; host/device
+    // come from the profile's PalmDeviceConnection wiring (E.17 owns
+    // the deeper integration). Constructed empty here so the menu
+    // wiring can dispatch even before a profile is open — the runner
+    // will short-circuit with an error if syncPath is empty.
+    m_syncRunner = new WildPalms::Runtime::SyncRunner(
+        m_backendPluginManager,
+        /*device=*/nullptr,
+        /*host=*/nullptr,
+        /*syncPath=*/QString(),
+        /*stateDir=*/QString(),
+        this);
 }
 
 void KF6MainWindow::onConduitLoaded(IConduit *conduit)
@@ -743,6 +759,14 @@ void KF6MainWindow::loadProfile(const QString &path)
 
     // Configure sync engine
     m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
+
+    // Phase E.16 — keep the SyncRunner's bind state aligned with the
+    // active profile so Tools-menu actions targeting the new ABI write
+    // baselines + per-plugin local stores under the right paths.
+    if (m_syncRunner) {
+        m_syncRunner->setSyncPath(m_syncPath);
+        m_syncRunner->setStateDir(m_currentProfile->stateDirectoryPath());
+    }
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
     m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
     m_syncEngine->setConflictPromptStrategy(m_currentProfile->conflictPromptStrategy());
@@ -1721,7 +1745,7 @@ void KF6MainWindow::onHotSync()
 
     m_logWidget->logInfo(i18n("=== Starting HotSync ==="));
     m_pendingSyncOperationName = i18n("HotSync");
-    m_session->requestSync(Sync::SyncMode::HotSync, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::HotSync, m_syncRunner);
 }
 
 void KF6MainWindow::onFullSync()
@@ -1744,7 +1768,7 @@ void KF6MainWindow::onFullSync()
 
     m_logWidget->logInfo(i18n("=== Starting Full Sync ==="));
     m_pendingSyncOperationName = i18n("Full Sync");
-    m_session->requestSync(Sync::SyncMode::FullSync, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::FullSync, m_syncRunner);
 }
 
 void KF6MainWindow::onCopyPalmToPC()
@@ -1767,7 +1791,7 @@ void KF6MainWindow::onCopyPalmToPC()
 
     m_logWidget->logInfo(i18n("=== Copying Palm → PC ==="));
     m_pendingSyncOperationName = i18n("Copy Palm → PC");
-    m_session->requestSync(Sync::SyncMode::CopyPalmToPC, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::CopyPalmToPC, m_syncRunner);
 }
 
 void KF6MainWindow::onCopyPCToPalm()
@@ -1790,7 +1814,7 @@ void KF6MainWindow::onCopyPCToPalm()
 
     m_logWidget->logInfo(i18n("=== Copying PC → Palm ==="));
     m_pendingSyncOperationName = i18n("Copy PC → Palm");
-    m_session->requestSync(Sync::SyncMode::CopyPCToPalm, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::CopyPCToPalm, m_syncRunner);
 }
 
 void KF6MainWindow::onBackup()
@@ -1814,7 +1838,7 @@ void KF6MainWindow::onBackup()
 
     m_logWidget->logInfo(i18n("=== Backing up Palm → PC ==="));
     m_pendingSyncOperationName = i18n("Backup");
-    m_session->requestSync(Sync::SyncMode::Backup, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::Backup, m_syncRunner);
 }
 
 void KF6MainWindow::onRestore()
@@ -1839,7 +1863,7 @@ void KF6MainWindow::onRestore()
 
     m_logWidget->logInfo(i18n("=== Restoring PC → Palm ==="));
     m_pendingSyncOperationName = i18n("Restore");
-    m_session->requestSync(Sync::SyncMode::Restore, m_syncEngine);
+    m_session->requestSync(Sync::SyncMode::Restore, m_syncRunner);
 }
 
 void KF6MainWindow::onChangeSyncFolder()

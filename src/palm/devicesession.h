@@ -20,6 +20,10 @@ class SyncEngine;
 enum class SyncMode;
 }
 
+namespace WildPalms::Runtime {
+class SyncRunner;
+}
+
 /**
  * @brief Thread-safe interface for Palm device operations
  *
@@ -80,6 +84,22 @@ public:
      * Progress via progressUpdated(), results via syncFinished().
      */
     void requestSync(Sync::SyncMode mode, Sync::SyncEngine *engine);
+
+    /**
+     * @brief Phase E.16: Run a sync via the new IBackendPlugin runtime.
+     *
+     * Drives WildPalms::Runtime::SyncRunner through the existing
+     * worker-thread machinery (mirrors requestSync(SyncEngine*) but
+     * targets the new ABI). Coexists with the SyncEngine overload
+     * during E.16's incremental migration.
+     *
+     * @param mode Sync mode (HotSync, FullSync, …)
+     * @param runner SyncRunner that owns plugin orchestration
+     * @param enabledPluginIds Empty list = all loaded plugins
+     */
+    void requestSync(Sync::SyncMode mode,
+                     WildPalms::Runtime::SyncRunner *runner,
+                     const QStringList &enabledPluginIds = {});
 
     /**
      * @brief Cancel current operation
@@ -191,6 +211,8 @@ private:
 
     // Pending operation state
     Sync::SyncEngine *m_pendingSyncEngine = nullptr;
+    WildPalms::Runtime::SyncRunner *m_pendingSyncRunner = nullptr;
+    QStringList m_pendingPluginIds;
     Sync::SyncMode m_pendingSyncMode;
 };
 

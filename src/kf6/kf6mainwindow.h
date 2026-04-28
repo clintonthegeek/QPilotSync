@@ -25,6 +25,7 @@ class AutoSyncOrchestrator;
 // Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
 // until E.16 retires the old surface.
 namespace WildPalms { class BackendPluginManager; class IBackendPlugin; }
+namespace WildPalms::Runtime { class SyncRunner; }
 
 namespace Sync {
 class SyncEngine;
@@ -173,6 +174,12 @@ private:
     // until E.16 retires the old surface.
     WildPalms::BackendPluginManager   *m_backendPluginManager = nullptr;
     QMap<QString, KPageWidgetItem *>   m_backendPluginPages;
+
+    // Phase E.16 — new-ABI sync orchestrator. Replaces Sync::SyncEngine
+    // for the Tools-menu sync actions. Coexists with m_syncEngine
+    // until the legacy IConduit deletion lands; the legacy engine is
+    // constructed but unused from the menu wiring.
+    WildPalms::Runtime::SyncRunner    *m_syncRunner = nullptr;
 
     // Action manager
     ActionManager *m_actionManager;

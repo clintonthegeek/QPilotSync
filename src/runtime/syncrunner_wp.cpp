@@ -94,6 +94,8 @@ SyncRunner::SyncRunner(BackendPluginManager *plugins,
     , m_syncPath(std::move(syncPath))
     , m_stateDir(std::move(stateDir))
 {
+    static const int registered = qRegisterMetaType<WildPalms::Runtime::SyncRunner *>();
+    Q_UNUSED(registered);
     m_localBackendFactory = [](const QString &rootPath, const QString &) {
         return std::unique_ptr<Kalburator::Sync::IBlobBackend>(
             new Kalburator::Sync::LocalBlobBackend(rootPath));
