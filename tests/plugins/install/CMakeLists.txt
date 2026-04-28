@@ -45,3 +45,28 @@ target_link_libraries(tst_installsourcecollector
         Kalburator::Sync
 )
 add_test(NAME tst_installsourcecollector COMMAND tst_installsourcecollector)
+
+# --- Task 6: InstallActionPlugin ---
+add_executable(tst_installactionplugin
+    tst_installactionplugin.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/install/installactionplugin.cpp
+)
+target_include_directories(tst_installactionplugin
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_installactionplugin BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_installactionplugin
+    PRIVATE
+        Qt::Test
+        Qt::Core
+        WildPalmsCore
+        WildPalmsRuntime
+        WildPalmsPalmSync
+        KF6::CoreAddons
+        Kalburator::Sync
+)
+add_test(NAME tst_installactionplugin COMMAND tst_installactionplugin)

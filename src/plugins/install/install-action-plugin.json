@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Name": "Install Files",
+        "Description": "Install .prc / .pdb files onto the connected Palm",
+        "Icon": "document-import",
+        "Authors": [{ "Name": "Clinton Ignatov" }],
+        "License": "GPL",
+        "Version": "2.0.0",
+        "Category": "Sync",
+        "Id": "install"
+    },
+    "X-WildPalms-PluginType":   "action",
+    "X-WildPalms-DefaultEnabled": true,
+    "X-WildPalms-SortOrder":     50
+}
