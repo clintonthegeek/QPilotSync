@@ -3,6 +3,7 @@
 #include "pluckerblobbackend.h"
 #include "pluckerchannel.h"
 #include "pluckerfetcher.h"
+#include "palm/sync/mockpalmdatabaseaccess.h"
 
 using namespace Kalburator::Sync;
 using namespace WildPalms::PluckerPlugin;
@@ -157,6 +158,60 @@ private slots:
         FakePluckerFetcher fetcher;
         PluckerBlobBackend backend({}, &fetcher, nullptr, {}, {});
         QVERIFY(backend.loadRecords(QStringLiteral("nope")).isEmpty());
+    }
+
+    void loadRecords_bootstrap_emitsWhenDbMissing()
+    {
+        WildPalms::PalmSync::MockPalmDatabaseAccess mock;
+        FakePluckerFetcher fetcher;
+        PluckerBlobBackend backend({}, &fetcher, &mock,
+                                    QByteArray("SZLB"),
+                                    QByteArray("VIEW"));
+
+        const auto records = backend.loadRecords(
+            QStringLiteral("plucker:bootstrap"));
+        QCOMPARE(records.size(), 2);
+
+        QHash<QString, QByteArray> byId;
+        for (const auto &r : records) byId.insert(r.id, r.data);
+        QCOMPARE(byId[QStringLiteral("bootstrap:syszlib")], QByteArray("SZLB"));
+        QCOMPARE(byId[QStringLiteral("bootstrap:viewer")],  QByteArray("VIEW"));
+    }
+
+    void loadRecords_bootstrap_emptyWhenDbPresent()
+    {
+        WildPalms::PalmSync::MockPalmDatabaseAccess mock;
+        mock.createDatabase(QStringLiteral("Plucker"));
+        FakePluckerFetcher fetcher;
+        PluckerBlobBackend backend({}, &fetcher, &mock,
+                                    QByteArray("SZLB"),
+                                    QByteArray("VIEW"));
+
+        QVERIFY(backend.loadRecords(
+            QStringLiteral("plucker:bootstrap")).isEmpty());
+    }
+
+    void loadRecords_bootstrap_emptyWhenNoDevice()
+    {
+        FakePluckerFetcher fetcher;
+        PluckerBlobBackend backend({}, &fetcher, nullptr,
+                                    QByteArray("SZLB"),
+                                    QByteArray("VIEW"));
+        QVERIFY(backend.loadRecords(
+            QStringLiteral("plucker:bootstrap")).isEmpty());
+    }
+
+    void loadRecords_bootstrap_skipsEmptyByteArrays()
+    {
+        WildPalms::PalmSync::MockPalmDatabaseAccess mock;
+        FakePluckerFetcher fetcher;
+        PluckerBlobBackend backend({}, &fetcher, &mock,
+                                    QByteArray(),
+                                    QByteArray("VIEW"));
+        const auto records = backend.loadRecords(
+            QStringLiteral("plucker:bootstrap"));
+        QCOMPARE(records.size(), 1);
+        QCOMPARE(records[0].id, QStringLiteral("bootstrap:viewer"));
     }
 };
 
