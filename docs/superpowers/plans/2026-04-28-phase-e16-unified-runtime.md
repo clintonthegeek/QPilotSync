@@ -3,6 +3,28 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (or
 > superpowers:subagent-driven-development for parallelizable steps).
 
+## Progress checkpoint — 2026-04-28
+
+**Landed (commits 72ca4c7, de1dbf7, 47bb35b on main):**
+
+- ✅ Task 1: `synctypes.h` relocated `src/sync/` → `src/core/`. Header guard `WILDPALMS_CORE_SYNCTYPES_H`. All consumers (mappers, palm/, kf6mainwindow, runtime) updated. Build clean.
+- ✅ Task 2: `SyncRunner` (`src/runtime/syncrunner_wp.{h,cpp}`) implemented. ~600 LOC. Drives `BlobSyncEngine::twoWayWithBaseline` per-plugin per-collection with a swappable PC-side `IBlobBackend` factory (LocalBlobBackend default; tests inject MockBlobBackend).
+- ✅ Task 3: All six `SyncMode` policies implemented + tested (`tests/runtime/tst_syncrunner.cpp`, 11 test methods). FullSync clears baseline + PC mirror to dodge BlobSyncEngine's silent-fall-through on `hasA && hasB && !hasBase`. Cancellation cooperative via `std::atomic<bool>`. ctest 77/77 at this checkpoint.
+- ✅ Task 5: All seven plugins' legacy halves deleted. Six are git submodules — each committed in-submodule with superproject pointer bumps. Install (in superproject proper). Mapper-level tests deleted with their mappers. ctest 73/73 (4 mapper tests gone, SyncRunner +1).
+
+**Remaining (Tasks 4, 6, 7, 8 — call-site migration + final deletes):**
+
+- ⏳ Task 4: app-layer call-site migration. The crux: `KF6MainWindow::onHotSync()` etc still call `m_session->requestSync(mode, m_syncEngine)`. They must route to `m_syncRunner` via a new `DeviceSession::requestSync(mode, SyncRunner*, ids)` overload, with `DeviceWorker::doSync` similarly extended. `InteractiveConflictHandler` is wired against WP-internal qsynccore (`src/sync/qsynccore/`); rewriting it against `Kalburator::Sync::QSyncCore::ConflictHandler` is the single biggest piece of remaining real engineering.
+  - Risk: high. The wiring has intricate threading (worker thread, tickle thread, cancellation propagation) that the existing test suite doesn't exercise. A wrong slot connection or a missed `Q_DECLARE_METATYPE` breaks the runtime app silently.
+  - Recommended approach: introduce overloaded `requestSync` / `doSync` on DeviceSession / DeviceWorker that take `SyncRunner*` instead of `SyncEngine*`. Leave the legacy overloads in place initially. Switch kf6mainwindow's menu handlers to the new path. Verify with a manual smoke test (Profile → Tools → HotSync against POSE64 emulator). THEN delete the legacy overloads in a follow-up commit.
+- ⏳ Task 6: deletion of `src/sync/`, `src/core/iconduit.h`, `src/core/isyncconduit.h`, `src/core/itoolconduit.h`, `src/kf6/conduitmanager.{h,cpp}`. Blocked on Task 4 — these are still load-bearing in kf6mainwindow until that migration lands.
+- ⏳ Task 7: `WildPalms::FullSync` → `WildPalms::Runtime` namespace rename. Mechanical sed; can land any time but no rush.
+- ⏳ Task 8: final ctest, parent-spec row flip, memory entry.
+
+**Acceptance gap:** The "WP builds + all six menu actions still drive a sync" criterion needs Task 4 done plus a manual smoke test on a real Palm device (or POSE64 emulator). The current state has the orchestrator (SyncRunner) ready and tested in isolation, but the app's existing onHotSync/etc. handlers still drive the legacy SyncEngine.
+
+
+
 **Goal:** Delete legacy `IConduit` ABI + Client-Mode runtime; introduce
 `WildPalms::Runtime::SyncRunner` to drive the new ABI under all six
 Tools-menu sync modes; migrate app-layer call sites; preserve user-visible
