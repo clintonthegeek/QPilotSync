@@ -5,6 +5,11 @@
 #include <QFileInfo>
 #include <QSet>
 
+#include <iblobbackend.h>
+
+#include "core/ibackendplugin.h"
+#include "runtime/backendpluginmanager.h"
+
 namespace WildPalms {
 
 InstallSourceCollector::Result
@@ -53,11 +58,46 @@ InstallSourceCollector::scanFolder(const QString &folderPath,
 }
 
 QList<InstallSourceCollector::FileEntry>
-InstallSourceCollector::drainPluginBlobs(BackendPluginManager * /*manager*/,
-                                            QTemporaryDir       * /*dir*/)
+InstallSourceCollector::drainPluginBlobs(BackendPluginManager *manager,
+                                            QTemporaryDir       *dir)
 {
-    // Implemented in Task 5.
-    return {};
+    QList<FileEntry> out;
+    if (!manager || !dir) return out;
+
+    for (auto *plugin : manager->plugins()) {
+        if (!plugin) continue;
+        auto backends = plugin->createBackends(nullptr, nullptr);
+        auto *blob = backends.blob;
+        if (!blob) continue;
+
+        for (const auto &col : blob->availableCollections()) {
+            const auto records = blob->loadRecords(col.id);
+            for (const auto &rec : records) {
+                if (!isInstallableType(rec.type)) continue;
+                if (rec.data.isEmpty()) continue;
+
+                const QString ext  = inferExtension(rec.type, rec.displayName);
+                const QString stem = rec.displayName.isEmpty()
+                                       ? rec.id.section(QChar(':'), -1)
+                                       : QFileInfo(rec.displayName).completeBaseName();
+                QString fileName = stem;
+                if (!fileName.endsWith(ext, Qt::CaseInsensitive)) fileName += ext;
+                const QString path = QDir(dir->path()).filePath(fileName);
+
+                QFile f(path);
+                if (!f.open(QIODevice::WriteOnly)) continue;
+                f.write(rec.data);
+                f.close();
+
+                FileEntry e;
+                e.path        = path;
+                e.displayName = rec.displayName.isEmpty() ? fileName : rec.displayName;
+                out.append(e);
+            }
+        }
+        delete blob;
+    }
+    return out;
 }
 
 bool InstallSourceCollector::isInstallableType(const QString &type)

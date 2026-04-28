@@ -30,6 +30,14 @@ target_include_directories(WildPalmsRuntime
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
 )
 
+# Phase E.15a — installsourcecollector.cpp uses Kalburator::Sync's
+# IBlobBackend / BackendRecord. Include the headers PRIVATE so we
+# don't leak the Kalburator surface to consumers.
+target_include_directories(WildPalmsRuntime BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+
 target_link_libraries(WildPalmsRuntime
     PUBLIC
         Qt::Core
