@@ -115,6 +115,7 @@ add_wildpalms_test(test_multidatabase test_multidatabase.cpp)
 add_executable(test_pluckerconfig
     test_pluckerconfig.cpp
     ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerconfig.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerchannel.cpp
 )
 target_link_libraries(test_pluckerconfig PRIVATE Qt::Core Qt::Test)
 target_include_directories(test_pluckerconfig PRIVATE ${CMAKE_SOURCE_DIR}/src)

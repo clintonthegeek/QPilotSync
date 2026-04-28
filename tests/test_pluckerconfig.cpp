@@ -3,6 +3,8 @@
 #include <QSettings>
 #include "../src/plugins/plucker/pluckerconfig.h"
 
+using PluckerChannel = WildPalms::PluckerPlugin::PluckerChannel;
+
 class TestPluckerConfig : public QObject
 {
     Q_OBJECT
