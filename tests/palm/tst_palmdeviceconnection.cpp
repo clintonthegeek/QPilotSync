@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 #include "palm/palmdeviceconnection.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
+#include "palm/sync/mockpalmfileinstaller.h"
 #include "palm/sync/palmbackend.h"
 
 class TestPalmDeviceConnection : public QObject {
@@ -8,6 +9,8 @@ class TestPalmDeviceConnection : public QObject {
 private slots:
     void exposesDeviceAndPalmBackend();
     void palmBackendIsUsableAcrossCalls();
+    void fileInstaller_returnsConfiguredInstance();
+    void fileInstaller_isNullByDefault();
 };
 
 void TestPalmDeviceConnection::exposesDeviceAndPalmBackend()
@@ -35,6 +38,22 @@ void TestPalmDeviceConnection::palmBackendIsUsableAcrossCalls()
         if (c.id == QStringLiteral("palm:memo")) sawMemo = true;
     }
     QVERIFY(sawMemo);
+}
+
+void TestPalmDeviceConnection::fileInstaller_returnsConfiguredInstance()
+{
+    WildPalms::PalmSync::MockPalmDatabaseAccess  db;
+    WildPalms::PalmSync::MockPalmFileInstaller   installer;
+    PalmDeviceConnection conn(&db, &installer);
+    QCOMPARE(conn.fileInstaller(),
+             static_cast<WildPalms::PalmSync::IPalmFileInstaller*>(&installer));
+}
+
+void TestPalmDeviceConnection::fileInstaller_isNullByDefault()
+{
+    WildPalms::PalmSync::MockPalmDatabaseAccess db;
+    PalmDeviceConnection conn(&db);
+    QVERIFY(conn.fileInstaller() == nullptr);
 }
 
 QTEST_MAIN(TestPalmDeviceConnection)

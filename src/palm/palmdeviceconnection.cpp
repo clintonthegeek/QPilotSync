@@ -7,6 +7,18 @@ PalmDeviceConnection::PalmDeviceConnection(
     : QObject(parent)
     , m_device(device)
     , m_palmBackend(new WildPalms::PalmSync::PalmBackend(device, this))
+    , m_fileInstaller(nullptr)
+{
+}
+
+PalmDeviceConnection::PalmDeviceConnection(
+    WildPalms::PalmSync::IPalmDatabaseAccess *device,
+    WildPalms::PalmSync::IPalmFileInstaller  *fileInstaller,
+    QObject *parent)
+    : QObject(parent)
+    , m_device(device)
+    , m_palmBackend(new WildPalms::PalmSync::PalmBackend(device, this))
+    , m_fileInstaller(fileInstaller)
 {
 }
 
@@ -20,4 +32,9 @@ WildPalms::PalmSync::IPalmDatabaseAccess *PalmDeviceConnection::device() const
 WildPalms::PalmSync::PalmBackend *PalmDeviceConnection::palmBackend() const
 {
     return m_palmBackend;
+}
+
+WildPalms::PalmSync::IPalmFileInstaller *PalmDeviceConnection::fileInstaller() const
+{
+    return m_fileInstaller;
 }
