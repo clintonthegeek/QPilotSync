@@ -21,3 +21,6 @@ add_subdirectory(contacts)
 
 # Phase E.13 — WebCalendar plugin tests.
 add_subdirectory(webcalendar)
+
+# Phase E.14 — Plucker plugin tests.
+add_subdirectory(plucker)
