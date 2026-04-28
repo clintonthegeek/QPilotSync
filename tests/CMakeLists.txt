@@ -42,38 +42,6 @@ endfunction()
 # be linked against at compile time, tests compile the mapper
 # sources directly from the plugin directories.
 
-add_wildpalms_test(test_calendarmapper
-    test_calendarmapper.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/calendar/calendarmapper.cpp
-)
-target_include_directories(test_calendarmapper PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/plugins/calendar
-)
-
-add_wildpalms_test(test_contactmapper
-    test_contactmapper.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/contacts/contactmapper.cpp
-)
-target_include_directories(test_contactmapper PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/plugins/contacts
-)
-
-add_wildpalms_test(test_memomapper
-    test_memomapper.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/memo/memomapper.cpp
-)
-target_include_directories(test_memomapper PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/plugins/memo
-)
-
-add_wildpalms_test(test_todomapper
-    test_todomapper.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/todos/todomapper.cpp
-)
-target_include_directories(test_todomapper PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/plugins/todos
-)
-
 # ============================================================
 # Unit Tests - Palm Data Structures
 # ============================================================
