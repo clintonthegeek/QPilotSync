@@ -70,3 +70,33 @@ target_link_libraries(tst_installactionplugin
         Kalburator::Sync
 )
 add_test(NAME tst_installactionplugin COMMAND tst_installactionplugin)
+
+# --- Task 8: end-to-end ---
+add_executable(tst_install_v2_e2e
+    tst_install_v2_e2e.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/installsourcecollector.cpp
+    ${CMAKE_SOURCE_DIR}/src/plugins/install/installactionplugin.cpp
+)
+target_compile_definitions(tst_install_v2_e2e
+    PRIVATE
+        INSTALL_FIXTURE_DIR="${INSTALL_FIXTURE_DIR}"
+)
+target_include_directories(tst_install_v2_e2e
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_install_v2_e2e BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_install_v2_e2e
+    PRIVATE
+        Qt::Test
+        Qt::Core
+        WildPalmsCore
+        WildPalmsRuntime
+        WildPalmsPalmSync
+        KF6::CoreAddons
+        Kalburator::Sync
+)
+add_test(NAME tst_install_v2_e2e COMMAND tst_install_v2_e2e)
