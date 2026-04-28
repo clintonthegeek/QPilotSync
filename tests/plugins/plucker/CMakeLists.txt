@@ -68,3 +68,45 @@ target_link_libraries(tst_pluckerblobbackend
         Kalburator::Sync
 )
 add_test(NAME tst_pluckerblobbackend COMMAND tst_pluckerblobbackend)
+
+# --- Task 7: PluckerBackendPlugin ---
+if (WILDPALMS_PLUCKER_PLUGIN_V2)
+    add_executable(tst_pluckerbackendplugin
+        tst_pluckerbackendplugin.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckerbackendplugin.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckerblobbackend.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckerfetcher.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckerchannel.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckerchannelserializer.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckersettingswidget.cpp
+        ${PLUCKER_PLUGIN_SRC_DIR}/pluckerchanneleditor.cpp
+        ${CMAKE_SOURCE_DIR}/src/palm/sync/mockpalmdatabaseaccess.cpp
+    )
+    target_compile_definitions(tst_pluckerbackendplugin
+        PRIVATE
+            PLUCKER_PLUGIN_SO_PATH="$<TARGET_FILE:wildpalms_plucker_v2>"
+            PLUCKER_DATA_DIR="${PLUCKER_PLUGIN_SRC_DIR}"
+    )
+    target_include_directories(tst_pluckerbackendplugin
+        PRIVATE
+            ${PLUCKER_PLUGIN_SRC_DIR}
+            ${CMAKE_SOURCE_DIR}/src
+    )
+    target_include_directories(tst_pluckerbackendplugin BEFORE
+        PRIVATE
+            $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+    )
+    target_link_libraries(tst_pluckerbackendplugin
+        PRIVATE
+            WildPalmsCore
+            WildPalmsRuntime
+            WildPalmsPalmSync
+            Qt::Test
+            Qt::Core
+            Qt::Widgets
+            KF6::CoreAddons
+            Kalburator::Sync
+    )
+    add_dependencies(tst_pluckerbackendplugin wildpalms_plucker_v2)
+    add_test(NAME tst_pluckerbackendplugin COMMAND tst_pluckerbackendplugin)
+endif ()
