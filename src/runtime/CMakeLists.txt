@@ -18,6 +18,10 @@ add_library(WildPalmsRuntime STATIC
     pluginactionmanager.cpp
     simpleactioncontext.h
     simpleactioncontext.cpp
+    # Phase E.15a — folder + cross-plugin blob aggregator for the
+    # install action.
+    installsourcecollector.h
+    installsourcecollector.cpp
 )
 
 target_include_directories(WildPalmsRuntime

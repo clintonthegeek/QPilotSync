@@ -18,3 +18,30 @@ target_link_libraries(tst_palmfileinstaller
         WildPalmsPalmSync
 )
 add_test(NAME tst_palmfileinstaller COMMAND tst_palmfileinstaller)
+
+# --- Task 4: InstallSourceCollector (folder side) ---
+add_executable(tst_installsourcecollector
+    tst_installsourcecollector.cpp
+    ${CMAKE_SOURCE_DIR}/src/runtime/installsourcecollector.cpp
+)
+target_compile_definitions(tst_installsourcecollector
+    PRIVATE
+        INSTALL_FIXTURE_DIR="${INSTALL_FIXTURE_DIR}"
+)
+target_include_directories(tst_installsourcecollector
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_installsourcecollector BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_installsourcecollector
+    PRIVATE
+        Qt::Test
+        Qt::Core
+        WildPalmsCore
+        WildPalmsRuntime
+        Kalburator::Sync
+)
+add_test(NAME tst_installsourcecollector COMMAND tst_installsourcecollector)
