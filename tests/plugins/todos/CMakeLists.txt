@@ -22,6 +22,7 @@ target_link_libraries(tst_todoicstranscoder
         Qt::Core
 )
 add_test(NAME tst_todoicstranscoder COMMAND tst_todoicstranscoder)
+set_tests_properties(tst_todoicstranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 3: TodoBlobBackend ---
 add_executable(tst_todoblobbackend
@@ -44,6 +45,7 @@ target_link_libraries(tst_todoblobbackend
         Qt::Core
 )
 add_test(NAME tst_todoblobbackend COMMAND tst_todoblobbackend)
+set_tests_properties(tst_todoblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: TodoConflictHandler ---
 add_executable(tst_todoconflicthandler
@@ -65,6 +67,7 @@ target_link_libraries(tst_todoconflicthandler
         Qt::Core
 )
 add_test(NAME tst_todoconflicthandler COMMAND tst_todoconflicthandler)
+set_tests_properties(tst_todoconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: TodoBackendPlugin (in-process, no .so loading) ---
 add_executable(tst_todobackendplugin
@@ -97,6 +100,7 @@ target_link_libraries(tst_todobackendplugin
         ${PILOT_LINK_LIBRARIES}
 )
 add_test(NAME tst_todobackendplugin COMMAND tst_todobackendplugin)
+set_tests_properties(tst_todobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 6: tst_todo_v2 — end-to-end via BackendPluginManager ---
 # Loads the real wildpalms_todos_v2.so off the build tree, drives
@@ -134,3 +138,4 @@ target_link_libraries(tst_todo_v2
 # Loads the plugin .so at runtime; ensure the plugin builds first.
 add_dependencies(tst_todo_v2 wildpalms_todos_v2)
 add_test(NAME tst_todo_v2 COMMAND tst_todo_v2)
+set_tests_properties(tst_todo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

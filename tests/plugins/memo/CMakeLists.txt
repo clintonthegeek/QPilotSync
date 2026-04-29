@@ -19,6 +19,7 @@ target_link_libraries(tst_memomarkdown
         Qt::Core
 )
 add_test(NAME tst_memomarkdown COMMAND tst_memomarkdown)
+set_tests_properties(tst_memomarkdown PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 add_executable(tst_memoblobbackend
     tst_memoblobbackend.cpp
@@ -39,6 +40,7 @@ target_link_libraries(tst_memoblobbackend
         Qt::Core
 )
 add_test(NAME tst_memoblobbackend COMMAND tst_memoblobbackend)
+set_tests_properties(tst_memoblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 add_executable(tst_memobackendplugin
     tst_memobackendplugin.cpp
@@ -65,6 +67,7 @@ target_link_libraries(tst_memobackendplugin
         Qt::Core
 )
 add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
+set_tests_properties(tst_memobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # Task 9: end-to-end test that loads the real .so through
 # BackendPluginManager and drives BlobSyncEngine::twoWayWithBaseline.
@@ -89,3 +92,4 @@ target_link_libraries(tst_memo_v2
 )
 add_dependencies(tst_memo_v2 wildpalms_memo_v2)
 add_test(NAME tst_memo_v2 COMMAND tst_memo_v2)
+set_tests_properties(tst_memo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

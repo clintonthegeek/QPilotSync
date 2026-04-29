@@ -18,6 +18,7 @@ target_link_libraries(tst_palmfileinstaller
         WildPalmsPalmSync
 )
 add_test(NAME tst_palmfileinstaller COMMAND tst_palmfileinstaller)
+set_tests_properties(tst_palmfileinstaller PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: InstallSourceCollector (folder side) ---
 add_executable(tst_installsourcecollector
@@ -45,6 +46,7 @@ target_link_libraries(tst_installsourcecollector
         Kalburator::Sync
 )
 add_test(NAME tst_installsourcecollector COMMAND tst_installsourcecollector)
+set_tests_properties(tst_installsourcecollector PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 6: InstallActionPlugin ---
 add_executable(tst_installactionplugin
@@ -70,6 +72,7 @@ target_link_libraries(tst_installactionplugin
         Kalburator::Sync
 )
 add_test(NAME tst_installactionplugin COMMAND tst_installactionplugin)
+set_tests_properties(tst_installactionplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 8: end-to-end ---
 add_executable(tst_install_v2_e2e
@@ -100,3 +103,4 @@ target_link_libraries(tst_install_v2_e2e
         Kalburator::Sync
 )
 add_test(NAME tst_install_v2_e2e COMMAND tst_install_v2_e2e)
+set_tests_properties(tst_install_v2_e2e PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

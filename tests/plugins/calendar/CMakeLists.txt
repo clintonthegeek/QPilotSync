@@ -25,6 +25,7 @@ target_link_libraries(tst_categoryappinforeader
         Qt::Core
 )
 add_test(NAME tst_categoryappinforeader COMMAND tst_categoryappinforeader)
+set_tests_properties(tst_categoryappinforeader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 3: IcsTranscoder ---
 add_executable(tst_icstranscoder
@@ -44,6 +45,7 @@ target_link_libraries(tst_icstranscoder
         Qt::Core
 )
 add_test(NAME tst_icstranscoder COMMAND tst_icstranscoder)
+set_tests_properties(tst_icstranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: CalendarBlobBackend ---
 add_executable(tst_calendarblobbackend
@@ -65,6 +67,7 @@ target_link_libraries(tst_calendarblobbackend
         Qt::Core
 )
 add_test(NAME tst_calendarblobbackend COMMAND tst_calendarblobbackend)
+set_tests_properties(tst_calendarblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: CalendarConflictHandler ---
 add_executable(tst_calendarconflicthandler
@@ -84,6 +87,7 @@ target_link_libraries(tst_calendarconflicthandler
         Qt::Core
 )
 add_test(NAME tst_calendarconflicthandler COMMAND tst_calendarconflicthandler)
+set_tests_properties(tst_calendarconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 6: CalendarBackendPlugin (in-process, no .so loading) ---
 add_executable(tst_calendarbackendplugin
@@ -115,6 +119,7 @@ target_link_libraries(tst_calendarbackendplugin
         ${PILOT_LINK_LIBRARIES}
 )
 add_test(NAME tst_calendarbackendplugin COMMAND tst_calendarbackendplugin)
+set_tests_properties(tst_calendarbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 7: tst_calendar_v2 — end-to-end via BackendPluginManager ---
 # Loads the real wildpalms_calendar_v2.so off the build tree, drives
@@ -158,3 +163,4 @@ target_link_libraries(tst_calendar_v2
 # Loads the plugin .so at runtime; ensure the plugin builds first.
 add_dependencies(tst_calendar_v2 wildpalms_calendar_v2)
 add_test(NAME tst_calendar_v2 COMMAND tst_calendar_v2)
+set_tests_properties(tst_calendar_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

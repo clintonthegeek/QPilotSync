@@ -19,6 +19,7 @@ target_link_libraries(tst_webcalfeed
         Qt::Core
 )
 add_test(NAME tst_webcalfeed COMMAND tst_webcalfeed)
+set_tests_properties(tst_webcalfeed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: WebcalBlobBackend ---
 set(WEBCAL_FIXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
@@ -45,6 +46,7 @@ target_link_libraries(tst_webcalblobbackend
         Kalburator::Sync
 )
 add_test(NAME tst_webcalblobbackend COMMAND tst_webcalblobbackend)
+set_tests_properties(tst_webcalblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: WebcalBackendPlugin ---
 add_executable(tst_webcalbackendplugin
@@ -73,6 +75,7 @@ target_link_libraries(tst_webcalbackendplugin
         Kalburator::Sync
 )
 add_test(NAME tst_webcalbackendplugin COMMAND tst_webcalbackendplugin)
+set_tests_properties(tst_webcalbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 6: end-to-end ---
 add_executable(tst_webcal_v2_e2e
@@ -105,3 +108,4 @@ target_link_libraries(tst_webcal_v2_e2e
         Kalburator::Sync
 )
 add_test(NAME tst_webcal_v2_e2e COMMAND tst_webcal_v2_e2e)
+set_tests_properties(tst_webcal_v2_e2e PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -21,6 +21,7 @@ target_link_libraries(tst_pluckerchannel
         Qt::Core
 )
 add_test(NAME tst_pluckerchannel COMMAND tst_pluckerchannel)
+set_tests_properties(tst_pluckerchannel PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: PluckerFetcher ---
 add_executable(tst_pluckerfetcher
@@ -42,6 +43,7 @@ target_link_libraries(tst_pluckerfetcher
         Qt::Core
 )
 add_test(NAME tst_pluckerfetcher COMMAND tst_pluckerfetcher)
+set_tests_properties(tst_pluckerfetcher PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: PluckerBlobBackend ---
 add_executable(tst_pluckerblobbackend
@@ -68,6 +70,7 @@ target_link_libraries(tst_pluckerblobbackend
         Kalburator::Sync
 )
 add_test(NAME tst_pluckerblobbackend COMMAND tst_pluckerblobbackend)
+set_tests_properties(tst_pluckerblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 7: PluckerBackendPlugin ---
 if (WILDPALMS_PLUCKER_PLUGIN_V2)
@@ -109,6 +112,7 @@ if (WILDPALMS_PLUCKER_PLUGIN_V2)
     )
     add_dependencies(tst_pluckerbackendplugin wildpalms_plucker_v2)
     add_test(NAME tst_pluckerbackendplugin COMMAND tst_pluckerbackendplugin)
+    set_tests_properties(tst_pluckerbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     # --- Task 9: end-to-end ---
     add_executable(tst_plucker_v2_e2e
@@ -147,4 +151,5 @@ if (WILDPALMS_PLUCKER_PLUGIN_V2)
             Kalburator::Sync
     )
     add_test(NAME tst_plucker_v2_e2e COMMAND tst_plucker_v2_e2e)
+    set_tests_properties(tst_plucker_v2_e2e PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif ()

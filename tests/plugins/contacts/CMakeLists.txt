@@ -24,6 +24,7 @@ target_link_libraries(tst_contactsvcardtranscoder
         Qt::Core
 )
 add_test(NAME tst_contactsvcardtranscoder COMMAND tst_contactsvcardtranscoder)
+set_tests_properties(tst_contactsvcardtranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 2: ContactsBlobBackend ---
 add_executable(tst_contactsblobbackend
@@ -46,6 +47,7 @@ target_link_libraries(tst_contactsblobbackend
         Qt::Core
 )
 add_test(NAME tst_contactsblobbackend COMMAND tst_contactsblobbackend)
+set_tests_properties(tst_contactsblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 3: ContactsConflictHandler ---
 add_executable(tst_contactsconflicthandler
@@ -67,6 +69,7 @@ target_link_libraries(tst_contactsconflicthandler
         Qt::Core
 )
 add_test(NAME tst_contactsconflicthandler COMMAND tst_contactsconflicthandler)
+set_tests_properties(tst_contactsconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: ContactsBackendPlugin (in-process, no .so loading) ---
 add_executable(tst_contactsbackendplugin
@@ -98,6 +101,7 @@ target_link_libraries(tst_contactsbackendplugin
         ${PILOT_LINK_LIBRARIES}
 )
 add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
+set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: tst_contacts_v2 — end-to-end via BackendPluginManager ---
 # Loads the real wildpalms_contacts_v2.so off the build tree, drives
@@ -133,3 +137,4 @@ target_link_libraries(tst_contacts_v2
 )
 add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
 add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
+set_tests_properties(tst_contacts_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
