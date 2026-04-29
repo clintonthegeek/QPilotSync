@@ -3,25 +3,64 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (or
 > superpowers:subagent-driven-development for parallelizable steps).
 
-## Progress checkpoint — 2026-04-28
+## Progress log — 2026-04-28
 
-**Landed (commits 72ca4c7, de1dbf7, 47bb35b on main):**
+**Landed in seven commits on `main`:**
 
-- ✅ Task 1: `synctypes.h` relocated `src/sync/` → `src/core/`. Header guard `WILDPALMS_CORE_SYNCTYPES_H`. All consumers (mappers, palm/, kf6mainwindow, runtime) updated. Build clean.
-- ✅ Task 2: `SyncRunner` (`src/runtime/syncrunner_wp.{h,cpp}`) implemented. ~600 LOC. Drives `BlobSyncEngine::twoWayWithBaseline` per-plugin per-collection with a swappable PC-side `IBlobBackend` factory (LocalBlobBackend default; tests inject MockBlobBackend).
-- ✅ Task 3: All six `SyncMode` policies implemented + tested (`tests/runtime/tst_syncrunner.cpp`, 11 test methods). FullSync clears baseline + PC mirror to dodge BlobSyncEngine's silent-fall-through on `hasA && hasB && !hasBase`. Cancellation cooperative via `std::atomic<bool>`. ctest 77/77 at this checkpoint.
-- ✅ Task 5: All seven plugins' legacy halves deleted. Six are git submodules — each committed in-submodule with superproject pointer bumps. Install (in superproject proper). Mapper-level tests deleted with their mappers. ctest 73/73 (4 mapper tests gone, SyncRunner +1).
+| Commit  | Scope                                                                                        |
+| ------- | -------------------------------------------------------------------------------------------- |
+| 72ca4c7 | Spec + plan committed.                                                                       |
+| de1dbf7 | Task 1 (synctypes relocation) + Task 2/3 (SyncRunner impl + 11 tests).                       |
+| 47bb35b | Task 5 (all 7 plugins' legacy halves deleted; submodule pointer bumps + superproject diff). |
+| cc8e56e | Plan progress checkpoint mid-session.                                                        |
+| a7323c3 | Task 4 (DeviceSession + DeviceWorker SyncRunner overloads; KF6MainWindow menu-handler swap). |
+| 4b43f89 | Real `PalmDeviceConnection` wired into SyncRunner via new `pilotlinkconnectionfactory`. Resolves the AUTOMOC cycle by compiling the factory inside `WildPalmsCore` (Core PRIVATE-links PalmDevice; PalmDevice gets Core's include paths via `INTERFACE_INCLUDE_DIRECTORIES` query, no link). PalmDevice's AUTOMOC disabled (no Q_OBJECT classes there). |
+| 167d914 | `SyncRunner::run` startTime preservation across per-mode dispatch (was reporting 0 ms).      |
 
-**Remaining (Tasks 4, 6, 7, 8 — call-site migration + final deletes):**
+**Real-device smoke test (Palm m505, 2026-04-28):**
 
-- ⏳ Task 4: app-layer call-site migration. The crux: `KF6MainWindow::onHotSync()` etc still call `m_session->requestSync(mode, m_syncEngine)`. They must route to `m_syncRunner` via a new `DeviceSession::requestSync(mode, SyncRunner*, ids)` overload, with `DeviceWorker::doSync` similarly extended. `InteractiveConflictHandler` is wired against WP-internal qsynccore (`src/sync/qsynccore/`); rewriting it against `Kalburator::Sync::QSyncCore::ConflictHandler` is the single biggest piece of remaining real engineering.
-  - Risk: high. The wiring has intricate threading (worker thread, tickle thread, cancellation propagation) that the existing test suite doesn't exercise. A wrong slot connection or a missed `Q_DECLARE_METATYPE` breaks the runtime app silently.
-  - Recommended approach: introduce overloaded `requestSync` / `doSync` on DeviceSession / DeviceWorker that take `SyncRunner*` instead of `SyncEngine*`. Leave the legacy overloads in place initially. Switch kf6mainwindow's menu handlers to the new path. Verify with a manual smoke test (Profile → Tools → HotSync against POSE64 emulator). THEN delete the legacy overloads in a follow-up commit.
-- ⏳ Task 6: deletion of `src/sync/`, `src/core/iconduit.h`, `src/core/isyncconduit.h`, `src/core/itoolconduit.h`, `src/kf6/conduitmanager.{h,cpp}`. Blocked on Task 4 — these are still load-bearing in kf6mainwindow until that migration lands.
-- ⏳ Task 7: `WildPalms::FullSync` → `WildPalms::Runtime` namespace rename. Mechanical sed; can land any time but no rush.
-- ⏳ Task 8: final ctest, parent-spec row flip, memory entry.
+- Profile: `~/PalmSync/Clinton/`.
+- HotSync via Tools menu → routed through SyncRunner → BlobSyncEngine (`twoWayWithBaseline` against per-plugin LocalBlobBackend, baselines persisted to `<state-dir>/.wildpalms-sync.db`).
+- 621 records flowed Palm → PC: 582 calendar (`palm:calendar/<slot>/` `.ics`), 21 contacts (`palm:contact/<slot>/` `.vcf`), 9 memos (`palm:memo/` `.md` with YAML frontmatter), 9 todos (`palm:todo/<slot>/` `.ics`).
+- Stats split `Palm: Created: 0 / PC: Created: 621` is correct first-sync semantics (engine processes `hasA && !hasB && !hasBase` records by creating on B without touching A).
 
-**Acceptance gap:** The "WP builds + all six menu actions still drive a sync" criterion needs Task 4 done plus a manual smoke test on a real Palm device (or POSE64 emulator). The current state has the orchestrator (SyncRunner) ready and tested in isolation, but the app's existing onHotSync/etc. handlers still drive the legacy SyncEngine.
+**Final test count:** ctest 71/71 passing. Eleven new SyncRunner test methods cover all six SyncMode dispatch paths against MockBlobBackend; four legacy mapper tests deleted with their mappers.
+
+**Status of original tasks:**
+
+- ✅ Task 1 — `synctypes.h` relocated.
+- ✅ Task 2 — `SyncRunner` skeleton + first test.
+- ✅ Task 3 — Six SyncMode policies + tests.
+- ✅ Task 4 — App-layer call-site migration (DeviceSession/DeviceWorker overloads + KF6MainWindow menu wiring + `m_syncRunner->setKPilotLink()` lifecycle).
+- ✅ Task 5 — Plugin legacy halves deleted across all 7 plugins.
+- ⏸ Task 6 — Deletion of `src/sync/`, `ConduitManager`, IConduit family. **Deferred.** The legacy code still builds and is constructed at startup, but is unreachable from the Tools menu (and from the deleted plugin manifests). Removing it requires migrating `InteractiveConflictHandler` first (see Deferred Items below).
+- ⏸ Task 7 — `WildPalms::FullSync` → `WildPalms::Runtime` namespace rename. **Deferred.** Cosmetic; will ride along with Task 6.
+- ⏸ Task 8 — Final spec row flip + memory entry. **Partial.** Memory entry written for "E.16 partial". Parent spec row not flipped to ✅ since Task 6/7 still pending; instead, recorded as "Landed (partial) 2026-04-28".
+
+## Deferred items (carried into a future phase)
+
+1. **`InteractiveConflictHandler` rebind to `Kalburator::Sync::QSyncCore::ConflictHandler`.** Currently the handler is wired against WP-internal `QSyncCore::ConflictHandler` (defined in `src/sync/qsynccore/conflictpolicy.h`); SyncRunner does not consult it. Conflicts on the new path auto-resolve via per-mode policy (NewerWins for HotSync/FullSync, source/target wins for Copy modes). UX regression — no interactive prompts on conflict. **Required before `src/sync/` can be deleted.**
+
+2. **WebCalendar plugin cross-thread parenting bug.** Smoke-test log:
+   > `QObject: Cannot create children for a parent that is in a different thread. (Parent is WildPalms::WebcalPlugin::WebcalBackendPlugin, parent's thread is mainThread, current thread is QThread(...))`
+   The plugin instance is created on the main thread; `SyncRunner::run()` calls `createBackends()` from the worker thread. WebCal plugin's body does `new SomeQObject(this)` with `this` = the plugin, violating Qt's same-thread parenting rule. Currently harmless because no WebCal feeds were configured during the smoke test (the bad backend goes unused), but will surface once feeds are added. Fix lives in the WebCal submodule — drop the parent-this parenting in `createBackends`.
+
+3. **Multi-collection plugins re-read Palm DB N times per sync.** Calendar (1 collection) reads DatebookDB once. Contacts/ToDos (4 collections each, one per category slot in their AppInfo) trigger `loadRecords()` per collection, and the plugin's blob backend re-reads the entire Palm DB each time and filters by category. 4× DLP I/O over USB. Functionally correct; performance optimization. Fix: per-DB read cache inside each plugin's blob backend.
+
+4. **Cross-id-space duplicates on second HotSync (untested).** `LocalBlobBackend` rewrites record ids to absolute file paths; the engine matches records by id-string equality across both backends. On the second sync, the engine sees PC-side records as "new" because their ids (paths) don't match Palm-side ids (`MemoDB:N`). Not yet observed by the user — first sync only. Fix path: per-plugin `IDMappingStore` between Palm and Local sides (matches the V2 plugin tests' MockBlobBackend approach but persistent).
+
+5. **Library-graph unused-include drift.** kf6mainwindow.cpp now has dead includes (`categoryinfo.h`, `syncstate.h`, `palmdeviceconnection.h`). clangd flags them; removing is mechanical and can ride with Task 6.
+
+## Resumption guide
+
+When picking E.16 back up (probably under a new phase row, e.g. E.16b):
+
+1. Plan a focused chunk for the InteractiveConflictHandler rewrite. The shape mismatch between WP's `QSyncCore::ConflictHandler` (operates on `ConflictRecord` with `source`/`target` content blocks + `ConflictPolicy` parameter) and Kalburator's `Kalburator::Sync::QSyncCore::ConflictHandler` (same shape, different namespace) means much of the body can port directly; the surgery is mostly include paths and namespace prefixes plus the `ConduitLookupFn` substitution.
+2. Once the handler talks to libkalburator's types, register it on SyncRunner's `ConflictHandlerRegistry` per-plugin-id before each `engine.twoWayWithBaseline()` call.
+3. Then `src/sync/` can be deleted in one atomic commit (Core no longer references any types from it).
+4. Then namespace rename + final spec/memory flip.
+
+Earlier sub-task descriptions below are kept for reference; many are now history.
 
 
 
