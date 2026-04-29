@@ -117,7 +117,7 @@ Create `tests/core/tst_ibackendplugin_defaults.cpp`:
 #include <QIcon>
 #include <QWidget>
 #include "core/ibackendplugin.h"
-#include "kalburator/sync/qsynccore/recordsnapshot.h"
+#include "conflictrecord.h"
 
 // Minimal concrete IBackendPlugin that overrides only the required pure
 // virtuals. Every optional hook falls through to the default
@@ -292,7 +292,7 @@ Q_DECLARE_INTERFACE(WildPalms::IBackendPlugin,
 ```cpp
 #include "ibackendplugin.h"
 
-#include "kalburator/sync/qsynccore/recordsnapshot.h"
+#include "conflictrecord.h"
 
 #include <QString>
 
@@ -1832,7 +1832,7 @@ Create `tests/plugins/memo/tst_memobackendplugin.cpp`:
 #include "palm/palmdeviceconnection.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 
-#include "kalburator/sync/qsynccore/recordsnapshot.h"
+#include "conflictrecord.h"
 
 using WildPalms::Memo::MemoBackendPlugin;
 using WildPalms::Memo::MemoBlobBackend;
@@ -2039,7 +2039,7 @@ public:
 #include "palm/codecs/memocodec.h"
 #include "palm/palmdeviceconnection.h"
 
-#include "kalburator/sync/qsynccore/recordsnapshot.h"
+#include "conflictrecord.h"
 
 #include <QIcon>
 #include <QString>
