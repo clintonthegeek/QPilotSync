@@ -2,6 +2,7 @@
 #define WILDPALMS_CALENDAR_PALMCALENDARBACKEND_H
 
 #include "syncbackend.h"
+#include "transcodingplan.h"
 
 namespace WildPalms::PalmSync {
 class IPalmDatabaseAccess;
@@ -62,16 +63,19 @@ public:
         const QString &collectionId,
         const QList<KCalendarCore::MemoryCalendar *> &calendars) override;
     void storeItems(KCalendarCore::MemoryCalendar *cal,
-                    const QList<KCalendarCore::Incidence::Ptr> &items) override;
+                    const QList<KCalendarCore::Incidence::Ptr> &items,
+                    const Kalburator::Sync::TranscodingPlan &plan) override;
     void updateItem(KCalendarCore::MemoryCalendar *cal,
                     const KCalendarCore::Incidence::Ptr &item,
-                    const QString &icalData) override;
+                    const QString &icalData,
+                    const Kalburator::Sync::TranscodingPlan &plan) override;
     void startSync(
         const QString &collectionId,
         KCalendarCore::MemoryCalendar *calendar,
         const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
         const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
-        const QMap<QString, QString> &stagedDeletions) override;
+        const QMap<QString, QString> &stagedDeletions,
+        const Kalburator::Sync::TranscodingPlan &plan) override;
     void removeItem(const QString &calId, const QString &itemUid) override;
 
     // ========== Operation-based API (Task 5) ==========

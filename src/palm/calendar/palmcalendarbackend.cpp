@@ -119,9 +119,12 @@ void PalmCalendarBackend::storeCalendars(
 }
 
 void PalmCalendarBackend::storeItems(
-    KCalendarCore::MemoryCalendar *,
-    const QList<KCalendarCore::Incidence::Ptr> &items)
+    KCalendarCore::MemoryCalendar *cal,
+    const QList<KCalendarCore::Incidence::Ptr> &items,
+    const Kalburator::Sync::TranscodingPlan &plan)
 {
+    Q_UNUSED(cal);
+    Q_UNUSED(plan);
     // Legacy API lacks calendarId, so we route to Unfiled (slot 0) —
     // callers needing slot control use pushItems(calendarId, items).
     if (items.isEmpty()) return;
@@ -130,9 +133,13 @@ void PalmCalendarBackend::storeItems(
 }
 
 void PalmCalendarBackend::updateItem(
-    KCalendarCore::MemoryCalendar *, const KCalendarCore::Incidence::Ptr &item,
-    const QString &icalData)
+    KCalendarCore::MemoryCalendar *cal,
+    const KCalendarCore::Incidence::Ptr &item,
+    const QString &icalData,
+    const Kalburator::Sync::TranscodingPlan &plan)
 {
+    Q_UNUSED(cal);
+    Q_UNUSED(plan);
     if (!item) return;
 
     KCalendarCore::Incidence::Ptr effective = item;
@@ -164,11 +171,16 @@ void PalmCalendarBackend::updateItem(
 }
 
 void PalmCalendarBackend::startSync(
-    const QString &, KCalendarCore::MemoryCalendar *,
+    const QString &collectionId,
+    KCalendarCore::MemoryCalendar *calendar,
     const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
     const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
-    const QMap<QString, QString> &stagedDeletions)
+    const QMap<QString, QString> &stagedDeletions,
+    const Kalburator::Sync::TranscodingPlan &plan)
 {
+    Q_UNUSED(collectionId);
+    Q_UNUSED(calendar);
+    Q_UNUSED(plan);
     // Route by each incidence's X-WP-PALM-CATEGORY-SLOT property,
     // else 0.
     auto slotForIncidence = [](const KCalendarCore::Incidence::Ptr &inc) {
