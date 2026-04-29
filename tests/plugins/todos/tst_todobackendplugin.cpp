@@ -93,7 +93,7 @@ void TestTodoBackendPlugin::createBackendsPopulatesCategoryStoreFromAppInfo()
     auto provided = p.createBackends(/*host=*/nullptr, &conn);
     QVERIFY(provided.blob != nullptr);
 
-    auto *blob = qobject_cast<TodoBlobBackend *>(provided.blob);
+    auto *blob = static_cast<TodoBlobBackend *>(provided.blob);
     QVERIFY(blob);
     auto cols = blob->availableCollections();
     QCOMPARE(cols.size(), 3);  // Unfiled + Personal + Business

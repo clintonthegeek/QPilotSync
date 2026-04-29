@@ -64,7 +64,7 @@ PalmRecord backendToPalm(const Kalburator::Sync::BackendRecord &br,
 } // namespace
 
 PalmBackend::PalmBackend(IPalmDatabaseAccess *device, QObject *parent)
-    : Kalburator::Sync::IBlobBackend(parent)
+    : QObject(parent)
     , m_device(device)
 {
 }

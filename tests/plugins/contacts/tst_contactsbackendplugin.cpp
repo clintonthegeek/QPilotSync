@@ -111,7 +111,7 @@ void TestContactsBackendPlugin::createBackends_populatesCategoryStoreFromAppInfo
     auto provided = p.createBackends(/*host=*/nullptr, &conn);
     QVERIFY(provided.blob != nullptr);
 
-    auto *blob = qobject_cast<ContactsBlobBackend *>(provided.blob);
+    auto *blob = static_cast<ContactsBlobBackend *>(provided.blob);
     QVERIFY(blob);
     auto cols = blob->availableCollections();
     QCOMPARE(cols.size(), 3);  // Unfiled (slot 0) + Family (slot 1) + Customers (slot 5)

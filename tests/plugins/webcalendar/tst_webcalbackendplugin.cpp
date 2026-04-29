@@ -33,7 +33,7 @@ private slots:
         const auto out = p.createBackends(nullptr, nullptr);
         QVERIFY(out.blob != nullptr);
         QVERIFY(out.calendar == nullptr);
-        QVERIFY(qobject_cast<WebcalBlobBackend *>(out.blob) != nullptr);
+        QVERIFY(dynamic_cast<WebcalBlobBackend *>(out.blob) != nullptr);
         delete out.blob;
     }
 

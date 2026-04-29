@@ -17,7 +17,7 @@ namespace {
 
 using namespace Kalburator::Sync;
 
-class FakeBlobBackend : public IBlobBackend
+class FakeBlobBackend : public QObject, public IBlobBackend
 {
     Q_OBJECT
 public:
@@ -45,6 +45,13 @@ public:
 
     QList<CollectionInfo>                          m_cols;
     QHash<QString, QList<BackendRecord>>           m_records;
+
+Q_SIGNALS:
+    void recordCreated(const QString &recordId);
+    void recordUpdated(const QString &recordId);
+    void recordDeleted(const QString &recordId);
+    void errorOccurred(const QString &error);
+    void progressUpdated(int current, int total, const QString &message);
 };
 
 class FakeBackendPlugin : public QObject, public WildPalms::IBackendPlugin
