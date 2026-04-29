@@ -1115,6 +1115,15 @@ void KF6MainWindow::onConnectionComplete(bool success)
 
     m_deviceLink = m_session->deviceLink();
 
+    // Phase E.16 — hand the live KPilotLink to the SyncRunner so it
+    // can build (and own) the PalmDeviceConnection that
+    // IBackendPlugin::createBackends() needs. The construction logic
+    // lives in WildPalmsRuntime so this header can stay free of the
+    // pilot-link wrapper types.
+    if (m_syncRunner) {
+        m_syncRunner->setKPilotLink(m_deviceLink, this);
+    }
+
     // Use handshake data (captured during connection on the worker thread —
     // no DLP calls on the main thread while tickle may be running)
     if (m_deviceLink->handshakeUserInfoValid()) {
@@ -1357,6 +1366,10 @@ void KF6MainWindow::onDisconnectDevice()
         m_deviceLink = nullptr;
 
         m_syncEngine->setDeviceLink(nullptr);
+
+        // Phase E.16 — tear down the SyncRunner-owned
+        // PalmDeviceConnection so it can't call into a stale link.
+        if (m_syncRunner) m_syncRunner->setKPilotLink(nullptr, nullptr);
 
         statusBar()->showMessage(i18n("Disconnected"));
         m_logWidget->logInfo(i18n("Disconnected from device"));

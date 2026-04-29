@@ -35,6 +35,10 @@ add_library(WildPalmsRuntime STATIC
     # legacy Sync::SyncEngine driving IConduit derivatives.
     syncrunner_wp.h
     syncrunner_wp.cpp
+    # Phase E.16 — pilot-link factory header (forward-decls only;
+    # impl compiled into WildPalmsCore where the device-side
+    # libraries can be linked without an AUTOMOC cycle).
+    pilotlinkconnectionfactory.h
 )
 
 target_include_directories(WildPalmsRuntime

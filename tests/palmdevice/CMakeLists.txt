@@ -10,6 +10,9 @@ function(add_palm_device_test TEST_NAME)
             Qt::Core
             Qt::Test
             WildPalmsPalmDevice
+            # Phase E.16 — PalmDevice no longer links Core
+            # transitively; add it here explicitly.
+            WildPalmsCore
             pisock
             bluetooth
             usb

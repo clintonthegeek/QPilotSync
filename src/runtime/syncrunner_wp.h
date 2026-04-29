@@ -16,6 +16,11 @@ class ISyncHost;
 }
 
 class PalmDeviceConnection;
+class KPilotLink;
+
+namespace WildPalms::Runtime {
+struct PalmConnectionBundle;
+}
 
 namespace WildPalms {
 class BackendPluginManager;
@@ -90,6 +95,13 @@ public:
     void setDevice(PalmDeviceConnection *device) { m_device = device; }
     void setHost(Kalburator::Sync::ISyncHost *host) { m_host = host; }
 
+    /// Phase E.16: caller-friendly device wiring. KF6MainWindow hands
+    /// us a live KPilotLink; SyncRunner owns the resulting wrapper
+    /// bundle so kf6mainwindow.h doesn't need to include the
+    /// device-side headers (which would force a Core <-> PalmDevice
+    /// link cycle through AUTOMOC). Pass nullptr to tear down.
+    void setKPilotLink(KPilotLink *link, QObject *bundleParent);
+
 signals:
     void started(int mode);
     void progress(int current, int total, const QString &message);
@@ -115,6 +127,7 @@ private:
     QString                        m_syncPath;
     QString                        m_stateDir;
     LocalBackendFactory            m_localBackendFactory;
+    PalmConnectionBundle          *m_ownedBundle = nullptr;
 
     std::atomic<bool>              m_cancelled{false};
 };

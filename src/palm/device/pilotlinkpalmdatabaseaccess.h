@@ -1,7 +1,7 @@
 #ifndef WILDPALMS_DEVICE_PILOTLINKPALMDATABASEACCESS_H
 #define WILDPALMS_DEVICE_PILOTLINKPALMDATABASEACCESS_H
 
-#include "ipalmdatabaseaccess.h"
+#include "../sync/ipalmdatabaseaccess.h"
 
 class KPilotLink;
 

@@ -1,4 +1,5 @@
 #include "syncrunner_wp.h"
+#include "pilotlinkconnectionfactory.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -102,7 +103,29 @@ SyncRunner::SyncRunner(BackendPluginManager *plugins,
     };
 }
 
-SyncRunner::~SyncRunner() = default;
+SyncRunner::~SyncRunner()
+{
+    if (m_ownedBundle) {
+        m_ownedBundle->destroy();
+        delete m_ownedBundle;
+        m_ownedBundle = nullptr;
+    }
+}
+
+void SyncRunner::setKPilotLink(KPilotLink *link, QObject *bundleParent)
+{
+    // Always tear down the previous bundle first — the device pointer
+    // it gave us would dangle if we kept it across a reconnect.
+    if (m_ownedBundle) {
+        m_device = nullptr;
+        m_ownedBundle->destroy();
+        delete m_ownedBundle;
+        m_ownedBundle = nullptr;
+    }
+    if (!link) return;
+    m_ownedBundle = new PalmConnectionBundle(makePalmConnection(link, bundleParent));
+    m_device = m_ownedBundle->connection;
+}
 
 void SyncRunner::setLocalBackendFactory(LocalBackendFactory factory)
 {

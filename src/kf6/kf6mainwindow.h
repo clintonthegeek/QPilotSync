@@ -181,6 +181,12 @@ private:
     // constructed but unused from the menu wiring.
     WildPalms::Runtime::SyncRunner    *m_syncRunner = nullptr;
 
+    // (Phase E.16 — the PalmDeviceConnection wrapping the live
+    // KPilotDeviceLink is owned inside m_syncRunner via
+    // SyncRunner::setKPilotLink, set on connect and torn down on
+    // disconnect. Keeps the device-side headers off this one's
+    // include surface.)
+
     // Action manager
     ActionManager *m_actionManager;
 

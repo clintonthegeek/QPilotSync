@@ -83,6 +83,12 @@ add_library(WildPalmsCore SHARED
     kf6/kf6settings.cpp
     kf6/kf6settings.h
 
+    # Phase E.16 — pilot-link factory impl. Lives in WildPalmsCore (not
+    # WildPalmsRuntime) because Core PRIVATE-links WildPalmsPalmDevice
+    # without creating an AUTOMOC cycle (PalmDevice's Core link is
+    # PRIVATE on its end). Header in src/runtime/.
+    runtime/pilotlinkconnectionfactory.cpp
+
     # Widgets - Common
     widgets/common/categorymanager.cpp
     widgets/common/categorymanager.h
@@ -135,6 +141,11 @@ target_link_libraries(WildPalmsCore
         # here embeds its static objects without creating a consumer
         # cycle.
         WildPalmsRuntime
+        # Phase E.16 — pilot-link wrappers used by kf6mainwindow's
+        # device-connect path. PalmDevice→Core is PRIVATE (demoted)
+        # so the link is one-directional from Core's perspective.
+        WildPalmsPalmDevice
+        WildPalmsPalmSync
 )
 
 target_include_directories(WildPalmsCore PUBLIC
