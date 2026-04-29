@@ -213,6 +213,10 @@ Sync::SyncResult SyncRunner::run(Sync::SyncMode mode, const QStringList &enabled
     QDir().mkpath(m_syncPath);
     QDir().mkpath(m_stateDir);
 
+    // Capture startTime separately so the per-mode helpers' return
+    // value (which constructs a fresh SyncResult) doesn't trample it.
+    const QDateTime startedAt = result.startTime;
+
     switch (mode) {
     case Sync::SyncMode::HotSync:
     case Sync::SyncMode::FullSync:
@@ -230,6 +234,7 @@ Sync::SyncResult SyncRunner::run(Sync::SyncMode mode, const QStringList &enabled
         break;
     }
 
+    result.startTime = startedAt;
     result.endTime = QDateTime::currentDateTimeUtc();
     emit logMessage(QStringLiteral("=== %1 %2 (%3 ms) ===")
                         .arg(modeLabel(mode),
