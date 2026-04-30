@@ -81,7 +81,7 @@ public slots:
      *
      * Mirror of doSync(SyncEngine*) targeting the new IBackendPlugin
      * runtime. Same threading + cancellation semantics as the legacy
-     * overload; the runner internally drives BlobSyncEngine per
+     * overload; the runner internally drives SyncEngine per
      * loaded plugin.
      */
     void doSyncRunner(int mode,

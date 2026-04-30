@@ -552,7 +552,7 @@ void KF6MainWindow::initializeConduits()
         }
     }
 
-    // Phase E.16 — orchestrator that drives BlobSyncEngine for each
+    // Phase E.16 — orchestrator that drives SyncEngine for each
     // loaded IBackendPlugin in response to Tools-menu actions. syncPath
     // + stateDir get rebound when a profile is loaded; host/device
     // come from the profile's PalmDeviceConnection wiring (E.17 owns

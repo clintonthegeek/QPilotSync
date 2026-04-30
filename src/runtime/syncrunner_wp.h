@@ -30,12 +30,12 @@ namespace WildPalms::Runtime {
 
 /**
  * @brief Single orchestrator that drives Tools-menu sync actions through
- *        the new IBackendPlugin ABI plus Kalburator::Sync::BlobSyncEngine.
+ *        the new IBackendPlugin ABI plus Kalburator::Sync::SyncEngine.
  *
  * Replaces Sync::SyncEngine + Sync::Conduit (deleted in E.16). Each call
  * to run() iterates the loaded plugins, gets each plugin's blob backend,
  * pairs it with a per-plugin LocalBlobBackend rooted under syncPath, and
- * dispatches BlobSyncEngine::twoWayWithBaseline (or a one-way mirror for
+ * dispatches SyncEngine::twoWayWithBaseline (or a one-way mirror for
  * Backup/Restore/CopyXxx modes).
  *
  * Threading: run() is synchronous. Callers that want it off the UI

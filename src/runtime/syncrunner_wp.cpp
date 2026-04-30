@@ -4,7 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 
-#include <blobsyncengine.h>
+#include <syncengine.h>
 #include <iblobbackend.h>
 #include <localblobbackend.h>
 #include <conflicthandlerregistry.h>
@@ -33,10 +33,10 @@ QString sanitizeForPath(const QString &id)
     return out;
 }
 
-// Build a ConflictPolicy whose autoResolve drives BlobSyncEngine to a
-// deterministic resolution. The blob engine treats the first IBlobBackend
-// argument to twoWayWithBaseline as the "source" side; we therefore feed
-// Palm-as-source consistently in this runner.
+// Build a ConflictPolicy whose autoResolve drives SyncEngine's blob
+// facade to a deterministic resolution. The engine treats the first
+// IBlobBackend argument to runBlobTwoWay as the "source" side; we
+// therefore feed Palm-as-source consistently in this runner.
 Kalburator::Sync::QSyncCore::ConflictPolicy policyFor(Sync::SyncMode mode)
 {
     using Kalburator::Sync::QSyncCore::AutoResolveStrategy;
@@ -263,7 +263,7 @@ Sync::SyncResult SyncRunner::runTwoWay(Sync::SyncMode mode, const QStringList &p
     Kalburator::Sync::QSyncCore::ConflictStore           conflicts;
     const auto policy = policyFor(mode);
 
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     int total = pluginIds.size();
     int idx = 0;
@@ -300,16 +300,16 @@ Sync::SyncResult SyncRunner::runTwoWay(Sync::SyncMode mode, const QStringList &p
             if (mode == Sync::SyncMode::FullSync) {
                 // Reset both the baseline AND the PC-side mirror so the
                 // engine treats every Palm record as fresh-on-source.
-                // BlobSyncEngine::twoWayWithBaseline does not currently
-                // handle the (record-on-both, baseline-absent) case —
-                // it falls through silently — so we clear B first to
-                // avoid stale data sticking.
+                // SyncEngine::runBlobTwoWay does not currently handle
+                // the (record-on-both, baseline-absent) case — it falls
+                // through silently — so we clear B first to avoid stale
+                // data sticking.
                 baseline.clearMapping(mappingId);
                 const auto stale = localBlob.loadRecords(col.id);
                 for (const auto &r : stale) localBlob.deleteRecord(r.id);
             }
 
-            const auto r = engine.twoWayWithBaseline(
+            const auto r = engine.runBlobTwoWay(
                 palmBlob.get(), &localBlob,
                 col.id, mappingId,
                 &baseline, &handlers, &conflicts, policy);
@@ -336,7 +336,7 @@ Sync::SyncResult SyncRunner::runMirror(Sync::SyncMode mode, const QStringList &p
     Sync::SyncResult result;
     result.success = true;
 
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     int total = pluginIds.size();
     int idx = 0;
@@ -374,7 +374,7 @@ Sync::SyncResult SyncRunner::runMirror(Sync::SyncMode mode, const QStringList &p
                 dst = palmBlob.get();
             }
 
-            const auto r = engine.mirror(src, dst, col.id);
+            const auto r = engine.runBlobMirror(src, dst, col.id);
             if (!r.success) {
                 result.success = false;
                 result.errorMessage += (result.errorMessage.isEmpty()
@@ -469,7 +469,7 @@ Sync::SyncResult SyncRunner::runRestore(const QStringList &pluginIds)
     Sync::SyncResult result;
     result.success = true;
 
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     int total = pluginIds.size();
     int idx = 0;
@@ -495,7 +495,7 @@ Sync::SyncResult SyncRunner::runRestore(const QStringList &pluginIds)
         const auto cols = palmBlob->availableCollections();
         for (const auto &col : cols) {
             if (isCancelled()) break;
-            const auto r = engine.mirror(&localBlob, palmBlob.get(), col.id);
+            const auto r = engine.runBlobMirror(&localBlob, palmBlob.get(), col.id);
             if (!r.success) {
                 result.success = false;
                 result.errorMessage += (result.errorMessage.isEmpty()
