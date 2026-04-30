@@ -3,7 +3,7 @@
 #include <QJsonObject>
 #include <QTest>
 
-#include <blobsyncengine.h>
+#include <syncengine.h>
 #include <mockblobbackend.h>
 
 #include "palm/sync/mockpalmdatabaseaccess.h"
@@ -67,8 +67,8 @@ private slots:
         c.type = QStringLiteral("plucker");
         dst.createCollection(c);
 
-        BlobSyncEngine engine;
-        engine.mirror(&src, &dst, QStringLiteral("plucker:channels"));
+        SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+        engine.runBlobMirror(&src, &dst, QStringLiteral("plucker:channels"));
 
         const auto records = dst.loadRecords(QStringLiteral("plucker:channels"));
         QCOMPARE(records.size(), 1);
@@ -89,10 +89,10 @@ private slots:
         c.type = QStringLiteral("plucker");
         dst.createCollection(c);
 
-        BlobSyncEngine engine;
+        SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
         // First run — device lacks Plucker DB.
-        engine.mirror(&src, &dst, QStringLiteral("plucker:bootstrap"));
+        engine.runBlobMirror(&src, &dst, QStringLiteral("plucker:bootstrap"));
         const auto first = dst.loadRecords(QStringLiteral("plucker:bootstrap"));
         QCOMPARE(first.size(), 2);
 
@@ -101,7 +101,7 @@ private slots:
 
         // Second run — bootstrap collection becomes empty; mirror deletes
         // the now-absent records from dst.
-        engine.mirror(&src, &dst, QStringLiteral("plucker:bootstrap"));
+        engine.runBlobMirror(&src, &dst, QStringLiteral("plucker:bootstrap"));
         const auto second = dst.loadRecords(QStringLiteral("plucker:bootstrap"));
         QCOMPARE(second.size(), 0);
     }

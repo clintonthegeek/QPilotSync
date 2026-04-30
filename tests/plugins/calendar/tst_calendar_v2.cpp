@@ -20,7 +20,7 @@
 #include "plugins/calendar/calendarblobbackend.h"
 #include "runtime/backendpluginmanager.h"
 
-#include "blobsyncengine.h"
+#include "syncengine.h"
 #include "blobbaselinestore.h"
 #include "mockblobbackend.h"
 #include "conflicthandlerregistry.h"
@@ -187,13 +187,13 @@ void TestCalendarV2::freshSyncCreatesPerCategoryRecords()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     for (int slot : {0, 1, 2, 3}) {
         const QString cid = CalendarBlobBackend::collectionIdForSlot(slot);
         const QString mappingId =
             QStringLiteral("e10-fresh-%1").arg(slot);
-        auto result = engine.twoWayWithBaseline(
+        auto result = engine.runBlobTwoWay(
             provided.blob, &target, cid, mappingId,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
@@ -236,13 +236,13 @@ void TestCalendarV2::modifyTargetPropagatesToPalm()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid = CalendarBlobBackend::collectionIdForSlot(1);
     const QString mappingId = QStringLiteral("e10-mod");
 
     // First sync.
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
@@ -269,7 +269,7 @@ void TestCalendarV2::modifyTargetPropagatesToPalm()
     QVERIFY(target.updateRecord(mutated));
 
     // Re-sync; expect Palm side to pick up the change.
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
@@ -318,12 +318,12 @@ void TestCalendarV2::deletePalmRemovesTargetRecord()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid = CalendarBlobBackend::collectionIdForSlot(2);
     const QString mappingId = QStringLiteral("e10-del");
 
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
@@ -342,7 +342,7 @@ void TestCalendarV2::deletePalmRemovesTargetRecord()
     }
     QVERIFY(deleted);
 
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
@@ -380,13 +380,13 @@ void TestCalendarV2::idempotentNoopSyncChangesNothing()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid = CalendarBlobBackend::collectionIdForSlot(1);
     const QString mappingId = QStringLiteral("e10-noop");
 
     // First sync.
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
@@ -398,7 +398,7 @@ void TestCalendarV2::idempotentNoopSyncChangesNothing()
     std::sort(hashesAfterFirst.begin(), hashesAfterFirst.end());
 
     // Second sync should be a noop.
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));

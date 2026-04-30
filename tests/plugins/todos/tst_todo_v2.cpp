@@ -17,7 +17,7 @@
 #include "plugins/todos/todoicstranscoder.h"
 #include "runtime/backendpluginmanager.h"
 
-#include "blobsyncengine.h"
+#include "syncengine.h"
 #include "blobbaselinestore.h"
 #include "mockblobbackend.h"
 #include "conflicthandlerregistry.h"
@@ -219,13 +219,13 @@ void TestTodoV2::freshSyncMovesTargetRecordsToPalm()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     for (int slot : {0, 1}) {
         const QString cid = TodoBlobBackend::collectionIdForSlot(slot);
         const QString mappingId =
             QStringLiteral("e11-fresh-%1").arg(slot);
-        auto result = engine.twoWayWithBaseline(
+        auto result = engine.runBlobTwoWay(
             provided.blob, &target, cid, mappingId,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
@@ -293,13 +293,13 @@ void TestTodoV2::palmRecordsLandAtTargetInCorrectSlots()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     for (int slot : {0, 1, 2}) {
         const QString cid = TodoBlobBackend::collectionIdForSlot(slot);
         const QString mappingId =
             QStringLiteral("e11-palm2target-%1").arg(slot);
-        auto result = engine.twoWayWithBaseline(
+        auto result = engine.runBlobTwoWay(
             provided.blob, &target, cid, mappingId,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
@@ -355,13 +355,13 @@ void TestTodoV2::completionConflictMergesViaOverlay()
     QVERIFY(baseline.isOpen());
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid       = TodoBlobBackend::collectionIdForSlot(1);
     const QString mappingId = QStringLiteral("e11-conflict");
 
     // First sync establishes the baseline + propagates Palm→target.
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
@@ -406,7 +406,7 @@ void TestTodoV2::completionConflictMergesViaOverlay()
 
     // Second sync — both sides have local edits since baseline →
     // BothModified conflict → handler fires.
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
@@ -475,7 +475,7 @@ void TestTodoV2::crossSlotMoveUpdatesPalmCategory()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid1      = TodoBlobBackend::collectionIdForSlot(1);
     const QString cid2      = TodoBlobBackend::collectionIdForSlot(2);
@@ -484,12 +484,12 @@ void TestTodoV2::crossSlotMoveUpdatesPalmCategory()
 
     // First sync — slot 1 record propagates Palm→target.
     {
-        auto r = engine.twoWayWithBaseline(
+        auto r = engine.runBlobTwoWay(
             provided.blob, &target, cid1, mappingId1,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(r.success, qUtf8Printable(r.errorMessage));
         // And run slot-2 sync once to establish baseline (both empty).
-        auto r2 = engine.twoWayWithBaseline(
+        auto r2 = engine.runBlobTwoWay(
             provided.blob, &target, cid2, mappingId2,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
@@ -525,11 +525,11 @@ void TestTodoV2::crossSlotMoveUpdatesPalmCategory()
     // Re-sync both slots. Slot 1 propagates the deletion to Palm;
     // slot 2 propagates the new record to Palm.
     {
-        auto r1 = engine.twoWayWithBaseline(
+        auto r1 = engine.runBlobTwoWay(
             provided.blob, &target, cid1, mappingId1,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
-        auto r2 = engine.twoWayWithBaseline(
+        auto r2 = engine.runBlobTwoWay(
             provided.blob, &target, cid2, mappingId2,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));

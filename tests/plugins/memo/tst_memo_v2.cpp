@@ -13,7 +13,7 @@
 
 #include <QCryptographicHash>
 
-#include "blobsyncengine.h"
+#include "syncengine.h"
 #include "blobbaselinestore.h"
 #include "mockblobbackend.h"
 #include "conflicthandlerregistry.h"
@@ -138,8 +138,8 @@ void TestMemoV2::freshSyncCreatesLocalFiles()
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
 
-    Kalburator::Sync::BlobSyncEngine engine;
-    auto result = engine.twoWayWithBaseline(
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+    auto result = engine.runBlobTwoWay(
         memoBackend, &mock,
         QStringLiteral("palm:memo"),
         QStringLiteral("e9-fresh"),
@@ -195,9 +195,9 @@ void TestMemoV2::modifyLocalPropagatesToPalm()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         backends.blob, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e9-mod"),
         &baseline, &registry, &conflicts, policy);
@@ -221,7 +221,7 @@ void TestMemoV2::modifyLocalPropagatesToPalm()
     mutated.lastModified = QDateTime::currentDateTimeUtc().addSecs(60);
     QVERIFY(mock.updateRecord(mutated));
 
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         backends.blob, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e9-mod"),
         &baseline, &registry, &conflicts, policy);
@@ -265,9 +265,9 @@ void TestMemoV2::deletePalmRemovesLocalFile()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
-    auto firstSync = engine.twoWayWithBaseline(
+    auto firstSync = engine.runBlobTwoWay(
         backends.blob, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e9-del"),
         &baseline, &registry, &conflicts, policy);
@@ -279,7 +279,7 @@ void TestMemoV2::deletePalmRemovesLocalFile()
 
     QCOMPARE(mock.loadRecords(QStringLiteral("palm:memo")).size(), 3);
 
-    auto r = engine.twoWayWithBaseline(
+    auto r = engine.runBlobTwoWay(
         backends.blob, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e9-del"),
         &baseline, &registry, &conflicts, policy);
@@ -315,15 +315,15 @@ void TestMemoV2::idempotentNoopSyncChangesNothing()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         backends.blob, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e9-noop"),
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
 
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         backends.blob, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e9-noop"),
         &baseline, &registry, &conflicts, policy);

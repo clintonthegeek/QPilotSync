@@ -5,7 +5,7 @@
 #include <QTest>
 #include <QUrl>
 
-#include <blobsyncengine.h>
+#include <syncengine.h>
 #include <icsfeedfetcher.h>
 #include <mockblobbackend.h>
 
@@ -63,8 +63,8 @@ private slots:
         src.loadRecords(QStringLiteral("palm:calendar/5"));
         QVERIFY(src.lastFetchSucceeded(5));
 
-        BlobSyncEngine engine;
-        engine.mirror(&src, &dst, QStringLiteral("palm:calendar/5"));
+        SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+        engine.runBlobMirror(&src, &dst, QStringLiteral("palm:calendar/5"));
 
         const auto records = dst.loadRecords(QStringLiteral("palm:calendar/5"));
         QCOMPARE(records.size(), 3);
@@ -94,8 +94,8 @@ private slots:
         dst.createRecord(QStringLiteral("palm:calendar/5"), s2);
         QCOMPARE(dst.loadRecords(QStringLiteral("palm:calendar/5")).size(), 2);
 
-        BlobSyncEngine engine;
-        engine.mirror(&src, &dst, QStringLiteral("palm:calendar/5"));
+        SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+        engine.runBlobMirror(&src, &dst, QStringLiteral("palm:calendar/5"));
 
         const auto records = dst.loadRecords(QStringLiteral("palm:calendar/5"));
         QCOMPARE(records.size(), 3);
@@ -116,12 +116,12 @@ private slots:
         c.type = QStringLiteral("calendar");
         dst.createCollection(c);
 
-        BlobSyncEngine engine;
-        engine.mirror(&src, &dst, QStringLiteral("palm:calendar/5"));
+        SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+        engine.runBlobMirror(&src, &dst, QStringLiteral("palm:calendar/5"));
         const auto first = dst.loadRecords(QStringLiteral("palm:calendar/5"));
 
         // Second mirror against identical source → target unchanged.
-        engine.mirror(&src, &dst, QStringLiteral("palm:calendar/5"));
+        engine.runBlobMirror(&src, &dst, QStringLiteral("palm:calendar/5"));
         const auto second = dst.loadRecords(QStringLiteral("palm:calendar/5"));
         QCOMPARE(second.size(), first.size());
         for (int i = 0; i < first.size(); ++i) {
@@ -159,8 +159,8 @@ private slots:
         // Caller (this test, standing in for the runtime) honours the
         // gate by skipping the mirror call.
         if (src.lastFetchSucceeded(5)) {
-            BlobSyncEngine engine;
-            engine.mirror(&src, &dst, QStringLiteral("palm:calendar/5"));
+            SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+            engine.runBlobMirror(&src, &dst, QStringLiteral("palm:calendar/5"));
         }
 
         // Target preserved.

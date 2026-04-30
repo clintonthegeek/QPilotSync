@@ -17,7 +17,7 @@
 #include "plugins/contacts/contactsvcardtranscoder.h"
 #include "runtime/backendpluginmanager.h"
 
-#include "blobsyncengine.h"
+#include "syncengine.h"
 #include "blobbaselinestore.h"
 #include "mockblobbackend.h"
 #include "conflicthandlerregistry.h"
@@ -235,11 +235,11 @@ void TestContactsV2::pushSourceToTarget_singleSlot()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid       = ContactsBlobBackend::collectionIdForSlot(0);
     const QString mappingId = QStringLiteral("e12-single-0");
-    auto result = engine.twoWayWithBaseline(
+    auto result = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
@@ -291,12 +291,12 @@ void TestContactsV2::pushSourceToTarget_multiSlotRouting()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     for (int slot : {0, 3}) {
         const QString cid       = ContactsBlobBackend::collectionIdForSlot(slot);
         const QString mappingId = QStringLiteral("e12-multi-%1").arg(slot);
-        auto result = engine.twoWayWithBaseline(
+        auto result = engine.runBlobTwoWay(
             provided.blob, &target, cid, mappingId,
             &baseline, &registry, &conflicts, policy);
         QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
@@ -347,9 +347,9 @@ void TestContactsV2::pullTargetToSource_assignsCategoryFromCollectionId()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
-    auto result = engine.twoWayWithBaseline(
+    auto result = engine.runBlobTwoWay(
         provided.blob, &target, cid, QStringLiteral("e12-pull-2"),
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
@@ -423,13 +423,13 @@ void TestContactsV2::conflictMerge_phoneSlotUnion()
     QVERIFY(baseline.isOpen());
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid       = ContactsBlobBackend::collectionIdForSlot(1);
     const QString mappingId = QStringLiteral("e12-conflict-union");
 
     // First sync establishes the baseline + propagates Palm->target.
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
@@ -471,7 +471,7 @@ void TestContactsV2::conflictMerge_phoneSlotUnion()
 
     // Second sync - both sides have local edits since baseline ->
     // BothModified conflict -> handler fires.
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
@@ -535,13 +535,13 @@ void TestContactsV2::deletionPropagatesSourceToTarget()
     Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
     Kalburator::Sync::QSyncCore::ConflictStore conflicts;
     Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::BlobSyncEngine engine;
+    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     const QString cid       = ContactsBlobBackend::collectionIdForSlot(0);
     const QString mappingId = QStringLiteral("e12-delete");
 
     // First sync establishes the baseline + propagates the seed to target.
-    auto r1 = engine.twoWayWithBaseline(
+    auto r1 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
@@ -551,7 +551,7 @@ void TestContactsV2::deletionPropagatesSourceToTarget()
     QVERIFY(dev.deleteRecord(QStringLiteral("AddressDB"), seedId));
 
     // Second sync - deletion propagates to target.
-    auto r2 = engine.twoWayWithBaseline(
+    auto r2 = engine.runBlobTwoWay(
         provided.blob, &target, cid, mappingId,
         &baseline, &registry, &conflicts, policy);
     QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));

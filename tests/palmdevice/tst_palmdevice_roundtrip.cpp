@@ -2,7 +2,7 @@
 #include <QTemporaryDir>
 
 #include "blobbaselinestore.h"
-#include "blobsyncengine.h"
+#include "syncengine.h"
 #include "conflicthandlerregistry.h"
 #include "conflictpolicy.h"
 #include "conflictstore.h"
@@ -13,7 +13,7 @@
 #include "pilotlinkpalmdatabaseaccess.h"
 
 using Kalburator::Sync::BlobBaselineStore;
-using Kalburator::Sync::BlobSyncEngine;
+using Kalburator::Sync::SyncEngine;
 using Kalburator::Sync::BlobSyncResult;
 using Kalburator::Sync::BackendRecord;
 using Kalburator::Sync::CollectionInfo;
@@ -69,8 +69,8 @@ void TestPalmDeviceRoundTrip::palmSideRecordPropagatesToMockBlobBackend()
     ConflictStore store;
     ConflictPolicy policy;
 
-    BlobSyncEngine engine;
-    BlobSyncResult r = engine.twoWayWithBaseline(
+    SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+    BlobSyncResult r = engine.runBlobTwoWay(
         &palm, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e4-rt1"),
         &baseline, &reg, &store, policy);
@@ -101,10 +101,10 @@ void TestPalmDeviceRoundTrip::deletionOnPalmSidePropagatesViaBaseline()
     ConflictHandlerRegistry reg;
     ConflictStore store;
     ConflictPolicy policy;
-    BlobSyncEngine engine;
+    SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
 
     // First sync: populate baseline + propagate to mock.
-    BlobSyncResult r1 = engine.twoWayWithBaseline(
+    BlobSyncResult r1 = engine.runBlobTwoWay(
         &palm, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e4-del"),
         &baseline, &reg, &store, policy);
@@ -115,7 +115,7 @@ void TestPalmDeviceRoundTrip::deletionOnPalmSidePropagatesViaBaseline()
     QVERIFY(dev.deleteRecord(QStringLiteral("MemoDB"), 21));
 
     // Second sync: baseline sees the deletion.
-    BlobSyncResult r2 = engine.twoWayWithBaseline(
+    BlobSyncResult r2 = engine.runBlobTwoWay(
         &palm, &mock,
         QStringLiteral("palm:memo"), QStringLiteral("e4-del"),
         &baseline, &reg, &store, policy);
