@@ -304,7 +304,12 @@ Sync::SyncResult SyncRunner::runTwoWay(Sync::SyncMode mode, const QStringList &p
                 // the (record-on-both, baseline-absent) case — it falls
                 // through silently — so we clear B first to avoid stale
                 // data sticking.
-                baseline.clearMapping(mappingId);
+                // Phase F1 Task 11: BlobBaselineStore is now triple-keyed
+                // (backendId, collectionId, recordId). The mappingId is
+                // still used for conflict-record identification inside
+                // SyncEngine::runBlobTwoWay, but the baseline scope key
+                // is the (backend, collection) pair.
+                baseline.clearCollection(palmBlob->backendId(), col.id);
                 const auto stale = localBlob.loadRecords(col.id);
                 for (const auto &r : stale) localBlob.deleteRecord(r.id);
             }
