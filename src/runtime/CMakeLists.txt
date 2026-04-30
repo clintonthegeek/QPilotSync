@@ -1,7 +1,7 @@
 # WildPalmsRuntime — managers for the new WP plugin ABI (Phase E.8) plus
 # Full-Sync host-interface implementations (relocated from src/fullsync/
 # in E.15b). Houses BackendPluginManager + PluginActionManager + shared
-# metadata helpers + InstallSourceCollector + the SyncCoordinator-facing
+# metadata helpers + InstallSourceCollector + the SyncEngine-facing
 # WP host implementations consumed by libkalburator.
 
 find_package(KF6 REQUIRED COMPONENTS CoreAddons)

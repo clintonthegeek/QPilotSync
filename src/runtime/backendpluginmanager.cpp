@@ -11,7 +11,7 @@ namespace WildPalms {
 
 BackendPluginManager::BackendPluginManager(Kalburator::Sync::ISyncHost       *host,
                                              PalmDeviceConnection              *device,
-                                             Kalburator::Sync::SyncCoordinator *coordinator,
+                                             Kalburator::Sync::SyncEngine      *coordinator,
                                              QObject                           *parent)
     : QObject(parent)
     , m_subdir(QStringLiteral("wildpalms/plugins"))

@@ -56,7 +56,7 @@ public:
     // ========== Optional conflict handler ==========
     //
     // Return nullptr to use the default handler; otherwise the manager
-    // registers the returned handler with the SyncCoordinator's
+    // registers the returned handler with the SyncEngine's
     // ConflictHandlerRegistry under this plugin's backend id.
     virtual Kalburator::Sync::QSyncCore::ConflictHandler *createConflictHandler()
     {

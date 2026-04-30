@@ -10,7 +10,7 @@
 
 namespace Kalburator::Sync {
     class ISyncHost;
-    class SyncCoordinator;
+    class SyncEngine;
 }
 
 class PalmDeviceConnection;
@@ -44,7 +44,7 @@ public:
 
     explicit BackendPluginManager(Kalburator::Sync::ISyncHost       *host,
                                    PalmDeviceConnection              *device,
-                                   Kalburator::Sync::SyncCoordinator *coordinator,
+                                   Kalburator::Sync::SyncEngine *coordinator,
                                    QObject                           *parent = nullptr);
     ~BackendPluginManager() override;
 
@@ -93,7 +93,7 @@ private:
 
     Kalburator::Sync::ISyncHost       *m_host        = nullptr;
     PalmDeviceConnection              *m_device      = nullptr;
-    Kalburator::Sync::SyncCoordinator *m_coordinator = nullptr;
+    Kalburator::Sync::SyncEngine *m_coordinator = nullptr;
 };
 
 } // namespace WildPalms
