@@ -300,16 +300,11 @@ Sync::SyncResult SyncRunner::runTwoWay(Sync::SyncMode mode, const QStringList &p
             if (mode == Sync::SyncMode::FullSync) {
                 // Reset both the baseline AND the PC-side mirror so the
                 // engine treats every Palm record as fresh-on-source.
-                // SyncEngine::runBlobTwoWay does not currently handle
-                // the (record-on-both, baseline-absent) case — it falls
-                // through silently — so we clear B first to avoid stale
-                // data sticking.
-                // Phase F1 Task 11: BlobBaselineStore is now triple-keyed
-                // (backendId, collectionId, recordId). The mappingId is
-                // still used for conflict-record identification inside
-                // SyncEngine::runBlobTwoWay, but the baseline scope key
-                // is the (backend, collection) pair.
+                // G.4: engine now reads from the v3 mapping-keyed table;
+                // clear both legacy v2 (clearCollection) and v3 (clearMappingV3)
+                // so no stale baselines survive the reset.
                 baseline.clearCollection(palmBlob->backendId(), col.id);
+                baseline.clearMappingV3(mappingId);
                 const auto stale = localBlob.loadRecords(col.id);
                 for (const auto &r : stale) localBlob.deleteRecord(r.id);
             }
