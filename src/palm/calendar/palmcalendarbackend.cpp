@@ -18,6 +18,7 @@ using Kalburator::Sync::DeleteOperation;
 using Kalburator::Sync::FetchOperation;
 using Kalburator::Sync::PushOperation;
 using Kalburator::Sync::SyncOperation;
+using Kalburator::Sync::TranscodingPlan;
 using WildPalms::PalmSync::IPalmDatabaseAccess;
 
 PalmCalendarBackend::PalmCalendarBackend(IPalmDatabaseAccess *device,
@@ -122,7 +123,7 @@ void PalmCalendarBackend::startSync(
     for (const auto &inc : stagedCreations) bySlot[slotForIncidence(inc)].append(inc);
     for (const auto &inc : stagedUpdates)   bySlot[slotForIncidence(inc)].append(inc);
     for (auto it = bySlot.constBegin(); it != bySlot.constEnd(); ++it) {
-        auto *op = pushItems(calendarIdForSlot(it.key()), it.value());
+        auto *op = pushItems(calendarIdForSlot(it.key()), it.value(), TranscodingPlan{});
         if (op) op->deleteLater();
     }
 
@@ -192,8 +193,10 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
 
 PushOperation *PalmCalendarBackend::pushItems(
     const QString &calendarId,
-    const QList<KCalendarCore::Incidence::Ptr> &items)
+    const QList<KCalendarCore::Incidence::Ptr> &items,
+    const TranscodingPlan &plan)
 {
+    Q_UNUSED(plan);
     auto *op = new PushOperation(calendarId, items, this);
 
     const int slot = slotFromCalendarId(calendarId);

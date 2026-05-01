@@ -73,7 +73,8 @@ public:
         const QString &calendarId) override;
     Kalburator::Sync::PushOperation *pushItems(
         const QString &calendarId,
-        const QList<KCalendarCore::Incidence::Ptr> &items) override;
+        const QList<KCalendarCore::Incidence::Ptr> &items,
+        const Kalburator::Sync::TranscodingPlan &plan) override;
     Kalburator::Sync::DeleteOperation *deleteItems(
         const QString &calendarId, const QStringList &uids) override;
 
