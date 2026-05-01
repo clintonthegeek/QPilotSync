@@ -1,14 +1,12 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
 
-#include "datadomain.h"
+#include "shape.h"
 #include "syncoperation.h"
 
 #include "categorymappingstore.h"
 #include "mockpalmdatabaseaccess.h"
 #include "palmcalendarbackend.h"
-
-using Kalburator::Sync::DataDomain;
 using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCalendar::PalmCalendarBackend;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
@@ -45,7 +43,9 @@ void TestPalmCalendarBackend::identity()
     PalmCalendarBackend backend(&dev, &store);
 
     QCOMPARE(backend.backendType(), QStringLiteral("palm-calendar"));
-    QCOMPARE(backend.dataDomain(), DataDomain::Calendar);
+    QCOMPARE(backend.nativeShapes().size(), 1);
+    QCOMPARE(backend.nativeShapes().first().domain.toString(), QStringLiteral("calendar"));
+    QCOMPARE(backend.nativeShapes().first().encoding.toString(), QStringLiteral("palm-datebook"));
 }
 
 void TestPalmCalendarBackend::slotFromCalendarIdParsing()

@@ -6,7 +6,6 @@
 #include "syncoperation.h"
 
 #include "categorymappingstore.h"
-#include "datadomain.h"
 #include "ipalmdatabaseaccess.h"
 
 #include <KCalendarCore/Event>
