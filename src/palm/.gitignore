@@ -1,0 +1,3 @@
+# Override the root .gitignore which excludes contacts/ (sync data dirs).
+# This directory contains source code, not sync data.
+!contacts/

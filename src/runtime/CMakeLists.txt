@@ -39,6 +39,9 @@ add_library(WildPalmsRuntime STATIC
     # impl compiled into WildPalmsCore where the device-side
     # libraries can be linked without an AUTOMOC cycle).
     pilotlinkconnectionfactory.h
+    # G.7 — HotSyncCoordinator replaces SyncRunner_wp (Task 55 deletes the old files).
+    hotsynccoordinator.h
+    hotsynccoordinator.cpp
 )
 
 target_include_directories(WildPalmsRuntime

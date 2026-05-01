@@ -3,8 +3,10 @@
 
 #include <QString>
 #include <QStringList>
+#include <QList>
 #include <QMap>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 
 /**
@@ -248,6 +250,14 @@ public:
     QJsonObject conduitSettings(const QString &conduitId) const;
     void setConduitSettings(const QString &conduitId, const QJsonObject &settings);
 
+    // ========== Sync Mappings (G.7 Task 54) ==========
+
+    // Raw JSON form of the SyncMapping list. Callers that need the parsed
+    // SyncMapping types (which require Kalburator headers) can use
+    // WildPalmsSyncMappingHelper::parseMappings(profile.syncMappingsJson()).
+    QJsonArray syncMappingsJson() const;
+    void setSyncMappingsJson(const QJsonArray &json);
+
     // ========== Persistence ==========
 
     // Load settings from .wildpalms.conf in the sync folder
@@ -293,6 +303,7 @@ private:
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, QJsonObject> m_conduitSettings;
     QMap<QString, QString> m_databaseHandlers; ///< database name -> active conduit ID
+    QJsonArray m_syncMappingsJson;
 
     // Default values
     static const QString DEFAULT_CONFLICT_POLICY;

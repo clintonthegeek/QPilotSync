@@ -334,8 +334,23 @@ bool Profile::load()
     }
     settings.endGroup();
 
+    // G.7 Task 54: SyncMappings — load raw JSON
+    {
+        m_syncMappingsJson = QJsonArray{};
+        const QString jsonStr = settings.value(QStringLiteral("syncMappings/json")).toString();
+        if (!jsonStr.isEmpty()) {
+            const QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+            if (doc.isArray())
+                m_syncMappingsJson = doc.array();
+        }
+    }
+
     return true;
 }
+
+QJsonArray Profile::syncMappingsJson() const { return m_syncMappingsJson; }
+
+void Profile::setSyncMappingsJson(const QJsonArray &json) { m_syncMappingsJson = json; }
 
 bool Profile::save()
 {
@@ -432,6 +447,13 @@ bool Profile::save()
         settings.setValue(it.key(), it.value());
     }
     settings.endGroup();
+
+    // G.7 Task 54: SyncMappings — stored as a JSON array
+    if (!m_syncMappingsJson.isEmpty()) {
+        QJsonDocument doc(m_syncMappingsJson);
+        settings.setValue(QStringLiteral("syncMappings/json"),
+                          QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    }
 
     settings.sync();
     return settings.status() == QSettings::NoError;

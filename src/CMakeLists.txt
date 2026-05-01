@@ -263,6 +263,13 @@ add_subdirectory(palm/codecs)
 # (Phase E.7 of libkalburator integration). Not on the plugin ABI.
 add_subdirectory(palm/adapters)
 
+# G.7 — SyncBackend implementations for Palm non-calendar databases.
+# Each wraps IPalmDatabaseAccess and routes through BlobDomainAdapter.
+add_subdirectory(palm/contacts)
+add_subdirectory(palm/memo)
+add_subdirectory(palm/todo)
+add_subdirectory(palm/transformations)
+
 # Plugin runtime — managers, simple action context, install source
 # collector, and (since E.15b) the Full-Sync host-interface
 # implementations consumed by libkalburator.
