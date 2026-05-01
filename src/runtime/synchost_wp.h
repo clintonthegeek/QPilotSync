@@ -53,12 +53,18 @@ public:
     void unloadCalendar(const QString &calendarId) override;
     void generateSyncMappingsFromLogicalCalendars() override;
 
+    // G.9.a — new generic lifecycle event
+    void recordChanged(const QString &mappingId,
+                       const QString &recordId,
+                       Kalburator::Sync::ISyncHost::ChangeKind kind) override;
+
     // Phase D counters — used by tests to verify dispatch happened.
     int applyAdditionCount() const { return m_applyAdditionCount; }
     int applyRemovalCount() const { return m_applyRemovalCount; }
     int applyUpdateCount() const { return m_applyUpdateCount; }
     int unloadCount() const { return m_unloadCount; }
     int regenerateMappingsCount() const { return m_regenerateMappingsCount; }
+    int recordChangedCount() const { return m_recordChangedCount; }
 
 private:
     CalendarCollection_WP *m_collection;
@@ -70,6 +76,7 @@ private:
     int m_applyUpdateCount = 0;
     int m_unloadCount = 0;
     int m_regenerateMappingsCount = 0;
+    int m_recordChangedCount = 0;
 };
 
 } // namespace WildPalms::FullSync

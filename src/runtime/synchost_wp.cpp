@@ -97,4 +97,14 @@ void SyncHost_WP::generateSyncMappingsFromLogicalCalendars()
     ++m_regenerateMappingsCount;
 }
 
+void SyncHost_WP::recordChanged(const QString &mappingId,
+                                const QString &recordId,
+                                Kalburator::Sync::ISyncHost::ChangeKind kind)
+{
+    Q_UNUSED(mappingId)
+    Q_UNUSED(recordId)
+    Q_UNUSED(kind)
+    ++m_recordChangedCount;
+}
+
 } // namespace WildPalms::FullSync
