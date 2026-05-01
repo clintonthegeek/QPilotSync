@@ -18,7 +18,6 @@
 
 namespace WildPalms::PalmCalendar {
 
-using Kalburator::Sync::DataDomain;
 using Kalburator::Sync::DeleteOperation;
 using Kalburator::Sync::FetchOperation;
 using Kalburator::Sync::PushOperation;
@@ -41,9 +40,11 @@ QString PalmCalendarBackend::backendType() const
     return QStringLiteral("palm-calendar");
 }
 
-DataDomain PalmCalendarBackend::dataDomain() const
+QList<Kalburator::Shape::Shape> PalmCalendarBackend::nativeShapes() const
 {
-    return DataDomain::Calendar;
+    return { Kalburator::Shape::Shape{
+        Kalburator::Shape::DomainId{QStringLiteral("calendar")},
+        Kalburator::Shape::EncodingId{QStringLiteral("palm-datebook")} } };
 }
 
 void PalmCalendarBackend::loadCalendars(const QString &collectionId)

@@ -51,7 +51,7 @@ public:
 
     // ========== Identity ==========
     QString backendType() const override;
-    Kalburator::Sync::DataDomain dataDomain() const override;
+    QList<Kalburator::Shape::Shape> nativeShapes() const override;
 
     // ========== Discovery ==========
     void loadCalendars(const QString &collectionId) override;
