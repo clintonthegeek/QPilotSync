@@ -151,21 +151,8 @@ void PalmContactsBackend::loadCalendars(const QString &collectionId)
         QStringLiteral("PalmContactsBackend: not a calendar backend"));
 }
 
-void PalmContactsBackend::loadItems(KCalendarCore::MemoryCalendar *, bool) {}
-
 void PalmContactsBackend::storeCalendars(
     const QString &, const QList<KCalendarCore::MemoryCalendar *> &) {}
-
-void PalmContactsBackend::storeItems(
-    KCalendarCore::MemoryCalendar *,
-    const QList<KCalendarCore::Incidence::Ptr> &,
-    const Kalburator::Sync::TranscodingPlan &) {}
-
-void PalmContactsBackend::updateItem(
-    KCalendarCore::MemoryCalendar *,
-    const KCalendarCore::Incidence::Ptr &,
-    const QString &,
-    const Kalburator::Sync::TranscodingPlan &) {}
 
 void PalmContactsBackend::startSync(
     const QString &, KCalendarCore::MemoryCalendar *,

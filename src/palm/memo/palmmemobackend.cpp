@@ -139,16 +139,8 @@ void PalmMemoBackend::loadCalendars(const QString &collectionId)
         QStringLiteral("PalmMemoBackend: not a calendar backend"));
 }
 
-void PalmMemoBackend::loadItems(KCalendarCore::MemoryCalendar *, bool) {}
 void PalmMemoBackend::storeCalendars(const QString &,
                                      const QList<KCalendarCore::MemoryCalendar *> &) {}
-void PalmMemoBackend::storeItems(KCalendarCore::MemoryCalendar *,
-                                 const QList<KCalendarCore::Incidence::Ptr> &,
-                                 const Kalburator::Sync::TranscodingPlan &) {}
-void PalmMemoBackend::updateItem(KCalendarCore::MemoryCalendar *,
-                                 const KCalendarCore::Incidence::Ptr &,
-                                 const QString &,
-                                 const Kalburator::Sync::TranscodingPlan &) {}
 void PalmMemoBackend::startSync(const QString &, KCalendarCore::MemoryCalendar *,
                                 const QList<KCalendarCore::Incidence::Ptr> &,
                                 const QList<KCalendarCore::Incidence::Ptr> &,

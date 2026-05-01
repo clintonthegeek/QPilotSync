@@ -27,9 +27,8 @@ class CategoryMappingStore;
  * Caller retains ownership; both must outlive the backend.
  *
  * Scope (Phase E.6): loadCalendars, fetchItems, pushItems, deleteItems
- * fully implemented. Legacy pure-virtual APIs (loadItems, storeItems,
- * updateItem, removeItem, storeCalendars, startSync) get minimal
- * scaffolding to satisfy the abstract interface; Calendar CRUD at the
+ * fully implemented. Legacy scaffolding (storeCalendars, startSync,
+ * removeItem) satisfies the abstract interface; Calendar CRUD at the
  * sub-calendar level returns false (Palm slots are implicit).
  */
 class PalmCalendarBackend : public Kalburator::Sync::SyncBackend
@@ -57,18 +56,9 @@ public:
     void loadCalendars(const QString &collectionId) override;
 
     // ========== Legacy pure-virtual scaffolding (Task 6) ==========
-    void loadItems(KCalendarCore::MemoryCalendar *cal,
-                   bool suppressSignals = false) override;
     void storeCalendars(
         const QString &collectionId,
         const QList<KCalendarCore::MemoryCalendar *> &calendars) override;
-    void storeItems(KCalendarCore::MemoryCalendar *cal,
-                    const QList<KCalendarCore::Incidence::Ptr> &items,
-                    const Kalburator::Sync::TranscodingPlan &plan) override;
-    void updateItem(KCalendarCore::MemoryCalendar *cal,
-                    const KCalendarCore::Incidence::Ptr &item,
-                    const QString &icalData,
-                    const Kalburator::Sync::TranscodingPlan &plan) override;
     void startSync(
         const QString &collectionId,
         KCalendarCore::MemoryCalendar *calendar,

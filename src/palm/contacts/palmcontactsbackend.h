@@ -54,18 +54,9 @@ public:
 
     // --- Calendar discovery (stubs) ---
     void loadCalendars(const QString &collectionId) override;
-    void loadItems(KCalendarCore::MemoryCalendar *cal,
-                   bool suppressSignals = false) override;
     void storeCalendars(
         const QString &collectionId,
         const QList<KCalendarCore::MemoryCalendar *> &calendars) override;
-    void storeItems(KCalendarCore::MemoryCalendar *cal,
-                    const QList<KCalendarCore::Incidence::Ptr> &items,
-                    const Kalburator::Sync::TranscodingPlan &plan) override;
-    void updateItem(KCalendarCore::MemoryCalendar *cal,
-                    const KCalendarCore::Incidence::Ptr &item,
-                    const QString &icalData,
-                    const Kalburator::Sync::TranscodingPlan &plan) override;
     void startSync(
         const QString &collectionId,
         KCalendarCore::MemoryCalendar *calendar,
