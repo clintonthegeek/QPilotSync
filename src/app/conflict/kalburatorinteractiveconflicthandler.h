@@ -1,0 +1,66 @@
+#ifndef KALBURATORINTERACTIVECONFLICTHANDLER_H
+#define KALBURATORINTERACTIVECONFLICTHANDLER_H
+
+#include "conflictpolicy.h"   // libkalburator's interface (conflict/ is on the include path)
+
+#include <QObject>
+#include <QPointer>
+#include <QWidget>   // needed for complete type in QPointer<QWidget>
+
+namespace Kalburator::Sync::QSyncCore {
+    class ConflictStore;
+}
+
+class KalburatorInteractiveConflictHandler
+    : public QObject,
+      public Kalburator::Sync::QSyncCore::ConflictHandler
+{
+    Q_OBJECT
+public:
+    explicit KalburatorInteractiveConflictHandler(
+        Kalburator::Sync::QSyncCore::ConflictStore *store = nullptr,
+        QWidget *parentWidget = nullptr,
+        QObject *parent = nullptr);
+    ~KalburatorInteractiveConflictHandler() override = default;
+
+    // ConflictHandler
+    Kalburator::Sync::QSyncCore::ConflictDecision handleConflict(
+        Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
+        const Kalburator::Sync::QSyncCore::ConflictPolicy &policy)
+        override;
+    void onSyncStart() override;
+    void onSyncEnd(bool hadConflicts, bool allResolved) override;
+    bool canPrompt() const override
+        { return m_parentWidget != nullptr; }
+    bool shouldKeepConnectionAlive() const override
+        { return m_keepAlive; }
+    QList<Kalburator::Sync::QSyncCore::ConflictRecord>
+        pendingConflicts() const override
+        { return m_localPending; }
+
+    void setParentWidget(QWidget *w) { m_parentWidget = w; }
+
+signals:
+    void keepAliveRequested();
+    void conflictProgress(int current, int total,
+                          const QString &description);
+
+private:
+    // GUI-thread marshalling helper — not a slot because the return type
+    // is a Kalburator:: type and MOC cannot resolve it in this translation
+    // unit due to the local QSyncCore namespace shadowing.
+    Kalburator::Sync::QSyncCore::ConflictDecision
+        handleConflictOnGuiThread(
+            Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
+            const Kalburator::Sync::QSyncCore::ConflictPolicy &policy);
+
+    Kalburator::Sync::QSyncCore::ConflictStore *m_store;
+    QPointer<QWidget>                           m_parentWidget;
+    QList<Kalburator::Sync::QSyncCore::ConflictRecord>
+                                                m_localPending;
+    int                                         m_conflictsHandled = 0;
+    int                                         m_conflictsDeferred = 0;
+    bool                                        m_keepAlive = true;
+};
+
+#endif // KALBURATORINTERACTIVECONFLICTHANDLER_H

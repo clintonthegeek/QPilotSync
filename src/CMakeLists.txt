@@ -149,6 +149,11 @@ target_link_libraries(WildPalmsCore
         # M2 Task 11 — PalmRuntime lives in this static lib until Task 12
         # merges it back into WildPalmsRuntime.
         PalmDeviceAccessLib
+        # M5a — libkalburator-side interactive ConflictHandler. Separate
+        # static lib to avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard
+        # collision between libkalburator's conflict/conflictpolicy.h and
+        # WildPalms' local sync/qsynccore/conflictpolicy.h.
+        WildPalmsAppConflict
 )
 
 target_include_directories(WildPalmsCore PUBLIC
@@ -276,6 +281,12 @@ add_subdirectory(palm/contacts)
 add_subdirectory(palm/memo)
 add_subdirectory(palm/todo)
 add_subdirectory(palm/transformations)
+
+# M5a — libkalburator-side interactive ConflictHandler. Separate lib to
+# avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard collision between
+# libkalburator's conflict/conflictpolicy.h and WildPalms' local
+# sync/qsynccore/conflictpolicy.h.
+add_subdirectory(app/conflict)
 
 # Plugin runtime — managers, simple action context, install source
 # collector, and (since E.15b) the Full-Sync host-interface
