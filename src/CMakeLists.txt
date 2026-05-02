@@ -154,6 +154,9 @@ target_link_libraries(WildPalmsCore
         # collision between libkalburator's conflict/conflictpolicy.h and
         # WildPalms' local sync/qsynccore/conflictpolicy.h.
         WildPalmsAppConflict
+        # M5b — Mapping editor dialogs. Separate static lib so its TUs
+        # see libkalburator's synctypes.h (not WP-local core/synctypes.h).
+        WildPalmsAppMapping
 )
 
 target_include_directories(WildPalmsCore PUBLIC
@@ -287,6 +290,13 @@ add_subdirectory(palm/transformations)
 # libkalburator's conflict/conflictpolicy.h and WildPalms' local
 # sync/qsynccore/conflictpolicy.h.
 add_subdirectory(app/conflict)
+
+# M5b — Mapping editor dialogs (MappingRowDialog, MappingEditorDialog).
+# Separate static lib for the same reason as WildPalmsAppConflict: avoids
+# having WildPalmsCore's PUBLIC src/core/ on the include path so that
+# `#include "synctypes.h"` resolves to libkalburator's Kalburator::Sync
+# header (not WP-local Sync:: namespace).
+add_subdirectory(app/mapping)
 
 # Plugin runtime — managers, simple action context, install source
 # collector, and (since E.15b) the Full-Sync host-interface

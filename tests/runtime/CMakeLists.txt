@@ -182,6 +182,21 @@ set_tests_properties(tst_palm_runtime_default_mappings_only_when_empty PROPERTIE
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# M5b Task 4: MappingRowDialog — modal editor for one SyncMapping
+add_executable(tst_mapping_row_dialog tst_mapping_row_dialog.cpp)
+target_link_libraries(tst_mapping_row_dialog
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        Kalburator::Sync
+        WildPalmsAppMapping
+)
+add_test(NAME tst_mapping_row_dialog COMMAND tst_mapping_row_dialog)
+set_tests_properties(tst_mapping_row_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
