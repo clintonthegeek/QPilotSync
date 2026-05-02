@@ -462,16 +462,18 @@ QFuture<PalmRunResult> PalmRuntime::backup()
         return QtFuture::makeReadyValueFuture(r);
     }
 
+    // Pause the TickleWorker BEFORE the first DLP call (listDatabases).
+    // dlp_ReadDBList() iterates 100+ databases and takes several seconds;
+    // the 5-second tickle timer fires mid-loop and corrupts the DLP session.
+    // pauseTickle() uses BlockingQueuedConnection so the tickle thread is
+    // fully stopped before we proceed.
+    m_link->pauseTickle();
+
     // Snapshot the DB list on the calling (main) thread — KPilotLink is not
     // thread-safe; all link calls must happen before we hand off to the pool.
     const QStringList databases = m_link->listDatabases();
     const QString backupDir = m_backupRoot;
     KPilotLink *link = m_link;
-
-    // Pause the TickleWorker now, on the main thread, before the pool thread
-    // starts issuing DLP calls. pauseTickle() uses BlockingQueuedConnection
-    // internally so the tickle thread is fully stopped before we return.
-    m_link->pauseTickle();
 
     return QtConcurrent::run([this, databases, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
