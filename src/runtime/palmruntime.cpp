@@ -17,9 +17,12 @@
 #include <isyncconfigstore.h>
 #include "shape.h"
 #include "core/ibackendplugin_v2.h"
+#include "palm/device/pilotlinkpalmdatabaseaccess.h"
 
 #include <KCalendarCore/MemoryCalendar>
 #include <KCalendarCore/Incidence>
+#include <KPluginFactory>
+#include <KPluginMetaData>
 
 namespace {
 
@@ -157,8 +160,66 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
 PalmRuntime::~PalmRuntime() = default;
 
 void PalmRuntime::connectDevice(KPilotLink *link) {
-    Q_UNUSED(link);
-    // Implemented in Task 10.
+    if (!link) return;
+
+    // Wrap the live KPilotLink in PilotLinkPalmDatabaseAccess and PalmDeviceAccess.
+    auto dbAccess = std::make_unique<WildPalms::PalmDevice::PilotLinkPalmDatabaseAccess>(link);
+    m_device = std::make_unique<PalmDeviceAccess>(std::move(dbAccess));
+
+    // Discover and load IBackendPluginV2 plugins from wildpalms/plugins/
+    const auto metaDatas = KPluginMetaData::findPlugins(
+        QStringLiteral("wildpalms/plugins"),
+        [](const KPluginMetaData &md) {
+            return md.value(QStringLiteral("X-WildPalms-PluginType"))
+                   == QStringLiteral("backend");
+        });
+
+    for (const KPluginMetaData &meta : metaDatas) {
+        auto factoryResult = KPluginFactory::loadFactory(meta);
+        if (!factoryResult) {
+            qWarning() << "[PalmRuntime::connectDevice] Failed to load factory for"
+                       << meta.pluginId() << ":" << factoryResult.errorString;
+            continue;
+        }
+
+        QObject *obj = factoryResult.plugin->create<QObject>(this);
+        if (!obj) {
+            qWarning() << "[PalmRuntime::connectDevice] Factory returned nullptr for"
+                       << meta.pluginId();
+            continue;
+        }
+
+        // Try to cast to IBackendPluginV2.
+        auto *v2 = qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
+        if (!v2) {
+            qDebug() << "[PalmRuntime::connectDevice] Plugin" << meta.pluginId()
+                     << "does not implement IBackendPluginV2 -- skipping";
+            delete obj;
+            continue;
+        }
+
+        // Create the Palm backend for this plugin.
+        auto backend = v2->createPalmBackend(m_device.get());
+        if (!backend) {
+            qWarning() << "[PalmRuntime::connectDevice] Plugin" << meta.pluginId()
+                       << "returned null backend";
+            delete obj;
+            continue;
+        }
+
+        // Wrap the backend in BlobBackendAdapter and register with BackendRegistry.
+        const QString id = v2->pluginId();
+        auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id);
+        m_registry->registerBackendInstance(id, adapter.get());
+        m_ownedBackends.push_back(std::move(adapter));
+
+        // Keep the QObject alive (parented to this, will be cleaned up on destruction).
+        m_v2PluginObjects.append(obj);
+
+        qDebug() << "[PalmRuntime::connectDevice] Registered backend plugin:" << id;
+    }
+
+    emit deviceConnected();
 }
 
 void PalmRuntime::disconnectDevice() {

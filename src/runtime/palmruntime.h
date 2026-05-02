@@ -76,6 +76,7 @@ private:
     QList<std::shared_ptr<WildPalms::IBackendPluginV2>>          m_plugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     std::vector<std::unique_ptr<Kalburator::Sync::SyncBackend>>  m_ownedBackends;
+    QList<QObject*>                                              m_v2PluginObjects;
 };
 
 }  // namespace WildPalms::Runtime
