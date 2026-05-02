@@ -3,6 +3,8 @@
 
 #include <KXmlGuiWindow>
 #include <QMap>
+#include <memory>
+#include "runtime/palmrunresult.h"
 
 // Forward declarations
 class QTimer;
@@ -26,6 +28,7 @@ class AutoSyncOrchestrator;
 // until E.16 retires the old surface.
 namespace WildPalms { class BackendPluginManager; class IBackendPlugin; }
 namespace WildPalms::Runtime { class SyncRunner; }
+namespace WildPalms::Runtime { class PalmRuntime; }
 
 namespace Sync {
 class SyncEngine;
@@ -124,6 +127,9 @@ private Q_SLOTS:
     // Auto-sync detection
     void onAutoDeviceDetected(Profile *profile, const QStringList &ports);
 
+    // M2 — PalmRuntime callback
+    void onPalmRunFinished(WildPalms::Runtime::PalmRunResult result);
+
 private:
     // UI setup
     void setupUI();
@@ -180,6 +186,9 @@ private:
     // until the legacy IConduit deletion lands; the legacy engine is
     // constructed but unused from the menu wiring.
     WildPalms::Runtime::SyncRunner    *m_syncRunner = nullptr;
+
+    // M2 — PalmRuntime owns the new hotSync path.
+    std::unique_ptr<WildPalms::Runtime::PalmRuntime> m_palmRuntime;
 
     // (Phase E.16 — the PalmDeviceConnection wrapping the live
     // KPilotDeviceLink is owned inside m_syncRunner via

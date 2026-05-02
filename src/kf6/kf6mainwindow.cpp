@@ -17,6 +17,8 @@
 
 #include "../core/iconduit.h"
 #include "../runtime/syncrunner_wp.h"
+#include "../runtime/palmruntime.h"
+#include "../runtime/palmrunresult.h"
 #include "../core/ibackendplugin.h"
 #include "../runtime/backendpluginmanager.h"
 #include "../sync/syncengine.h"
@@ -60,6 +62,7 @@
 #include <QDialogButtonBox>
 #include <QDialog>
 #include <QDebug>
+#include <QFutureWatcher>
 #include <cstring>
 
 #include <KActionCollection>
@@ -767,6 +770,12 @@ void KF6MainWindow::loadProfile(const QString &path)
         m_syncRunner->setSyncPath(m_syncPath);
         m_syncRunner->setStateDir(m_currentProfile->stateDirectoryPath());
     }
+
+    // M2 — (re)create PalmRuntime for the new profile path.
+    m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
+        m_currentProfile->stateDirectoryPath(), this);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
+            this, &KF6MainWindow::onPalmRunFinished);
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
     m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
     m_syncEngine->setConflictPromptStrategy(m_currentProfile->conflictPromptStrategy());
@@ -1064,6 +1073,8 @@ void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
     connect(m_session, &DeviceSession::disconnected,
             this, [this]() {
                 m_deviceLink = nullptr;
+                // M2 — notify PalmRuntime of device loss.
+                if (m_palmRuntime) m_palmRuntime->disconnectDevice();
                 updateMenuState(false);
                 statusBar()->showMessage(i18n("Disconnected"));
 
@@ -1123,6 +1134,10 @@ void KF6MainWindow::onConnectionComplete(bool success)
     if (m_syncRunner) {
         m_syncRunner->setKPilotLink(m_deviceLink, this);
     }
+
+    // M2 — hand the live link to PalmRuntime.
+    if (m_palmRuntime)
+        m_palmRuntime->connectDevice(m_deviceLink);
 
     // Use handshake data (captured during connection on the worker thread —
     // no DLP calls on the main thread while tickle may be running)
@@ -1370,6 +1385,9 @@ void KF6MainWindow::onDisconnectDevice()
         // Phase E.16 — tear down the SyncRunner-owned
         // PalmDeviceConnection so it can't call into a stale link.
         if (m_syncRunner) m_syncRunner->setKPilotLink(nullptr, nullptr);
+
+        // M2 — tear down PalmRuntime's device reference.
+        if (m_palmRuntime) m_palmRuntime->disconnectDevice();
 
         statusBar()->showMessage(i18n("Disconnected"));
         m_logWidget->logInfo(i18n("Disconnected from device"));
@@ -1747,136 +1765,47 @@ void KF6MainWindow::onProfileSettings()
 
 void KF6MainWindow::onHotSync()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        qWarning() << "[KF6MainWindow] HotSync requested but PalmRuntime not ready";
+        m_logWidget->logError(i18n("HotSync requested but no device connected (PalmRuntime not ready)"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    m_logWidget->logInfo(i18n("=== Starting HotSync ==="));
-    m_pendingSyncOperationName = i18n("HotSync");
-    m_session->requestSync(Sync::SyncMode::HotSync, m_syncRunner);
+    m_logWidget->logInfo(i18n("=== Starting HotSync via PalmRuntime ==="));
+    auto future = m_palmRuntime->hotSync();
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(future);
 }
 
 void KF6MainWindow::onFullSync()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
-        return;
-    }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::question(this, i18n("Full Sync"),
-        i18n("Full Sync will compare all records on both sides.\n"
-             "This may take longer than HotSync.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Starting Full Sync ==="));
-    m_pendingSyncOperationName = i18n("Full Sync");
-    m_session->requestSync(Sync::SyncMode::FullSync, m_syncRunner);
+    qWarning() << "[M2] Full Sync not yet implemented";
+    m_logWidget->logWarning(i18n("[M2] Full Sync not yet implemented"));
 }
 
 void KF6MainWindow::onCopyPalmToPC()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
-        return;
-    }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::warning(this, i18n("Copy Palm → PC"),
-        i18n("This will overwrite PC data with Palm data.\n"
-             "Any changes on the PC will be lost.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Copying Palm → PC ==="));
-    m_pendingSyncOperationName = i18n("Copy Palm → PC");
-    m_session->requestSync(Sync::SyncMode::CopyPalmToPC, m_syncRunner);
+    qWarning() << "[M2] Copy Palm→PC not yet implemented";
+    m_logWidget->logWarning(i18n("[M2] Copy Palm→PC not yet implemented"));
 }
 
 void KF6MainWindow::onCopyPCToPalm()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
-        return;
-    }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::warning(this, i18n("Copy PC → Palm"),
-        i18n("This will overwrite Palm data with PC data.\n"
-             "Any changes on the Palm will be lost.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Copying PC → Palm ==="));
-    m_pendingSyncOperationName = i18n("Copy PC → Palm");
-    m_session->requestSync(Sync::SyncMode::CopyPCToPalm, m_syncRunner);
+    qWarning() << "[M2] Copy PC→Palm not yet implemented";
+    m_logWidget->logWarning(i18n("[M2] Copy PC→Palm not yet implemented"));
 }
 
 void KF6MainWindow::onBackup()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
-        return;
-    }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::question(this, i18n("Backup Palm → PC"),
-        i18n("This will backup all Palm data to your PC.\n"
-             "Existing backup files will be updated.\n"
-             "Old files not on Palm will be preserved.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Backing up Palm → PC ==="));
-    m_pendingSyncOperationName = i18n("Backup");
-    m_session->requestSync(Sync::SyncMode::Backup, m_syncRunner);
+    qWarning() << "[M2] Backup not yet implemented";
+    m_logWidget->logWarning(i18n("[M2] Backup not yet implemented"));
 }
 
 void KF6MainWindow::onRestore()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
-        return;
-    }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::warning(this, i18n("Restore PC → Palm"),
-        i18n("FULL RESTORE\n\n"
-             "This will completely overwrite your Palm with PC backup data.\n"
-             "Palm records not in the backup WILL BE DELETED.\n\n"
-             "Are you sure you want to restore?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Restoring PC → Palm ==="));
-    m_pendingSyncOperationName = i18n("Restore");
-    m_session->requestSync(Sync::SyncMode::Restore, m_syncRunner);
+    qWarning() << "[M2] Restore not yet implemented";
+    m_logWidget->logWarning(i18n("[M2] Restore not yet implemented"));
 }
 
 void KF6MainWindow::onChangeSyncFolder()
@@ -1960,6 +1889,18 @@ void KF6MainWindow::onSyncStarted()
     notification->setText(i18n("Synchronization has started"));
     notification->setIconName(QStringLiteral("view-refresh"));
     notification->sendEvent();
+}
+
+void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)
+{
+    if (result.success) {
+        m_logWidget->logInfo(i18n("PalmRuntime HotSync completed successfully"));
+        statusBar()->showMessage(i18n("HotSync complete"));
+    } else {
+        m_logWidget->logError(i18n("PalmRuntime HotSync finished with errors: %1",
+                                   result.errorMessage));
+        statusBar()->showMessage(i18n("HotSync finished with errors"));
+    }
 }
 
 void KF6MainWindow::onSyncFinished(const Sync::SyncResult &result)

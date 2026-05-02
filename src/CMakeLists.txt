@@ -146,6 +146,9 @@ target_link_libraries(WildPalmsCore
         # so the link is one-directional from Core's perspective.
         WildPalmsPalmDevice
         WildPalmsPalmSync
+        # M2 Task 11 — PalmRuntime lives in this static lib until Task 12
+        # merges it back into WildPalmsRuntime.
+        PalmDeviceAccessLib
 )
 
 target_include_directories(WildPalmsCore PUBLIC
