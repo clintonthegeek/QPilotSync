@@ -23,16 +23,9 @@ add_wildpalms_runtime_test(tst_backendpluginmanager tst_backendpluginmanager.cpp
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
 add_wildpalms_runtime_test(tst_plugin_factory_roundtrip tst_plugin_factory_roundtrip.cpp)
-# tst_syncrunner uses SyncRunner_wp which is broken by Plan 1 (F1 facade
-# deleted). Excluded from WILDPALMS_CALENDAR_MVP_ONLY builds until M6.
-if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
-    add_wildpalms_runtime_test(tst_syncrunner tst_syncrunner.cpp)
-    target_link_libraries(tst_syncrunner PRIVATE Kalburator::Sync)
-endif()
-# tst_palm_device_access links PalmDeviceAccessLib directly (not the full
-# WildPalmsRuntime) because syncrunner_wp.cpp is intentionally broken by
-# Plan 1 until Task 12 rewrites it. PalmDeviceAccessLib has the same include
-# paths and Qt::Core linkage that this test needs.
+# tst_palm_device_access links PalmDeviceAccessLib directly (kept after
+# the M5c deletion of SyncRunner_wp because PalmDeviceAccessLib has the
+# same include paths and Qt::Core linkage that this test needs).
 add_executable(tst_palm_device_access tst_palm_device_access.cpp)
 target_link_libraries(tst_palm_device_access
     PRIVATE

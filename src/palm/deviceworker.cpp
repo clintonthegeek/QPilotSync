@@ -1,9 +1,6 @@
 #include "deviceworker.h"
 #include "../sync/syncengine.h"
 #include "../core/synctypes.h"
-#ifndef WILDPALMS_CALENDAR_MVP_ONLY
-#include "../runtime/syncrunner_wp.h"
-#endif
 
 #include <QDebug>
 #include <QThread>
@@ -114,69 +111,6 @@ void DeviceWorker::doSync(int mode,
     emit syncResultReady(result);  // Emit full result for detailed handling
     emit operationFinished(result.success, "sync");
 }
-
-#ifndef WILDPALMS_CALENDAR_MVP_ONLY
-void DeviceWorker::doSyncRunner(int mode,
-                                const QStringList &enabledPluginIds,
-                                WildPalms::Runtime::SyncRunner *runner)
-{
-    qDebug() << "[DeviceWorker] doSyncRunner() mode:" << mode
-             << "plugins:" << enabledPluginIds
-             << "on thread:" << QThread::currentThread();
-
-    if (m_socket < 0) {
-        emit error("No socket connection");
-        emit syncFinished(false, "No connection");
-        return;
-    }
-    if (!runner) {
-        emit error("No SyncRunner provided");
-        emit syncFinished(false, "Internal error");
-        return;
-    }
-
-    resetCancel();
-
-    // Refresh Palm screen + open the conduit, mirroring the legacy
-    // doSync() flow so the on-device UX is unchanged.
-    emit palmScreenChanged("Syncing...");
-    int openResult = dlp_OpenConduit(m_socket);
-    if (openResult < 0) {
-        emit logMessage(QString("Warning: dlp_OpenConduit returned %1").arg(openResult));
-    }
-
-    // Forward runner progress + log signals onto our own so the
-    // DeviceSession ↔ KF6MainWindow plumbing keeps working.
-    QObject::connect(runner, &WildPalms::Runtime::SyncRunner::progress,
-                     this, &DeviceWorker::progress, Qt::DirectConnection);
-    QObject::connect(runner, &WildPalms::Runtime::SyncRunner::logMessage,
-                     this, &DeviceWorker::logMessage, Qt::DirectConnection);
-
-    Sync::SyncMode syncMode = static_cast<Sync::SyncMode>(mode);
-    Sync::SyncResult result = runner->run(syncMode, enabledPluginIds);
-
-    QObject::disconnect(runner, &WildPalms::Runtime::SyncRunner::progress,
-                        this, &DeviceWorker::progress);
-    QObject::disconnect(runner, &WildPalms::Runtime::SyncRunner::logMessage,
-                        this, &DeviceWorker::logMessage);
-
-    QString summary;
-    if (result.success) {
-        summary = QString("Palm: %1, PC: %2")
-                      .arg(result.palmStats.summary())
-                      .arg(result.pcStats.summary());
-        emit palmScreenChanged("Sync complete");
-    } else {
-        summary = result.errorMessage;
-        emit palmScreenChanged("Sync error");
-    }
-
-    emit logMessage(summary);
-    emit syncFinished(result.success, summary);
-    emit syncResultReady(result);
-    emit operationFinished(result.success, "sync");
-}
-#endif // WILDPALMS_CALENDAR_MVP_ONLY
 
 void DeviceWorker::doCancel()
 {

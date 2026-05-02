@@ -38,11 +38,5 @@ add_palm_device_test(tst_pilotlinkpalmdatabaseaccess
     mockkpilotlink.cpp
 )
 
-# tst_palmdevice_roundtrip uses BlobSyncResult / runBlobTwoWay which were
-# removed by Plan 1 (F1 facade deletion). Excluded until M6 rewrites it.
-if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
-    add_palm_device_test(tst_palmdevice_roundtrip
-        tst_palmdevice_roundtrip.cpp
-        mockkpilotlink.cpp
-    )
-endif()
+# tst_palmdevice_roundtrip was deleted in M5c — its source used the
+# F1-facade APIs (BlobSyncResult / runBlobTwoWay) deleted in Plan 1.

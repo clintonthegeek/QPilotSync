@@ -38,15 +38,6 @@ add_library(WildPalmsRuntime STATIC
     pilotlinkconnectionfactory.h
 )
 
-# Phase E.16 — SyncRunner_wp is broken by Plan 1 (F1 facade deleted).
-# Exclude it when building in MVP-only mode; M6 deletes the source entirely.
-if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
-    target_sources(WildPalmsRuntime PRIVATE
-        syncrunner_wp.h
-        syncrunner_wp.cpp
-    )
-endif()
-
 target_sources(WildPalmsRuntime PRIVATE
     # G.7 — HotSyncCoordinator replaces SyncRunner_wp (Task 55 deletes the old files).
     hotsynccoordinator.h

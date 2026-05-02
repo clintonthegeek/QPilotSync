@@ -4,9 +4,6 @@
 #include "kpilotdevicelink.h"
 #include "../sync/syncengine.h"
 #include "../core/synctypes.h"
-#ifndef WILDPALMS_CALENDAR_MVP_ONLY
-#include "../runtime/syncrunner_wp.h"
-#endif
 
 #include <QDebug>
 #include <QMetaObject>
@@ -123,43 +120,6 @@ void DeviceSession::requestSync(Sync::SyncMode mode, Sync::SyncEngine *engine)
                               Q_ARG(QString, QString()),  // stateDir - engine already configured
                               Q_ARG(QString, QString())); // syncPath - engine already configured
 }
-
-#ifndef WILDPALMS_CALENDAR_MVP_ONLY
-void DeviceSession::requestSync(Sync::SyncMode mode,
-                                WildPalms::Runtime::SyncRunner *runner,
-                                const QStringList &enabledPluginIds)
-{
-    if (!isConnected()) {
-        emit errorOccurred("Not connected to device");
-        return;
-    }
-
-    if (m_busy) {
-        emit errorOccurred("Another operation is in progress");
-        return;
-    }
-
-    if (!runner) {
-        emit errorOccurred("No SyncRunner configured");
-        return;
-    }
-
-    m_busy = true;
-    m_currentOperation = "sync";
-    m_pendingSyncRunner = runner;
-    m_pendingPluginIds = enabledPluginIds;
-    emit operationStarted("Syncing");
-
-    ensureWorkerThread();
-    stopTickle();  // Pause tickle - sync operations keep connection alive
-
-    QMetaObject::invokeMethod(m_worker, "doSyncRunner",
-                              Qt::QueuedConnection,
-                              Q_ARG(int, static_cast<int>(mode)),
-                              Q_ARG(QStringList, enabledPluginIds),
-                              Q_ARG(WildPalms::Runtime::SyncRunner*, runner));
-}
-#endif // WILDPALMS_CALENDAR_MVP_ONLY
 
 void DeviceSession::requestCancel()
 {

@@ -20,7 +20,6 @@ add_subdirectory(todos)
 add_subdirectory(contacts)
 add_subdirectory(webcalendar)
 
-if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
-    # Phase E.14 — Plucker plugin tests.
-    add_subdirectory(plucker)
-endif()
+# Plucker plugin tests are commented out — the plugin itself is excluded
+# from the build (see src/plugins/CMakeLists.txt). M6 deletes both.
+# add_subdirectory(plucker)
