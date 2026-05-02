@@ -186,6 +186,10 @@ if(NOT WILDPALMS_INSTALLED)
     )
 endif()
 
+if(WILDPALMS_CALENDAR_MVP_ONLY)
+    target_compile_definitions(WildPalmsCore PRIVATE WILDPALMS_CALENDAR_MVP_ONLY)
+endif()
+
 # Install the shared library with export
 install(TARGETS WildPalmsCore
     EXPORT WildPalmsTargets

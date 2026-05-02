@@ -16,7 +16,9 @@
 #include "../profile.h"
 
 #include "../core/iconduit.h"
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
 #include "../runtime/syncrunner_wp.h"
+#endif
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
 #include "../core/ibackendplugin.h"
@@ -555,6 +557,7 @@ void KF6MainWindow::initializeConduits()
         }
     }
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
     // Phase E.16 — orchestrator that drives SyncEngine for each
     // loaded IBackendPlugin in response to Tools-menu actions. syncPath
     // + stateDir get rebound when a profile is loaded; host/device
@@ -569,6 +572,7 @@ void KF6MainWindow::initializeConduits()
         /*syncPath=*/QString(),
         /*stateDir=*/QString(),
         this);
+#endif
 }
 
 void KF6MainWindow::onConduitLoaded(IConduit *conduit)
@@ -763,6 +767,7 @@ void KF6MainWindow::loadProfile(const QString &path)
     // Configure sync engine
     m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
     // Phase E.16 — keep the SyncRunner's bind state aligned with the
     // active profile so Tools-menu actions targeting the new ABI write
     // baselines + per-plugin local stores under the right paths.
@@ -770,6 +775,7 @@ void KF6MainWindow::loadProfile(const QString &path)
         m_syncRunner->setSyncPath(m_syncPath);
         m_syncRunner->setStateDir(m_currentProfile->stateDirectoryPath());
     }
+#endif
 
     // M2 — (re)create PalmRuntime for the new profile path.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
@@ -1126,6 +1132,7 @@ void KF6MainWindow::onConnectionComplete(bool success)
 
     m_deviceLink = m_session->deviceLink();
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
     // Phase E.16 — hand the live KPilotLink to the SyncRunner so it
     // can build (and own) the PalmDeviceConnection that
     // IBackendPlugin::createBackends() needs. The construction logic
@@ -1134,6 +1141,7 @@ void KF6MainWindow::onConnectionComplete(bool success)
     if (m_syncRunner) {
         m_syncRunner->setKPilotLink(m_deviceLink, this);
     }
+#endif
 
     // M2 — hand the live link to PalmRuntime.
     if (m_palmRuntime)
@@ -1382,9 +1390,11 @@ void KF6MainWindow::onDisconnectDevice()
 
         m_syncEngine->setDeviceLink(nullptr);
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
         // Phase E.16 — tear down the SyncRunner-owned
         // PalmDeviceConnection so it can't call into a stale link.
         if (m_syncRunner) m_syncRunner->setKPilotLink(nullptr, nullptr);
+#endif
 
         // M2 — tear down PalmRuntime's device reference.
         if (m_palmRuntime) m_palmRuntime->disconnectDevice();

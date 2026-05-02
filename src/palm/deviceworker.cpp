@@ -1,7 +1,9 @@
 #include "deviceworker.h"
 #include "../sync/syncengine.h"
 #include "../core/synctypes.h"
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
 #include "../runtime/syncrunner_wp.h"
+#endif
 
 #include <QDebug>
 #include <QThread>
@@ -113,6 +115,7 @@ void DeviceWorker::doSync(int mode,
     emit operationFinished(result.success, "sync");
 }
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
 void DeviceWorker::doSyncRunner(int mode,
                                 const QStringList &enabledPluginIds,
                                 WildPalms::Runtime::SyncRunner *runner)
@@ -173,6 +176,7 @@ void DeviceWorker::doSyncRunner(int mode,
     emit syncResultReady(result);
     emit operationFinished(result.success, "sync");
 }
+#endif // WILDPALMS_CALENDAR_MVP_ONLY
 
 void DeviceWorker::doCancel()
 {

@@ -69,6 +69,10 @@ option(WILDPALMS_CALENDAR_MVP_ONLY
     "Build only the calendar Palm plugin and disable memo/contacts/todo/webcal during the runtime rewrite"
     ON)
 
+if(WILDPALMS_CALENDAR_MVP_ONLY)
+    add_compile_definitions(WILDPALMS_CALENDAR_MVP_ONLY)
+endif()
+
 if(BUILD_TESTS)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)

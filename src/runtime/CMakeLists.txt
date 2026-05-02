@@ -31,14 +31,22 @@ add_library(WildPalmsRuntime STATIC
     syncconfigstore_wp.cpp
     synchost_wp.h
     synchost_wp.cpp
-    # Phase E.16 — single orchestrator for the new ABI; replaces
-    # legacy Sync::SyncEngine driving IConduit derivatives.
-    syncrunner_wp.h
-    syncrunner_wp.cpp
     # Phase E.16 — pilot-link factory header (forward-decls only;
     # impl compiled into WildPalmsCore where the device-side
     # libraries can be linked without an AUTOMOC cycle).
     pilotlinkconnectionfactory.h
+)
+
+# Phase E.16 — SyncRunner_wp is broken by Plan 1 (F1 facade deleted).
+# Exclude it when building in MVP-only mode; M6 deletes the source entirely.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
+    target_sources(WildPalmsRuntime PRIVATE
+        syncrunner_wp.h
+        syncrunner_wp.cpp
+    )
+endif()
+
+target_sources(WildPalmsRuntime PRIVATE
     # G.7 — HotSyncCoordinator replaces SyncRunner_wp (Task 55 deletes the old files).
     hotsynccoordinator.h
     hotsynccoordinator.cpp

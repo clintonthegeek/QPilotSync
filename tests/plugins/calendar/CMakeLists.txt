@@ -126,42 +126,46 @@ set_tests_properties(tst_calendarbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PL
 # Loads the real wildpalms_calendar_v2.so off the build tree, drives
 # BlobSyncEngine::twoWayWithBaseline against a MockBlobBackend target
 # across four DateBk6-style category slots.
-add_executable(tst_calendar_v2
-    tst_calendar_v2.cpp
-    ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
-    ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
-)
-target_compile_definitions(tst_calendar_v2
-    PRIVATE
-        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-)
-target_include_directories(tst_calendar_v2
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${PILOT_LINK_INCLUDE_DIR}
-)
-# Prepend libkalburator's include dir so #include "syncbackend.h"
-# resolves to Kalburator::Sync::SyncBackend (palmcalendarbackend.h, pulled
-# in via WildPalmsPalmCalendar's headers, includes "syncbackend.h"
-# unqualified — same trick the plugin's CMakeLists uses).
-target_include_directories(tst_calendar_v2 BEFORE
-    PRIVATE
-        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
-)
-target_link_libraries(tst_calendar_v2
-    PRIVATE
-        WildPalmsRuntime        # BackendPluginManager
-        WildPalmsPalmCalendar   # DatebookCodec
-        WildPalmsPalmSync
-        WildPalmsCore
-        Kalburator::Sync
-        KF6::CoreAddons
-        KF6::CalendarCore
-        Qt::Test
-        Qt::Core
-        pisock
-)
-# Loads the plugin .so at runtime; ensure the plugin builds first.
-add_dependencies(tst_calendar_v2 wildpalms_calendar_v2)
-add_test(NAME tst_calendar_v2 COMMAND tst_calendar_v2)
-set_tests_properties(tst_calendar_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# NOTE: uses runBlobTwoWay which was removed by Plan 1; excluded in MVP-only
+# mode until M6 rewrites the test against the new SyncEngine API.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
+    add_executable(tst_calendar_v2
+        tst_calendar_v2.cpp
+        ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
+        ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+    )
+    target_compile_definitions(tst_calendar_v2
+        PRIVATE
+            CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
+    )
+    target_include_directories(tst_calendar_v2
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+            ${PILOT_LINK_INCLUDE_DIR}
+    )
+    # Prepend libkalburator's include dir so #include "syncbackend.h"
+    # resolves to Kalburator::Sync::SyncBackend (palmcalendarbackend.h, pulled
+    # in via WildPalmsPalmCalendar's headers, includes "syncbackend.h"
+    # unqualified — same trick the plugin's CMakeLists uses).
+    target_include_directories(tst_calendar_v2 BEFORE
+        PRIVATE
+            $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+    )
+    target_link_libraries(tst_calendar_v2
+        PRIVATE
+            WildPalmsRuntime        # BackendPluginManager
+            WildPalmsPalmCalendar   # DatebookCodec
+            WildPalmsPalmSync
+            WildPalmsCore
+            Kalburator::Sync
+            KF6::CoreAddons
+            KF6::CalendarCore
+            Qt::Test
+            Qt::Core
+            pisock
+    )
+    # Loads the plugin .so at runtime; ensure the plugin builds first.
+    add_dependencies(tst_calendar_v2 wildpalms_calendar_v2)
+    add_test(NAME tst_calendar_v2 COMMAND tst_calendar_v2)
+    set_tests_properties(tst_calendar_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

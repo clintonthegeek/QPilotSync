@@ -23,8 +23,12 @@ add_wildpalms_runtime_test(tst_backendpluginmanager tst_backendpluginmanager.cpp
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
 add_wildpalms_runtime_test(tst_plugin_factory_roundtrip tst_plugin_factory_roundtrip.cpp)
-add_wildpalms_runtime_test(tst_syncrunner tst_syncrunner.cpp)
-target_link_libraries(tst_syncrunner PRIVATE Kalburator::Sync)
+# tst_syncrunner uses SyncRunner_wp which is broken by Plan 1 (F1 facade
+# deleted). Excluded from WILDPALMS_CALENDAR_MVP_ONLY builds until M6.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
+    add_wildpalms_runtime_test(tst_syncrunner tst_syncrunner.cpp)
+    target_link_libraries(tst_syncrunner PRIVATE Kalburator::Sync)
+endif()
 # tst_palm_device_access links PalmDeviceAccessLib directly (not the full
 # WildPalmsRuntime) because syncrunner_wp.cpp is intentionally broken by
 # Plan 1 until Task 12 rewrites it. PalmDeviceAccessLib has the same include
@@ -35,6 +39,13 @@ target_link_libraries(tst_palm_device_access
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        # palmruntime.cpp instantiates PilotLinkPalmDatabaseAccess; pull in
+        # WildPalmsPalmDevice and its transitive pisock deps to resolve it.
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
 )
 add_test(NAME tst_palm_device_access COMMAND tst_palm_device_access)
 set_tests_properties(tst_palm_device_access PROPERTIES
@@ -52,6 +63,14 @@ target_link_libraries(tst_palm_runtime_hotsync
         Qt::Test
         PalmDeviceAccessLib
         Kalburator::Sync
+        # palmruntime.cpp directly instantiates PilotLinkPalmDatabaseAccess
+        # (WildPalmsPalmDevice) on connectDevice(); link in the device lib and
+        # its transitive pisock deps so the symbol resolves at link time.
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
 )
 add_test(NAME tst_palm_runtime_hotsync COMMAND tst_palm_runtime_hotsync)
 set_tests_properties(tst_palm_runtime_hotsync PROPERTIES

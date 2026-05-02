@@ -20,4 +20,8 @@ endfunction()
 
 add_palm_sync_test(tst_mockpalmdatabaseaccess tst_mockpalmdatabaseaccess.cpp)
 add_palm_sync_test(tst_palmbackend              tst_palmbackend.cpp)
-add_palm_sync_test(tst_palmbackend_roundtrip    tst_palmbackend_roundtrip.cpp)
+# tst_palmbackend_roundtrip uses runBlobTwoWay / BlobSyncResult which were
+# removed by Plan 1 (F1 facade deletion). Excluded until M6 rewrites it.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
+    add_palm_sync_test(tst_palmbackend_roundtrip    tst_palmbackend_roundtrip.cpp)
+endif()

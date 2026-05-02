@@ -14,9 +14,11 @@ class SyncEngine;
 enum class SyncMode;
 }
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
 namespace WildPalms::Runtime {
 class SyncRunner;
 }
+#endif
 
 /**
  * @brief Worker object for executing blocking DLP operations
@@ -76,6 +78,7 @@ public slots:
                 const QString &stateDir,
                 const QString &syncPath);
 
+#ifndef WILDPALMS_CALENDAR_MVP_ONLY
     /**
      * @brief Phase E.16: Execute a SyncRunner-driven sync.
      *
@@ -87,6 +90,7 @@ public slots:
     void doSyncRunner(int mode,
                       const QStringList &enabledPluginIds,
                       WildPalms::Runtime::SyncRunner *runner);
+#endif
 
     /**
      * @brief Request cancellation of current operation
