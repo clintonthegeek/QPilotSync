@@ -12,6 +12,7 @@ class TstKalburatorInteractiveConflictHandler : public QObject
 private slots:
     void registers_into_libkalburator_registry();
     void marshals_to_gui_thread();
+    void hook_bypasses_dialog_when_set();
 };
 
 void TstKalburatorInteractiveConflictHandler::registers_into_libkalburator_registry()
@@ -63,6 +64,25 @@ void TstKalburatorInteractiveConflictHandler::marshals_to_gui_thread()
     QCOMPARE(observedThread, mainThread);
     QCOMPARE(result,
         Kalburator::Sync::QSyncCore::ConflictDecision::UseSource);
+}
+
+void TstKalburatorInteractiveConflictHandler::hook_bypasses_dialog_when_set()
+{
+    // With m_parentWidget set BUT m_hook also set, the hook wins.
+    // Without this guarantee, unit tests can't run at all once
+    // the dialog path is in place (dialog would block waiting for user input).
+    QWidget parent;
+    KalburatorInteractiveConflictHandler handler(nullptr, &parent);
+    handler.setOnGuiThreadHook([](
+        Kalburator::Sync::QSyncCore::ConflictRecord &,
+        const Kalburator::Sync::QSyncCore::ConflictPolicy &) {
+            return Kalburator::Sync::QSyncCore::ConflictDecision::UseTarget;
+    });
+
+    Kalburator::Sync::QSyncCore::ConflictRecord conflict;
+    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
+    QCOMPARE(handler.handleConflict(conflict, policy),
+        Kalburator::Sync::QSyncCore::ConflictDecision::UseTarget);
 }
 
 QTEST_MAIN(TstKalburatorInteractiveConflictHandler)

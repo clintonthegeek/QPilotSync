@@ -87,6 +87,10 @@ target_link_libraries(tst_kalburator_interactive_conflict_handler
         Qt::Concurrent
         WildPalmsAppConflict
         Kalburator::Sync
+        # WildPalmsCore provides ConflictDialog (referenced by conflictdialogbridge.cpp).
+        # The bridge's exec() is never called in tests (the hook short-circuits first),
+        # but the linker still requires the symbol to be resolved.
+        WildPalmsCore
 )
 add_test(NAME tst_kalburator_interactive_conflict_handler
     COMMAND tst_kalburator_interactive_conflict_handler
