@@ -84,6 +84,7 @@ target_link_libraries(tst_kalburator_interactive_conflict_handler
     PRIVATE
         Qt::Core
         Qt::Test
+        Qt::Concurrent
         WildPalmsAppConflict
         Kalburator::Sync
 )

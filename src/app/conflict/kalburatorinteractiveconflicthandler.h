@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QWidget>   // needed for complete type in QPointer<QWidget>
+#include <functional>
 
 namespace Kalburator::Sync::QSyncCore {
     class ConflictStore;
@@ -40,6 +41,12 @@ public:
 
     void setParentWidget(QWidget *w) { m_parentWidget = w; }
 
+    using OnGuiThreadHook = std::function<
+        Kalburator::Sync::QSyncCore::ConflictDecision(
+            Kalburator::Sync::QSyncCore::ConflictRecord &,
+            const Kalburator::Sync::QSyncCore::ConflictPolicy &)>;
+    void setOnGuiThreadHook(OnGuiThreadHook fn) { m_hook = std::move(fn); }
+
 signals:
     void keepAliveRequested();
     void conflictProgress(int current, int total,
@@ -54,6 +61,7 @@ private:
             Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
             const Kalburator::Sync::QSyncCore::ConflictPolicy &policy);
 
+    OnGuiThreadHook                             m_hook;
     Kalburator::Sync::QSyncCore::ConflictStore *m_store;
     QPointer<QWidget>                           m_parentWidget;
     QList<Kalburator::Sync::QSyncCore::ConflictRecord>

@@ -1,5 +1,7 @@
 #include "kalburatorinteractiveconflicthandler.h"
 #include "conflictstore.h"
+#include <QMetaObject>
+#include <QThread>
 
 using ConflictDecision =
     Kalburator::Sync::QSyncCore::ConflictDecision;
@@ -22,11 +24,20 @@ KalburatorInteractiveConflictHandler::handleConflict(
     ConflictRecord &conflict,
     const ConflictPolicy &policy)
 {
-    Q_UNUSED(conflict);
-    Q_UNUSED(policy);
-    // Skeleton — Task 5 implements GUI-thread marshalling +
-    // dialog. For now, defer everything.
-    return ConflictDecision::Pending;
+    ++m_conflictsHandled;
+
+    if (QThread::currentThread() == thread()) {
+        return handleConflictOnGuiThread(conflict, policy);
+    }
+
+    ConflictDecision decision = ConflictDecision::Pending;
+    QMetaObject::invokeMethod(
+        this,
+        [this, &conflict, &policy, &decision]() {
+            decision = handleConflictOnGuiThread(conflict, policy);
+        },
+        Qt::BlockingQueuedConnection);
+    return decision;
 }
 
 void KalburatorInteractiveConflictHandler::onSyncStart()
@@ -48,7 +59,18 @@ KalburatorInteractiveConflictHandler::handleConflictOnGuiThread(
     ConflictRecord &conflict,
     const ConflictPolicy &policy)
 {
-    Q_UNUSED(conflict);
-    Q_UNUSED(policy);
+    if (m_hook) {
+        return m_hook(conflict, policy);
+    }
+
+    if (!m_parentWidget) {
+        m_localPending.append(conflict);
+        ++m_conflictsDeferred;
+        return ConflictDecision::Pending;
+    }
+
+    // Production path: dialog wired in Task 6.
+    m_localPending.append(conflict);
+    ++m_conflictsDeferred;
     return ConflictDecision::Pending;
 }
