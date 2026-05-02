@@ -6,6 +6,7 @@
 #include <QList>
 #include <QString>
 #include <memory>
+#include <vector>
 
 #include "palmrunresult.h"
 
@@ -16,6 +17,9 @@ namespace Kalburator::Sync {
     class BackendRegistry;
     class ISyncHost;
     struct SyncMapping;
+    class IBlobBackend;
+    class BlobBaselineStore;
+    class SyncBackend;
 }
 
 namespace WildPalms {
@@ -51,6 +55,8 @@ public:
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);
     void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>);
     void setMappingsForTest(QList<Kalburator::Sync::SyncMapping>);
+    void registerBlobBackendForTest(const QString &id,
+                                     std::unique_ptr<Kalburator::Sync::IBlobBackend> backend);
 
 signals:
     void deviceConnected();
@@ -64,9 +70,12 @@ private:
     QString                                                      m_profilePath;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
+    std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;
     std::unique_ptr<Kalburator::Sync::SyncEngine>                m_engine;
+    std::unique_ptr<Kalburator::Sync::BlobBaselineStore>         m_baselineStore;
     QList<std::shared_ptr<WildPalms::IBackendPluginV2>>          m_plugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
+    std::vector<std::unique_ptr<Kalburator::Sync::SyncBackend>>  m_ownedBackends;
 };
 
 }  // namespace WildPalms::Runtime

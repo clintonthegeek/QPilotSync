@@ -45,3 +45,15 @@ add_dependencies(tst_plugin_factory_roundtrip
     dummy_backend
     dummy_action
 )
+add_executable(tst_palm_runtime_hotsync tst_palm_runtime_hotsync.cpp)
+target_link_libraries(tst_palm_runtime_hotsync
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        Kalburator::Sync
+)
+add_test(NAME tst_palm_runtime_hotsync COMMAND tst_palm_runtime_hotsync)
+set_tests_properties(tst_palm_runtime_hotsync PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
