@@ -34,6 +34,7 @@
 // The full KalburatorInteractiveConflictHandler header must NOT appear here;
 // see src/app/conflict/CMakeLists.txt for the include-guard collision rationale.
 #include "../app/conflict/conflictdialogbridge.h"
+#include "../app/mapping/mappingeditordialog.h"
 #include "../widgets/dialogs/conflictreviewdialog.h"
 
 // Widget includes
@@ -318,6 +319,8 @@ void KF6MainWindow::setupConnections()
             this, &KF6MainWindow::onCloseProfile);
     connect(m_actionManager, &ActionManager::profileSettingsRequested,
             this, &KF6MainWindow::onProfileSettings);
+    connect(m_actionManager, &ActionManager::configureMappingsRequested,
+            this, &KF6MainWindow::onConfigureMappings);
     connect(m_actionManager, &ActionManager::settingsRequested,
             this, &KF6MainWindow::onSettings);
 
@@ -1969,6 +1972,34 @@ void KF6MainWindow::onPalmConflictHandlerKeepAlive()
     if (m_session) {
         m_session->resumeTickle();
     }
+}
+
+void KF6MainWindow::onConfigureMappings()
+{
+    if (!m_currentProfile) {
+        QMessageBox::information(this, tr("Configure Mappings"),
+            tr("No profile loaded."));
+        return;
+    }
+    if (m_palmRuntime && m_palmRuntime->isRunning()) {
+        QMessageBox::information(this, tr("Configure Mappings"),
+            tr("A sync is currently in progress. Wait for it to finish "
+               "before editing mappings."));
+        return;
+    }
+
+    MappingEditorDialog dlg(this);
+    dlg.setMappings(m_currentProfile->syncMappingsJson());
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    const QJsonArray updated = dlg.mappings();
+    m_currentProfile->setSyncMappingsJson(updated);
+    m_currentProfile->save();
+
+    if (m_palmRuntime)
+        m_palmRuntime->reloadMappings(updated);
 }
 
 void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)

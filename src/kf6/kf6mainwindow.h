@@ -136,6 +136,9 @@ private Q_SLOTS:
     // M5a — keepAlive from KalburatorInteractiveConflictHandler
     void onPalmConflictHandlerKeepAlive();
 
+    // M5b — open MappingEditorDialog and reload PalmRuntime
+    void onConfigureMappings();
+
 private:
     // UI setup
     void setupUI();
