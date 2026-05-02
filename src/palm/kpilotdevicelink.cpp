@@ -675,6 +675,11 @@ int KPilotDeviceLink::openDatabase(const QString &dbName, bool readWrite)
     int result = dlp_OpenDB(m_socket, 0, mode, dbName.toUtf8().constData(), &dbHandle);
     if (result < 0) {
         qWarning() << "[KPilotDeviceLink] dlp_OpenDB() failed, result:" << result;
+        // Socket/protocol-level errors (≤ -200) mean the DLP session is
+        // unrecoverable.  Mark as disconnected so subsequent calls fast-fail
+        // instead of retrying hundreds of times.
+        if (result <= -200)
+            m_isConnected = false;
         setError(QString("Failed to open database: %1").arg(dbName));
         return -1;
     }

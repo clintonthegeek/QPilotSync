@@ -356,6 +356,11 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     if (ids.isEmpty())
         return makeSuccessFuture();
 
+    // Pause the TickleWorker before the engine starts issuing DLP calls.
+    // readAllRecords() for 500+ records takes > 5 s; the tickle fires
+    // mid-stream and corrupts the DLP session.
+    if (m_link) m_link->pauseTickle();
+
     auto engineFuture = m_engine->runSyncFuture(
         ids, Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored);
 
@@ -378,7 +383,12 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
             r.perPluginStats.insert(QStringLiteral("calendar"), stats);
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        emit runFinished(r);
+        // Resume tickle on the main thread (this callback runs on the
+        // engine worker thread).
+        QMetaObject::invokeMethod(this, [this, r]() {
+            if (m_link) m_link->resumeTickle();
+            emit runFinished(r);
+        });
         return r;
     });
 }
@@ -415,6 +425,10 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
     ov.direction = (dir == MirrorDir::PalmToPC) ? Direction::MirrorAToB
                                                  : Direction::MirrorBToA;
 
+    // Pause the TickleWorker before the engine starts issuing DLP calls —
+    // same race as runAllMappings().
+    if (m_link) m_link->pauseTickle();
+
     // For M3: calendar-only, single mapping. Dispatch only the first enabled
     // mapping; Plan 3 (M4) will add multi-mapping iteration once other plugins
     // are re-enabled.
@@ -434,7 +448,12 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         r.perPluginStats.insert(QStringLiteral("calendar"), stats);
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        emit runFinished(r);
+        // Resume tickle on the main thread (this callback runs on the
+        // engine worker thread).
+        QMetaObject::invokeMethod(this, [this, r]() {
+            if (m_link) m_link->resumeTickle();
+            emit runFinished(r);
+        });
         return r;
     });
 }
