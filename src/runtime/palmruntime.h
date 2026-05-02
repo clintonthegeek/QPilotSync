@@ -67,7 +67,14 @@ signals:
     void runFinished(PalmRunResult);
 
 private:
+    // Mirror direction — local enum avoids pulling synctypes.h into this header.
+    enum class MirrorDir { PalmToPC, PCToPalm };
+
+    QFuture<PalmRunResult> runAllMappings();
+    QFuture<PalmRunResult> runMirror(MirrorDir dir, const QString &modeLabel);
+
     QString                                                      m_profilePath;
+    QString                                                      m_backupRoot;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;

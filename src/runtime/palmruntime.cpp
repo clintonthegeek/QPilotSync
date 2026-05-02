@@ -3,7 +3,10 @@
 
 #include <QPromise>
 #include <QDir>
+#include <QFileInfo>
 #include <QDateTime>
+#include <QSet>
+#include <QtConcurrent>
 
 #include "backendregistry.h"
 #include "syncengine.h"
@@ -27,6 +30,14 @@
 #include <KPluginMetaData>
 
 namespace {
+
+static QString sanitizeForFilesystem(const QString &id)
+{
+    QString s = id;
+    s.replace(QLatin1Char(':'), QLatin1Char('_'))
+     .replace(QLatin1Char('/'), QLatin1Char('_'));
+    return s;
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BlobBackendAdapter
@@ -147,6 +158,7 @@ namespace WildPalms::Runtime {
 PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     : QObject(parent)
     , m_profilePath(profilePath)
+    , m_backupRoot(QDir(profilePath).filePath(QStringLiteral("backup")))
     , m_registry(std::make_unique<Kalburator::Sync::BackendRegistry>())
     , m_baselineStore(std::make_unique<Kalburator::Sync::BlobBaselineStore>(
           QDir(profilePath).filePath(QStringLiteral(".wildpalms-blob-baselines.db"))))
@@ -327,12 +339,8 @@ static QFuture<WildPalms::Runtime::PalmRunResult> makeSuccessFuture() {
     return f;
 }
 
-QFuture<PalmRunResult> PalmRuntime::hotSync() {
-    emit runStarted(QStringLiteral("HotSync"));
-
-    if (m_mappings.isEmpty())
-        return makeSuccessFuture();
-
+QFuture<PalmRunResult> PalmRuntime::runAllMappings()
+{
     QList<QString> ids;
     for (const auto &m : m_mappings) {
         if (m.enabled)
@@ -368,10 +376,239 @@ QFuture<PalmRunResult> PalmRuntime::hotSync() {
     });
 }
 
-QFuture<PalmRunResult> PalmRuntime::fullSync()     { return makeSuccessFuture(); }
-QFuture<PalmRunResult> PalmRuntime::copyPalmToPC() { return makeSuccessFuture(); }
-QFuture<PalmRunResult> PalmRuntime::copyPCToPalm() { return makeSuccessFuture(); }
-QFuture<PalmRunResult> PalmRuntime::backup()       { return makeSuccessFuture(); }
-QFuture<PalmRunResult> PalmRuntime::restore()      { return makeSuccessFuture(); }
+QFuture<PalmRunResult> PalmRuntime::hotSync() {
+    emit runStarted(QStringLiteral("HotSync"));
+    if (m_mappings.isEmpty())
+        return makeSuccessFuture();
+    return runAllMappings();
+}
+
+QFuture<PalmRunResult> PalmRuntime::fullSync()
+{
+    emit runStarted(QStringLiteral("FullSync"));
+    // Clear all baselines so the engine treats this as a fresh first sync.
+    for (const auto &m : m_mappings)
+        m_baselineStore->clearMappingV3(m.id);
+    return runAllMappings();
+}
+
+QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &modeLabel)
+{
+    emit runStarted(modeLabel);
+
+    QList<QString> ids;
+    for (const auto &m : m_mappings) {
+        if (m.enabled) ids.append(m.id);
+    }
+    if (ids.isEmpty())
+        return makeSuccessFuture();
+
+    using Direction = Kalburator::Sync::ExecutionOverride::Direction;
+    Kalburator::Sync::ExecutionOverride ov;
+    ov.direction = (dir == MirrorDir::PalmToPC) ? Direction::MirrorAToB
+                                                 : Direction::MirrorBToA;
+
+    // For M3: calendar-only, single mapping. Dispatch only the first enabled
+    // mapping; Plan 3 (M4) will add multi-mapping iteration once other plugins
+    // are re-enabled.
+    auto engineFuture = m_engine->runSyncFuture(ids.first(), ov);
+
+    return engineFuture.then([this](Kalburator::Sync::SyncResult sr) {
+        PalmRunResult r;
+        r.startTime = QDateTime::currentDateTimeUtc();
+        r.success   = sr.success;
+
+        PalmRunResult::PluginStats stats;
+        stats.created   = sr.targetStats.created;
+        stats.updated   = sr.targetStats.updated;
+        stats.deleted   = sr.targetStats.deleted;
+        stats.unchanged = sr.targetStats.unchanged;
+        stats.errors    = r.success ? 0 : 1;
+        r.perPluginStats.insert(QStringLiteral("calendar"), stats);
+
+        r.endTime = QDateTime::currentDateTimeUtc();
+        emit runFinished(r);
+        return r;
+    });
+}
+
+QFuture<PalmRunResult> PalmRuntime::copyPalmToPC()
+{
+    return runMirror(MirrorDir::PalmToPC, QStringLiteral("CopyPalmToPC"));
+}
+
+QFuture<PalmRunResult> PalmRuntime::copyPCToPalm()
+{
+    return runMirror(MirrorDir::PCToPalm, QStringLiteral("CopyPCToPalm"));
+}
+
+QFuture<PalmRunResult> PalmRuntime::backup()
+{
+    emit runStarted(QStringLiteral("Backup"));
+
+    // Capture mappings and backend pointers before launching background thread.
+    struct BackupTask {
+        QString sourceBackendId;
+        Kalburator::Sync::SyncBackend *palmBackend;  // owned by m_ownedBackends
+        QString sourceCalendar;
+        QString backupPath;
+    };
+    QList<BackupTask> tasks;
+    for (const auto &m : m_mappings) {
+        if (!m.enabled) continue;
+        auto *backend = m_registry->backendInstance(m.sourceBackend);
+        if (!backend) continue;
+        tasks.append({
+            m.sourceBackend,
+            backend,
+            m.sourceCalendar,
+            QDir(m_backupRoot).filePath(m.sourceBackend + QLatin1Char('/')
+                                        + sanitizeForFilesystem(m.sourceCalendar))
+        });
+    }
+
+    if (tasks.isEmpty())
+        return makeSuccessFuture();
+
+    return QtConcurrent::run([this, tasks = std::move(tasks)]() -> PalmRunResult {
+        PalmRunResult r;
+        r.startTime = QDateTime::currentDateTimeUtc();
+        r.success   = true;
+
+        for (const auto &task : tasks) {
+            Kalburator::Sinks::RawFilesBackend backupSink(task.backupPath);
+            Kalburator::Sync::CollectionInfo col;
+            col.id   = task.sourceCalendar;
+            col.name = task.sourceBackendId;
+            backupSink.createCollection(col);
+
+            auto &stats = r.perPluginStats[task.sourceBackendId];
+
+            for (const auto &rec : task.palmBackend->loadRecords(task.sourceCalendar)) {
+                auto existing = backupSink.loadRecord(rec.id);
+                if (existing && existing->contentHash == rec.contentHash) {
+                    ++stats.unchanged;
+                } else if (existing) {
+                    if (backupSink.updateRecord(rec)) {
+                        ++stats.updated;
+                    } else {
+                        ++stats.errors;
+                        r.success = false;
+                    }
+                } else {
+                    if (!backupSink.createRecord(task.sourceCalendar, rec).isEmpty()) {
+                        ++stats.created;
+                    } else {
+                        ++stats.errors;
+                        r.success = false;
+                    }
+                }
+            }
+        }
+
+        r.endTime = QDateTime::currentDateTimeUtc();
+        QMetaObject::invokeMethod(this, [this, r]() { emit runFinished(r); });
+        return r;
+    });
+}
+
+QFuture<PalmRunResult> PalmRuntime::restore()
+{
+    emit runStarted(QStringLiteral("Restore"));
+
+    struct RestoreTask {
+        QString sourceBackendId;
+        Kalburator::Sync::SyncBackend *palmBackend;
+        QString sourceCalendar;
+        QString backupPath;
+    };
+    QList<RestoreTask> tasks;
+    for (const auto &m : m_mappings) {
+        if (!m.enabled) continue;
+        auto *backend = m_registry->backendInstance(m.sourceBackend);
+        if (!backend) continue;
+        tasks.append({
+            m.sourceBackend,
+            backend,
+            m.sourceCalendar,
+            QDir(m_backupRoot).filePath(m.sourceBackend + QLatin1Char('/')
+                                        + sanitizeForFilesystem(m.sourceCalendar))
+        });
+    }
+
+    if (tasks.isEmpty())
+        return makeSuccessFuture();
+
+    return QtConcurrent::run([this, tasks = std::move(tasks)]() -> PalmRunResult {
+        PalmRunResult r;
+        r.startTime = QDateTime::currentDateTimeUtc();
+        r.success   = true;
+
+        for (const auto &task : tasks) {
+            Kalburator::Sinks::RawFilesBackend backupSink(task.backupPath);
+
+            auto &stats = r.perPluginStats[task.sourceBackendId];
+
+            // RawFilesBackend uses the absolute file path as the record ID.
+            // Derive the logical ID from each record's filename by stripping
+            // the file path and the trailing collection suffix (e.g. ".palm-col").
+            // QFileInfo::completeBaseName() returns everything before the last
+            // '.' — correct for names like "rec-X.palm-col" → "rec-X".
+            struct LogicalRecord {
+                QString logicalId;
+                Kalburator::Sync::BackendRecord rec;
+            };
+            QList<LogicalRecord> backupRecords;
+            for (auto rawRec : backupSink.loadRecords(task.sourceCalendar)) {
+                LogicalRecord lr;
+                lr.logicalId = QFileInfo(rawRec.id).completeBaseName();
+                lr.rec       = std::move(rawRec);
+                lr.rec.id    = lr.logicalId;  // normalise for Palm backend
+                backupRecords.append(std::move(lr));
+            }
+            QSet<QString> backupLogicalIds;
+            for (const auto &lr : backupRecords)
+                backupLogicalIds.insert(lr.logicalId);
+
+            // Delete Palm records absent from backup.
+            for (const auto &palmRec : task.palmBackend->loadRecords(task.sourceCalendar)) {
+                if (!backupLogicalIds.contains(palmRec.id)) {
+                    if (task.palmBackend->deleteRecord(palmRec.id)) {
+                        ++stats.deleted;
+                    } else {
+                        ++stats.errors;
+                        r.success = false;
+                    }
+                }
+            }
+
+            // Write backup records to Palm (create or update).
+            for (const auto &lr : backupRecords) {
+                auto existing = task.palmBackend->loadRecord(lr.logicalId);
+                if (!existing) {
+                    if (!task.palmBackend->createRecord(task.sourceCalendar, lr.rec).isEmpty()) {
+                        ++stats.created;
+                    } else {
+                        ++stats.errors;
+                        r.success = false;
+                    }
+                } else if (existing->contentHash != lr.rec.contentHash) {
+                    if (task.palmBackend->updateRecord(lr.rec)) {
+                        ++stats.updated;
+                    } else {
+                        ++stats.errors;
+                        r.success = false;
+                    }
+                } else {
+                    ++stats.unchanged;
+                }
+            }
+        }
+
+        r.endTime = QDateTime::currentDateTimeUtc();
+        QMetaObject::invokeMethod(this, [this, r]() { emit runFinished(r); });
+        return r;
+    });
+}
 
 }  // namespace WildPalms::Runtime

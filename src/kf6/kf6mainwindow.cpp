@@ -780,6 +780,8 @@ void KF6MainWindow::loadProfile(const QString &path)
     // M2 — (re)create PalmRuntime for the new profile path.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
         m_currentProfile->stateDirectoryPath(), this);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runStarted,
+            this, &KF6MainWindow::onPalmRunStarted);
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
             this, &KF6MainWindow::onPalmRunFinished);
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
@@ -1776,46 +1778,78 @@ void KF6MainWindow::onProfileSettings()
 void KF6MainWindow::onHotSync()
 {
     if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
-        qWarning() << "[KF6MainWindow] HotSync requested but PalmRuntime not ready";
-        m_logWidget->logError(i18n("HotSync requested but no device connected (PalmRuntime not ready)"));
+        m_logWidget->logError(i18n("HotSync: no Palm device connected"));
         return;
     }
-    m_logWidget->logInfo(i18n("=== Starting HotSync via PalmRuntime ==="));
-    auto future = m_palmRuntime->hotSync();
     auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
     connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
             watcher, &QObject::deleteLater);
-    watcher->setFuture(future);
+    watcher->setFuture(m_palmRuntime->hotSync());
 }
 
 void KF6MainWindow::onFullSync()
 {
-    qWarning() << "[M2] Full Sync not yet implemented";
-    m_logWidget->logWarning(i18n("[M2] Full Sync not yet implemented"));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("FullSync: no Palm device connected"));
+        return;
+    }
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->fullSync());
 }
 
 void KF6MainWindow::onCopyPalmToPC()
 {
-    qWarning() << "[M2] Copy Palm→PC not yet implemented";
-    m_logWidget->logWarning(i18n("[M2] Copy Palm→PC not yet implemented"));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("CopyPalmToPC: no Palm device connected"));
+        return;
+    }
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->copyPalmToPC());
 }
 
 void KF6MainWindow::onCopyPCToPalm()
 {
-    qWarning() << "[M2] Copy PC→Palm not yet implemented";
-    m_logWidget->logWarning(i18n("[M2] Copy PC→Palm not yet implemented"));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("CopyPCToPalm: no Palm device connected"));
+        return;
+    }
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->copyPCToPalm());
 }
 
 void KF6MainWindow::onBackup()
 {
-    qWarning() << "[M2] Backup not yet implemented";
-    m_logWidget->logWarning(i18n("[M2] Backup not yet implemented"));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("Backup: no Palm device connected"));
+        return;
+    }
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->backup());
 }
 
 void KF6MainWindow::onRestore()
 {
-    qWarning() << "[M2] Restore not yet implemented";
-    m_logWidget->logWarning(i18n("[M2] Restore not yet implemented"));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("Restore: no Palm device connected"));
+        return;
+    }
+    if (QMessageBox::question(this, i18n("Restore"),
+            i18n("Restore is destructive. All Palm records not in the backup WILL BE DELETED. Continue?"),
+            QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->restore());
 }
 
 void KF6MainWindow::onChangeSyncFolder()
@@ -1901,15 +1935,23 @@ void KF6MainWindow::onSyncStarted()
     notification->sendEvent();
 }
 
+void KF6MainWindow::onPalmRunStarted(const QString &label)
+{
+    m_currentPalmRunLabel = label;
+    m_logWidget->logInfo(i18n("=== Starting %1 via PalmRuntime ===", label));
+}
+
 void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)
 {
+    const QString op = m_currentPalmRunLabel.isEmpty()
+                       ? i18n("Palm operation") : m_currentPalmRunLabel;
     if (result.success) {
-        m_logWidget->logInfo(i18n("PalmRuntime HotSync completed successfully"));
-        statusBar()->showMessage(i18n("HotSync complete"));
+        m_logWidget->logInfo(i18n("%1 completed successfully", op));
+        statusBar()->showMessage(i18n("%1 complete", op));
     } else {
-        m_logWidget->logError(i18n("PalmRuntime HotSync finished with errors: %1",
-                                   result.errorMessage));
-        statusBar()->showMessage(i18n("HotSync finished with errors"));
+        m_logWidget->logError(i18n("%1 finished with errors: %2",
+                                   op, result.errorMessage));
+        statusBar()->showMessage(i18n("%1 finished with errors", op));
     }
 }
 

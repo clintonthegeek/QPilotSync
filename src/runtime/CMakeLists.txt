@@ -5,6 +5,7 @@
 # WP host implementations consumed by libkalburator.
 
 find_package(KF6 REQUIRED COMPONENTS CoreAddons)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 add_library(WildPalmsRuntime STATIC
     pluginmetadatahelpers.h
@@ -106,6 +107,7 @@ target_include_directories(PalmDeviceAccessLib
 target_link_libraries(PalmDeviceAccessLib
     PUBLIC
         Qt::Core
+        Qt::Concurrent  # M3 — QtConcurrent::run used by backup/restore
         # M2 Task 5 — PalmRuntime's unique_ptr members (BackendRegistry,
         # SyncEngine) require complete types at destruction; add Kalburator::Sync
         # so the destructor compiles. Task 12 merges this lib back into

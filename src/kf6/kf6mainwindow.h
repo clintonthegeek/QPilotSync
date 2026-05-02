@@ -129,7 +129,8 @@ private Q_SLOTS:
     // Auto-sync detection
     void onAutoDeviceDetected(Profile *profile, const QStringList &ports);
 
-    // M2 — PalmRuntime callback
+    // M2/M3 — PalmRuntime callbacks
+    void onPalmRunStarted(const QString &label);
     void onPalmRunFinished(WildPalms::Runtime::PalmRunResult result);
 
 private:
@@ -222,6 +223,7 @@ private:
 
     // Current async operation
     QString m_pendingSyncOperationName;
+    QString m_currentPalmRunLabel;
 
     // Profile
     Profile *m_currentProfile;
