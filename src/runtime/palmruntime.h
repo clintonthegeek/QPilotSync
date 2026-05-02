@@ -52,6 +52,8 @@ public:
     QList<QString> enabledPluginIds() const;
     QList<Kalburator::Sync::SyncMapping> palmMappings() const;
 
+    bool isRunning() const { return m_running; }
+
     // Non-owning. Caller must ensure the handler outlives this PalmRuntime
     // (or call setConflictHandler(nullptr) before destroying the handler).
     void setConflictHandler(Kalburator::Sync::QSyncCore::ConflictHandler *handler);
@@ -91,6 +93,7 @@ private:
     std::unique_ptr<Kalburator::Sync::BlobBaselineStore>         m_baselineStore;
     QList<std::shared_ptr<WildPalms::IBackendPluginV2>>          m_plugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
+    bool                                                         m_running = false;
     std::vector<std::unique_ptr<Kalburator::Sync::SyncBackend>>  m_ownedBackends;
     QList<QObject*>                                              m_v2PluginObjects;
 };

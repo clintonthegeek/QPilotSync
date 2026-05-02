@@ -175,6 +175,11 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     // with the re-install pattern required at every engine-construction site.
     if (m_conflictHandler)
         m_engine->conflictRegistry()->setDefaultHandler(m_conflictHandler);
+
+    connect(this, &PalmRuntime::runStarted,
+            this, [this]() { m_running = true; });
+    connect(this, &PalmRuntime::runFinished,
+            this, [this]() { m_running = false; });
 }
 
 PalmRuntime::~PalmRuntime() = default;
