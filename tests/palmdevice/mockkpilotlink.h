@@ -62,6 +62,10 @@ public:
     bool cleanUpDatabase(int dbHandle) override;
     bool resetSyncFlags(int dbHandle) override;
 
+    // Raw file transfer — not exercised by palmdevice tests; stub returns false.
+    bool retrieveDatabase(const QString &, const QString &) override { return false; }
+    bool installFile(const QString &) override { return false; }
+
     // --- Test helpers ---
 
     /// Create an empty database (fails if name already taken).

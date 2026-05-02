@@ -10,6 +10,7 @@
 #include <pi-debug.h>
 
 #include <QDebug>
+#include <QFile>
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <cstring>
@@ -1215,6 +1216,36 @@ bool KPilotDeviceLink::installFile(const QString &filePath)
     }
 
     qDebug() << "[DeviceLink] Installed successfully:" << dbInfo.name;
+    return true;
+}
+
+bool KPilotDeviceLink::retrieveDatabase(const QString &dbName, const QString &destPath)
+{
+    if (!m_isConnected || m_socket < 0) {
+        qWarning() << "[DeviceLink] Cannot retrieve — not connected";
+        return false;
+    }
+    struct DBInfo info;
+    int rc = dlp_FindDBInfo(m_socket, 0, 0,
+                             dbName.toLocal8Bit().constData(),
+                             0, 0, &info);
+    if (rc < 0) {
+        qWarning() << "[DeviceLink] dlp_FindDBInfo failed for" << dbName << "rc:" << rc;
+        return false;
+    }
+    pi_file_t *pf = pi_file_create(destPath.toLocal8Bit().constData(), &info);
+    if (!pf) {
+        qWarning() << "[DeviceLink] pi_file_create failed for" << destPath;
+        return false;
+    }
+    rc = pi_file_retrieve(pf, m_socket, 0, nullptr);
+    pi_file_close(pf);
+    if (rc < 0) {
+        qWarning() << "[DeviceLink] pi_file_retrieve failed for" << dbName << "rc:" << rc;
+        QFile::remove(destPath);
+        return false;
+    }
+    qDebug() << "[DeviceLink] Retrieved database:" << dbName << "->" << destPath;
     return true;
 }
 

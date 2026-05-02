@@ -1,6 +1,8 @@
 #include <QTest>
 #include <QFuture>
 #include <QTemporaryDir>
+#include <QDir>
+#include <QFile>
 
 #include "runtime/palmruntime.h"
 #include "runtime/palmrunresult.h"
@@ -8,7 +10,8 @@
 #include "collectioninfo.h"
 #include "backendrecord.h"
 #include "synctypes.h"
-#include "rawfilesbackend.h"
+#include "palm/kpilotlink.h"
+#include "palm/pilotrecord.h"
 
 using namespace WildPalms::Runtime;
 using namespace Kalburator::Sync;
@@ -36,6 +39,60 @@ static SyncMapping makeTwoWayMapping(const QString &srcBackend, const QString &s
     m.enabled        = true;
     return m;
 }
+
+// Minimal KPilotLink mock for backup/restore tests.
+// retrieveDatabase() writes a small marker file to destPath.
+// installFile() records the file paths it was called with.
+class MockKPilotLink : public KPilotLink {
+    Q_OBJECT
+public:
+    explicit MockKPilotLink(QObject *parent = nullptr) : KPilotLink(parent) {}
+
+    QStringList dbNames;        // preset list returned by listDatabases()
+    QStringList installedFiles; // filled in by installFile()
+
+    // Connection management
+    bool openConnection() override { return true; }
+    void closeConnection() override {}
+    LinkStatus status() const override { return AcceptedDevice; }
+
+    // User / system info — not exercised by backup/restore
+    bool readUserInfo(struct PilotUser &) override { return true; }
+    bool writeUserInfo(const struct PilotUser &) override { return true; }
+    bool readSysInfo(struct SysInfo &) override { return true; }
+    bool readStorageInfo(int, struct CardInfo &) override { return true; }
+
+    // Database / record ops — not exercised by backup/restore
+    int openDatabase(const QString &, bool) override { return 0; }
+    bool closeDatabase(int) override { return true; }
+    QStringList listDatabases() override { return dbNames; }
+    QList<PilotRecord*> readAllRecords(int) override { return {}; }
+    PilotRecord* readRecordByIndex(int, int) override { return nullptr; }
+    PilotRecord* readRecordById(int, int) override { return nullptr; }
+    bool writeRecord(int, PilotRecord *) override { return true; }
+    bool deleteRecord(int, int) override { return true; }
+    QList<PilotRecord*> readModifiedRecords(int) override { return {}; }
+    bool resetDBIndex(int) override { return true; }
+    bool readAppBlock(int, unsigned char *, size_t *) override { return true; }
+    bool writeAppBlock(int, const unsigned char *, size_t) override { return true; }
+    bool beginSync() override { return true; }
+    bool endSync() override { return true; }
+    bool isConnected() const override { return true; }
+    bool cleanUpDatabase(int) override { return true; }
+    bool resetSyncFlags(int) override { return true; }
+
+    // Raw file transfer — these are what backup/restore actually call
+    bool retrieveDatabase(const QString &dbName, const QString &destPath) override {
+        QFile f(destPath);
+        if (!f.open(QIODevice::WriteOnly)) return false;
+        f.write(("MOCKPDB:" + dbName).toUtf8());
+        return true;
+    }
+    bool installFile(const QString &filePath) override {
+        installedFiles.append(filePath);
+        return true;
+    }
+};
 
 } // namespace
 
@@ -191,119 +248,57 @@ private slots:
         QVERIFY(!palmFinal.contains(QStringLiteral("rec-B")));
     }
 
-    void backup_additiveCopiesPalmRecords() {
+    void backup_dumpsAllDatabasesAsFiles() {
         QTemporaryDir profileDir;
         QVERIFY(profileDir.isValid());
 
         PalmRuntime runtime(profileDir.path());
 
-        auto palmBlob = std::make_unique<MockBlobBackend>();
-        {
-            CollectionInfo ci;
-            ci.id   = QStringLiteral("palm-col");
-            ci.name = QStringLiteral("Palm");
-            palmBlob->createCollection(ci);
-            palmBlob->createRecord(QStringLiteral("palm-col"),
-                makeRecord(QStringLiteral("rec-A"),
-                    QByteArray("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                               "BEGIN:VEVENT\r\nUID:rec-A\r\nSUMMARY:A\r\n"
-                               "DTSTART:20260501T090000Z\r\nDTEND:20260501T100000Z\r\n"
-                               "END:VEVENT\r\nEND:VCALENDAR\r\n")));
-            palmBlob->createRecord(QStringLiteral("palm-col"),
-                makeRecord(QStringLiteral("rec-B"),
-                    QByteArray("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                               "BEGIN:VEVENT\r\nUID:rec-B\r\nSUMMARY:B\r\n"
-                               "DTSTART:20260502T090000Z\r\nDTEND:20260502T100000Z\r\n"
-                               "END:VEVENT\r\nEND:VCALENDAR\r\n")));
-        }
-        runtime.registerBlobBackendForTest(QStringLiteral("palm"), std::move(palmBlob));
-
-        // Register a dummy PC target so the runtime has a valid mapping.
-        auto pcBlob = std::make_unique<MockBlobBackend>();
-        {
-            CollectionInfo ci;
-            ci.id   = QStringLiteral("pc-col");
-            ci.name = QStringLiteral("PC");
-            pcBlob->createCollection(ci);
-        }
-        runtime.registerBlobBackendForTest(QStringLiteral("pc"), std::move(pcBlob));
-
-        runtime.setMappingsForTest(
-            {makeTwoWayMapping(QStringLiteral("palm"), QStringLiteral("palm-col"),
-                               QStringLiteral("pc"),   QStringLiteral("pc-col"))});
+        MockKPilotLink link;
+        link.dbNames = {QStringLiteral("DatebookDB"), QStringLiteral("MemoDB")};
+        runtime.setLinkForTest(&link);
 
         auto future = runtime.backup();
         QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);
         QVERIFY(future.resultAt(0).success);
 
-        // Verify the backup root contains the Palm records.
-        const QString backupPath = QDir(profileDir.path())
-            .filePath(QStringLiteral("backup/palm/palm-col"));
-        QVERIFY(QFileInfo(backupPath).isDir());
+        // backup dir should contain one .pdb file per database
+        const QString backupDir = QDir(profileDir.path()).filePath(QStringLiteral("backup"));
+        QVERIFY(QFileInfo(backupDir + QStringLiteral("/DatebookDB.pdb")).exists());
+        QVERIFY(QFileInfo(backupDir + QStringLiteral("/MemoDB.pdb")).exists());
     }
 
-    void restore_writesBackupRecordsToPalm() {
+    void restore_installsAllPdbFilesFromBackupDir() {
         QTemporaryDir profileDir;
         QVERIFY(profileDir.isValid());
 
-        // Pre-populate backup root with one record.
-        const QString backupPath = QDir(profileDir.path())
-            .filePath(QStringLiteral("backup/palm/palm-col"));
-        QDir().mkpath(backupPath);
-        {
-            Kalburator::Sinks::RawFilesBackend backupSink(backupPath);
-            CollectionInfo col;
-            col.id   = QStringLiteral("palm-col");
-            col.name = QStringLiteral("Palm");
-            backupSink.createCollection(col);
-            backupSink.createRecord(QStringLiteral("palm-col"),
-                makeRecord(QStringLiteral("rec-X"),
-                    QByteArray("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                               "BEGIN:VEVENT\r\nUID:rec-X\r\nSUMMARY:X\r\n"
-                               "DTSTART:20260503T090000Z\r\nDTEND:20260503T100000Z\r\n"
-                               "END:VEVENT\r\nEND:VCALENDAR\r\n")));
+        // Pre-populate backup dir with two fake .pdb files.
+        const QString backupDir = QDir(profileDir.path()).filePath(QStringLiteral("backup"));
+        QDir().mkpath(backupDir);
+        const QStringList files = {
+            backupDir + QStringLiteral("/DatebookDB.pdb"),
+            backupDir + QStringLiteral("/MemoDB.pdb"),
+        };
+        for (const QString &f : files) {
+            QFile file(f);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("FAKEPDB");
         }
 
         PalmRuntime runtime(profileDir.path());
 
-        auto palmBlob = std::make_unique<MockBlobBackend>();
-        MockBlobBackend *palmRaw = palmBlob.get();
-        {
-            CollectionInfo ci;
-            ci.id   = QStringLiteral("palm-col");
-            ci.name = QStringLiteral("Palm");
-            palmBlob->createCollection(ci);
-            // Palm has rec-Y (not in backup) — should be deleted after restore.
-            palmBlob->createRecord(QStringLiteral("palm-col"),
-                makeRecord(QStringLiteral("rec-Y"),
-                    QByteArray("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                               "BEGIN:VEVENT\r\nUID:rec-Y\r\nSUMMARY:Y\r\n"
-                               "DTSTART:20260504T090000Z\r\nDTEND:20260504T100000Z\r\n"
-                               "END:VEVENT\r\nEND:VCALENDAR\r\n")));
-        }
-        runtime.registerBlobBackendForTest(QStringLiteral("palm"), std::move(palmBlob));
-
-        auto pcBlob = std::make_unique<MockBlobBackend>();
-        {
-            CollectionInfo ci;
-            ci.id   = QStringLiteral("pc-col");
-            ci.name = QStringLiteral("PC");
-            pcBlob->createCollection(ci);
-        }
-        runtime.registerBlobBackendForTest(QStringLiteral("pc"), std::move(pcBlob));
-
-        runtime.setMappingsForTest(
-            {makeTwoWayMapping(QStringLiteral("palm"), QStringLiteral("palm-col"),
-                               QStringLiteral("pc"),   QStringLiteral("pc-col"))});
+        MockKPilotLink link;
+        runtime.setLinkForTest(&link);
 
         auto future = runtime.restore();
         QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);
         QVERIFY(future.resultAt(0).success);
 
-        // Palm should now have rec-X (from backup) and NOT rec-Y (deleted).
-        const auto palmFinal = palmRaw->recordsIn(QStringLiteral("palm-col"));
-        QVERIFY(palmFinal.contains(QStringLiteral("rec-X")));
-        QVERIFY(!palmFinal.contains(QStringLiteral("rec-Y")));
+        // installFile should have been called for both files
+        QCOMPARE(link.installedFiles.size(), 2);
+        const QSet<QString> installed(link.installedFiles.cbegin(), link.installedFiles.cend());
+        QVERIFY(installed.contains(files[0]));
+        QVERIFY(installed.contains(files[1]));
     }
 };
 

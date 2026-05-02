@@ -1,5 +1,6 @@
 #include "palmruntime.h"
 #include "palmdeviceaccess.h"
+#include "palm/kpilotlink.h"
 
 #include <QPromise>
 #include <QDir>
@@ -175,6 +176,7 @@ PalmRuntime::~PalmRuntime() = default;
 
 void PalmRuntime::connectDevice(KPilotLink *link) {
     if (!link) return;
+    m_link = link;
 
     // Wrap the live KPilotLink in PilotLinkPalmDatabaseAccess and PalmDeviceAccess.
     auto dbAccess = std::make_unique<WildPalms::PalmDevice::PilotLinkPalmDatabaseAccess>(link);
@@ -279,6 +281,7 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
 }
 
 void PalmRuntime::disconnectDevice() {
+    m_link = nullptr;
     m_device.reset();
     emit deviceDisconnected();
 }
@@ -315,6 +318,10 @@ void PalmRuntime::registerBlobBackendForTest(const QString &id,
 void PalmRuntime::setMappingsForTest(QList<Kalburator::Sync::SyncMapping> mappings) {
     m_mappings = std::move(mappings);
     m_engine->setSyncMappings(m_mappings);
+}
+
+void PalmRuntime::setLinkForTest(KPilotLink *link) {
+    m_link = link;
 }
 
 QList<QString> PalmRuntime::enabledPluginIds() const {
@@ -446,63 +453,37 @@ QFuture<PalmRunResult> PalmRuntime::backup()
 {
     emit runStarted(QStringLiteral("Backup"));
 
-    // Capture mappings and backend pointers before launching background thread.
-    struct BackupTask {
-        QString sourceBackendId;
-        Kalburator::Sync::SyncBackend *palmBackend;  // owned by m_ownedBackends
-        QString sourceCalendar;
-        QString backupPath;
-    };
-    QList<BackupTask> tasks;
-    for (const auto &m : m_mappings) {
-        if (!m.enabled) continue;
-        auto *backend = m_registry->backendInstance(m.sourceBackend);
-        if (!backend) continue;
-        tasks.append({
-            m.sourceBackend,
-            backend,
-            m.sourceCalendar,
-            QDir(m_backupRoot).filePath(m.sourceBackend + QLatin1Char('/')
-                                        + sanitizeForFilesystem(m.sourceCalendar))
-        });
+    if (!m_link) {
+        PalmRunResult r;
+        r.startTime = r.endTime = QDateTime::currentDateTimeUtc();
+        r.success = false;
+        r.errorMessage = QStringLiteral("backup: no device connected");
+        emit runFinished(r);
+        return QtFuture::makeReadyValueFuture(r);
     }
 
-    if (tasks.isEmpty())
-        return makeSuccessFuture();
+    // Snapshot the DB list on the calling (main) thread — KPilotLink is not
+    // thread-safe; all link calls must happen before we hand off to the pool.
+    const QStringList databases = m_link->listDatabases();
+    const QString backupDir = m_backupRoot;
+    KPilotLink *link = m_link;
 
-    return QtConcurrent::run([this, tasks = std::move(tasks)]() -> PalmRunResult {
+    return QtConcurrent::run([this, databases, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
         r.success   = true;
 
-        for (const auto &task : tasks) {
-            Kalburator::Sinks::RawFilesBackend backupSink(task.backupPath);
-            Kalburator::Sync::CollectionInfo col;
-            col.id   = task.sourceCalendar;
-            col.name = task.sourceBackendId;
-            backupSink.createCollection(col);
+        QDir().mkpath(backupDir);
 
-            auto &stats = r.perPluginStats[task.sourceBackendId];
-
-            for (const auto &rec : task.palmBackend->loadRecords(task.sourceCalendar)) {
-                auto existing = backupSink.loadRecord(rec.id);
-                if (existing && existing->contentHash == rec.contentHash) {
-                    ++stats.unchanged;
-                } else if (existing) {
-                    if (backupSink.updateRecord(rec)) {
-                        ++stats.updated;
-                    } else {
-                        ++stats.errors;
-                        r.success = false;
-                    }
-                } else {
-                    if (!backupSink.createRecord(task.sourceCalendar, rec).isEmpty()) {
-                        ++stats.created;
-                    } else {
-                        ++stats.errors;
-                        r.success = false;
-                    }
-                }
+        auto &stats = r.perPluginStats[QStringLiteral("device")];
+        for (const QString &dbName : databases) {
+            const QString destPath = QDir(backupDir).filePath(
+                sanitizeForFilesystem(dbName) + QStringLiteral(".pdb"));
+            if (link->retrieveDatabase(dbName, destPath)) {
+                ++stats.created;
+            } else {
+                ++stats.errors;
+                r.success = false;
             }
         }
 
@@ -516,92 +497,35 @@ QFuture<PalmRunResult> PalmRuntime::restore()
 {
     emit runStarted(QStringLiteral("Restore"));
 
-    struct RestoreTask {
-        QString sourceBackendId;
-        Kalburator::Sync::SyncBackend *palmBackend;
-        QString sourceCalendar;
-        QString backupPath;
-    };
-    QList<RestoreTask> tasks;
-    for (const auto &m : m_mappings) {
-        if (!m.enabled) continue;
-        auto *backend = m_registry->backendInstance(m.sourceBackend);
-        if (!backend) continue;
-        tasks.append({
-            m.sourceBackend,
-            backend,
-            m.sourceCalendar,
-            QDir(m_backupRoot).filePath(m.sourceBackend + QLatin1Char('/')
-                                        + sanitizeForFilesystem(m.sourceCalendar))
-        });
+    if (!m_link) {
+        PalmRunResult r;
+        r.startTime = r.endTime = QDateTime::currentDateTimeUtc();
+        r.success = false;
+        r.errorMessage = QStringLiteral("restore: no device connected");
+        emit runFinished(r);
+        return QtFuture::makeReadyValueFuture(r);
     }
 
-    if (tasks.isEmpty())
-        return makeSuccessFuture();
+    const QString backupDir = m_backupRoot;
+    KPilotLink *link = m_link;
 
-    return QtConcurrent::run([this, tasks = std::move(tasks)]() -> PalmRunResult {
+    return QtConcurrent::run([this, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
         r.success   = true;
 
-        for (const auto &task : tasks) {
-            Kalburator::Sinks::RawFilesBackend backupSink(task.backupPath);
+        const QStringList files = QDir(backupDir).entryList(
+            QStringList{QStringLiteral("*.pdb"), QStringLiteral("*.prc")},
+            QDir::Files);
 
-            auto &stats = r.perPluginStats[task.sourceBackendId];
-
-            // RawFilesBackend uses the absolute file path as the record ID.
-            // Derive the logical ID from each record's filename by stripping
-            // the file path and the trailing collection suffix (e.g. ".palm-col").
-            // QFileInfo::completeBaseName() returns everything before the last
-            // '.' — correct for names like "rec-X.palm-col" → "rec-X".
-            struct LogicalRecord {
-                QString logicalId;
-                Kalburator::Sync::BackendRecord rec;
-            };
-            QList<LogicalRecord> backupRecords;
-            for (auto rawRec : backupSink.loadRecords(task.sourceCalendar)) {
-                LogicalRecord lr;
-                lr.logicalId = QFileInfo(rawRec.id).completeBaseName();
-                lr.rec       = std::move(rawRec);
-                lr.rec.id    = lr.logicalId;  // normalise for Palm backend
-                backupRecords.append(std::move(lr));
-            }
-            QSet<QString> backupLogicalIds;
-            for (const auto &lr : backupRecords)
-                backupLogicalIds.insert(lr.logicalId);
-
-            // Delete Palm records absent from backup.
-            for (const auto &palmRec : task.palmBackend->loadRecords(task.sourceCalendar)) {
-                if (!backupLogicalIds.contains(palmRec.id)) {
-                    if (task.palmBackend->deleteRecord(palmRec.id)) {
-                        ++stats.deleted;
-                    } else {
-                        ++stats.errors;
-                        r.success = false;
-                    }
-                }
-            }
-
-            // Write backup records to Palm (create or update).
-            for (const auto &lr : backupRecords) {
-                auto existing = task.palmBackend->loadRecord(lr.logicalId);
-                if (!existing) {
-                    if (!task.palmBackend->createRecord(task.sourceCalendar, lr.rec).isEmpty()) {
-                        ++stats.created;
-                    } else {
-                        ++stats.errors;
-                        r.success = false;
-                    }
-                } else if (existing->contentHash != lr.rec.contentHash) {
-                    if (task.palmBackend->updateRecord(lr.rec)) {
-                        ++stats.updated;
-                    } else {
-                        ++stats.errors;
-                        r.success = false;
-                    }
-                } else {
-                    ++stats.unchanged;
-                }
+        auto &stats = r.perPluginStats[QStringLiteral("device")];
+        for (const QString &fileName : files) {
+            const QString filePath = QDir(backupDir).filePath(fileName);
+            if (link->installFile(filePath)) {
+                ++stats.created;
+            } else {
+                ++stats.errors;
+                r.success = false;
             }
         }
 

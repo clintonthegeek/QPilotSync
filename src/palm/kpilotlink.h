@@ -79,6 +79,13 @@ public:
     virtual bool cleanUpDatabase(int dbHandle) = 0;
     virtual bool resetSyncFlags(int dbHandle) = 0;
 
+    // Raw database file transfer (backup / restore)
+    // retrieveDatabase: download the named database from the device and write
+    // it as a .pdb/.prc file to destPath.  Returns false on any error.
+    virtual bool retrieveDatabase(const QString &dbName, const QString &destPath) = 0;
+    // installFile: upload a .pdb/.prc file from filePath onto the device.
+    virtual bool installFile(const QString &filePath) = 0;
+
 signals:
     void statusChanged(LinkStatus status);
     void deviceReady(const QString &userName, const QString &deviceName);

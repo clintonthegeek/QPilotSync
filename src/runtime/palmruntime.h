@@ -57,6 +57,7 @@ public:
     void setMappingsForTest(QList<Kalburator::Sync::SyncMapping>);
     void registerBlobBackendForTest(const QString &id,
                                      std::unique_ptr<Kalburator::Sync::IBlobBackend> backend);
+    void setLinkForTest(KPilotLink *link);
 
 signals:
     void deviceConnected();
@@ -75,6 +76,7 @@ private:
 
     QString                                                      m_profilePath;
     QString                                                      m_backupRoot;
+    KPilotLink                                                  *m_link = nullptr;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;

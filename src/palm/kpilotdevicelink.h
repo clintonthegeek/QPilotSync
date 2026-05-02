@@ -166,7 +166,8 @@ public:
      * @param filePath Absolute path to the .pdb or .prc file
      * @return true on success
      */
-    bool installFile(const QString &filePath);
+    bool installFile(const QString &filePath) override;
+    bool retrieveDatabase(const QString &dbName, const QString &destPath) override;
 
     /**
      * @brief Check if a database exists on the Palm device
