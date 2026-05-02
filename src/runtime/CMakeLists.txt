@@ -81,9 +81,14 @@ set_target_properties(WildPalmsRuntime PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # M2 Task 2/3 — Isolated build unit for PalmDeviceAccess so the test target
 # compiles while syncrunner_wp.cpp is still broken (Plan 1 breakage; Task 12
 # merges this back into WildPalmsRuntime once the syncrunner is rewritten).
+# M2 Task 5 — PalmRuntime skeleton + PalmRunResult type compiled here for the
+# same reason (WildPalmsRuntime is still broken by syncrunner_wp.cpp).
 add_library(PalmDeviceAccessLib STATIC
     palmdeviceaccess.h
     palmdeviceaccess.cpp
+    palmrunresult.h
+    palmruntime.h
+    palmruntime.cpp
 )
 target_include_directories(PalmDeviceAccessLib
     PUBLIC
@@ -93,5 +98,10 @@ target_include_directories(PalmDeviceAccessLib
 target_link_libraries(PalmDeviceAccessLib
     PUBLIC
         Qt::Core
+        # M2 Task 5 — PalmRuntime's unique_ptr members (BackendRegistry,
+        # SyncEngine) require complete types at destruction; add Kalburator::Sync
+        # so the destructor compiles. Task 12 merges this lib back into
+        # WildPalmsRuntime which already links Kalburator::Sync.
+        Kalburator::Sync
 )
 set_target_properties(PalmDeviceAccessLib PROPERTIES POSITION_INDEPENDENT_CODE ON)
