@@ -12,16 +12,11 @@
 #include "../conflictdialog.h"
 
 #include <QDialog>
+#include <cstring>
 
 namespace ConflictDialogBridge {
 
 namespace {
-// Stores the decision from the most-recently-exec'd dialog so getDecision()
-// can retrieve it.  Single-threaded (GUI thread only); always called in an
-// exec()/getDecision() pair, so a static is safe.
-static QSyncCore::ConflictDecision s_lastDecision =
-    QSyncCore::ConflictDecision::Pending;
-
 QSyncCore::ConflictPolicy policyFromBridge(const BridgePolicy &bp)
 {
     QSyncCore::ConflictPolicy p;
@@ -41,28 +36,26 @@ QSyncCore::ConflictPolicy policyFromBridge(const BridgePolicy &bp)
 }
 } // anonymous namespace
 
-int exec(const void        *wpRecord,
-         const BridgePolicy &policy,
-         QWidget            *parent)
+int showAndGetDecision(
+    const void        *wpRecord,
+    const BridgePolicy &policy,
+    QWidget            *parent)
 {
     // wpRecord points to a Kalburator::Sync::QSyncCore::ConflictRecord whose
     // layout is byte-for-byte identical to QSyncCore::ConflictRecord (same
     // compiler, same field order, same Qt types, same namespace-stripped
-    // struct definition).  The cast is therefore well-defined.
-    const auto &record =
-        *static_cast<const QSyncCore::ConflictRecord *>(wpRecord);
+    // struct definition).  Use memcpy to avoid strict-aliasing UB
+    // (C++17 [basic.lval]/11) when reading through a pointer to a different type.
+    QSyncCore::ConflictRecord record;
+    std::memcpy(&record, wpRecord, sizeof(QSyncCore::ConflictRecord));
 
     const QSyncCore::ConflictPolicy wpPolicy = policyFromBridge(policy);
 
     ConflictDialog dlg(record, wpPolicy, nullptr, parent);
     const int code = dlg.exec();
-    s_lastDecision = dlg.decision();
-    return code;
-}
-
-int getDecision()
-{
-    return static_cast<int>(s_lastDecision);
+    if (code != QDialog::Accepted)
+        return static_cast<int>(QSyncCore::ConflictDecision::Pending);
+    return static_cast<int>(dlg.decision());
 }
 
 } // namespace ConflictDialogBridge

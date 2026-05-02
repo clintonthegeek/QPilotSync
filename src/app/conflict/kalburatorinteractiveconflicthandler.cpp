@@ -1,7 +1,6 @@
 #include "kalburatorinteractiveconflicthandler.h"
 #include "conflictdialogbridge.h"
 #include "conflictstore.h"
-#include <QDialog>
 #include <QMetaObject>
 #include <QThread>
 #include <QTimer>
@@ -147,16 +146,16 @@ KalburatorInteractiveConflictHandler::handleConflictOnGuiThread(
             this, &KalburatorInteractiveConflictHandler::keepAliveRequested);
     keepAlive.start();
 
-    const int code = ConflictDialogBridge::exec(
+    const int rawDecision = ConflictDialogBridge::showAndGetDecision(
         static_cast<const void *>(&wpRecord), bp, m_parentWidget);
 
     keepAlive.stop();
 
-    if (code != QDialog::Accepted) {
+    if (rawDecision == static_cast<int>(ConflictDecision::Pending)) {
         m_localPending.append(conflict);
         ++m_conflictsDeferred;
         return ConflictDecision::Pending;
     }
 
-    return fromBridgeDecision(ConflictDialogBridge::getDecision());
+    return fromBridgeDecision(rawDecision);
 }

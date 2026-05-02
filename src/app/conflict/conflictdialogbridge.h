@@ -40,28 +40,25 @@ struct BridgePolicy {
 };
 
 // ---------------------------------------------------------------------------
-// exec() — open ConflictDialog modally.
+// showAndGetDecision() — open ConflictDialog modally and return the decision.
 //
 // wpRecord: pointer to a ConflictRecord whose layout is byte-for-byte
 //           identical to QSyncCore::ConflictRecord (same compiler, same field
-//           order, same Qt types).  The bridge casts it to
-//           const QSyncCore::ConflictRecord*.
+//           order, same Qt types).  The bridge copies it via memcpy to avoid
+//           strict-aliasing UB (C++17 [basic.lval]/11).
 //
 // policy:   plain BridgePolicy struct; the bridge reconstructs a
 //           QSyncCore::ConflictPolicy from it, avoiding the layout-size
 //           mismatch (WP policy has two extra Palm-specific fields).
 //
-// Returns QDialog::Accepted (1) or QDialog::Rejected (0).
-// After Accepted, call getDecision() to retrieve the user's choice.
+// Returns the dialog's decision as int (matches QSyncCore::ConflictDecision
+// enum values).  Returns ConflictDecision::Pending (0) if the dialog was
+// rejected or dismissed.  Must be called on the GUI thread.
 // ---------------------------------------------------------------------------
-int exec(const void       *wpRecord,   // const QSyncCore::ConflictRecord *
-         const BridgePolicy &policy,
-         QWidget           *parent);
-
-// Must be called only after exec() returned QDialog::Accepted.
-// Returns static_cast<int>(QSyncCore::ConflictDecision) — cast-safe to
-// Kalburator::Sync::QSyncCore::ConflictDecision since ordinals are identical.
-int getDecision();
+int showAndGetDecision(
+    const void        *wpRecord,   // const QSyncCore::ConflictRecord *
+    const BridgePolicy &policy,
+    QWidget            *parent);
 
 } // namespace ConflictDialogBridge
 
