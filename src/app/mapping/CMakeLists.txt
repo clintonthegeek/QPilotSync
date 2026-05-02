@@ -10,6 +10,8 @@
 add_library(WildPalmsAppMapping STATIC
     mappingrowdialog.h
     mappingrowdialog.cpp
+    mappingeditordialog.h
+    mappingeditordialog.cpp
 )
 
 target_include_directories(WildPalmsAppMapping
