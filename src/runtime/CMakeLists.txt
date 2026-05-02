@@ -42,6 +42,11 @@ add_library(WildPalmsRuntime STATIC
     # G.7 — HotSyncCoordinator replaces SyncRunner_wp (Task 55 deletes the old files).
     hotsynccoordinator.h
     hotsynccoordinator.cpp
+    # M2 Task 2/3 — PalmDeviceAccess: IPalmDatabaseAccess wrapper that
+    # marshals all calls to a dedicated link thread via BlockingQueuedConnection.
+    # NOTE: compiled into PalmDeviceAccessLib (below) while syncrunner_wp.cpp
+    # is broken by Plan 1 (Task 12 re-merges these into WildPalmsRuntime once
+    # the syncrunner is rewritten).
 )
 
 target_include_directories(WildPalmsRuntime
@@ -72,3 +77,21 @@ target_link_libraries(WildPalmsRuntime
 )
 
 set_target_properties(WildPalmsRuntime PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# M2 Task 2/3 — Isolated build unit for PalmDeviceAccess so the test target
+# compiles while syncrunner_wp.cpp is still broken (Plan 1 breakage; Task 12
+# merges this back into WildPalmsRuntime once the syncrunner is rewritten).
+add_library(PalmDeviceAccessLib STATIC
+    palmdeviceaccess.h
+    palmdeviceaccess.cpp
+)
+target_include_directories(PalmDeviceAccessLib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+)
+target_link_libraries(PalmDeviceAccessLib
+    PUBLIC
+        Qt::Core
+)
+set_target_properties(PalmDeviceAccessLib PROPERTIES POSITION_INDEPENDENT_CODE ON)

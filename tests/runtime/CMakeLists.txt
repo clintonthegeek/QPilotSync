@@ -25,6 +25,21 @@ add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
 add_wildpalms_runtime_test(tst_plugin_factory_roundtrip tst_plugin_factory_roundtrip.cpp)
 add_wildpalms_runtime_test(tst_syncrunner tst_syncrunner.cpp)
 target_link_libraries(tst_syncrunner PRIVATE Kalburator::Sync)
+# tst_palm_device_access links PalmDeviceAccessLib directly (not the full
+# WildPalmsRuntime) because syncrunner_wp.cpp is intentionally broken by
+# Plan 1 until Task 12 rewrites it. PalmDeviceAccessLib has the same include
+# paths and Qt::Core linkage that this test needs.
+add_executable(tst_palm_device_access tst_palm_device_access.cpp)
+target_link_libraries(tst_palm_device_access
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+)
+add_test(NAME tst_palm_device_access COMMAND tst_palm_device_access)
+set_tests_properties(tst_palm_device_access PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
 # Force the dummy .so files to be built before running this test.
 add_dependencies(tst_plugin_factory_roundtrip
     dummy_backend
