@@ -249,39 +249,44 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
 
         qDebug() << "[PalmRuntime::connectDevice] Registered backend plugin:" << id;
 
-        // Build a default RawFiles PC-side backend + SyncMapping for each Palm
-        // collection. M5 will replace these with user-configured mappings.
-        for (const auto &palmCol : palmCollections) {
-            // Sanitize the collection ID for filesystem safety.
-            QString safeColId = palmCol.id;
-            safeColId.replace(QLatin1Char(':'), QLatin1Char('_'))
-                     .replace(QLatin1Char('/'), QLatin1Char('_'));
+        // Auto-create RawFiles defaults the first time we connect, but only
+        // if the user has not already loaded their own mappings via
+        // reloadMappings(). User-saved mappings win.
+        if (m_mappings.isEmpty()) {
+            // Build a default RawFiles PC-side backend + SyncMapping for each Palm
+            // collection.
+            for (const auto &palmCol : palmCollections) {
+                // Sanitize the collection ID for filesystem safety.
+                QString safeColId = palmCol.id;
+                safeColId.replace(QLatin1Char(':'), QLatin1Char('_'))
+                         .replace(QLatin1Char('/'), QLatin1Char('_'));
 
-            const QString pcId = QStringLiteral("rawfiles-%1-%2").arg(id, safeColId);
-            const QString rootPath = QDir(m_profilePath).filePath(
-                QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
+                const QString pcId = QStringLiteral("rawfiles-%1-%2").arg(id, safeColId);
+                const QString rootPath = QDir(m_profilePath).filePath(
+                    QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
 
-            auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
-            Kalburator::Sync::CollectionInfo pcCol;
-            pcCol.id   = safeColId;
-            pcCol.name = palmCol.name;
-            pcBackend->createCollection(pcCol);
+                auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
+                Kalburator::Sync::CollectionInfo pcCol;
+                pcCol.id   = safeColId;
+                pcCol.name = palmCol.name;
+                pcBackend->createCollection(pcCol);
 
-            m_registry->registerBackendInstance(pcId, pcBackend.get());
-            m_ownedBackends.push_back(std::move(pcBackend));
+                m_registry->registerBackendInstance(pcId, pcBackend.get());
+                m_ownedBackends.push_back(std::move(pcBackend));
 
-            Kalburator::Sync::SyncMapping m;
-            m.id             = QStringLiteral("default-%1-%2").arg(id, safeColId);
-            m.sourceBackend  = id;
-            m.targetBackend  = pcId;
-            m.sourceCalendar = palmCol.id;
-            m.targetCalendar = safeColId;
-            m.mode           = Kalburator::Sync::SyncMode::TwoWay;
-            m.enabled        = true;
-            m_mappings.append(m);
+                Kalburator::Sync::SyncMapping m;
+                m.id             = QStringLiteral("default-%1-%2").arg(id, safeColId);
+                m.sourceBackend  = id;
+                m.targetBackend  = pcId;
+                m.sourceCalendar = palmCol.id;
+                m.targetCalendar = safeColId;
+                m.mode           = Kalburator::Sync::SyncMode::TwoWay;
+                m.enabled        = true;
+                m_mappings.append(m);
 
-            qDebug() << "[PalmRuntime::connectDevice] Default mapping:"
-                     << palmCol.id << "->" << rootPath;
+                qDebug() << "[PalmRuntime::connectDevice] Default mapping:"
+                         << palmCol.id << "->" << rootPath;
+            }
         }
     }
 

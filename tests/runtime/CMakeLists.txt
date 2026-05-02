@@ -161,6 +161,27 @@ set_tests_properties(tst_palm_runtime_reload_mappings PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# M5b Task 3: defaults guard — connectDevice skips defaults if mappings present
+add_executable(tst_palm_runtime_default_mappings_only_when_empty
+    tst_palm_runtime_default_mappings_only_when_empty.cpp)
+target_link_libraries(tst_palm_runtime_default_mappings_only_when_empty
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_default_mappings_only_when_empty
+    COMMAND tst_palm_runtime_default_mappings_only_when_empty)
+set_tests_properties(tst_palm_runtime_default_mappings_only_when_empty PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
