@@ -31,6 +31,8 @@ KalburatorInteractiveConflictHandler::handleConflict(
     }
 
     ConflictDecision decision = ConflictDecision::Pending;
+    // Reference captures are safe: BlockingQueuedConnection blocks this thread
+    // until the slot returns, so the captured locals remain alive throughout.
     QMetaObject::invokeMethod(
         this,
         [this, &conflict, &policy, &decision]() {
@@ -69,7 +71,9 @@ KalburatorInteractiveConflictHandler::handleConflictOnGuiThread(
         return ConflictDecision::Pending;
     }
 
-    // Production path: dialog wired in Task 6.
+    // Task 6 replaces this with ConflictDialog invocation.
+    // For now, fall through to defer (same as no-widget path above)
+    // so that AskUser behaves as Defer until the dialog is wired in.
     m_localPending.append(conflict);
     ++m_conflictsDeferred;
     return ConflictDecision::Pending;

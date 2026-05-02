@@ -53,9 +53,10 @@ signals:
                           const QString &description);
 
 private:
-    // GUI-thread marshalling helper — not a slot because the return type
-    // is a Kalburator:: type and MOC cannot resolve it in this translation
-    // unit due to the local QSyncCore namespace shadowing.
+    // Called on the GUI thread only — via BlockingQueuedConnection from handleConflict
+    // (cross-thread) or directly (same-thread). Not a Qt slot: the return type is a
+    // Kalburator namespace type that MOC cannot resolve in this TU due to the
+    // local QSyncCore namespace collision. Called via functor invokeMethod instead.
     Kalburator::Sync::QSyncCore::ConflictDecision
         handleConflictOnGuiThread(
             Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
