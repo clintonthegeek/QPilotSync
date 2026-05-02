@@ -795,17 +795,16 @@ void KF6MainWindow::loadProfile(const QString &path)
     // the include-guard collision between WP-local and libkalburator QSyncCore
     // headers (both share the same guard names QSYNCCORE_CONFLICTPOLICY_H etc).
     ConflictDialogBridge::destroyHandler(m_palmConflictHandler);
+    m_palmConflictHandler = nullptr;  // clear dangling pointer before recreating
     m_palmConflictHandler = ConflictDialogBridge::createAndInstall(
         m_palmRuntime.get(),
         this,     // parentWidget for the dialog
         this);    // QObject parent for lifetime management
 
     // Tickle the device link while the dialog is open (matches legacy handler).
-    if (m_palmConflictHandler) {
-        connect(m_palmConflictHandler,
-                SIGNAL(keepAliveRequested()),
-                this, SLOT(onPalmConflictHandlerKeepAlive()));
-    }
+    ConflictDialogBridge::connectKeepAlive(
+        m_palmConflictHandler,
+        [this]() { onPalmConflictHandlerKeepAlive(); });
 
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
     m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());

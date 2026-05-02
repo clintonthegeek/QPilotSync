@@ -37,4 +37,15 @@ void destroyHandler(QObject *handler)
     delete handler;
 }
 
+void connectKeepAlive(
+    QObject *handler,
+    std::function<void()> callback)
+{
+    if (!handler)
+        return;
+    auto *h = static_cast<KalburatorInteractiveConflictHandler *>(handler);
+    QObject::connect(h, &KalburatorInteractiveConflictHandler::keepAliveRequested,
+                     h, [cb = std::move(callback)]() { cb(); });
+}
+
 } // namespace ConflictDialogBridge

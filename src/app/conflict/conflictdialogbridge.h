@@ -1,6 +1,8 @@
 #ifndef CONFLICTDIALOGBRIDGE_H
 #define CONFLICTDIALOGBRIDGE_H
 
+#include <functional>
+
 // Plain-function bridge that opens ConflictDialog without requiring the caller
 // to include WP-local QSyncCore headers.  The collision arises because both
 // libkalburator and WildPalms define conflictrecord.h / conflictpolicy.h with
@@ -86,6 +88,10 @@ QObject *createAndInstall(
     QObject *qobjParent);      // QObject parent for lifetime management
 
 void destroyHandler(QObject *handler);
+
+// Connect keepAliveRequested signal to a callback. Must be called on the
+// GUI thread. The callback is called on the handler's thread (GUI thread).
+void connectKeepAlive(QObject *handler, std::function<void()> callback);
 
 } // namespace ConflictDialogBridge
 
