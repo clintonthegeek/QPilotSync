@@ -78,6 +78,9 @@ add_test(NAME tst_webcalbackendplugin COMMAND tst_webcalbackendplugin)
 set_tests_properties(tst_webcalbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 6: end-to-end ---
+# NOTE: uses runBlobMirror (deleted in Plan 1 M1); excluded until M6
+# rewrites against the new SyncEngine API.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
 add_executable(tst_webcal_v2_e2e
     tst_webcal_v2_e2e.cpp
     ${WEBCAL_PLUGIN_SRC_DIR}/webcalbackendplugin.cpp
@@ -109,3 +112,4 @@ target_link_libraries(tst_webcal_v2_e2e
 )
 add_test(NAME tst_webcal_v2_e2e COMMAND tst_webcal_v2_e2e)
 set_tests_properties(tst_webcal_v2_e2e PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

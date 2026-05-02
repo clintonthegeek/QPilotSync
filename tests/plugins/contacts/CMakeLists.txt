@@ -91,6 +91,7 @@ target_link_libraries(tst_contactsbackendplugin
         WildPalmsPalmCodecs
         WildPalmsPalmSync
         WildPalmsCore
+        PalmDeviceAccessLib      # PalmDeviceAccess symbols
         Kalburator::Sync
         KF6::CoreAddons
         KF6::Contacts
@@ -104,9 +105,9 @@ add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
 set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: tst_contacts_v2 — end-to-end via BackendPluginManager ---
-# Loads the real wildpalms_contacts_v2.so off the build tree, drives
-# BlobSyncEngine::twoWayWithBaseline against a MockBlobBackend target
-# across multiple AddressDB category slots. Mirrors tst_todo_v2.
+# NOTE: uses runBlobTwoWay (deleted in Plan 1 M1) and BackendPluginManager
+# v1 API; excluded until M6 rewrites against the new SyncEngine API.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
 add_executable(tst_contacts_v2
     tst_contacts_v2.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
@@ -138,3 +139,4 @@ target_link_libraries(tst_contacts_v2
 add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
 add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
 set_tests_properties(tst_contacts_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

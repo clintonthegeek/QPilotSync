@@ -58,6 +58,7 @@ target_link_libraries(tst_memobackendplugin
         WildPalmsPalmCodecs
         WildPalmsPalmCalendar
         WildPalmsCore
+        PalmDeviceAccessLib     # PalmDeviceAccess symbols
         Kalburator::Sync
         KF6::CoreAddons
         KF6::I18n
@@ -71,6 +72,9 @@ set_tests_properties(tst_memobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFO
 
 # Task 9: end-to-end test that loads the real .so through
 # BackendPluginManager and drives BlobSyncEngine::twoWayWithBaseline.
+# NOTE: uses runBlobTwoWay (deleted in Plan 1 M1) and BackendPluginManager
+# v1 API; excluded until M6 rewrites against the new SyncEngine API.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
 add_executable(tst_memo_v2 tst_memo_v2.cpp)
 target_compile_definitions(tst_memo_v2
     PRIVATE
@@ -93,3 +97,4 @@ target_link_libraries(tst_memo_v2
 add_dependencies(tst_memo_v2 wildpalms_memo_v2)
 add_test(NAME tst_memo_v2 COMMAND tst_memo_v2)
 set_tests_properties(tst_memo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

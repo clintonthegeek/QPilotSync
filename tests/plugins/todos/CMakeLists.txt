@@ -90,6 +90,7 @@ target_link_libraries(tst_todobackendplugin
         WildPalmsPalmCodecs
         WildPalmsPalmSync
         WildPalmsCore
+        PalmDeviceAccessLib      # PalmDeviceAccess symbols
         Kalburator::Sync
         KF6::CoreAddons
         KF6::CalendarCore
@@ -103,10 +104,9 @@ add_test(NAME tst_todobackendplugin COMMAND tst_todobackendplugin)
 set_tests_properties(tst_todobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 6: tst_todo_v2 — end-to-end via BackendPluginManager ---
-# Loads the real wildpalms_todos_v2.so off the build tree, drives
-# BlobSyncEngine::twoWayWithBaseline against a MockBlobBackend target
-# across multiple ToDo category slots. Mirrors the calendar plugin's
-# tst_calendar_v2 plumbing.
+# NOTE: uses runBlobTwoWay (deleted in Plan 1 M1) and BackendPluginManager
+# v1 API; excluded until M6 rewrites against the new SyncEngine API.
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
 add_executable(tst_todo_v2
     tst_todo_v2.cpp
     ${TODOS_PLUGIN_SRC_DIR}/todoblobbackend.cpp
@@ -139,3 +139,4 @@ target_link_libraries(tst_todo_v2
 add_dependencies(tst_todo_v2 wildpalms_todos_v2)
 add_test(NAME tst_todo_v2 COMMAND tst_todo_v2)
 set_tests_properties(tst_todo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
