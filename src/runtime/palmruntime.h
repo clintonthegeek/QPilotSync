@@ -52,6 +52,8 @@ public:
     QList<QString> enabledPluginIds() const;
     QList<Kalburator::Sync::SyncMapping> palmMappings() const;
 
+    // Non-owning. Caller must ensure the handler outlives this PalmRuntime
+    // (or call setConflictHandler(nullptr) before destroying the handler).
     void setConflictHandler(Kalburator::Sync::QSyncCore::ConflictHandler *handler);
     Kalburator::Sync::QSyncCore::ConflictHandler *conflictHandlerForTest() const;
 

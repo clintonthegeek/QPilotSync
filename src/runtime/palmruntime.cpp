@@ -171,9 +171,10 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
         m_registry.get(), m_syncHost.get());
     m_engine->setBlobBaselineStore(m_baselineStore.get());
-    if (m_conflictHandler) {
+    // No-op today (handler set after construction), but keeps this consistent
+    // with the re-install pattern required at every engine-construction site.
+    if (m_conflictHandler)
         m_engine->conflictRegistry()->setDefaultHandler(m_conflictHandler);
-    }
 }
 
 PalmRuntime::~PalmRuntime() = default;
