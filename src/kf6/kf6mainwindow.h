@@ -61,6 +61,12 @@ public:
     explicit KF6MainWindow(QWidget *parent = nullptr);
     ~KF6MainWindow() override;
 
+    // Test seam — read-only view of the per-plugin KPageWidget map. Used by
+    // tst_main_window_plugin_pages_populated to confirm per-plugin pages
+    // populate after backendPluginLoaded fires for all enabled plugins.
+    const QMap<QString, KPageWidgetItem *> &backendPluginPagesForTest() const
+        { return m_backendPluginPages; }
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 

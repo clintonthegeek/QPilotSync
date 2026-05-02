@@ -212,6 +212,32 @@ set_tests_properties(tst_mapping_editor_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# M5c Task 2: smoke test — KF6MainWindow per-plugin KPageWidget wiring.
+# Loads real WildPalms plugins via BackendPluginManager (same path
+# KF6MainWindow uses) and asserts every plugin claiming hasMainView()=true
+# returns a non-null QWidget from createMainView() — the contract that
+# onBackendPluginLoaded depends on.
+add_executable(tst_main_window_plugin_pages_populated
+    tst_main_window_plugin_pages_populated.cpp)
+target_compile_definitions(tst_main_window_plugin_pages_populated
+    PRIVATE
+        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
+target_link_libraries(tst_main_window_plugin_pages_populated
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::CoreAddons
+        WildPalmsCore
+        WildPalmsRuntime
+)
+add_test(NAME tst_main_window_plugin_pages_populated
+    COMMAND tst_main_window_plugin_pages_populated)
+set_tests_properties(tst_main_window_plugin_pages_populated PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
