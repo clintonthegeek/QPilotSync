@@ -2070,7 +2070,7 @@ void KF6MainWindow::onAbout()
 
 void KF6MainWindow::onSettings()
 {
-    SettingsDialog dialog(this);
+    SettingsDialog dialog(this, m_currentProfile);
     connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
         m_minimizeToTray = KF6Settings::instance().minimizeToTray();
     });
