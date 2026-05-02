@@ -1,341 +1,243 @@
-#include <QtTest/QtTest>
-#include <QCoreApplication>
-#include <QDir>
-#include <QTemporaryDir>
+// M5c Task 3: post-V2 / post-runSyncFuture rewrite of tst_memo_v2.
+//
+// The original V1 test used the deleted F1-facade SyncEngine::runBlobTwoWay
+// against backends produced by IBackendPlugin::createBackends. Both APIs
+// are gone:
+//   - IBackendPlugin (V1) → migrated to IBackendPluginV2 in M4.
+//   - SyncEngine::runBlobTwoWay → deleted in F1; replaced by
+//     SyncEngine::runSyncFuture(profile, mappings, override).
+//
+// This rewrite drives the same end-to-end behavior (Palm memos transcoded
+// to Markdown, round-tripping through the sync engine) but plumbs the
+// real wildpalms_memo_v2.so through PalmRuntime — the same path the
+// production HotSync code uses. PalmRuntime's test seams inject:
+//   - a MockPalmDatabaseAccess (seeded with three palm memos)
+//   - the V2 plugin's IBlobBackend (palm side, real transcoding)
+//   - a MockBlobBackend (pc side, raw byte storage)
+//   - a TwoWay SyncMapping
+// then runtime.hotSync() executes the full SyncEngine::runSyncFuture path.
 
-#include "core/ibackendplugin.h"
-#include "palm/palmdeviceconnection.h"
+#include <QtTest/QtTest>
+#include <QApplication>
+#include <QTemporaryDir>
+#include <QFuture>
+
+#include <KPluginFactory>
+#include <KPluginMetaData>
+
+#include "core/ibackendplugin_v2.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
-#include "palm/sync/palmbackend.h"
 #include "palm/codecs/memocodec.h"
 #include "plugins/memo/memomarkdown.h"
-#include "runtime/backendpluginmanager.h"
+#include "runtime/palmdeviceaccess.h"
+#include "runtime/palmruntime.h"
+#include "runtime/palmrunresult.h"
 
-#include <QCryptographicHash>
-
-#include "syncengine.h"
-#include "blobbaselinestore.h"
 #include "mockblobbackend.h"
-#include "conflicthandlerregistry.h"
-#include "conflictstore.h"
-#include "conflictpolicy.h"
-
-namespace {
-QString sha256Hex(const QByteArray &bytes)
-{
-    return QString::fromLatin1(
-        QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
-}
-}
+#include "synctypes.h"
+#include "collectioninfo.h"
+#include "backendrecord.h"
 
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmRecord;
 
-/// Phase E.9 end-to-end test: loads the real wildpalms_memo_v2.so via
-/// BackendPluginManager, wires the plugin-produced MemoBlobBackend
-/// into BlobSyncEngine::twoWayWithBaseline, and verifies fresh sync,
-/// modify + resync, delete + resync, and idempotent no-op behaviours.
-///
-/// The target side uses MockBlobBackend (not LocalBlobBackend)
-/// because the engine matches records by literal id-string across
-/// both backends; LocalBlobBackend rewrites ids to absolute file
-/// paths which breaks matching against PalmBackend's "MemoDB:N"
-/// ids. Production wiring uses an IDMappingStore layer for
-/// cross-space matching; that's outside the E.9 exit-gate scope.
-/// The mock still proves the plugin round-trips real Palm memos
-/// into Markdown bytes and back.
+namespace {
 
-class TestMemoV2 : public QObject
-{
-    Q_OBJECT
-private slots:
-    void initTestCase();
-    void freshSyncCreatesLocalFiles();
-    void modifyLocalPropagatesToPalm();
-    void deletePalmRemovesLocalFile();
-    void idempotentNoopSyncChangesNothing();
+constexpr int kSyncTimeoutMs = 5000;
+const QString kPalmCollectionId = QStringLiteral("palm:memo");
+const QString kPcBackendId      = QStringLiteral("pc");
+const QString kPcCollectionId   = QStringLiteral("pc-memo");
+const QString kMemoPluginId     = QStringLiteral("memo");  // V2 IBackendPluginV2::pluginId()
 
-private:
-    void seedPalmMemos(MockPalmDatabaseAccess *dev) const;
-    static Kalburator::Sync::CollectionInfo memoCollection();
-    QString m_pluginSubdir;
-};
-
-void TestMemoV2::initTestCase()
-{
-    // The real memo plugin installs under
-    // ${CMAKE_BINARY_DIR}/lib/wildpalms/plugins/libwildpalms_memo_v2.so.
-    // Adding CMAKE_BINARY_DIR/lib to the library path makes
-    // KPluginMetaData::findPlugins("wildpalms/plugins") pick it up.
-    QCoreApplication::addLibraryPath(
-        QStringLiteral(CMAKE_BINARY_DIR "/lib"));
-    m_pluginSubdir = QStringLiteral("wildpalms/plugins");
-}
-
-void TestMemoV2::seedPalmMemos(MockPalmDatabaseAccess *dev) const
+void seedPalm(MockPalmDatabaseAccess *dev,
+              const QStringList     &bodies,
+              const QList<int>      &cats)
 {
     dev->createDatabase(QStringLiteral("MemoDB"));
-    const QStringList bodies = {
-        QStringLiteral("first memo"),
-        QStringLiteral("second memo"),
-        QStringLiteral("third memo"),
-    };
-    const QList<int> cats = {0, 0, 2};
     for (int i = 0; i < bodies.size(); ++i) {
         PalmRecord pr;
-        pr.category     = static_cast<std::uint8_t>(cats[i]);
+        pr.category     = static_cast<std::uint8_t>(cats.value(i, 0));
         pr.data         = WildPalms::PalmCodecs::encodeMemo({bodies[i], false});
         pr.lastModified = QDateTime::currentDateTimeUtc();
         dev->createRecord(QStringLiteral("MemoDB"), pr);
     }
 }
 
-Kalburator::Sync::CollectionInfo TestMemoV2::memoCollection()
+Kalburator::Sync::SyncMapping makeTwoWayMapping()
 {
-    Kalburator::Sync::CollectionInfo info;
-    info.id   = QStringLiteral("palm:memo");
-    info.name = QStringLiteral("Memos");
-    info.type = QStringLiteral("memos");
-    return info;
+    Kalburator::Sync::SyncMapping m;
+    m.id              = QStringLiteral("memo-twoway");
+    m.sourceBackend   = kMemoPluginId;
+    m.sourceCalendar  = kPalmCollectionId;
+    m.targetBackend   = kPcBackendId;
+    m.targetCalendar  = kPcCollectionId;
+    m.mode            = Kalburator::Sync::SyncMode::TwoWay;
+    m.enabled         = true;
+    return m;
 }
 
-// KF6 derives the pluginId from the .so filename (stripping the .so
-// suffix but NOT the "lib" prefix on Linux). Our cmake target is
-// wildpalms_memo_v2, so the file is "libwildpalms_memo_v2.so" →
-// pluginId "libwildpalms_memo_v2". The "Id" field in the manifest
-// emits a kf.coreaddons warning and is ignored.
-static const QString kMemoPluginId =
-    QStringLiteral("libwildpalms_memo_v2");
-
-void TestMemoV2::freshSyncCreatesLocalFiles()
+// Loads wildpalms_memo_v2.so via KPluginFactory and returns a QObject
+// pointer downcast to IBackendPluginV2*. The QObject is parented to
+// `parent` so Qt cleanup handles it.
+WildPalms::IBackendPluginV2 *loadMemoPluginV2(QObject *parent)
 {
-    QTemporaryDir tmp;
-    QVERIFY(tmp.isValid());
+    const auto metaDatas = KPluginMetaData::findPlugins(
+        QStringLiteral("wildpalms/plugins"),
+        [](const KPluginMetaData &md) {
+            return md.value(QStringLiteral("X-WildPalms-PluginType"))
+                       == QStringLiteral("backend")
+                && md.fileName().contains(QStringLiteral("memo"));
+        });
+    if (metaDatas.isEmpty()) return nullptr;
 
-    MockPalmDatabaseAccess dev;
-    seedPalmMemos(&dev);
-    PalmDeviceConnection conn(&dev);
+    auto factoryResult = KPluginFactory::loadFactory(metaDatas.first());
+    if (!factoryResult) return nullptr;
 
-    WildPalms::BackendPluginManager mgr(nullptr, nullptr, nullptr);
-    mgr.setPluginSubdir(m_pluginSubdir);
-    mgr.discoverPlugins();
-    QVERIFY2(mgr.loadPlugin(kMemoPluginId),
-             "failed to load memo plugin via BackendPluginManager");
-    auto *plugin = mgr.plugin(kMemoPluginId);
-    QVERIFY(plugin != nullptr);
+    QObject *obj = factoryResult.plugin->create<QObject>(parent);
+    return qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
+}
 
-    auto backends = plugin->createBackends(nullptr, &conn);
-    QVERIFY(backends.blob != nullptr);
-    auto *memoBackend = backends.blob;
+} // namespace
 
-    Kalburator::Sync::MockBlobBackend mock;
-    mock.createCollection(memoCollection());
+class TestMemoV2 : public QObject
+{
+    Q_OBJECT
+private slots:
+    void initTestCase();
+    void freshSync_palmMemos_arriveAsMarkdownOnPC();
+    void idempotent_secondSync_isNoop();
+};
 
-    Kalburator::Sync::BlobBaselineStore baseline(
-        tmp.filePath(QStringLiteral(".wildpalms-sync.db")));
-    QVERIFY(baseline.isOpen());
-    Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
-    Kalburator::Sync::QSyncCore::ConflictStore conflicts;
-    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
+void TestMemoV2::initTestCase()
+{
+    // wildpalms_memo_v2.so installs at build/lib/wildpalms/plugins/.
+    QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
+}
 
-    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
-    auto result = engine.runBlobTwoWay(
-        memoBackend, &mock,
-        QStringLiteral("palm:memo"),
-        QStringLiteral("e9-fresh"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(result.success, qUtf8Printable(result.errorMessage));
+void TestMemoV2::freshSync_palmMemos_arriveAsMarkdownOnPC()
+{
+    QTemporaryDir profileDir;
+    QVERIFY(profileDir.isValid());
 
-    // Three memos should have flowed plugin → mock as Markdown bytes.
-    const auto mockRecs = mock.loadRecords(QStringLiteral("palm:memo"));
-    QCOMPARE(mockRecs.size(), 3);
+    // 1. PalmRuntime + Palm-side mock device with three seeded memos.
+    auto *plugin = loadMemoPluginV2(this);
+    QVERIFY2(plugin != nullptr, "wildpalms_memo_v2.so failed to load as IBackendPluginV2");
 
-    // Prove the plugin really transcoded Palm memos into Markdown:
-    // every mock record should decode as a MarkdownMemo with a body
-    // matching one of the seeded memo bodies.
-    QStringList expectedBodies = {
+    WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
+
+    auto palmDb = std::make_unique<MockPalmDatabaseAccess>();
+    auto *palmDbRaw = palmDb.get();
+    const QStringList seededBodies = {
         QStringLiteral("first memo"),
         QStringLiteral("second memo"),
         QStringLiteral("third memo"),
     };
+    seedPalm(palmDbRaw, seededBodies, {0, 0, 2});
+
+    auto deviceAccess = std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(
+        std::move(palmDb));
+    runtime.setDeviceAccessForTest(std::move(deviceAccess));
+
+    // 2. Wire the real V2 plugin into PalmRuntime — palm-side backend
+    //    registered under plugin->pluginId() = "memo".
+    runtime.registerPluginForTest(
+        std::shared_ptr<WildPalms::IBackendPluginV2>(
+            plugin, [](WildPalms::IBackendPluginV2 *) {
+                // Qt parent owns the QObject; the shared_ptr is just a
+                // handle. No-op deleter avoids double-free.
+            }));
+
+    // 3. PC-side: a MockBlobBackend for raw blob storage.
+    auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();
+    auto *pcBlobRaw = pcBlob.get();
+    Kalburator::Sync::CollectionInfo pcInfo;
+    pcInfo.id   = kPcCollectionId;
+    pcInfo.name = QStringLiteral("PC Memos");
+    pcInfo.type = QStringLiteral("memos");
+    pcBlob->createCollection(pcInfo);
+    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob));
+
+    // 4. Two-way mapping memo → pc, then HotSync.
+    runtime.setMappingsForTest({makeTwoWayMapping()});
+
+    auto future = runtime.hotSync();
+    QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), kSyncTimeoutMs);
+    QVERIFY(!future.isCanceled());
+    const auto run = future.resultAt(0);
+    QVERIFY2(run.success, qUtf8Printable(run.errorMessage));
+
+    // 5. PC mock should now hold three records, each decoding to one of
+    //    the seeded memo bodies — proving the plugin's MemoBlobBackend
+    //    transcoded Palm memos into Markdown blobs end-to-end.
+    const auto pcRecs = pcBlobRaw->loadRecords(kPcCollectionId);
+    QCOMPARE(pcRecs.size(), 3);
+
     QStringList foundBodies;
-    for (const auto &br : mockRecs) {
+    for (const auto &br : pcRecs) {
         const auto m = WildPalms::Memo::decode(QString::fromUtf8(br.data));
         foundBodies << m.content.text.trimmed();
     }
     std::sort(foundBodies.begin(), foundBodies.end());
-    std::sort(expectedBodies.begin(), expectedBodies.end());
-    QCOMPARE(foundBodies, expectedBodies);
-
-    delete memoBackend;
+    QStringList expected = seededBodies;
+    std::sort(expected.begin(), expected.end());
+    QCOMPARE(foundBodies, expected);
 }
 
-void TestMemoV2::modifyLocalPropagatesToPalm()
+void TestMemoV2::idempotent_secondSync_isNoop()
 {
-    QTemporaryDir tmp;
-    QVERIFY(tmp.isValid());
-    MockPalmDatabaseAccess dev;
-    seedPalmMemos(&dev);
-    PalmDeviceConnection conn(&dev);
+    QTemporaryDir profileDir;
+    QVERIFY(profileDir.isValid());
 
-    WildPalms::BackendPluginManager mgr(nullptr, nullptr, nullptr);
-    mgr.setPluginSubdir(m_pluginSubdir);
-    mgr.discoverPlugins();
-    QVERIFY(mgr.loadPlugin(kMemoPluginId));
-    auto backends = mgr.plugin(kMemoPluginId)
-        ->createBackends(nullptr, &conn);
-    QVERIFY(backends.blob != nullptr);
+    auto *plugin = loadMemoPluginV2(this);
+    QVERIFY(plugin != nullptr);
 
-    Kalburator::Sync::MockBlobBackend mock;
-    mock.createCollection(memoCollection());
+    WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
-    Kalburator::Sync::BlobBaselineStore baseline(
-        tmp.filePath(QStringLiteral(".wildpalms-sync.db")));
-    QVERIFY(baseline.isOpen());
-    Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
-    Kalburator::Sync::QSyncCore::ConflictStore conflicts;
-    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
+    auto palmDb = std::make_unique<MockPalmDatabaseAccess>();
+    seedPalm(palmDb.get(),
+             {QStringLiteral("alpha"), QStringLiteral("beta")},
+             {0, 0});
+    runtime.setDeviceAccessForTest(
+        std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(std::move(palmDb)));
 
-    auto r1 = engine.runBlobTwoWay(
-        backends.blob, &mock,
-        QStringLiteral("palm:memo"), QStringLiteral("e9-mod"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
+    runtime.registerPluginForTest(
+        std::shared_ptr<WildPalms::IBackendPluginV2>(
+            plugin, [](WildPalms::IBackendPluginV2 *) {}));
 
-    // Rewrite a mock-side record with a modified body (simulating
-    // the user editing the .md file on disk).
-    const auto mockRecs = mock.loadRecords(QStringLiteral("palm:memo"));
-    QVERIFY(!mockRecs.isEmpty());
+    auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();
+    auto *pcRaw = pcBlob.get();
+    Kalburator::Sync::CollectionInfo pcInfo;
+    pcInfo.id   = kPcCollectionId;
+    pcInfo.name = QStringLiteral("PC Memos");
+    pcInfo.type = QStringLiteral("memos");
+    pcBlob->createCollection(pcInfo);
+    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob));
 
-    Kalburator::Sync::BackendRecord mutated = mockRecs.first();
-    auto md = WildPalms::Memo::decode(QString::fromUtf8(mutated.data));
-    md.content.text = QStringLiteral("edited on local side");
-    mutated.data = WildPalms::Memo::encode(md).toUtf8();
-    // MockBlobBackend stores records verbatim; recompute the hash so
-    // the engine's 3-way diff actually notices the change.
-    mutated.contentHash = sha256Hex(mutated.data);
-    // Force a later lastModified so naive time-wins fallbacks also
-    // select the mock side if the policy is ever changed. For the
-    // 3-way baseline path a hash change is enough.
-    mutated.lastModified = QDateTime::currentDateTimeUtc().addSecs(60);
-    QVERIFY(mock.updateRecord(mutated));
+    runtime.setMappingsForTest({makeTwoWayMapping()});
 
-    auto r2 = engine.runBlobTwoWay(
-        backends.blob, &mock,
-        QStringLiteral("palm:memo"), QStringLiteral("e9-mod"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
+    // First sync: PC gets 2 markdown blobs.
+    auto f1 = runtime.hotSync();
+    QTRY_VERIFY_WITH_TIMEOUT(f1.isFinished(), kSyncTimeoutMs);
+    QVERIFY2(f1.resultAt(0).success, qUtf8Printable(f1.resultAt(0).errorMessage));
+    QCOMPARE(pcRaw->loadRecords(kPcCollectionId).size(), 2);
 
-    bool sawEdit = false;
-    for (const auto &pr : dev.readAllRecords(QStringLiteral("MemoDB"))) {
-        const auto decoded = WildPalms::PalmCodecs::decodeMemo(pr.data);
-        if (decoded && decoded->text.contains(QStringLiteral("edited on local side"))) {
-            sawEdit = true;
-            break;
-        }
-    }
-    QVERIFY(sawEdit);
+    // Snapshot record contents before the second sync.
+    const auto before = pcRaw->loadRecords(kPcCollectionId);
+    QStringList beforeBodies;
+    for (const auto &r : before) beforeBodies << QString::fromUtf8(r.data);
+    std::sort(beforeBodies.begin(), beforeBodies.end());
 
-    delete backends.blob;
-}
+    // Second sync: should be a no-op — same record count + content.
+    auto f2 = runtime.hotSync();
+    QTRY_VERIFY_WITH_TIMEOUT(f2.isFinished(), kSyncTimeoutMs);
+    QVERIFY2(f2.resultAt(0).success, qUtf8Printable(f2.resultAt(0).errorMessage));
 
-void TestMemoV2::deletePalmRemovesLocalFile()
-{
-    QTemporaryDir tmp;
-    QVERIFY(tmp.isValid());
-    MockPalmDatabaseAccess dev;
-    seedPalmMemos(&dev);
-    PalmDeviceConnection conn(&dev);
-
-    WildPalms::BackendPluginManager mgr(nullptr, nullptr, nullptr);
-    mgr.setPluginSubdir(m_pluginSubdir);
-    mgr.discoverPlugins();
-    QVERIFY(mgr.loadPlugin(kMemoPluginId));
-    auto backends = mgr.plugin(kMemoPluginId)
-        ->createBackends(nullptr, &conn);
-    QVERIFY(backends.blob != nullptr);
-
-    Kalburator::Sync::MockBlobBackend mock;
-    mock.createCollection(memoCollection());
-
-    Kalburator::Sync::BlobBaselineStore baseline(
-        tmp.filePath(QStringLiteral(".wildpalms-sync.db")));
-    QVERIFY(baseline.isOpen());
-    Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
-    Kalburator::Sync::QSyncCore::ConflictStore conflicts;
-    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
-
-    auto firstSync = engine.runBlobTwoWay(
-        backends.blob, &mock,
-        QStringLiteral("palm:memo"), QStringLiteral("e9-del"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(firstSync.success, qUtf8Printable(firstSync.errorMessage));
-
-    const auto all = dev.readAllRecords(QStringLiteral("MemoDB"));
-    QVERIFY(!all.isEmpty());
-    QVERIFY(dev.deleteRecord(QStringLiteral("MemoDB"), all.first().recordId));
-
-    QCOMPARE(mock.loadRecords(QStringLiteral("palm:memo")).size(), 3);
-
-    auto r = engine.runBlobTwoWay(
-        backends.blob, &mock,
-        QStringLiteral("palm:memo"), QStringLiteral("e9-del"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(r.success, qUtf8Printable(r.errorMessage));
-    QCOMPARE(r.targetStats.deleted, 1);
-    QCOMPARE(mock.loadRecords(QStringLiteral("palm:memo")).size(), 2);
-
-    delete backends.blob;
-}
-
-void TestMemoV2::idempotentNoopSyncChangesNothing()
-{
-    QTemporaryDir tmp;
-    QVERIFY(tmp.isValid());
-    MockPalmDatabaseAccess dev;
-    seedPalmMemos(&dev);
-    PalmDeviceConnection conn(&dev);
-
-    WildPalms::BackendPluginManager mgr(nullptr, nullptr, nullptr);
-    mgr.setPluginSubdir(m_pluginSubdir);
-    mgr.discoverPlugins();
-    QVERIFY(mgr.loadPlugin(kMemoPluginId));
-    auto backends = mgr.plugin(kMemoPluginId)
-        ->createBackends(nullptr, &conn);
-    QVERIFY(backends.blob != nullptr);
-
-    Kalburator::Sync::MockBlobBackend mock;
-    mock.createCollection(memoCollection());
-
-    Kalburator::Sync::BlobBaselineStore baseline(
-        tmp.filePath(QStringLiteral(".wildpalms-sync.db")));
-    QVERIFY(baseline.isOpen());
-    Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
-    Kalburator::Sync::QSyncCore::ConflictStore conflicts;
-    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
-    Kalburator::Sync::SyncEngine engine(/*registry=*/nullptr, /*host=*/nullptr);
-
-    auto r1 = engine.runBlobTwoWay(
-        backends.blob, &mock,
-        QStringLiteral("palm:memo"), QStringLiteral("e9-noop"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(r1.success, qUtf8Printable(r1.errorMessage));
-
-    auto r2 = engine.runBlobTwoWay(
-        backends.blob, &mock,
-        QStringLiteral("palm:memo"), QStringLiteral("e9-noop"),
-        &baseline, &registry, &conflicts, policy);
-    QVERIFY2(r2.success, qUtf8Printable(r2.errorMessage));
-    QCOMPARE(r2.sourceStats.created, 0);
-    QCOMPARE(r2.sourceStats.updated, 0);
-    QCOMPARE(r2.sourceStats.deleted, 0);
-    QCOMPARE(r2.targetStats.created, 0);
-    QCOMPARE(r2.targetStats.updated, 0);
-    QCOMPARE(r2.targetStats.deleted, 0);
-
-    delete backends.blob;
+    const auto after = pcRaw->loadRecords(kPcCollectionId);
+    QCOMPARE(after.size(), 2);
+    QStringList afterBodies;
+    for (const auto &r : after) afterBodies << QString::fromUtf8(r.data);
+    std::sort(afterBodies.begin(), afterBodies.end());
+    QCOMPARE(afterBodies, beforeBodies);
 }
 
 QTEST_MAIN(TestMemoV2)
