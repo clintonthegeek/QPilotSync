@@ -11,6 +11,7 @@
 
 #include "backendregistry.h"
 #include "syncengine.h"
+#include "conflicthandlerregistry.h"
 #include "syncbackend.h"
 #include "synctypes.h"
 #include "collectioninfo.h"
@@ -170,6 +171,9 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
         m_registry.get(), m_syncHost.get());
     m_engine->setBlobBaselineStore(m_baselineStore.get());
+    if (m_conflictHandler) {
+        m_engine->conflictRegistry()->setDefaultHandler(m_conflictHandler);
+    }
 }
 
 PalmRuntime::~PalmRuntime() = default;
@@ -322,6 +326,22 @@ void PalmRuntime::setMappingsForTest(QList<Kalburator::Sync::SyncMapping> mappin
 
 void PalmRuntime::setLinkForTest(KPilotLink *link) {
     m_link = link;
+}
+
+void PalmRuntime::setConflictHandler(
+    Kalburator::Sync::QSyncCore::ConflictHandler *handler)
+{
+    m_conflictHandler = handler;
+    if (m_engine) {
+        m_engine->conflictRegistry()->setDefaultHandler(handler);
+    }
+}
+
+Kalburator::Sync::QSyncCore::ConflictHandler *
+PalmRuntime::conflictHandlerForTest() const
+{
+    if (!m_engine) return nullptr;
+    return m_engine->conflictRegistry()->handlerFor(QString{});
 }
 
 QList<QString> PalmRuntime::enabledPluginIds() const {

@@ -20,6 +20,7 @@ namespace Kalburator::Sync {
     class IBlobBackend;
     class BlobBaselineStore;
     class SyncBackend;
+    namespace QSyncCore { class ConflictHandler; }
 }
 
 namespace WildPalms {
@@ -51,6 +52,9 @@ public:
     QList<QString> enabledPluginIds() const;
     QList<Kalburator::Sync::SyncMapping> palmMappings() const;
 
+    void setConflictHandler(Kalburator::Sync::QSyncCore::ConflictHandler *handler);
+    Kalburator::Sync::QSyncCore::ConflictHandler *conflictHandlerForTest() const;
+
     // Test seams
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);
     void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>);
@@ -74,6 +78,7 @@ private:
     QFuture<PalmRunResult> runAllMappings();
     QFuture<PalmRunResult> runMirror(MirrorDir dir, const QString &modeLabel);
 
+    Kalburator::Sync::QSyncCore::ConflictHandler                *m_conflictHandler = nullptr;
     QString                                                      m_profilePath;
     QString                                                      m_backupRoot;
     KPilotLink                                                  *m_link = nullptr;

@@ -99,6 +99,27 @@ set_tests_properties(tst_kalburator_interactive_conflict_handler PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# M5a Tasks 7-8: PalmRuntime::setConflictHandler
+add_executable(tst_palm_runtime_conflict_handler
+    tst_palm_runtime_conflict_handler.cpp)
+target_link_libraries(tst_palm_runtime_conflict_handler
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_conflict_handler
+    COMMAND tst_palm_runtime_conflict_handler)
+set_tests_properties(tst_palm_runtime_conflict_handler PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
