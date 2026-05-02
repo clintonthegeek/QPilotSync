@@ -2,10 +2,13 @@
 # Each subdirectory here builds a conduit plugin (.so) that links against WildPalmsCore.
 # Plugins are loaded at runtime by the sync engine.
 
-add_subdirectory(memo)
-add_subdirectory(contacts)
 add_subdirectory(calendar)
-add_subdirectory(todos)
-add_subdirectory(webcalendar)
-add_subdirectory(plucker)
 add_subdirectory(install)
+
+if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
+    add_subdirectory(memo)
+    add_subdirectory(contacts)
+    add_subdirectory(todos)
+    add_subdirectory(webcalendar)
+    add_subdirectory(plucker)
+endif()
