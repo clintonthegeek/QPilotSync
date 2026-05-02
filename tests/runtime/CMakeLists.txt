@@ -140,6 +140,27 @@ set_tests_properties(tst_palm_runtime_is_running PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# M5b Task 2: PalmRuntime::reloadMappings(QJsonArray)
+add_executable(tst_palm_runtime_reload_mappings
+    tst_palm_runtime_reload_mappings.cpp)
+target_link_libraries(tst_palm_runtime_reload_mappings
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_reload_mappings
+    COMMAND tst_palm_runtime_reload_mappings)
+set_tests_properties(tst_palm_runtime_reload_mappings PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes

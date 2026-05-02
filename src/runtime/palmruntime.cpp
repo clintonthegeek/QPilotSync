@@ -290,6 +290,18 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
     emit deviceConnected();
 }
 
+void PalmRuntime::reloadMappings(const QJsonArray &json)
+{
+    m_mappings.clear();
+    for (const auto &v : json) {
+        if (!v.isObject())
+            continue;
+        m_mappings.append(Kalburator::Sync::syncMappingFromJson(v.toObject()));
+    }
+    if (m_engine)
+        m_engine->setSyncMappings(m_mappings);
+}
+
 void PalmRuntime::disconnectDevice() {
     m_link = nullptr;
     m_device.reset();

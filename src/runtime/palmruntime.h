@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QFuture>
+#include <QJsonArray>
 #include <QList>
 #include <QString>
 #include <memory>
@@ -53,6 +54,11 @@ public:
     QList<Kalburator::Sync::SyncMapping> palmMappings() const;
 
     bool isRunning() const { return m_running; }
+
+    // Replace the live mapping list. Caller must ensure isRunning() == false.
+    // JSON shape is the same as Profile::syncMappingsJson() — array of objects
+    // each round-trippable via syncMappingToJson()/syncMappingFromJson().
+    void reloadMappings(const QJsonArray &json);
 
     // Non-owning. Caller must ensure the handler outlives this PalmRuntime
     // (or call setConflictHandler(nullptr) before destroying the handler).
