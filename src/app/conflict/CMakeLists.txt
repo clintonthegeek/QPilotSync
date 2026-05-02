@@ -21,6 +21,10 @@ add_library(WildPalmsAppConflict STATIC
     # cannot include both without type-guard collisions.
     conflictdialogbridge.h
     conflictdialogbridge.cpp
+    # Factory/install bridge — libkalburator-only TU that creates the handler
+    # and installs it on PalmRuntime.  Must NOT include WP-local QSyncCore
+    # headers (same include-guard collision as above).
+    palmruntimebridgeinstall.cpp
 )
 
 target_include_directories(WildPalmsAppConflict

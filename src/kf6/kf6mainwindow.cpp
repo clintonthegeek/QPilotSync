@@ -30,6 +30,10 @@
 #include "../sync/qsynccore/conflictstore.h"
 #include "../sync/syncstate.h"
 #include "../app/interactiveconflicthandler.h"
+// M5a: bridge header — safe to include alongside WP-local QSyncCore headers.
+// The full KalburatorInteractiveConflictHandler header must NOT appear here;
+// see src/app/conflict/CMakeLists.txt for the include-guard collision rationale.
+#include "../app/conflict/conflictdialogbridge.h"
 #include "../widgets/dialogs/conflictreviewdialog.h"
 
 // Widget includes
@@ -784,6 +788,25 @@ void KF6MainWindow::loadProfile(const QString &path)
             this, &KF6MainWindow::onPalmRunStarted);
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
             this, &KF6MainWindow::onPalmRunFinished);
+
+    // M5a — construct and install the libkalburator-side conflict handler.
+    // Recreate per profile so it points at the new engine.
+    // Direct construction is isolated in palmruntimebridgeinstall.cpp to avoid
+    // the include-guard collision between WP-local and libkalburator QSyncCore
+    // headers (both share the same guard names QSYNCCORE_CONFLICTPOLICY_H etc).
+    ConflictDialogBridge::destroyHandler(m_palmConflictHandler);
+    m_palmConflictHandler = ConflictDialogBridge::createAndInstall(
+        m_palmRuntime.get(),
+        this,     // parentWidget for the dialog
+        this);    // QObject parent for lifetime management
+
+    // Tickle the device link while the dialog is open (matches legacy handler).
+    if (m_palmConflictHandler) {
+        connect(m_palmConflictHandler,
+                SIGNAL(keepAliveRequested()),
+                this, SLOT(onPalmConflictHandlerKeepAlive()));
+    }
+
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
     m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
     m_syncEngine->setConflictPromptStrategy(m_currentProfile->conflictPromptStrategy());
@@ -1939,6 +1962,14 @@ void KF6MainWindow::onPalmRunStarted(const QString &label)
 {
     m_currentPalmRunLabel = label;
     m_logWidget->logInfo(i18n("=== Starting %1 via PalmRuntime ===", label));
+}
+
+void KF6MainWindow::onPalmConflictHandlerKeepAlive()
+{
+    // Mirror the tickle used by m_interactiveConflictHandler's keepAliveRequested.
+    if (m_session) {
+        m_session->resumeTickle();
+    }
 }
 
 void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)

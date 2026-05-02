@@ -14,7 +14,10 @@
 // Signatures use only primitive types so this header is safe to include
 // alongside libkalburator headers.
 
+class QObject;
 class QWidget;
+
+namespace WildPalms::Runtime { class PalmRuntime; }
 
 namespace ConflictDialogBridge {
 
@@ -59,6 +62,30 @@ int showAndGetDecision(
     const void        *wpRecord,   // const QSyncCore::ConflictRecord *
     const BridgePolicy &policy,
     QWidget            *parent);
+
+// ---------------------------------------------------------------------------
+// M5a: Handler factory bridge — isolates KalburatorInteractiveConflictHandler
+// construction from TUs that also include WP-local QSyncCore headers.
+//
+// createAndInstall():
+//   Creates a KalburatorInteractiveConflictHandler with Qt parent = qobjParent,
+//   installs it on runtime via PalmRuntime::setConflictHandler, and returns the
+//   handler as QObject* so the caller can connect keepAliveRequested.
+//
+//   Returns nullptr if runtime is null.
+//
+// destroyHandler():
+//   Deletes the handler previously returned by createAndInstall.  Safe to call
+//   with nullptr.  Qt parent will also delete it when the parent is destroyed,
+//   so only call this explicitly when recreating per-profile (before the parent
+//   is destroyed).
+// ---------------------------------------------------------------------------
+QObject *createAndInstall(
+    WildPalms::Runtime::PalmRuntime *runtime,
+    QWidget *parentWidget,     // parentWidget arg for dialog display
+    QObject *qobjParent);      // QObject parent for lifetime management
+
+void destroyHandler(QObject *handler);
 
 } // namespace ConflictDialogBridge
 

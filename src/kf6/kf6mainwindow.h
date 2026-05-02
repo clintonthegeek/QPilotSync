@@ -133,6 +133,9 @@ private Q_SLOTS:
     void onPalmRunStarted(const QString &label);
     void onPalmRunFinished(WildPalms::Runtime::PalmRunResult result);
 
+    // M5a — keepAlive from KalburatorInteractiveConflictHandler
+    void onPalmConflictHandlerKeepAlive();
+
 private:
     // UI setup
     void setupUI();
@@ -231,6 +234,10 @@ private:
     // Conflict review
     QSyncCore::ConflictStore *m_conflictStore;
     InteractiveConflictHandler *m_interactiveConflictHandler = nullptr;
+    // M5a: stored as QObject* to avoid including libkalburator headers in this
+    // header (include-guard collision with WP-local QSyncCore headers).
+    // Actual type: KalburatorInteractiveConflictHandler (QObject subclass).
+    QObject *m_palmConflictHandler = nullptr;
 
     // Auto-detection and auto-sync
     PalmDeviceMonitor *m_deviceMonitor = nullptr;
