@@ -33,6 +33,7 @@ public:
     QAction* openProfileAction() const { return action(QStringLiteral("file_open_profile")); }
     QAction* closeProfileAction() const { return action(QStringLiteral("file_close_profile")); }
     QAction* profileSettingsAction() const { return action(QStringLiteral("file_profile_settings")); }
+    QAction* configureMappingsAction() const { return action(QStringLiteral("file_configure_mappings")); }
 
     // ========== Device Actions ==========
     QAction* connectAction() const { return action(QStringLiteral("device_connect")); }
@@ -77,6 +78,7 @@ Q_SIGNALS:
     void openProfileRequested();
     void closeProfileRequested();
     void profileSettingsRequested();
+    void configureMappingsRequested();
     void settingsRequested();
 
     // Device operations
