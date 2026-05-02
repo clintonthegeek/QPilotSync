@@ -468,6 +468,11 @@ QFuture<PalmRunResult> PalmRuntime::backup()
     const QString backupDir = m_backupRoot;
     KPilotLink *link = m_link;
 
+    // Pause the TickleWorker now, on the main thread, before the pool thread
+    // starts issuing DLP calls. pauseTickle() uses BlockingQueuedConnection
+    // internally so the tickle thread is fully stopped before we return.
+    m_link->pauseTickle();
+
     return QtConcurrent::run([this, databases, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
@@ -482,13 +487,19 @@ QFuture<PalmRunResult> PalmRuntime::backup()
             if (link->retrieveDatabase(dbName, destPath)) {
                 ++stats.created;
             } else {
+                // Hard failure — the DLP session state may be corrupted.
+                // Stop the loop rather than issuing further DLP calls.
                 ++stats.errors;
                 r.success = false;
+                break;
             }
         }
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        QMetaObject::invokeMethod(this, [this, r]() { emit runFinished(r); });
+        QMetaObject::invokeMethod(this, [this, r]() {
+            m_link->resumeTickle();
+            emit runFinished(r);
+        });
         return r;
     });
 }
@@ -509,6 +520,8 @@ QFuture<PalmRunResult> PalmRuntime::restore()
     const QString backupDir = m_backupRoot;
     KPilotLink *link = m_link;
 
+    m_link->pauseTickle();
+
     return QtConcurrent::run([this, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
@@ -526,11 +539,15 @@ QFuture<PalmRunResult> PalmRuntime::restore()
             } else {
                 ++stats.errors;
                 r.success = false;
+                break;
             }
         }
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        QMetaObject::invokeMethod(this, [this, r]() { emit runFinished(r); });
+        QMetaObject::invokeMethod(this, [this, r]() {
+            m_link->resumeTickle();
+            emit runFinished(r);
+        });
         return r;
     });
 }

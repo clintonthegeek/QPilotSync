@@ -1233,6 +1233,17 @@ bool KPilotDeviceLink::retrieveDatabase(const QString &dbName, const QString &de
         qWarning() << "[DeviceLink] dlp_FindDBInfo failed for" << dbName << "rc:" << rc;
         return false;
     }
+    // Skip databases the OS has marked as non-transferable.
+    if (info.flags & dlpDBFlagCopyPrevention) {
+        qDebug() << "[DeviceLink] Skipping copy-prevented database:" << dbName;
+        return true;
+    }
+    // Skip streaming file databases (not real record DBs; pi_file_retrieve
+    // would fail on them).
+    if (info.flags & dlpDBFlagStream) {
+        qDebug() << "[DeviceLink] Skipping stream database:" << dbName;
+        return true;
+    }
     pi_file_t *pf = pi_file_create(destPath.toLocal8Bit().constData(), &info);
     if (!pf) {
         qWarning() << "[DeviceLink] pi_file_create failed for" << destPath;
@@ -1247,6 +1258,16 @@ bool KPilotDeviceLink::retrieveDatabase(const QString &dbName, const QString &de
     }
     qDebug() << "[DeviceLink] Retrieved database:" << dbName << "->" << destPath;
     return true;
+}
+
+void KPilotDeviceLink::pauseTickle()
+{
+    emit ticklePauseRequested();
+}
+
+void KPilotDeviceLink::resumeTickle()
+{
+    emit tickleResumeRequested();
 }
 
 bool KPilotDeviceLink::findDatabase(const QString &dbName)

@@ -48,6 +48,10 @@ void DeviceSession::connectDevice(const QStringList &devicePaths)
             this, &DeviceSession::logMessage);
     connect(m_deviceLink, &KPilotDeviceLink::errorOccurred,
             this, &DeviceSession::errorOccurred);
+    connect(m_deviceLink, &KPilotDeviceLink::ticklePauseRequested,
+            this, &DeviceSession::pauseTickle, Qt::DirectConnection);
+    connect(m_deviceLink, &KPilotDeviceLink::tickleResumeRequested,
+            this, &DeviceSession::resumeTickle, Qt::DirectConnection);
 
     m_deviceLink->openConnection();
 }
