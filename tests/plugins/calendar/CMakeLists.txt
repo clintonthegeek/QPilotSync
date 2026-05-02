@@ -109,6 +109,7 @@ target_link_libraries(tst_calendarbackendplugin
         WildPalmsPalmConflict
         WildPalmsPalmSync
         WildPalmsCore
+        PalmDeviceAccessLib     # PalmDeviceAccess symbols (plugin includes palmdeviceaccess.h)
         Kalburator::Sync
         KF6::CoreAddons
         KF6::CalendarCore
