@@ -63,16 +63,6 @@ add_subdirectory(src)
 # Testing support
 option(BUILD_TESTS "Build the test suite" ON)
 
-# Plan 2 (M2-M3): build only the calendar plugin while the new
-# PalmRuntime + IBackendPlugin v2 contract bake. M4 re-enables.
-option(WILDPALMS_CALENDAR_MVP_ONLY
-    "Build only the calendar Palm plugin and disable memo/contacts/todo/webcal during the runtime rewrite"
-    ON)
-
-if(WILDPALMS_CALENDAR_MVP_ONLY)
-    add_compile_definitions(WILDPALMS_CALENDAR_MVP_ONLY)
-endif()
-
 if(BUILD_TESTS)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)
