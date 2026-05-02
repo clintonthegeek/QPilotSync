@@ -19,6 +19,8 @@
 #include "core/ibackendplugin_v2.h"
 #include "palm/device/pilotlinkpalmdatabaseaccess.h"
 
+#include <rawfilesbackend.h>
+
 #include <KCalendarCore/MemoryCalendar>
 #include <KCalendarCore/Incidence>
 #include <KPluginFactory>
@@ -207,6 +209,11 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
             continue;
         }
 
+        // Read available collections before the backend is moved into the adapter.
+        // CalendarBlobBackend::availableCollections() reads the in-memory category
+        // store (populated during createPalmBackend) — no live Palm I/O.
+        const auto palmCollections = backend->availableCollections();
+
         // Wrap the backend in BlobBackendAdapter and register with BackendRegistry.
         const QString id = v2->pluginId();
         auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id);
@@ -217,7 +224,44 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
         m_v2PluginObjects.append(obj);
 
         qDebug() << "[PalmRuntime::connectDevice] Registered backend plugin:" << id;
+
+        // Build a default RawFiles PC-side backend + SyncMapping for each Palm
+        // collection. M5 will replace these with user-configured mappings.
+        for (const auto &palmCol : palmCollections) {
+            // Sanitize the collection ID for filesystem safety.
+            QString safeColId = palmCol.id;
+            safeColId.replace(QLatin1Char(':'), QLatin1Char('_'))
+                     .replace(QLatin1Char('/'), QLatin1Char('_'));
+
+            const QString pcId = QStringLiteral("rawfiles-%1-%2").arg(id, safeColId);
+            const QString rootPath = QDir(m_profilePath).filePath(
+                QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
+
+            auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
+            Kalburator::Sync::CollectionInfo pcCol;
+            pcCol.id   = safeColId;
+            pcCol.name = palmCol.name;
+            pcBackend->createCollection(pcCol);
+
+            m_registry->registerBackendInstance(pcId, pcBackend.get());
+            m_ownedBackends.push_back(std::move(pcBackend));
+
+            Kalburator::Sync::SyncMapping m;
+            m.id             = QStringLiteral("default-%1-%2").arg(id, safeColId);
+            m.sourceBackend  = id;
+            m.targetBackend  = pcId;
+            m.sourceCalendar = palmCol.id;
+            m.targetCalendar = safeColId;
+            m.mode           = Kalburator::Sync::SyncMode::TwoWay;
+            m.enabled        = true;
+            m_mappings.append(m);
+
+            qDebug() << "[PalmRuntime::connectDevice] Default mapping:"
+                     << palmCol.id << "->" << rootPath;
+        }
     }
+
+    m_engine->setSyncMappings(m_mappings);
 
     emit deviceConnected();
 }
