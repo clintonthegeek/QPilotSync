@@ -104,10 +104,9 @@ target_link_libraries(tst_contactsbackendplugin
 add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
 set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 5: tst_contacts_v2 — end-to-end via BackendPluginManager ---
-# NOTE: uses runBlobTwoWay (deleted in Plan 1 M1) and BackendPluginManager
-# v1 API; excluded until M6 rewrites against the new SyncEngine API.
-if(NOT WILDPALMS_CALENDAR_MVP_ONLY)
+# M5c Task 4: end-to-end via the real wildpalms_contacts_v2.so plumbed
+# through PalmRuntime + SyncEngine::runSyncFuture (replaces the V1
+# BackendPluginManager + runBlobTwoWay test that this file used pre-M5c).
 add_executable(tst_contacts_v2
     tst_contacts_v2.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
@@ -124,19 +123,23 @@ target_include_directories(tst_contacts_v2
 )
 target_link_libraries(tst_contacts_v2
     PRIVATE
-        WildPalmsRuntime          # BackendPluginManager
-        WildPalmsPalmCalendar     # CategoryMappingStore + AppInfo helper
-        WildPalmsPalmCodecs       # Contact POD + encodeContact/decodeContact
-        WildPalmsPalmSync         # PalmRecord, MockPalmDatabaseAccess, PalmBackend
+        WildPalmsRuntime
+        WildPalmsPalmCalendar
+        WildPalmsPalmCodecs
+        WildPalmsPalmSync
+        WildPalmsPalmDevice
         WildPalmsCore
+        PalmDeviceAccessLib
         Kalburator::Sync
         KF6::CoreAddons
         KF6::Contacts
         Qt::Test
         Qt::Core
+        pisock
+        bluetooth
+        usb
         ${PILOT_LINK_LIBRARIES}
 )
 add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
 add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
 set_tests_properties(tst_contacts_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-endif()
