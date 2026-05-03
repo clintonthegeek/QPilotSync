@@ -42,6 +42,7 @@ void PalmTickle::start()
         return;
     }
     m_consecutiveFailures = 0;
+    m_timer->setInterval(m_intervalMs);
     m_timer->start();
 }
 
