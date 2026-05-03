@@ -41,6 +41,13 @@ PalmDeviceAccess::PalmDeviceAccess(QObject *parent)
 }
 
 PalmDeviceAccess::~PalmDeviceAccess() {
+    // Defensive: disconnect any link signals before anything else, so
+    // queued events from the link thread don't deliver to a half-destroyed
+    // PalmDeviceAccess.
+    if (m_link) {
+        disconnect(m_link, nullptr, this, nullptr);
+    }
+
     if (m_linkThread && m_linkThread->isRunning()) {
         // New-path teardown if connected.
         if (m_connected.load() || m_link) {
@@ -155,7 +162,7 @@ void PalmDeviceAccess::onLinkConnectionEstablished(const HandshakeResult &result
     connect(deviceLink, &KPilotDeviceLink::tickleResumeRequested,
             m_tickle, &PalmTickle::start, Qt::QueuedConnection);
     connect(m_tickle, &PalmTickle::connectionLost, this,
-            [this]() { doDisconnect(); }, Qt::QueuedConnection);
+            [this]() { disconnectDevice(); }, Qt::QueuedConnection);
     m_tickle->start();
 
     m_connected = true;
@@ -230,6 +237,7 @@ QString PalmDeviceAccess::handshakeCardName()   const { return m_handshake.cardN
 quint32 PalmDeviceAccess::handshakeRomVersion() const { return m_handshake.romVersion; }
 
 QStringList PalmDeviceAccess::availableDatabases() const {
+    if (!m_impl) return {};
     QStringList result;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &result]() { result = m_impl->availableDatabases(); },
@@ -238,6 +246,7 @@ QStringList PalmDeviceAccess::availableDatabases() const {
 }
 
 bool PalmDeviceAccess::hasDatabase(const QString &dbName) const {
+    if (!m_impl) return false;
     bool result = false;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &result]() { result = m_impl->hasDatabase(dbName); },
@@ -246,6 +255,7 @@ bool PalmDeviceAccess::hasDatabase(const QString &dbName) const {
 }
 
 bool PalmDeviceAccess::createDatabase(const QString &dbName) {
+    if (!m_impl) return false;
     bool result = false;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &result]() { result = m_impl->createDatabase(dbName); },
@@ -255,6 +265,7 @@ bool PalmDeviceAccess::createDatabase(const QString &dbName) {
 
 QList<WildPalms::PalmSync::PalmRecord>
 PalmDeviceAccess::readAllRecords(const QString &dbName) const {
+    if (!m_impl) return {};
     QList<WildPalms::PalmSync::PalmRecord> result;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &result]() { result = m_impl->readAllRecords(dbName); },
@@ -264,6 +275,7 @@ PalmDeviceAccess::readAllRecords(const QString &dbName) const {
 
 std::optional<WildPalms::PalmSync::PalmRecord>
 PalmDeviceAccess::readRecord(const QString &dbName, std::uint32_t recordId) const {
+    if (!m_impl) return std::nullopt;
     std::optional<WildPalms::PalmSync::PalmRecord> result;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, recordId, &result]() { result = m_impl->readRecord(dbName, recordId); },
@@ -273,6 +285,7 @@ PalmDeviceAccess::readRecord(const QString &dbName, std::uint32_t recordId) cons
 
 std::uint32_t PalmDeviceAccess::createRecord(const QString &dbName,
                                               const WildPalms::PalmSync::PalmRecord &record) {
+    if (!m_impl) return 0;
     std::uint32_t result = 0;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &record, &result]() { result = m_impl->createRecord(dbName, record); },
@@ -282,6 +295,7 @@ std::uint32_t PalmDeviceAccess::createRecord(const QString &dbName,
 
 bool PalmDeviceAccess::updateRecord(const QString &dbName,
                                     const WildPalms::PalmSync::PalmRecord &record) {
+    if (!m_impl) return false;
     bool result = false;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &record, &result]() { result = m_impl->updateRecord(dbName, record); },
@@ -290,6 +304,7 @@ bool PalmDeviceAccess::updateRecord(const QString &dbName,
 }
 
 bool PalmDeviceAccess::deleteRecord(const QString &dbName, std::uint32_t recordId) {
+    if (!m_impl) return false;
     bool result = false;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, recordId, &result]() { result = m_impl->deleteRecord(dbName, recordId); },
@@ -300,6 +315,7 @@ bool PalmDeviceAccess::deleteRecord(const QString &dbName, std::uint32_t recordI
 QList<WildPalms::PalmSync::PalmRecord>
 PalmDeviceAccess::recordsModifiedSince(const QString &dbName,
                                        const QDateTime &since) const {
+    if (!m_impl) return {};
     QList<WildPalms::PalmSync::PalmRecord> result;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &since, &result]() { result = m_impl->recordsModifiedSince(dbName, since); },
@@ -310,6 +326,7 @@ PalmDeviceAccess::recordsModifiedSince(const QString &dbName,
 QList<std::uint32_t>
 PalmDeviceAccess::recordsDeletedSince(const QString &dbName,
                                       const QDateTime &since) const {
+    if (!m_impl) return {};
     QList<std::uint32_t> result;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &since, &result]() { result = m_impl->recordsDeletedSince(dbName, since); },
@@ -318,6 +335,7 @@ PalmDeviceAccess::recordsDeletedSince(const QString &dbName,
 }
 
 QByteArray PalmDeviceAccess::readAppBlock(const QString &dbName) const {
+    if (!m_impl) return {};
     QByteArray result;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &dbName, &result]() { result = m_impl->readAppBlock(dbName); },
@@ -326,6 +344,7 @@ QByteArray PalmDeviceAccess::readAppBlock(const QString &dbName) const {
 }
 
 bool PalmDeviceAccess::supportsDeleteTracking() const {
+    if (!m_impl) return false;
     bool result = false;
     QMetaObject::invokeMethod(m_implOwner,
         [this, &result]() { result = m_impl->supportsDeleteTracking(); },
