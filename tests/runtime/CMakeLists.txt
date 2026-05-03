@@ -249,3 +249,27 @@ add_test(NAME tst_palm_runtime_modes COMMAND tst_palm_runtime_modes)
 set_tests_properties(tst_palm_runtime_modes PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# M6b Task 3: PalmDeviceAccess connect lifecycle test
+# Uses MockKPilotDeviceLink (subclass) injected via
+# PalmDeviceAccess::setLinkFactoryForTest to drive
+# onConnectionEstablished/onConnectionFailed without real hardware.
+add_executable(tst_palm_device_access_connect
+    tst_palm_device_access_connect.cpp
+    mockkpilotdevicelink.cpp
+)
+target_link_libraries(tst_palm_device_access_connect
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_device_access_connect COMMAND tst_palm_device_access_connect)
+set_tests_properties(tst_palm_device_access_connect PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

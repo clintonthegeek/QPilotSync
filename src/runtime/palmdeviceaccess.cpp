@@ -93,7 +93,9 @@ void PalmDeviceAccess::doConnect(const QStringList &devicePaths)
 {
     Q_ASSERT(QThread::currentThread() == m_linkThread.get());
 
-    auto *link = new KPilotDeviceLink(devicePaths);
+    auto *link = m_linkFactory
+        ? m_linkFactory(devicePaths)
+        : new KPilotDeviceLink(devicePaths);
     link->moveToThread(m_linkThread.get());
     link->setParent(m_implOwner);  // ensures cleanup if thread is torn down
     m_link = link;
@@ -180,6 +182,10 @@ void PalmDeviceAccess::onLinkConnectionFailed(const QString &error)
     m_connecting = false;
     m_connected = false;
     emit connectionComplete(false, error);
+}
+
+void PalmDeviceAccess::setLinkFactoryForTest(LinkFactory factory) {
+    m_linkFactory = std::move(factory);
 }
 
 void PalmDeviceAccess::cancelConnect()

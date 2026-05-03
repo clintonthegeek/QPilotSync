@@ -5,12 +5,14 @@
 #include <QStringList>
 #include <QThread>
 #include <atomic>
+#include <functional>
 #include <memory>
 
 #include "palm/kpilotdevicelink.h"   // for HandshakeResult
 #include "palm/sync/ipalmdatabaseaccess.h"
 
 class KPilotLink;
+class KPilotDeviceLink;
 
 namespace WildPalms::Runtime {
 
@@ -84,6 +86,12 @@ public:
 
     QThread *linkThread() const { return m_linkThread.get(); }
 
+    // Test seam: replace the link factory used by connectDevice().
+    // Default factory: new KPilotDeviceLink(paths, nullptr).
+    // Tests inject a factory that returns a mock subclass.
+    using LinkFactory = std::function<KPilotDeviceLink*(const QStringList &paths)>;
+    void setLinkFactoryForTest(LinkFactory factory);
+
 signals:
     void connectionStarted();
     void connectionComplete(bool success, QString error);
@@ -110,6 +118,8 @@ private:
     QString             m_pendingError;        // captured from errorOccurred during connect
     std::atomic<bool>   m_connecting { false };
     std::atomic<bool>   m_connected  { false };
+    LinkFactory         m_linkFactory;  // default-empty; doConnect uses real
+                                        // KPilotDeviceLink if empty
 };
 
 } // namespace WildPalms::Runtime
