@@ -327,8 +327,9 @@ void ConnectionWorker::doConnect()
             qDebug() << "[ConnectionWorker] ReadStorageInfo failed (non-fatal)";
         }
 
-        // NOTE: OpenConduit is NOT called here. It belongs exclusively in
-        // DeviceWorker::doSync() which handles it before each sync operation.
+        // NOTE: OpenConduit is NOT called here. It belongs in PalmRuntime's
+        // sync flow (hotSync/fullSync/etc.) which handles it before each
+        // sync operation.
 
         emit connectionEstablished(result);
         return;

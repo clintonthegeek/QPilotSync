@@ -1955,8 +1955,8 @@ void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)
     }
 
     // M6b Task 5 fix: honor ConnectionMode::DisconnectAfterSync.
-    // The legacy DeviceSession::setConnectionMode wired this; with the
-    // M6b architecture PalmRuntime doesn't model the post-sync policy,
+    // Pre-M6b this was driven by DeviceSession::setConnectionMode (since
+    // deleted in M6b Task 6). PalmRuntime doesn't model post-sync policy,
     // so KF6MainWindow checks the profile and disconnects here.
     if (m_currentProfile
         && m_currentProfile->connectionMode() == ConnectionMode::DisconnectAfterSync
