@@ -86,6 +86,8 @@ add_library(PalmDeviceAccessLib STATIC
     palmrunresult.h
     palmruntime.h
     palmruntime.cpp
+    palmtickle.h
+    palmtickle.cpp
 )
 target_include_directories(PalmDeviceAccessLib
     PUBLIC
