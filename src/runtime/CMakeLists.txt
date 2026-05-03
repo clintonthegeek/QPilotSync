@@ -39,9 +39,6 @@ add_library(WildPalmsRuntime STATIC
 )
 
 target_sources(WildPalmsRuntime PRIVATE
-    # G.7 — HotSyncCoordinator replaces SyncRunner_wp (Task 55 deletes the old files).
-    hotsynccoordinator.h
-    hotsynccoordinator.cpp
     # M2 Task 2/3 — PalmDeviceAccess: IPalmDatabaseAccess wrapper that
     # marshals all calls to a dedicated link thread via BlockingQueuedConnection.
     # NOTE: compiled into PalmDeviceAccessLib (below) while syncrunner_wp.cpp

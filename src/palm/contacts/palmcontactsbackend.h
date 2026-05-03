@@ -15,7 +15,7 @@ namespace WildPalms::PalmContacts {
  * Native shape: (contacts, palm-address). Records are stored as raw Palm
  * DLP bytes inside BackendRecord::data so BlobDomainAdapter can compare
  * them by content hash. The deviceId constructor parameter sets resourceId()
- * and is used by HotSyncCoordinator to identify the Palm resource.
+ * and is used by PalmRuntime to identify the Palm resource.
  *
  * Calendar-specific pure virtuals are stubbed: they do nothing and emit
  * no signals (the engine routes this backend through dispatchBlobSync,
