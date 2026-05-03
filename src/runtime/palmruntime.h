@@ -40,8 +40,6 @@ public:
                          QObject *parent = nullptr);
     ~PalmRuntime() override;
 
-    void connectDevice(KPilotLink *link);
-
     /// Open a Palm device on one of the supplied paths. Async — emits
     /// connectionComplete(true, "") on success or connectionComplete(false,
     /// error) on failure. Internally drives PalmDeviceAccess; on success,

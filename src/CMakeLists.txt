@@ -35,12 +35,6 @@ add_library(WildPalmsCore SHARED
     palm/kpilotdevicelink.h
     palm/categoryinfo.cpp
     palm/categoryinfo.h
-    palm/deviceworker.cpp
-    palm/deviceworker.h
-    palm/devicesession.cpp
-    palm/devicesession.h
-    palm/tickleworker.cpp
-    palm/tickleworker.h
     palm/palmdevicemonitor.cpp
     palm/palmdevicemonitor.h
 

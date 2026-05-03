@@ -185,23 +185,6 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
 
 PalmRuntime::~PalmRuntime() = default;
 
-void PalmRuntime::connectDevice(KPilotLink *link) {
-    if (!link) return;
-    m_link = link;
-
-    // Wrap the live KPilotLink in PilotLinkPalmDatabaseAccess and PalmDeviceAccess.
-    // Legacy path — DeviceSession owns the link and hands it in here.
-    auto dbAccess = std::make_unique<WildPalms::PalmDevice::PilotLinkPalmDatabaseAccess>(link);
-    m_device = std::make_unique<PalmDeviceAccess>(std::move(dbAccess));
-
-    // M6b Task 4 fix: forward deviceDisconnected so PalmRuntime emits it
-    // when m_device->disconnectDevice() runs in PalmRuntime::disconnectDevice.
-    connect(m_device.get(), &PalmDeviceAccess::deviceDisconnected,
-            this, &PalmRuntime::deviceDisconnected);
-
-    finishConnect();
-}
-
 void PalmRuntime::connectDevice(const QStringList &devicePaths)
 {
     if (!m_device) {
@@ -237,8 +220,7 @@ void PalmRuntime::finishConnect()
 {
     if (!m_device) return;
     // Cache the link from PalmDeviceAccess so backup/restore (which read
-    // m_link directly) keep working with the new connect path. For the
-    // legacy connectDevice(KPilotLink*) path m_link is already set.
+    // m_link directly) keep working.
     if (!m_link) m_link = m_device->link();
 
     // Discover and load IBackendPluginV2 plugins from wildpalms/plugins/

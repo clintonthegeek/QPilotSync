@@ -10,7 +10,6 @@
 
 #include "../wildpalms_version.h"
 #include "../palm/kpilotdevicelink.h"
-#include "../palm/devicesession.h"
 #include "../palm/pilotrecord.h"
 #include "../palm/categoryinfo.h"
 #include "../profile.h"

@@ -34,13 +34,10 @@ void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaults_skipped_if_user_mappin
     rt.reloadMappings(arr);
     QCOMPARE(rt.palmMappings().size(), 1);
 
-    // NOTE: connectDevice(nullptr) early-returns before reaching the
-    // defaults block, so this test verifies the user-mapping-preservation
-    // contract via reloadMappings + palmMappings round-trip rather than
-    // exercising the guard directly. The guard's correctness is by
-    // inspection (palmruntime.cpp's connectDevice).
-    rt.connectDevice(nullptr);
-
+    // This test verifies the user-mapping-preservation contract via
+    // reloadMappings + palmMappings round-trip. The guard that skips
+    // defaults when user mappings are present is tested by inspection
+    // of palmruntime.cpp's connectDevice.
     auto current = rt.palmMappings();
     QCOMPARE(current.size(), 1);
     QCOMPARE(current[0].id, QStringLiteral("user-only"));
