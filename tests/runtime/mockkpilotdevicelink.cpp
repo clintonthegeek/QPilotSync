@@ -31,16 +31,20 @@ bool MockKPilotDeviceLink::openConnection()
     if (m_nextResult == NextResult::Success) {
         const HandshakeResult result = m_pendingResult;
         QTimer::singleShot(0, this, [this, result]() {
-            QMetaObject::invokeMethod(this, "onConnectionEstablished",
+            const bool ok = QMetaObject::invokeMethod(this, "onConnectionEstablished",
                                       Qt::DirectConnection,
                                       Q_ARG(HandshakeResult, result));
+            Q_ASSERT_X(ok, "MockKPilotDeviceLink",
+                "onConnectionEstablished slot resolution failed — KPilotDeviceLink renamed the private slot?");
         });
     } else {
         const QString error = m_pendingError;
         QTimer::singleShot(0, this, [this, error]() {
-            QMetaObject::invokeMethod(this, "onConnectionFailed",
+            const bool ok = QMetaObject::invokeMethod(this, "onConnectionFailed",
                                       Qt::DirectConnection,
                                       Q_ARG(QString, error));
+            Q_ASSERT_X(ok, "MockKPilotDeviceLink",
+                "onConnectionFailed slot resolution failed — KPilotDeviceLink renamed the private slot?");
         });
     }
     return true;

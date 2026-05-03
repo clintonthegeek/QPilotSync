@@ -139,6 +139,10 @@ void TstPalmDeviceAccessConnect::is_connected_tracks_state()
     QSignalSpy complete(&access, &PalmDeviceAccess::connectionComplete);
     access.connectDevice({QStringLiteral("/dev/mock")});
 
+    // Synchronously set in connectDevice() before the QueuedConnection bounce.
+    QVERIFY(access.isConnecting());
+    QVERIFY(!access.isConnected());
+
     // While connect is in flight (before QTimer::singleShot(0) fires),
     // isConnecting should briefly be true. Race-prone — mostly we care
     // about the post-state.
@@ -158,7 +162,9 @@ void TstPalmDeviceAccessConnect::multiple_connect_calls_rejected()
 
     HandshakeResult result;
     result.socket = -1;
-    access.setLinkFactoryForTest([&result](const QStringList &paths) {
+    int factoryCalls = 0;
+    access.setLinkFactoryForTest([&](const QStringList &paths) {
+        ++factoryCalls;
         auto *mock = new MockKPilotDeviceLink(paths);
         mock->setNextResultSuccess(result);
         return mock;
@@ -171,10 +177,9 @@ void TstPalmDeviceAccessConnect::multiple_connect_calls_rejected()
     access.connectDevice({QStringLiteral("/dev/mock2")});  // should be ignored
     QVERIFY(complete.wait(2000));
 
-    // At least one connectionStarted (the first call). Second is suppressed
-    // by m_connecting / m_connected guards in connectDevice().
-    QVERIFY(started.count() >= 1);
+    QCOMPARE(started.count(), 1);
     QCOMPARE(complete.count(), 1);
+    QCOMPARE(factoryCalls, 1);
 }
 
 QTEST_MAIN(TstPalmDeviceAccessConnect)
