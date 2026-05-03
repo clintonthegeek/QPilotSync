@@ -1,6 +1,7 @@
 #include "palmruntime.h"
 #include "palmdeviceaccess.h"
 #include "palm/kpilotlink.h"
+#include "palm/kpilotdevicelink.h"
 
 #include <QPromise>
 #include <QDir>
@@ -364,6 +365,11 @@ void PalmRuntime::disconnectDevice() {
 
 bool PalmRuntime::isDeviceConnected() const {
     return m_device != nullptr;
+}
+
+KPilotDeviceLink *PalmRuntime::deviceLink() const {
+    if (!m_device) return nullptr;
+    return qobject_cast<KPilotDeviceLink*>(m_device->link());
 }
 
 void PalmRuntime::setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess> device) {

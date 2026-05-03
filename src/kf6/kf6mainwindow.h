@@ -15,7 +15,6 @@ class KXMLGUIClient;
 class ActionManager;
 class LogWidget;
 class KPilotDeviceLink;
-class DeviceSession;
 class Profile;
 class DashboardWidget;
 class ConduitManager;
@@ -70,7 +69,7 @@ protected:
 private Q_SLOTS:
     // Device connection
     void onConnectDevice();
-    void onConnectionComplete(bool success);
+    void onConnectionComplete(bool success, const QString &error);
     void onDisconnectDevice();
     void onDevicePoll();
     void onCancelConnection();
@@ -104,7 +103,7 @@ private Q_SLOTS:
     void onSyncFinished(const Sync::SyncResult &result);
     void onSyncProgress(int current, int total, const QString &message);
 
-    // DeviceSession callbacks
+    // PalmRuntime callbacks
     void onSessionPalmScreen(const QString &message);
     void onAsyncSyncResult(const Sync::SyncResult &result);
 
@@ -198,10 +197,6 @@ private:
 
     // Action manager
     ActionManager *m_actionManager;
-
-    // Device connection
-    DeviceSession *m_session;
-    KPilotDeviceLink *m_deviceLink;
 
     // Sync engine and conduits
     Sync::SyncEngine *m_syncEngine;

@@ -12,6 +12,7 @@
 #include "palmrunresult.h"
 
 class KPilotLink;
+class KPilotDeviceLink;
 
 namespace Kalburator::Sync {
     class SyncEngine;
@@ -52,6 +53,11 @@ public:
 
     void disconnectDevice();
     bool isDeviceConnected() const;
+
+    /// Borrowed pointer to the underlying KPilotDeviceLink. Only valid after
+    /// readyForSync(). Returns nullptr if not yet connected. KF6MainWindow uses
+    /// this to read handshake info and to feed the legacy m_syncEngine.
+    KPilotDeviceLink *deviceLink() const;
 
     QFuture<PalmRunResult> hotSync();
     QFuture<PalmRunResult> fullSync();
