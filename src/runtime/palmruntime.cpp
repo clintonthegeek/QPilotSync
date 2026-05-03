@@ -189,8 +189,51 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
     m_link = link;
 
     // Wrap the live KPilotLink in PilotLinkPalmDatabaseAccess and PalmDeviceAccess.
+    // Legacy path — DeviceSession owns the link and hands it in here.
     auto dbAccess = std::make_unique<WildPalms::PalmDevice::PilotLinkPalmDatabaseAccess>(link);
     m_device = std::make_unique<PalmDeviceAccess>(std::move(dbAccess));
+
+    finishConnect();
+}
+
+void PalmRuntime::connectDevice(const QStringList &devicePaths)
+{
+    if (!m_device) {
+        m_device = std::make_unique<PalmDeviceAccess>(this);
+
+        connect(m_device.get(), &PalmDeviceAccess::connectionStarted,
+                this, &PalmRuntime::connectionStarted);
+
+        connect(m_device.get(), &PalmDeviceAccess::connectionComplete,
+                this, [this](bool ok, const QString &err) {
+                    emit connectionComplete(ok, err);
+                    if (ok) {
+                        finishConnect();
+                    }
+                });
+
+        connect(m_device.get(), &PalmDeviceAccess::deviceDisconnected,
+                this, &PalmRuntime::deviceDisconnected);
+
+        connect(m_device.get(), &PalmDeviceAccess::logMessage,
+                this, &PalmRuntime::logMessage);
+    }
+
+    m_device->connectDevice(devicePaths);
+}
+
+void PalmRuntime::cancelConnect()
+{
+    if (m_device) m_device->cancelConnect();
+}
+
+void PalmRuntime::finishConnect()
+{
+    if (!m_device) return;
+    // Cache the link from PalmDeviceAccess so backup/restore (which read
+    // m_link directly) keep working with the new connect path. For the
+    // legacy connectDevice(KPilotLink*) path m_link is already set.
+    if (!m_link) m_link = m_device->link();
 
     // Discover and load IBackendPluginV2 plugins from wildpalms/plugins/
     const auto metaDatas = KPluginMetaData::findPlugins(
@@ -293,6 +336,7 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
     m_engine->setSyncMappings(m_mappings);
 
     emit deviceConnected();
+    emit readyForSync();
 }
 
 void PalmRuntime::reloadMappings(const QJsonArray &json)
@@ -308,6 +352,7 @@ void PalmRuntime::reloadMappings(const QJsonArray &json)
 }
 
 void PalmRuntime::disconnectDevice() {
+    if (m_device) m_device->disconnectDevice();   // M6b addition
     m_link = nullptr;
     m_device.reset();
     emit deviceDisconnected();

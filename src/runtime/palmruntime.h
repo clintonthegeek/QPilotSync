@@ -40,6 +40,16 @@ public:
     ~PalmRuntime() override;
 
     void connectDevice(KPilotLink *link);
+
+    /// Open a Palm device on one of the supplied paths. Async — emits
+    /// connectionComplete(true, "") on success or connectionComplete(false,
+    /// error) on failure. Internally drives PalmDeviceAccess; on success,
+    /// loads plugins + sets up engine via finishConnect().
+    void connectDevice(const QStringList &devicePaths);
+
+    /// Cancel an in-progress connect.
+    void cancelConnect();
+
     void disconnectDevice();
     bool isDeviceConnected() const;
 
@@ -81,7 +91,22 @@ signals:
     void runLog(QString message);
     void runFinished(PalmRunResult);
 
+    // M6b additions — replace DeviceSession's signal surface for KF6MainWindow.
+    void connectionStarted();
+    void connectionComplete(bool success, QString error);
+    void readyForSync();         // emitted right after deviceConnected once
+                                 // plugins are loaded and engine is ready
+    void logMessage(QString message);
+    void errorOccurred(QString error);
+    void progressUpdated(int current, int total, QString message);
+    void palmScreenMessage(QString message);
+
 private:
+    /// Run after PalmDeviceAccess emits connectionComplete(true, "").
+    /// Loads plugins, registers backends, sets up default mappings if
+    /// none exist, sets up the engine. Emits deviceConnected + readyForSync.
+    void finishConnect();
+
     // Mirror direction — local enum avoids pulling synctypes.h into this header.
     enum class MirrorDir { PalmToPC, PCToPalm };
 
