@@ -18,7 +18,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find Qt6
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Widgets Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Widgets Network Concurrent)
 qt_standard_project_setup()
 
 # KDE Extra CMake Modules — provides KDE_INSTALL_PLUGINDIR etc.
@@ -62,6 +62,7 @@ add_subdirectory(src)
 
 # Testing support
 option(BUILD_TESTS "Build the test suite" ON)
+
 if(BUILD_TESTS)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)

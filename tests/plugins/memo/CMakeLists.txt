@@ -58,6 +58,7 @@ target_link_libraries(tst_memobackendplugin
         WildPalmsPalmCodecs
         WildPalmsPalmCalendar
         WildPalmsCore
+        PalmDeviceAccessLib     # PalmDeviceAccess symbols
         Kalburator::Sync
         KF6::CoreAddons
         KF6::I18n
@@ -69,8 +70,9 @@ target_link_libraries(tst_memobackendplugin
 add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
 set_tests_properties(tst_memobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# Task 9: end-to-end test that loads the real .so through
-# BackendPluginManager and drives BlobSyncEngine::twoWayWithBaseline.
+# M5c Task 3: end-to-end via the real wildpalms_memo_v2.so plumbed
+# through PalmRuntime + SyncEngine::runSyncFuture (replaces the V1
+# BackendPluginManager + runBlobTwoWay test that this file used pre-M5c).
 add_executable(tst_memo_v2 tst_memo_v2.cpp)
 target_compile_definitions(tst_memo_v2
     PRIVATE
@@ -86,9 +88,15 @@ target_link_libraries(tst_memo_v2
         WildPalmsPalmSync
         WildPalmsPalmCodecs
         WildPalmsCore
+        PalmDeviceAccessLib
+        WildPalmsPalmDevice
         Kalburator::Sync
+        KF6::CoreAddons
         Qt::Test
         Qt::Core
+        pisock
+        bluetooth
+        usb
 )
 add_dependencies(tst_memo_v2 wildpalms_memo_v2)
 add_test(NAME tst_memo_v2 COMMAND tst_memo_v2)

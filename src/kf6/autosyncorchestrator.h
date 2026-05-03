@@ -14,7 +14,7 @@ class LogWidget;
  * 1. Looks up or auto-creates a profile based on USB serial / fingerprint
  * 2. Emits deviceDetected() so KF6MainWindow can handle the session
  *
- * Does NOT create DeviceSessions or manage sync lifecycle.
+ * Does NOT manage sync lifecycle (PalmRuntime owns that, M6b+).
  */
 class AutoSyncOrchestrator : public QObject
 {

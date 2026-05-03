@@ -3,6 +3,8 @@
 
 #include <KXmlGuiWindow>
 #include <QMap>
+#include <memory>
+#include "runtime/palmrunresult.h"
 
 // Forward declarations
 class QTimer;
@@ -13,7 +15,6 @@ class KXMLGUIClient;
 class ActionManager;
 class LogWidget;
 class KPilotDeviceLink;
-class DeviceSession;
 class Profile;
 class DashboardWidget;
 class ConduitManager;
@@ -25,7 +26,7 @@ class AutoSyncOrchestrator;
 // Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
 // until E.16 retires the old surface.
 namespace WildPalms { class BackendPluginManager; class IBackendPlugin; }
-namespace WildPalms::Runtime { class SyncRunner; }
+namespace WildPalms::Runtime { class PalmRuntime; }
 
 namespace Sync {
 class SyncEngine;
@@ -56,13 +57,19 @@ public:
     explicit KF6MainWindow(QWidget *parent = nullptr);
     ~KF6MainWindow() override;
 
+    // Test seam — read-only view of the per-plugin KPageWidget map. Used by
+    // tst_main_window_plugin_pages_populated to confirm per-plugin pages
+    // populate after backendPluginLoaded fires for all enabled plugins.
+    const QMap<QString, KPageWidgetItem *> &backendPluginPagesForTest() const
+        { return m_backendPluginPages; }
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 
 private Q_SLOTS:
     // Device connection
     void onConnectDevice();
-    void onConnectionComplete(bool success);
+    void onConnectionComplete(bool success, const QString &error);
     void onDisconnectDevice();
     void onDevicePoll();
     void onCancelConnection();
@@ -96,7 +103,7 @@ private Q_SLOTS:
     void onSyncFinished(const Sync::SyncResult &result);
     void onSyncProgress(int current, int total, const QString &message);
 
-    // DeviceSession callbacks
+    // PalmRuntime callbacks
     void onSessionPalmScreen(const QString &message);
     void onAsyncSyncResult(const Sync::SyncResult &result);
 
@@ -123,6 +130,16 @@ private Q_SLOTS:
 
     // Auto-sync detection
     void onAutoDeviceDetected(Profile *profile, const QStringList &ports);
+
+    // M2/M3 — PalmRuntime callbacks
+    void onPalmRunStarted(const QString &label);
+    void onPalmRunFinished(WildPalms::Runtime::PalmRunResult result);
+
+    // M5a — keepAlive from KalburatorInteractiveConflictHandler
+    void onPalmConflictHandlerKeepAlive();
+
+    // M5b — open MappingEditorDialog and reload PalmRuntime
+    void onConfigureMappings();
 
 private:
     // UI setup
@@ -175,24 +192,11 @@ private:
     WildPalms::BackendPluginManager   *m_backendPluginManager = nullptr;
     QMap<QString, KPageWidgetItem *>   m_backendPluginPages;
 
-    // Phase E.16 — new-ABI sync orchestrator. Replaces Sync::SyncEngine
-    // for the Tools-menu sync actions. Coexists with m_syncEngine
-    // until the legacy IConduit deletion lands; the legacy engine is
-    // constructed but unused from the menu wiring.
-    WildPalms::Runtime::SyncRunner    *m_syncRunner = nullptr;
-
-    // (Phase E.16 — the PalmDeviceConnection wrapping the live
-    // KPilotDeviceLink is owned inside m_syncRunner via
-    // SyncRunner::setKPilotLink, set on connect and torn down on
-    // disconnect. Keeps the device-side headers off this one's
-    // include surface.)
+    // M2 — PalmRuntime owns the new hotSync path.
+    std::unique_ptr<WildPalms::Runtime::PalmRuntime> m_palmRuntime;
 
     // Action manager
     ActionManager *m_actionManager;
-
-    // Device connection
-    DeviceSession *m_session;
-    KPilotDeviceLink *m_deviceLink;
 
     // Sync engine and conduits
     Sync::SyncEngine *m_syncEngine;
@@ -209,6 +213,7 @@ private:
 
     // Current async operation
     QString m_pendingSyncOperationName;
+    QString m_currentPalmRunLabel;
 
     // Profile
     Profile *m_currentProfile;
@@ -216,6 +221,10 @@ private:
     // Conflict review
     QSyncCore::ConflictStore *m_conflictStore;
     InteractiveConflictHandler *m_interactiveConflictHandler = nullptr;
+    // M5a: stored as QObject* to avoid including libkalburator headers in this
+    // header (include-guard collision with WP-local QSyncCore headers).
+    // Actual type: KalburatorInteractiveConflictHandler (QObject subclass).
+    QObject *m_palmConflictHandler = nullptr;
 
     // Auto-detection and auto-sync
     PalmDeviceMonitor *m_deviceMonitor = nullptr;

@@ -7,6 +7,7 @@
 #include "webcalbackendplugin.h"
 #include "webcalblobbackend.h"
 #include "webcalfeed.h"
+#include "iblobbackend.h"
 
 using WildPalms::WebcalPlugin::WebcalBackendPlugin;
 using WildPalms::WebcalPlugin::WebcalBlobBackend;
@@ -27,14 +28,12 @@ private slots:
         QCOMPARE(p.version(), QStringLiteral("2.0.0"));
     }
 
-    void createBackends_returnsBlobNullCalendar()
+    void createPalmBackend_returnsWebcalBlobBackend()
     {
         WebcalBackendPlugin p;
-        const auto out = p.createBackends(nullptr, nullptr);
-        QVERIFY(out.blob != nullptr);
-        QVERIFY(out.calendar == nullptr);
-        QVERIFY(dynamic_cast<WebcalBlobBackend *>(out.blob) != nullptr);
-        delete out.blob;
+        auto blobPtr = p.createPalmBackend(nullptr);
+        QVERIFY(blobPtr != nullptr);
+        QVERIFY(dynamic_cast<WebcalBlobBackend *>(blobPtr.get()) != nullptr);
     }
 
     void loadSettings_parsesFeeds()

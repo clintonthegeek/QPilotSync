@@ -3,21 +3,23 @@
 
 #include "plugins/memo/memobackendplugin.h"
 #include "plugins/memo/memoblobbackend.h"
-#include "palm/palmdeviceconnection.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "palm/codecs/memocodec.h"
+#include "runtime/palmdeviceaccess.h"
 
+#include "iblobbackend.h"
 #include "conflictrecord.h"   // Kalburator::Sync::QSyncCore::RecordSnapshot
 
 using WildPalms::Memo::MemoBackendPlugin;
 using WildPalms::Memo::MemoBlobBackend;
+using WildPalms::Runtime::PalmDeviceAccess;
 
 class TestMemoBackendPlugin : public QObject {
     Q_OBJECT
 private slots:
     void metadataStatics();
     void claimsMemoDB();
-    void createBackendsReturnsMemoBlobBackendOverPalmBackend();
+    void createPalmBackendReturnsMemoBlobBackend();
     void viewHooksReportMemoSurface();
     void conflictHtmlRendersMemoTitleAndBody();
     void enrichSnapshotDecodesPalmBytesOnSourceSide();
@@ -39,19 +41,15 @@ void TestMemoBackendPlugin::claimsMemoDB()
     QCOMPARE(p.claimedDatabases(), QStringList{QStringLiteral("MemoDB")});
 }
 
-void TestMemoBackendPlugin::createBackendsReturnsMemoBlobBackendOverPalmBackend()
+void TestMemoBackendPlugin::createPalmBackendReturnsMemoBlobBackend()
 {
-    WildPalms::PalmSync::MockPalmDatabaseAccess dev;
-    PalmDeviceConnection conn(&dev);
     MemoBackendPlugin p;
+    auto mock = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
+    PalmDeviceAccess dev(std::move(mock));
 
-    auto backends = p.createBackends(nullptr, &conn);
-    QVERIFY(backends.blob != nullptr);
-    QCOMPARE(backends.blob->backendId(), QStringLiteral("palm-memo"));
-    QCOMPARE(backends.calendar, static_cast<Kalburator::Sync::SyncBackend *>(nullptr));
-
-    // Clean up: the plugin returns a raw pointer without parenting.
-    delete backends.blob;
+    auto backend = p.createPalmBackend(&dev);
+    QVERIFY(backend != nullptr);
+    QCOMPARE(backend->backendId(), QStringLiteral("palm-memo"));
 }
 
 void TestMemoBackendPlugin::viewHooksReportMemoSurface()

@@ -20,4 +20,5 @@ endfunction()
 
 add_palm_sync_test(tst_mockpalmdatabaseaccess tst_mockpalmdatabaseaccess.cpp)
 add_palm_sync_test(tst_palmbackend              tst_palmbackend.cpp)
-add_palm_sync_test(tst_palmbackend_roundtrip    tst_palmbackend_roundtrip.cpp)
+# tst_palmbackend_roundtrip was deleted in M5c — its source used the
+# F1-facade APIs (BlobSyncResult / runBlobTwoWay) deleted in Plan 1.

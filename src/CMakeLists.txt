@@ -35,12 +35,6 @@ add_library(WildPalmsCore SHARED
     palm/kpilotdevicelink.h
     palm/categoryinfo.cpp
     palm/categoryinfo.h
-    palm/deviceworker.cpp
-    palm/deviceworker.h
-    palm/devicesession.cpp
-    palm/devicesession.h
-    palm/tickleworker.cpp
-    palm/tickleworker.h
     palm/palmdevicemonitor.cpp
     palm/palmdevicemonitor.h
 
@@ -146,6 +140,17 @@ target_link_libraries(WildPalmsCore
         # so the link is one-directional from Core's perspective.
         WildPalmsPalmDevice
         WildPalmsPalmSync
+        # M2 Task 11 — PalmRuntime lives in this static lib until Task 12
+        # merges it back into WildPalmsRuntime.
+        PalmDeviceAccessLib
+        # M5a — libkalburator-side interactive ConflictHandler. Separate
+        # static lib to avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard
+        # collision between libkalburator's conflict/conflictpolicy.h and
+        # WildPalms' local sync/qsynccore/conflictpolicy.h.
+        WildPalmsAppConflict
+        # M5b — Mapping editor dialogs. Separate static lib so its TUs
+        # see libkalburator's synctypes.h (not WP-local core/synctypes.h).
+        WildPalmsAppMapping
 )
 
 target_include_directories(WildPalmsCore PUBLIC
@@ -269,6 +274,19 @@ add_subdirectory(palm/contacts)
 add_subdirectory(palm/memo)
 add_subdirectory(palm/todo)
 add_subdirectory(palm/transformations)
+
+# M5a — libkalburator-side interactive ConflictHandler. Separate lib to
+# avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard collision between
+# libkalburator's conflict/conflictpolicy.h and WildPalms' local
+# sync/qsynccore/conflictpolicy.h.
+add_subdirectory(app/conflict)
+
+# M5b — Mapping editor dialogs (MappingRowDialog, MappingEditorDialog).
+# Separate static lib for the same reason as WildPalmsAppConflict: avoids
+# having WildPalmsCore's PUBLIC src/core/ on the include path so that
+# `#include "synctypes.h"` resolves to libkalburator's Kalburator::Sync
+# header (not WP-local Sync:: namespace).
+add_subdirectory(app/mapping)
 
 # Plugin runtime — managers, simple action context, install source
 # collector, and (since E.15b) the Full-Sync host-interface

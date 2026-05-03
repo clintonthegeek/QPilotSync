@@ -79,6 +79,21 @@ public:
     virtual bool cleanUpDatabase(int dbHandle) = 0;
     virtual bool resetSyncFlags(int dbHandle) = 0;
 
+    // Raw database file transfer (backup / restore)
+    // retrieveDatabase: download the named database from the device and write
+    // it as a .pdb/.prc file to destPath.  Returns false on any error;
+    // returns true (and writes nothing) if the database has the copy-prevention
+    // flag set and should be silently skipped.
+    virtual bool retrieveDatabase(const QString &dbName, const QString &destPath) = 0;
+    // installFile: upload a .pdb/.prc file from filePath onto the device.
+    virtual bool installFile(const QString &filePath) = 0;
+
+    // Tickle coordination: pause/resume the keep-alive tickle around bulk
+    // socket operations (backup/restore) that need exclusive socket access.
+    // Default no-ops — real devices override via KPilotDeviceLink.
+    virtual void pauseTickle() {}
+    virtual void resumeTickle() {}
+
 signals:
     void statusChanged(LinkStatus status);
     void deviceReady(const QString &userName, const QString &deviceName);

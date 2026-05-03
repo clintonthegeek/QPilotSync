@@ -67,6 +67,15 @@ void ActionManager::setupFileActions()
     QAction *profileSettings = new QAction(i18n("Profile Settings..."), this);
     connect(profileSettings, &QAction::triggered, this, &ActionManager::profileSettingsRequested);
     m_actionCollection->addAction(QStringLiteral("file_profile_settings"), profileSettings);
+
+    // Configure Mappings (M5b Task 6)
+    QAction *configureMappings = new QAction(
+        QIcon::fromTheme(QStringLiteral("configure")),
+        i18n("Configure Mappings..."), this);
+    connect(configureMappings, &QAction::triggered,
+            this, &ActionManager::configureMappingsRequested);
+    m_actionCollection->addAction(QStringLiteral("file_configure_mappings"),
+                                  configureMappings);
 }
 
 void ActionManager::setupDeviceActions()

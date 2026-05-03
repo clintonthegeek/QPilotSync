@@ -5,6 +5,7 @@
 # WP host implementations consumed by libkalburator.
 
 find_package(KF6 REQUIRED COMPONENTS CoreAddons)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 add_library(WildPalmsRuntime STATIC
     pluginmetadatahelpers.h
@@ -31,17 +32,18 @@ add_library(WildPalmsRuntime STATIC
     syncconfigstore_wp.cpp
     synchost_wp.h
     synchost_wp.cpp
-    # Phase E.16 — single orchestrator for the new ABI; replaces
-    # legacy Sync::SyncEngine driving IConduit derivatives.
-    syncrunner_wp.h
-    syncrunner_wp.cpp
     # Phase E.16 — pilot-link factory header (forward-decls only;
     # impl compiled into WildPalmsCore where the device-side
     # libraries can be linked without an AUTOMOC cycle).
     pilotlinkconnectionfactory.h
-    # G.7 — HotSyncCoordinator replaces SyncRunner_wp (Task 55 deletes the old files).
-    hotsynccoordinator.h
-    hotsynccoordinator.cpp
+)
+
+target_sources(WildPalmsRuntime PRIVATE
+    # M2 Task 2/3 — PalmDeviceAccess: IPalmDatabaseAccess wrapper that
+    # marshals all calls to a dedicated link thread via BlockingQueuedConnection.
+    # NOTE: compiled into PalmDeviceAccessLib (below) while syncrunner_wp.cpp
+    # is broken by Plan 1 (Task 12 re-merges these into WildPalmsRuntime once
+    # the syncrunner is rewritten).
 )
 
 target_include_directories(WildPalmsRuntime
@@ -72,3 +74,34 @@ target_link_libraries(WildPalmsRuntime
 )
 
 set_target_properties(WildPalmsRuntime PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# M2 Task 2/3 — Isolated build unit for PalmDeviceAccess so the test target
+# compiles while syncrunner_wp.cpp is still broken (Plan 1 breakage; Task 12
+# merges this back into WildPalmsRuntime once the syncrunner is rewritten).
+# M2 Task 5 — PalmRuntime skeleton + PalmRunResult type compiled here for the
+# same reason (WildPalmsRuntime is still broken by syncrunner_wp.cpp).
+add_library(PalmDeviceAccessLib STATIC
+    palmdeviceaccess.h
+    palmdeviceaccess.cpp
+    palmrunresult.h
+    palmruntime.h
+    palmruntime.cpp
+    palmtickle.h
+    palmtickle.cpp
+)
+target_include_directories(PalmDeviceAccessLib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+)
+target_link_libraries(PalmDeviceAccessLib
+    PUBLIC
+        Qt::Core
+        Qt::Concurrent  # M3 — QtConcurrent::run used by backup/restore
+        # M2 Task 5 — PalmRuntime's unique_ptr members (BackendRegistry,
+        # SyncEngine) require complete types at destruction; add Kalburator::Sync
+        # so the destructor compiles. Task 12 merges this lib back into
+        # WildPalmsRuntime which already links Kalburator::Sync.
+        Kalburator::Sync
+)
+set_target_properties(PalmDeviceAccessLib PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -77,22 +77,6 @@ add_wildpalms_test(test_profile
 add_wildpalms_test(test_multidatabase test_multidatabase.cpp)
 
 # ============================================================
-# Unit Tests - Plucker Config
-# ============================================================
-
-add_executable(test_pluckerconfig
-    test_pluckerconfig.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerconfig.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerchannel.cpp
-)
-target_link_libraries(test_pluckerconfig PRIVATE Qt::Core Qt::Test)
-target_include_directories(test_pluckerconfig PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_test(NAME test_pluckerconfig COMMAND test_pluckerconfig)
-set_tests_properties(test_pluckerconfig PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-)
-
-# ============================================================
 # Helper for runtime-only tests (Phase D originally; consolidated under
 # WildPalmsRuntime in E.15b). Links WildPalmsRuntime + Kalburator::Sync,
 # stays out of the WildPalmsCore/pisock link line.
