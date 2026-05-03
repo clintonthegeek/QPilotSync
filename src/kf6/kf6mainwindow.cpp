@@ -800,9 +800,14 @@ void KF6MainWindow::loadProfile(const QString &path)
         });
 
     // Connect keepAlive signal — tickle pause/resume is now driven by
-    // PalmTickle inside PalmDeviceAccess; no manual resume needed here.
+    // PalmTickle inside PalmDeviceAccess; refresh it when the user is
+    // reading a conflict dialog for a long time.
     connect(m_interactiveConflictHandler, &InteractiveConflictHandler::keepAliveRequested,
-            this, []() { /* no-op: PalmTickle handles tickle lifecycle */ });
+            this, [this]() {
+                if (m_palmRuntime && m_palmRuntime->deviceLink()) {
+                    m_palmRuntime->deviceLink()->resumeTickle();
+                }
+            });
 
     Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
     m_syncEngine->setBackend(backend);
@@ -981,6 +986,10 @@ void KF6MainWindow::startListening(const QString &devicePath)
 
     m_devicePollTimer->start(500);
 
+    // Note: cancelConnectionAction triggers PalmRuntime::cancelConnect
+    // which only cancels the open handshake. Mid-sync cancel is currently
+    // unsupported (would require PalmRuntime::cancelSync via QFutureWatcher
+    // cancellation propagation — TODO for follow-up).
     m_actionManager->cancelConnectionAction()->setEnabled(true);
     updateMenuState(false);
 }
@@ -1897,9 +1906,12 @@ void KF6MainWindow::onPalmRunStarted(const QString &label)
 
 void KF6MainWindow::onPalmConflictHandlerKeepAlive()
 {
-    // No-op: tickle pause/resume is now driven by PalmTickle inside
-    // PalmDeviceAccess, so the conflict-dialog keep-alive is handled
-    // automatically without manual intervention.
+    // Refresh the tickle when the conflict dialog is open for a long time.
+    // The legacy code called m_session->resumeTickle(); now go through
+    // the device link which emits to PalmTickle's start() (idempotent).
+    if (m_palmRuntime && m_palmRuntime->deviceLink()) {
+        m_palmRuntime->deviceLink()->resumeTickle();
+    }
 }
 
 void KF6MainWindow::onConfigureMappings()
@@ -1941,6 +1953,18 @@ void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)
         m_logWidget->logError(i18n("%1 finished with errors: %2",
                                    op, result.errorMessage));
         statusBar()->showMessage(i18n("%1 finished with errors", op));
+    }
+
+    // M6b Task 5 fix: honor ConnectionMode::DisconnectAfterSync.
+    // The legacy DeviceSession::setConnectionMode wired this; with the
+    // M6b architecture PalmRuntime doesn't model the post-sync policy,
+    // so KF6MainWindow checks the profile and disconnects here.
+    if (m_currentProfile
+        && m_currentProfile->connectionMode() == ConnectionMode::DisconnectAfterSync
+        && m_palmRuntime
+        && m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logInfo(i18n("Auto-disconnecting per profile policy (DisconnectAfterSync)"));
+        m_palmRuntime->disconnectDevice();
     }
 }
 
