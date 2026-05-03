@@ -19,7 +19,3 @@ add_subdirectory(memo)
 add_subdirectory(todos)
 add_subdirectory(contacts)
 add_subdirectory(webcalendar)
-
-# Plucker plugin tests are commented out — the plugin itself is excluded
-# from the build (see src/plugins/CMakeLists.txt). M6 deletes both.
-# add_subdirectory(plucker)
