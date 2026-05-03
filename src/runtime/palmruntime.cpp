@@ -193,6 +193,11 @@ void PalmRuntime::connectDevice(KPilotLink *link) {
     auto dbAccess = std::make_unique<WildPalms::PalmDevice::PilotLinkPalmDatabaseAccess>(link);
     m_device = std::make_unique<PalmDeviceAccess>(std::move(dbAccess));
 
+    // M6b Task 4 fix: forward deviceDisconnected so PalmRuntime emits it
+    // when m_device->disconnectDevice() runs in PalmRuntime::disconnectDevice.
+    connect(m_device.get(), &PalmDeviceAccess::deviceDisconnected,
+            this, &PalmRuntime::deviceDisconnected);
+
     finishConnect();
 }
 
@@ -352,10 +357,9 @@ void PalmRuntime::reloadMappings(const QJsonArray &json)
 }
 
 void PalmRuntime::disconnectDevice() {
-    if (m_device) m_device->disconnectDevice();   // M6b addition
+    if (m_device) m_device->disconnectDevice();   // emits deviceDisconnected via forward
     m_link = nullptr;
     m_device.reset();
-    emit deviceDisconnected();
 }
 
 bool PalmRuntime::isDeviceConnected() const {

@@ -97,6 +97,8 @@ signals:
     void readyForSync();         // emitted right after deviceConnected once
                                  // plugins are loaded and engine is ready
     void logMessage(QString message);
+    // TODO(M6b/Task 5): wire the next three from PalmDeviceAccess /
+    // KPilotDeviceLink once KF6MainWindow subscribes to PalmRuntime.
     void errorOccurred(QString error);
     void progressUpdated(int current, int total, QString message);
     void palmScreenMessage(QString message);

@@ -24,6 +24,12 @@ PalmDeviceAccess::PalmDeviceAccess(
             m_implOwner, &QObject::deleteLater);
 
     m_linkThread->start();
+
+    // M6b Task 4 fix: legacy path is "connected" from construction — the
+    // caller passed in an impl that's ready to use. This makes
+    // deviceDisconnected emit fire correctly when this object is later
+    // disconnected via doDisconnect's "if (m_connected.exchange(false))" guard.
+    m_connected = true;
 }
 
 PalmDeviceAccess::PalmDeviceAccess(QObject *parent)
