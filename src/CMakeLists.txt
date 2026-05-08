@@ -116,7 +116,7 @@ target_link_libraries(WildPalmsCore
         Qt::Widgets
         KF6::I18n
     PRIVATE
-        Kalburator::Sync
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         Qt::Network
         KF6::CalendarCore
         KF6::CoreAddons
