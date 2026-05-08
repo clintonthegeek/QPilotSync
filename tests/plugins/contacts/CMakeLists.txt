@@ -146,6 +146,38 @@ add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
 add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
 set_tests_properties(tst_contacts_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# --- Phase Ia Task 19: engine-level palm <-> vcard4 sync integration ---
+# Diagnostic test pinning the architectural gap that
+# SyncEngine::dispatchBlobSync passes bytes through verbatim, even
+# when source and target declare distinct shapes connected by a
+# registered TransformationEdge. When Phase Ib upgrades the engine
+# to compile + run a Pipeline at the edge, this test's diagnostic
+# assertions flip to assert vcard4 bytes on the target side.
+add_executable(tst_contacts_palm_engine_sync
+    tst_contacts_palm_engine_sync.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+)
+target_include_directories(tst_contacts_palm_engine_sync
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CONTACTS_PLUGIN_SRC_DIR}
+)
+target_link_libraries(tst_contacts_palm_engine_sync
+    PRIVATE
+        WildPalmsPalmCodecs   # encodeContact / Contact
+        WildPalmsPalmSync     # PalmRecord::toWireBytes / fromWireBytes
+        Kalburator::Sync      # SyncEngine, SyncBackend, BackendRegistry,
+                              # TransformationRegistry, BlobBaselineStore
+        KF6::Contacts
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_contacts_palm_engine_sync COMMAND tst_contacts_palm_engine_sync)
+set_tests_properties(tst_contacts_palm_engine_sync
+    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- Phase Ia Task 14: ContactsDomainExtension (path A registration) ---
 add_executable(tst_contactsdomainextension
     tst_contactsdomainextension.cpp
