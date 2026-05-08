@@ -4,7 +4,9 @@
 #include <cstdint>
 
 #include <QByteArray>
+#include <QDataStream>
 #include <QDateTime>
+#include <QIODevice>
 
 namespace WildPalms::PalmSync {
 
@@ -42,6 +44,55 @@ struct PalmRecord {
     bool isArchived() const { return attributes & AttrArchived; }
 
     bool operator==(const PalmRecord &other) const = default;
+
+    /**
+     * @brief Serialize this record into a self-describing byte string
+     *        for in-process exchange across libkalburator's
+     *        TransformationStage boundary.
+     *
+     * Format is QDataStream-based (Qt_6_0 version), carrying
+     * recordId / category / attributes / data / lastModified in that
+     * order. The exact bytes are an internal contract between WP's
+     * ContactsBlobBackend and the palm↔vcard4 transformation stages
+     * (Phase Ia, Tasks 11/14/16/17). Not stable on-disk; do not
+     * persist these bytes.
+     *
+     * Round-trip: fromWireBytes(toWireBytes(r)) == r.
+     */
+    QByteArray toWireBytes() const
+    {
+        QByteArray out;
+        QDataStream ds(&out, QIODevice::WriteOnly);
+        ds.setVersion(QDataStream::Qt_6_0);
+        ds << static_cast<quint32>(recordId)
+           << static_cast<quint8>(category)
+           << static_cast<quint8>(attributes)
+           << data
+           << lastModified;
+        return out;
+    }
+
+    /// Inverse of toWireBytes(). Returns a default-constructed
+    /// PalmRecord if the stream is malformed (best-effort: callers
+    /// should validate by checking that the result round-trips).
+    static PalmRecord fromWireBytes(const QByteArray &bytes)
+    {
+        PalmRecord r;
+        if (bytes.isEmpty())
+            return r;
+        QDataStream ds(bytes);
+        ds.setVersion(QDataStream::Qt_6_0);
+        quint32 rid = 0;
+        quint8 cat = 0;
+        quint8 attrs = 0;
+        ds >> rid >> cat >> attrs >> r.data >> r.lastModified;
+        if (ds.status() != QDataStream::Ok)
+            return PalmRecord{};
+        r.recordId = rid;
+        r.category = cat;
+        r.attributes = attrs;
+        return r;
+    }
 };
 
 } // namespace WildPalms::PalmSync
