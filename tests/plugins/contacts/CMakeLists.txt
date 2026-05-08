@@ -77,7 +77,9 @@ add_executable(tst_contactsbackendplugin
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsbackendplugin.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsconflicthandler.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
 )
 target_include_directories(tst_contactsbackendplugin
     PRIVATE
