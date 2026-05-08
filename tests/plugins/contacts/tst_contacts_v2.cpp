@@ -4,22 +4,20 @@
 // runBlobTwoWay for the V2 plugin loaded through PalmRuntime's test seams
 // driving SyncEngine::runSyncFuture via runtime.hotSync().
 //
-// Phase Ia (palm-native pivot): the ContactsBlobBackend now emits
+// Phase Ia (palm-native pivot): the ContactsBlobBackend emits
 // palm-native wire bytes on the read path; vCard transformation is
 // owned by the registered TransformationStage at the engine edge.
-// Until Phase Ia Task 19 wires the engine to invoke the registered
-// edge, the engine passes BackendRecord bytes through verbatim — so
-// the PC mock receives palm-native bytes, not vCard.
+// Phase Ia.5 unified the engine routing so dispatchSync compiles and
+// runs the registered (palm -> vcard4) Pipeline at the edge — the PC
+// mock therefore receives vCard 4.0 bytes after sync.
 //
-// The reduced V2 form preserves the load-bearing smoke assertion:
-// the real wildpalms_contacts_v2.so plumbed through the new engine
-// path produces *something matching the source* on the PC side for a
-// seeded Palm contact. The vCard-shape contract is pinned in
-// tst_contactsvcardtranscoder (PalmToVCardStage round-trip); the
-// engine-level palm->vcard4 transform will be pinned by Task 19.
-// Per-slot routing and conflict-merge semantics live in the plugin's
-// unit tests (tst_contactsblobbackend, tst_contactsconflicthandler)
-// and libkalburator's contract suite.
+// This V2 form pins the load-bearing end-to-end smoke assertion: the
+// real wildpalms_contacts_v2.so plumbed through PalmRuntime +
+// SyncEngine::runSyncFuture produces a vCard 4.0 payload on the PC
+// side for a seeded Palm contact. Per-slot routing and conflict-merge
+// semantics live in the plugin's unit tests
+// (tst_contactsblobbackend, tst_contactsconflicthandler) and
+// libkalburator's contract suite.
 
 #include <QtTest/QtTest>
 #include <QApplication>
@@ -43,6 +41,7 @@
 #include "synctypes.h"
 #include "collectioninfo.h"
 #include "backendrecord.h"
+#include "shape.h"
 
 using WildPalms::PalmCodecs::Contact;
 using WildPalms::PalmCodecs::encodeContact;
@@ -169,10 +168,18 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
         std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(std::move(palmDb)));
 
     // Wire the V2 plugin in — palm-side backend registered under
-    // plugin->pluginId() = "contacts".
+    // plugin->pluginId() = "contacts". Phase Ia.5 Task 19: declare the
+    // palm-side adapter with the (contacts, palm) native shape so the
+    // unified dispatchSync can compile the (contacts, palm) ->
+    // (contacts, vcard4) Pipeline.
+    const Kalburator::Shape::Shape palmShape{
+        Kalburator::Shape::DomainId{QStringLiteral("contacts")},
+        Kalburator::Shape::EncodingId{QStringLiteral("palm")}
+    };
     runtime.registerPluginForTest(
         std::shared_ptr<WildPalms::IBackendPluginV2>(
-            plugin, [](WildPalms::IBackendPluginV2 *) {}));
+            plugin, [](WildPalms::IBackendPluginV2 *) {}),
+        palmShape);
 
     // PC side: a MockBlobBackend with an empty Unfiled-equivalent collection.
     auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();
@@ -182,7 +189,16 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
     pcInfo.name = QStringLiteral("PC Contacts (Unfiled)");
     pcInfo.type = QStringLiteral("contacts");
     pcBlob->createCollection(pcInfo);
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob));
+    // Phase Ia.5 Task 19: declare the PC adapter as (contacts, vcard4)
+    // so the unified dispatchSync can compile the (contacts, palm) ->
+    // (contacts, vcard4) Pipeline via the registered TransformationRegistry
+    // edges. Without this, the adapter defaults to blob/blob and the
+    // engine's path resolution fails with "no edge path".
+    const Kalburator::Shape::Shape pcShape{
+        Kalburator::Shape::DomainId{QStringLiteral("contacts")},
+        Kalburator::Shape::EncodingId{QStringLiteral("vcard4")}
+    };
+    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob), pcShape);
 
     runtime.setMappingsForTest({makeUnfiledMapping()});
 
@@ -191,32 +207,26 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
     const auto run = future.resultAt(0);
     QVERIFY2(run.success, qUtf8Printable(run.errorMessage));
 
-    // PC mock should now hold one record whose blob is the seeded Palm
-    // contact's payload. Phase Ia (read-path palm-native pivot) means
-    // the BackendRecord travelling source -> engine -> target carries
-    // palm-native wire bytes. The "vCard arrives on PC" claim moves to
-    // Task 19's engine-level palm->vcard4 integration test once the
-    // engine is wired to invoke the registered TransformationStage at
-    // the edge. Until then this test pins the smoke assertion that
-    // *something matching the source* lands on PC.
+    // PC mock should now hold one record whose blob is the engine's
+    // transformed output. Phase Ia.5 routes the BackendRecord through
+    // the registered (palm -> vcard4) edge at the engine edge, so the
+    // PC mock receives a vCard 4.0 payload, not palm wire-bytes.
     const auto pcRecs = pcRaw->loadRecords(kPcCollectionId);
     QCOMPARE(pcRecs.size(), 1);
 
     const QByteArray payload = pcRecs.first().data;
     QVERIFY(!payload.isEmpty());
-    // Seeded contact's last/first names must survive the palm-native
-    // round-trip (palm wire bytes embed Pilot-Link's Address packed
-    // form, which keeps these as plain UTF-8 substrings).
+    // Seeded contact's last/first names must survive the palm ->
+    // vCard transcode (KContacts emits FN/N from the Addressee).
     QVERIFY2(payload.contains(QByteArrayLiteral("Doe")),
              qUtf8Printable(QStringLiteral("Expected 'Doe' in PC payload "
                                            "(payload size: %1)")
                                 .arg(payload.size())));
     QVERIFY(payload.contains(QByteArrayLiteral("Jane")));
-    // Negative: BEGIN:VCARD must NOT appear — engine doesn't yet
-    // transform palm-native -> vCard. When Task 19 lands, this
-    // assertion flips and a vCard-shape assertion replaces it (likely
-    // in a sibling test, leaving this one as a pure smoke check).
-    QVERIFY(!payload.contains(QByteArrayLiteral("BEGIN:VCARD")));
+    // Phase Ia.5: engine routes through the registered palm -> vcard4
+    // edge before push, so the target receives vCard 4.0.
+    QVERIFY(payload.contains(QByteArrayLiteral("BEGIN:VCARD")));
+    QVERIFY(payload.contains(QByteArrayLiteral("VERSION:4.0")));
 }
 
 QTEST_MAIN(TestContactsV2)

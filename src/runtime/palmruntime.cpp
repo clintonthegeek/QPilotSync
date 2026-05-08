@@ -62,13 +62,27 @@ public:
         : Kalburator::Sync::SyncBackend(parent)
         , m_blob(std::move(blob))
         , m_id(id)
+        , m_shape{ Kalburator::Shape::DomainId{QStringLiteral("blob")},
+                   Kalburator::Shape::EncodingId{QStringLiteral("blob")} }
+    {}
+
+    // Phase Ia.5 Task 19: optional shape override so cross-shape
+    // mappings (e.g. contacts/palm -> contacts/vcard4) can compile a
+    // Pipeline through the registered TransformationRegistry edges.
+    BlobBackendAdapter(std::unique_ptr<Kalburator::Sync::IBlobBackend> blob,
+                       const QString &id,
+                       const Kalburator::Shape::Shape &shape,
+                       QObject *parent = nullptr)
+        : Kalburator::Sync::SyncBackend(parent)
+        , m_blob(std::move(blob))
+        , m_id(id)
+        , m_shape(shape)
     {}
 
     // ── SyncBackend identity ──────────────────────────────────────────────────
     QString backendType() const override { return m_id; }
     QList<Kalburator::Shape::Shape> nativeShapes() const override {
-        return {{ Kalburator::Shape::DomainId{QStringLiteral("blob")},
-                  Kalburator::Shape::EncodingId{QStringLiteral("blob")} }};
+        return { m_shape };
     }
 
     // ── IBlobBackend identity ─────────────────────────────────────────────────
@@ -125,6 +139,7 @@ public:
 private:
     std::unique_ptr<Kalburator::Sync::IBlobBackend> m_blob;
     QString m_id;
+    Kalburator::Shape::Shape m_shape;
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -370,11 +385,33 @@ void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPlugi
     m_ownedBackends.push_back(std::move(adapter));
 }
 
+void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> plugin,
+                                         const Kalburator::Shape::Shape &shape) {
+    m_plugins.append(plugin);
+    if (!m_device) return;
+    auto blob = plugin->createPalmBackend(m_device.get());
+    if (!blob) return;
+    const QString id = plugin->pluginId();
+    auto adapter = std::make_unique<BlobBackendAdapter>(std::move(blob), id, shape);
+    m_registry->registerBackendInstance(id, adapter.get());
+    m_ownedBackends.push_back(std::move(adapter));
+}
+
 void PalmRuntime::registerBlobBackendForTest(const QString &id,
                                               std::unique_ptr<Kalburator::Sync::IBlobBackend> backend)
 {
     if (!backend) return;
     auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id);
+    m_registry->registerBackendInstance(id, adapter.get());
+    m_ownedBackends.push_back(std::move(adapter));
+}
+
+void PalmRuntime::registerBlobBackendForTest(const QString &id,
+                                              std::unique_ptr<Kalburator::Sync::IBlobBackend> backend,
+                                              const Kalburator::Shape::Shape &shape)
+{
+    if (!backend) return;
+    auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id, shape);
     m_registry->registerBackendInstance(id, adapter.get());
     m_ownedBackends.push_back(std::move(adapter));
 }

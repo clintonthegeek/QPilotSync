@@ -132,7 +132,12 @@ target_link_libraries(tst_contacts_v2
         WildPalmsPalmDevice
         WildPalmsCore
         PalmDeviceAccessLib
-        Kalburator::Sync
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars (KalburatorDomainContacts et al.) so
+        # dispatchSync's DomainRegistry::findByDomain(srcShape.domain)
+        # finds a plugin at sync time. Without WHOLE_ARCHIVE the linker
+        # drops the registrars as unreferenced TUs.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         KF6::CoreAddons
         KF6::Contacts
         Qt::Test
@@ -168,8 +173,13 @@ target_link_libraries(tst_contacts_palm_engine_sync
     PRIVATE
         WildPalmsPalmCodecs   # encodeContact / Contact
         WildPalmsPalmSync     # PalmRecord::toWireBytes / fromWireBytes
-        Kalburator::Sync      # SyncEngine, SyncBackend, BackendRegistry,
-                              # TransformationRegistry, BlobBaselineStore
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars (KalburatorDomainContacts) so
+        # dispatchSync's DomainRegistry::findByDomain("contacts") finds
+        # a plugin at sync time. SyncEngine, SyncBackend,
+        # BackendRegistry, TransformationRegistry, BlobBaselineStore
+        # also live in this archive.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         KF6::Contacts
         Qt::Test
         Qt::Core

@@ -1,11 +1,13 @@
-// Phase Ia Task 19: engine-level palm <-> vcard4 sync integration test.
+// Phase Ia Task 19 / Phase Ia.5: engine-level palm <-> vcard4 sync
+// integration test.
 //
-// This is the **diagnostic** integration test the entire phase was
-// designed to deliver. It pressure-tests the SyncEngine's behaviour
-// when the source backend declares native shape (contacts, palm) and
-// the target backend declares native shape (contacts, vcard4) — i.e.
-// a cross-shape mapping for a non-calendar domain, with a registered
-// transformation edge already present in TransformationRegistry.
+// Phase Ia.5 unified the engine routing: dispatchSync now compiles
+// the (srcShape -> tgtShape) Pipeline via the TransformationRegistry
+// and applies it before pushing to the target. This test now pins
+// the **positive end-to-end behaviour** — when source declares
+// (contacts, palm) and target declares (contacts, vcard4), the
+// engine routes the bytes through the registered palm -> vcard4 edge
+// and the target sees a vCard 4.0 payload.
 //
 // What this test asserts (and why)
 // ================================
@@ -22,57 +24,21 @@
 //   - SyncMapping: source -> target, OneWayUpload (forces dispatch to
 //     target without bidirectional baseline complications).
 //
-// The test asserts the **architectural reality of the engine as of
-// Phase Ia Task 18**:
+// Post-Phase Ia.5 the engine:
 //
-//   1. The engine routes through dispatchBlobSync because
-//      sourceBackend->nativeShapes().first().domain != "calendar"
-//      (syncengine.cpp:1457-1465).
+//   1. Routes via the unified dispatchSync path (the calendar/blob
+//      bifurcation is gone — see Phase Ia.5 Tasks 13-18).
 //
-//   2. dispatchBlobSync fetches source bytes, fetches target bytes,
-//      diffs them by content hash, and applies the resulting changes
-//      to the destination backend **verbatim** (no transformation
-//      stage is invoked between source.read and target.write).
+//   2. Calls `registry.compile(srcShape, tgtShape)` to obtain a
+//      Pipeline, runs the Pipeline against each source record's
+//      payload, and pushes the **transformed** bytes to the target.
 //
-//   3. Therefore the target receives the exact source byte-payload —
-//      the palm-wire-bytes blob — NOT a vCard 4.0 representation,
-//      even though the registered TransformationRegistry contains a
-//      palm -> vcard4 edge that, if invoked, would produce
-//      "BEGIN:VCARD\nVERSION:4.0\n…\nFN:<name>\nEND:VCARD\n".
+//   3. The target therefore receives a vCard 4.0 payload
+//      ("BEGIN:VCARD\nVERSION:4.0\n…\nFN:<name>\nEND:VCARD\n"),
+//      not the source's palm wire-bytes blob.
 //
-//   4. The TransformationRegistry IS consulted: the engine calls
-//      `registry.inspect(srcShape, tgtShape)` and forwards the
-//      resulting LossProfile to the host's syncStarted notification
-//      (syncengine.cpp:1441-1451). This proves the engine knows the
-//      mapping is cross-shape — it just doesn't act on that knowledge
-//      to invoke a Pipeline.
-//
-// This test pins that gap. When Phase Ib lands (engine actually
-// invokes Pipeline at the edge), the assertions in
-// `enginePassesPalmBytesThroughVerbatim_diagnostic` flip to assert
-// the target receives vcard4 bytes (FN:, VERSION:4.0, etc). The
-// flip is the "fix landed" signal.
-//
-// Why we can't do better today (without a libkalburator-side fix)
-// ===============================================================
-//
-// SyncEngineWorker::dispatchBlobSync (syncengine.cpp:1775-1926)
-// hardwires:
-//
-//     sourceRecords = srcBlob->loadRecords(srcColId);   // raw bytes
-//     ...
-//     for each rec in toWrite:
-//         tgtBlob->createRecord(tgtColId, rec);          // raw bytes
-//
-// There is no `compile()` against the registry, no `Pipeline::run()`.
-// Adding that is the Phase Ib delta. Hacking around it from inside a
-// test would not pressure-test what we want to pressure-test.
-//
-// Per the task spec: "if the engine routing requires production-code
-// changes to actually invoke the registered edge ... surface
-// DONE_WITH_CONCERNS" — the resolution is to land this test as the
-// pinned diagnostic of the gap, plus document the finding in the
-// Phase Ia status doc's Discoveries section.
+//   4. The TransformationRegistry's LossProfile is also forwarded to
+//      the host's syncStarted notification (unchanged from Phase Ia).
 
 #include <QtTest/QtTest>
 #include <QObject>
@@ -97,10 +63,13 @@
 #include "synctypes.h"
 #include "transformationregistry.h"
 
+#include "palm/codecs/contactcodec.h"
 #include "palm/sync/palmrecord.h"
 #include "contactsdomainextension.h"
 
 #include <KCalendarCore/MemoryCalendar>
+#include <KContacts/Addressee>
+#include <KContacts/VCardConverter>
 
 #include <QTemporaryDir>
 
@@ -125,6 +94,8 @@ using Kalburator::Shape::LossProfile;
 using Kalburator::Shape::Shape;
 using Kalburator::Shape::TransformationRegistry;
 using WildPalms::ContactsPlugin::ContactsDomainExtension;
+using WildPalms::PalmCodecs::Contact;
+using WildPalms::PalmCodecs::encodeContact;
 using WildPalms::PalmSync::PalmRecord;
 
 namespace {
@@ -316,25 +287,27 @@ private:
     QString m_lastSyncStartedMappingId;
 };
 
+// Source seed: a real pi-address packed Contact so the
+// PalmToVCardStage path's decodeContact() succeeds, the
+// KContacts::Addressee toAddressee() conversion produces a valid
+// Addressee, and KContacts::VCardConverter::createVCard emits a
+// vCard 4.0 payload. Phase Ia.5: the engine compiles and runs the
+// (palm -> vcard4) Pipeline at the edge, so the seed must be
+// genuine palm-codec output, not arbitrary bytes.
+constexpr const char *kSeedLastName  = "Doe";
+constexpr const char *kSeedFirstName = "Jane";
+
 PalmRecord makeKnownPalmRecord()
 {
+    Contact c;
+    c.lastName  = QString::fromLatin1(kSeedLastName);
+    c.firstName = QString::fromLatin1(kSeedFirstName);
+
     PalmRecord pr;
     pr.recordId    = 0xC0FFEE;
     pr.category    = 0;
     pr.attributes  = 0;
-    // Palm AddressDB encodes records with pi-address; the
-    // PalmToVCardStage path decodes via decodeContact then encodes via
-    // KContacts::VCardConverter v4. For Task 19 we don't need a fully
-    // round-trippable AddressDB blob — we just need a payload whose
-    // wire-bytes round-trip through PalmRecord::fromWireBytes (the
-    // engine path doesn't decode .data, only diffs by content hash).
-    // The diagnostic assertion that matters is the byte equality at
-    // the target side, which is satisfied by any non-empty payload.
-    //
-    // We embed a recognizable substring so the negative assertion
-    // ("BEGIN:VCARD" must NOT appear in target.data") has teeth.
-    pr.data = QByteArrayLiteral(
-        "PalmAddressDB-Contact-Doe-Jane-PHASE-IA-TASK-19");
+    pr.data        = encodeContact(c);
     pr.lastModified = QDateTime::currentDateTimeUtc();
     return pr;
 }
@@ -365,9 +338,11 @@ private slots:
     void initTestCase();
     void cleanup();
 
-    // Diagnostic test pinning the architectural gap (see file-level
-    // comment). On Phase Ib landing, the assertions flip to verify
-    // the target receives transformed vcard4 bytes.
+    // Phase Ia.5 unified the engine routing; this slot pins the
+    // positive end-to-end behaviour — palm wire-bytes on the source
+    // arrive as vCard 4.0 on the target via the registered
+    // TransformationRegistry edge. (Slot name retained from the
+    // pre-flip diagnostic for stable test-case identity.)
     void enginePassesPalmBytesThroughVerbatim_diagnostic();
 };
 
@@ -477,13 +452,12 @@ void TestContactsPalmEngineSync::enginePassesPalmBytesThroughVerbatim_diagnostic
     const LossProfile loss = host.lastLossProfile();
     QCOMPARE(loss.level, Kalburator::Shape::LossLevel::Lossless);
 
-    // ── Assert: dispatch route is dispatchBlobSync ────────────────────
-    // Implicit — sourceBackend->nativeShapes().first().domain ==
-    // "contacts" != "calendar" forces dispatchBlobSync. The behaviour
-    // below (hash-only diff, raw byte push) is the dispatchBlobSync
-    // signature; if the engine ever routes contacts via the calendar
-    // adapter, the loadRecords + createRecord call counts below would
-    // diverge.
+    // ── Assert: dispatch route is the unified dispatchSync ─────────────
+    // Phase Ia.5 collapsed the calendar/blob bifurcation; there is now
+    // a single dispatchSync path that compiles a Pipeline via the
+    // TransformationRegistry and applies it at the edge. The behaviour
+    // below (target receives transformed vCard 4.0 bytes, not raw palm
+    // wire-bytes) is the unified-engine signature.
 
     // ── Assert: target received exactly one createRecord ──────────────
     QCOMPARE(target->createRecordCalls(), 1);
@@ -491,51 +465,49 @@ void TestContactsPalmEngineSync::enginePassesPalmBytesThroughVerbatim_diagnostic
     const QList<BackendRecord> targetSnapshot = target->snapshot();
     QCOMPARE(targetSnapshot.size(), 1);
 
-    // ── Assert: target record bytes are PalmRecord wire-bytes (NOT vcard4) ──
+    // ── Assert: target record bytes are vCard 4.0 (Phase Ia.5) ─────────
     //
-    // **This is the diagnostic assertion.** With the current engine,
-    // dispatchBlobSync pushes source.data verbatim. The target
-    // therefore sees PalmRecord::toWireBytes output, not a vCard 4.0
-    // payload.
-    //
-    // When Phase Ib lands (engine compiles & runs Pipeline at the
-    // edge), this assertion flips to assert "BEGIN:VCARD" present and
-    // "VERSION:4.0" present. The flip is the "fix landed" signal.
+    // After Phase Ia.5 (engine-merger), dispatchSync compiles the
+    // (contacts, palm) -> (contacts, vcard4) Pipeline via the
+    // TransformationRegistry and applies it before pushing to the
+    // target. The target therefore sees a vCard 4.0 payload, not the
+    // source's palm wire-bytes.
     const BackendRecord arrived = targetSnapshot.first();
     QCOMPARE(arrived.id, seeded.id);
 
-    // Source bytes round-trip through PalmRecord::fromWireBytes —
-    // proves the test seed is genuinely wire-bytes, not just any
-    // arbitrary blob.
-    const PalmRecord roundTripped =
+    // Source bytes still round-trip through PalmRecord — proves the
+    // test seed is genuinely palm wire-bytes (the seed itself is
+    // unchanged; only what reaches the target is transformed).
+    const PalmRecord roundTrippedSource =
         PalmRecord::fromWireBytes(seeded.data);
-    QCOMPARE(roundTripped.recordId, pr.recordId);
-    QCOMPARE(roundTripped.data, pr.data);
+    QCOMPARE(roundTrippedSource.recordId, pr.recordId);
+    QCOMPARE(roundTrippedSource.data, pr.data);
 
-    // Bytes pushed to target are byte-equal to the source's wire
-    // bytes — no transformation occurred.
-    QCOMPARE(arrived.data, seeded.data);
+    // Target bytes contain vCard 4.0 markers.
+    QVERIFY2(arrived.data.contains(QByteArrayLiteral("BEGIN:VCARD")),
+             qPrintable(QStringLiteral(
+                 "Expected vCard 4.0 bytes after engine-merger pipeline; got:\n%1")
+                     .arg(QString::fromUtf8(arrived.data.left(200)))));
+    QVERIFY2(arrived.data.contains(QByteArrayLiteral("VERSION:4.0")),
+             qPrintable(QStringLiteral(
+                 "Expected VERSION:4.0 marker; got:\n%1")
+                     .arg(QString::fromUtf8(arrived.data.left(200)))));
 
-    // Target bytes do NOT contain vCard markers. (They're a
-    // QDataStream blob + an opaque payload, neither of which contains
-    // "BEGIN:VCARD" or "VERSION:4.0".)
-    QVERIFY2(!arrived.data.contains(QByteArrayLiteral("BEGIN:VCARD")),
-             "Target received vCard bytes — engine has been "
-             "upgraded to invoke transformations. Flip this test's "
-             "diagnostic assertions to assert vcard4 shape and "
-             "remove this guard.");
-    QVERIFY2(!arrived.data.contains(QByteArrayLiteral("VERSION:4.0")),
-             "Target received vCard 4.0 bytes — see comment above.");
-
-    // ── Assert: target bytes round-trip through PalmRecord ────────────
-    // (Confirming the gap: the target backend is supposedly a vcard4
-    // store but is being fed palm wire-bytes. A real vcard4 backend
-    // would reject these on the next sync; this test pins that the
-    // current engine cannot tell the difference.)
-    const PalmRecord targetRoundTrip =
-        PalmRecord::fromWireBytes(arrived.data);
-    QCOMPARE(targetRoundTrip.recordId, pr.recordId);
-    QCOMPARE(targetRoundTrip.data, pr.data);
+    // ── Assert: target bytes parse via KContacts::VCardConverter ───────
+    // Stronger than just byte search: the bytes must round-trip
+    // through KContacts as a single Addressee whose name fields match
+    // the seed PalmRecord's contact data.
+    //
+    // Note: vCard 4.0 emitted by KContacts here populates N: but not
+    // FN: (the Palm contact has no preferred-name / showPhone hint
+    // beyond the structured name), so we assert on familyName /
+    // givenName rather than formattedName.
+    KContacts::VCardConverter conv;
+    const auto addressees = conv.parseVCards(arrived.data);
+    QCOMPARE(addressees.size(), 1);
+    const KContacts::Addressee &a = addressees.first();
+    QCOMPARE(a.familyName(), QString::fromLatin1(kSeedLastName));
+    QCOMPARE(a.givenName(),  QString::fromLatin1(kSeedFirstName));
 }
 
 QTEST_MAIN(TestContactsPalmEngineSync)

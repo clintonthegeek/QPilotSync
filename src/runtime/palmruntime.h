@@ -25,6 +25,10 @@ namespace Kalburator::Sync {
     namespace QSyncCore { class ConflictHandler; }
 }
 
+namespace Kalburator::Shape {
+    struct Shape;
+}
+
 namespace WildPalms {
     class IBackendPluginV2;
 }
@@ -82,9 +86,22 @@ public:
     // Test seams
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);
     void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>);
+    // Phase Ia.5 Task 19 overload: explicitly declare the plugin's
+    // native palm-side Shape so unified dispatchSync can compile a
+    // Pipeline through registered TransformationRegistry edges.
+    void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>,
+                                const Kalburator::Shape::Shape &shape);
     void setMappingsForTest(QList<Kalburator::Sync::SyncMapping>);
     void registerBlobBackendForTest(const QString &id,
                                      std::unique_ptr<Kalburator::Sync::IBlobBackend> backend);
+    // Phase Ia.5 Task 19 overload: optionally declare the adapter's
+    // native Shape so the unified dispatchSync can compile a Pipeline
+    // between source and target shapes. The default overload above
+    // declares blob/blob, which matches no DomainPlugin and triggers
+    // "no edge path" on cross-shape mappings.
+    void registerBlobBackendForTest(const QString &id,
+                                     std::unique_ptr<Kalburator::Sync::IBlobBackend> backend,
+                                     const Kalburator::Shape::Shape &shape);
     void setLinkForTest(KPilotLink *link);
 
 signals:
