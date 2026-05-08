@@ -269,7 +269,7 @@ add_subdirectory(palm/codecs)
 add_subdirectory(palm/adapters)
 
 # G.7 — SyncBackend implementations for Palm non-calendar databases.
-# Each wraps IPalmDatabaseAccess and routes through BlobDomainAdapter.
+# Each wraps IPalmDatabaseAccess and is routed via dispatchBlobSync / blobBatchDiff.
 add_subdirectory(palm/contacts)
 add_subdirectory(palm/memo)
 add_subdirectory(palm/todo)

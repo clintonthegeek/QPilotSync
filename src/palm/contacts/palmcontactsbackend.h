@@ -13,7 +13,7 @@ namespace WildPalms::PalmContacts {
  * @brief SyncBackend for the Palm AddressDB (contacts).
  *
  * Native shape: (contacts, palm-address). Records are stored as raw Palm
- * DLP bytes inside BackendRecord::data so BlobDomainAdapter can compare
+ * DLP bytes inside BackendRecord::data so blobBatchDiff can compare
  * them by content hash. The deviceId constructor parameter sets resourceId()
  * and is used by PalmRuntime to identify the Palm resource.
  *
