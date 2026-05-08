@@ -54,6 +54,7 @@ private slots:
     void updateRecord_preservesSlotFromExisting();
     void deleteRecord_forwardsToPalmBackend();
     void modifiedSince_filtersByTimestampAndSlot();
+    void loadRecordsEmitsPalmNativeBytes();
 };
 
 void TestContactsBlobBackend::slotFromCollectionId_validRange()
@@ -309,6 +310,32 @@ void TestContactsBlobBackend::modifiedSince_filtersByTimestampAndSlot()
     QVERIFY(changed[0].data.contains("Newslot1"));
     QVERIFY(!changed[0].data.contains("Oldslot1"));
     QVERIFY(!changed[0].data.contains("Slot2man"));
+}
+
+void TestContactsBlobBackend::loadRecordsEmitsPalmNativeBytes()
+{
+    MockPalmDatabaseAccess device;
+    device.createDatabase(QStringLiteral("AddressDB"));
+    auto seedId = device.createRecord(QStringLiteral("AddressDB"),
+        makeContact(0, 0, QStringLiteral("Wireman")));
+    QVERIFY(seedId != 0);
+
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    ContactsBlobBackend be(&palm, &store);
+
+    auto records = be.loadRecords(QStringLiteral("palm:contact/0"));
+    QVERIFY(!records.isEmpty());
+    const auto &r = records.first();
+    // Palm wire bytes are NOT vCard. Verify the negative:
+    QVERIFY2(!r.data.startsWith("BEGIN:VCARD"),
+             qPrintable("expected palm-native bytes; got vCard:\n"
+                        + QString::fromUtf8(r.data.left(80))));
+    // Verify the positive: round-trip via PalmRecord.
+    const auto pr = WildPalms::PalmSync::PalmRecord::fromWireBytes(r.data);
+    QVERIFY(pr.recordId != 0);
+    // br.type should now be "contacts", not "text/vcard".
+    QCOMPARE(r.type, QStringLiteral("contacts"));
 }
 
 QTEST_MAIN(TestContactsBlobBackend)
