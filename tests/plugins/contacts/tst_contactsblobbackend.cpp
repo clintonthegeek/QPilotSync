@@ -55,6 +55,7 @@ private slots:
     void deleteRecord_forwardsToPalmBackend();
     void modifiedSince_filtersByTimestampAndSlot();
     void loadRecordsEmitsPalmNativeBytes();
+    void createRecordAcceptsPalmNativeBytes();
 };
 
 void TestContactsBlobBackend::slotFromCollectionId_validRange()
@@ -336,6 +337,35 @@ void TestContactsBlobBackend::loadRecordsEmitsPalmNativeBytes()
     QVERIFY(pr.recordId != 0);
     // br.type should now be "contacts", not "text/vcard".
     QCOMPARE(r.type, QStringLiteral("contacts"));
+}
+
+void TestContactsBlobBackend::createRecordAcceptsPalmNativeBytes()
+{
+    MockPalmDatabaseAccess device;
+    device.createDatabase(QStringLiteral("AddressDB"));
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    ContactsBlobBackend be(&palm, &store);
+
+    // Construct a PalmRecord and wire-serialize it (palm-native bytes,
+    // not vCard). After Phase Ia, the engine demotes through the
+    // registered edge before reaching the backend, so the backend gets
+    // palm wire bytes directly.
+    PalmRecord pr = makeContact(0, 0, QStringLiteral("Wirecreator"));
+    pr.category = 0;
+
+    BackendRecord br;
+    br.data = pr.toWireBytes();
+    br.type = QStringLiteral("contacts");
+
+    const auto newId = be.createRecord(QStringLiteral("palm:contact/0"), br);
+    QVERIFY(!newId.isEmpty());
+
+    const auto stored = device.readAllRecords(QStringLiteral("AddressDB"));
+    QCOMPARE(stored.size(), 1);
+    QCOMPARE(static_cast<int>(stored.first().category), 0);
+    // Verify the contact data round-tripped (it should contain "Wirecreator").
+    QVERIFY(stored.first().data.contains("Wirecreator"));
 }
 
 QTEST_MAIN(TestContactsBlobBackend)
