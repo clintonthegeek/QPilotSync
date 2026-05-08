@@ -1,7 +1,6 @@
 #include <QtTest/QtTest>
 
 #include "plugins/contacts/contactsblobbackend.h"
-#include "plugins/contacts/contactsvcardtranscoder.h"
 
 #include "palm/calendar/categorymappingstore.h"
 #include "palm/codecs/contactcodec.h"
@@ -10,7 +9,6 @@
 #include "palm/sync/palmrecord.h"
 
 using Kalburator::Sync::BackendRecord;
-using Kalburator::Sync::CollectionInfo;
 using WildPalms::ContactsPlugin::ContactsBlobBackend;
 using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCodecs::Contact;
@@ -150,8 +148,9 @@ void TestContactsBlobBackend::loadRecords_filtersBySlot()
     QCOMPARE(personal.size(), 2);
     QCOMPARE(be.loadRecords(QStringLiteral("palm:contact/2")).size(), 1);
 
-    // type stamped correctly
-    QCOMPARE(personal[0].type, QStringLiteral("text/vcard"));
+    // type stamped correctly (Phase Ia: backend emits palm-native bytes;
+    // the engine's TransformationStage promotes to vcard4 at the edge).
+    QCOMPARE(personal[0].type, QStringLiteral("contacts"));
     // Both slot-1 records present (scan, order is implementation-defined).
     QByteArray combined = personal[0].data + personal[1].data;
     QVERIFY(combined.contains("Personalov"));
@@ -199,7 +198,8 @@ void TestContactsBlobBackend::loadRecord_byId_roundTrips()
     QVERIFY(loaded.has_value());
     QCOMPARE(loaded->id, id);
     QVERIFY(loaded->data.contains("Lookuper"));
-    QCOMPARE(loaded->type, QStringLiteral("text/vcard"));
+    // Phase Ia: backend emits palm-native bytes; type tag is "contacts".
+    QCOMPARE(loaded->type, QStringLiteral("contacts"));
 
     // Bad id returns nullopt.
     QVERIFY(!be.loadRecord(QStringLiteral("not-a-real-id")).has_value());
@@ -214,12 +214,16 @@ void TestContactsBlobBackend::createRecord_assignsCategory()
     store.setSlotName(QStringLiteral("AddressDB"), 4, QStringLiteral("Quad"));
     ContactsBlobBackend be(&palm, &store);
 
-    // Build a vCard from a slot-0 contact, then write into palm:contact/4.
+    // Phase Ia: hand the backend palm-native wire bytes (the engine
+    // demotes through the registered edge before reaching us). The
+    // record's own category byte is irrelevant — createRecord uses the
+    // collectionId slot. Verify by writing a slot-0 record into
+    // palm:contact/4 and confirming category is overwritten.
     PalmRecord seed = makeContact(0, 0, QStringLiteral("Createman"));
     BackendRecord br;
     br.id   = QString();
-    br.data = WildPalms::ContactsPlugin::encodePalmToVcard(seed);
-    br.type = QStringLiteral("text/vcard");
+    br.data = seed.toWireBytes();
+    br.type = QStringLiteral("contacts");
 
     QString newId = be.createRecord(QStringLiteral("palm:contact/4"), br);
     QVERIFY(!newId.isEmpty());
@@ -227,6 +231,9 @@ void TestContactsBlobBackend::createRecord_assignsCategory()
     const auto stored = device.readAllRecords(QStringLiteral("AddressDB"));
     QCOMPARE(stored.size(), 1);
     QCOMPARE(static_cast<int>(stored.first().category), 4);
+    // Sanity: the record actually round-tripped through fromWireBytes
+    // (i.e. the test isn't passing because empty bytes silently no-oped).
+    QVERIFY(stored.first().data.contains("Createman"));
 }
 
 void TestContactsBlobBackend::updateRecord_preservesSlotFromExisting()
@@ -246,10 +253,14 @@ void TestContactsBlobBackend::updateRecord_preservesSlotFromExisting()
     QCOMPARE(records.size(), 1);
     BackendRecord br = records.first();
 
-    // Replace lastName and round-trip via vCard. Note: encoder doesn't
-    // know the slot, but updateRecord pulls it from the existing record.
+    // Phase Ia: the engine hands the backend palm-native bytes after
+    // demoting through the registered edge. Replace lastName by
+    // constructing a new PalmRecord and re-serializing. Note: the input
+    // PalmRecord's category is intentionally 0 here — updateRecord must
+    // recover the actual slot (3) from the existing record on the device.
     PalmRecord modified = makeContact(seedId, 0, QStringLiteral("Edited"));
-    br.data = WildPalms::ContactsPlugin::encodePalmToVcard(modified);
+    br.data = modified.toWireBytes();
+    br.type = QStringLiteral("contacts");
     QVERIFY(be.updateRecord(br));
 
     const auto stored = device.readRecord(QStringLiteral("AddressDB"), seedId);
@@ -257,6 +268,10 @@ void TestContactsBlobBackend::updateRecord_preservesSlotFromExisting()
     QCOMPARE(stored->recordId, seedId);
     // Slot must still be 3 (recovered from existing record).
     QCOMPARE(static_cast<int>(stored->category), 3);
+    // Sanity: the new lastName actually landed (i.e. updateRecord
+    // applied the wire bytes, didn't silently no-op).
+    QVERIFY(stored->data.contains("Edited"));
+    QVERIFY(!stored->data.contains("Original"));
 }
 
 void TestContactsBlobBackend::deleteRecord_forwardsToPalmBackend()

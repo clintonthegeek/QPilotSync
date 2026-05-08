@@ -4,14 +4,22 @@
 // runBlobTwoWay for the V2 plugin loaded through PalmRuntime's test seams
 // driving SyncEngine::runSyncFuture via runtime.hotSync().
 //
-// The original V1 test verified vCard transcoding across multiple
-// AddressDB category slots, conflict merge of phone-slot unions, and
-// deletion propagation. The reduced V2 form preserves the most
-// load-bearing assertion: the real wildpalms_contacts_v2.so plumbed
-// through the new engine path produces a vCard for a seeded Palm
-// contact on the PC side. Per-slot routing and conflict-merge semantics
-// are pinned by the plugin's own unit tests (tst_contactsblobbackend,
-// tst_contactsconflicthandler) and libkalburator's contract suite.
+// Phase Ia (palm-native pivot): the ContactsBlobBackend now emits
+// palm-native wire bytes on the read path; vCard transformation is
+// owned by the registered TransformationStage at the engine edge.
+// Until Phase Ia Task 19 wires the engine to invoke the registered
+// edge, the engine passes BackendRecord bytes through verbatim — so
+// the PC mock receives palm-native bytes, not vCard.
+//
+// The reduced V2 form preserves the load-bearing smoke assertion:
+// the real wildpalms_contacts_v2.so plumbed through the new engine
+// path produces *something matching the source* on the PC side for a
+// seeded Palm contact. The vCard-shape contract is pinned in
+// tst_contactsvcardtranscoder (PalmToVCardStage round-trip); the
+// engine-level palm->vcard4 transform will be pinned by Task 19.
+// Per-slot routing and conflict-merge semantics live in the plugin's
+// unit tests (tst_contactsblobbackend, tst_contactsconflicthandler)
+// and libkalburator's contract suite.
 
 #include <QtTest/QtTest>
 #include <QApplication>
@@ -129,7 +137,7 @@ class TestContactsV2 : public QObject
     Q_OBJECT
 private slots:
     void initTestCase();
-    void freshSync_seededPalmContact_arrivesAsVcardOnPC();
+    void freshSync_seededPalmContact_arrivesOnPC();
 };
 
 void TestContactsV2::initTestCase()
@@ -138,7 +146,7 @@ void TestContactsV2::initTestCase()
     QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
 }
 
-void TestContactsV2::freshSync_seededPalmContact_arrivesAsVcardOnPC()
+void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
 {
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
@@ -183,17 +191,32 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesAsVcardOnPC()
     const auto run = future.resultAt(0);
     QVERIFY2(run.success, qUtf8Printable(run.errorMessage));
 
-    // PC mock should now hold one record whose blob is the vCard
-    // representation of the seeded Palm contact.
+    // PC mock should now hold one record whose blob is the seeded Palm
+    // contact's payload. Phase Ia (read-path palm-native pivot) means
+    // the BackendRecord travelling source -> engine -> target carries
+    // palm-native wire bytes. The "vCard arrives on PC" claim moves to
+    // Task 19's engine-level palm->vcard4 integration test once the
+    // engine is wired to invoke the registered TransformationStage at
+    // the edge. Until then this test pins the smoke assertion that
+    // *something matching the source* lands on PC.
     const auto pcRecs = pcRaw->loadRecords(kPcCollectionId);
     QCOMPARE(pcRecs.size(), 1);
 
-    const QByteArray vcard = pcRecs.first().data;
-    QVERIFY2(vcard.contains(QByteArrayLiteral("BEGIN:VCARD")),
-             qUtf8Printable(QStringLiteral("Expected vCard payload, got: %1")
-                                .arg(QString::fromUtf8(vcard.left(120)))));
-    QVERIFY(vcard.contains(QByteArrayLiteral("Doe")));
-    QVERIFY(vcard.contains(QByteArrayLiteral("Jane")));
+    const QByteArray payload = pcRecs.first().data;
+    QVERIFY(!payload.isEmpty());
+    // Seeded contact's last/first names must survive the palm-native
+    // round-trip (palm wire bytes embed Pilot-Link's Address packed
+    // form, which keeps these as plain UTF-8 substrings).
+    QVERIFY2(payload.contains(QByteArrayLiteral("Doe")),
+             qUtf8Printable(QStringLiteral("Expected 'Doe' in PC payload "
+                                           "(payload size: %1)")
+                                .arg(payload.size())));
+    QVERIFY(payload.contains(QByteArrayLiteral("Jane")));
+    // Negative: BEGIN:VCARD must NOT appear — engine doesn't yet
+    // transform palm-native -> vCard. When Task 19 lands, this
+    // assertion flips and a vCard-shape assertion replaces it (likely
+    // in a sibling test, leaving this one as a pure smoke check).
+    QVERIFY(!payload.contains(QByteArrayLiteral("BEGIN:VCARD")));
 }
 
 QTEST_MAIN(TestContactsV2)
