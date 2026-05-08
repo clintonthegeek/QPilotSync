@@ -55,7 +55,12 @@ target_link_libraries(tst_palm_runtime_hotsync
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
-        Kalburator::Sync
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        # Without WHOLE_ARCHIVE the linker drops the registrars as
+        # unreferenced TUs and dispatchSync errors with "no edge path".
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         # palmruntime.cpp directly instantiates PilotLinkPalmDatabaseAccess
         # (WildPalmsPalmDevice) on connectDevice(); link in the device lib and
         # its transitive pisock deps so the symbol resolves at link time.
@@ -238,7 +243,10 @@ target_link_libraries(tst_palm_runtime_modes
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
-        Kalburator::Sync
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         WildPalmsPalmDevice
         WildPalmsCore
         pisock

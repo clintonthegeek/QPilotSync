@@ -62,8 +62,14 @@ public:
         : Kalburator::Sync::SyncBackend(parent)
         , m_blob(std::move(blob))
         , m_id(id)
+        // Phase Ia.5 follow-up: default shape must match the blob domain
+        // plugin's canonical shape (blob, raw) so the unified dispatchSync
+        // can compile an identity Pipeline (blob,raw) -> (blob,raw). The
+        // previous default (blob, blob) had no registered edge to canonical
+        // and made dispatchSync fail with "no edge path" for any test that
+        // registered a backend without an explicit shape override.
         , m_shape{ Kalburator::Shape::DomainId{QStringLiteral("blob")},
-                   Kalburator::Shape::EncodingId{QStringLiteral("blob")} }
+                   Kalburator::Shape::EncodingId{QStringLiteral("raw")} }
     {}
 
     // Phase Ia.5 Task 19: optional shape override so cross-shape

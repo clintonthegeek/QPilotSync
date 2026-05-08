@@ -108,7 +108,10 @@ target_link_libraries(tst_webcal_v2_e2e
         Qt::Network
         KF6::CalendarCore
         KF6::CoreAddons
-        Kalburator::Sync
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         pisock
         bluetooth
         usb

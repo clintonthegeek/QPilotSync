@@ -129,7 +129,10 @@ target_link_libraries(tst_todo_v2
         WildPalmsPalmDevice
         WildPalmsCore
         PalmDeviceAccessLib
-        Kalburator::Sync
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         KF6::CoreAddons
         KF6::CalendarCore
         Qt::Test
