@@ -21,6 +21,7 @@ public:
     KCalendarCore::MemoryCalendar* calendar(const QString &calendarId) const override;
     QList<KCalendarCore::MemoryCalendar*> calendars() const override;
     void addCalendar(KCalendarCore::MemoryCalendar *calendar) override;
+    void clear();
     void setCalendarColor(const QString &calendarId, const QColor &color) override;
     void setCalendarVisible(const QString &calendarId, bool visible) override;
 

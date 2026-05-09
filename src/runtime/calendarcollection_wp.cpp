@@ -44,6 +44,14 @@ void CalendarCollection_WP::addCalendar(KCalendarCore::MemoryCalendar *calendar)
     m_calendars.insert(key, calendar);
 }
 
+void CalendarCollection_WP::clear()
+{
+    qDeleteAll(m_calendars);
+    m_calendars.clear();
+    m_colors.clear();
+    m_visibility.clear();
+}
+
 void CalendarCollection_WP::setCalendarColor(const QString &calendarId, const QColor &color)
 {
     if (!m_calendars.contains(calendarId)) {

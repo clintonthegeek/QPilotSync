@@ -18,6 +18,7 @@ private slots:
     void addRejectsNullptrAndEmptyId();
     void setColorOnlyAppliesWhenCalendarPresent();
     void setVisibleOnlyAppliesWhenCalendarPresent();
+    void clear_removesAllCalendars();
 };
 
 void TestFullSyncCalendarCollection::idIsReturned()
@@ -77,6 +78,20 @@ void TestFullSyncCalendarCollection::setVisibleOnlyAppliesWhenCalendarPresent()
     c.addCalendar(cal);
     c.setCalendarVisible(QStringLiteral("cal-1"), false);
     QVERIFY(!c.isCalendarVisible(QStringLiteral("cal-1")));
+}
+
+void TestFullSyncCalendarCollection::clear_removesAllCalendars()
+{
+    CalendarCollection_WP col(QStringLiteral("test-clear"));
+    auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
+    cal->setId(QStringLiteral("palm:calendar/0"));
+    col.addCalendar(cal);
+    QCOMPARE(col.calendars().size(), 1);
+
+    col.clear();
+
+    QCOMPARE(col.calendars().size(), 0);
+    QVERIFY(col.calendar(QStringLiteral("palm:calendar/0")) == nullptr);
 }
 
 QTEST_MAIN(TestFullSyncCalendarCollection)
