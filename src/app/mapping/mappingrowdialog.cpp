@@ -99,6 +99,8 @@ void MappingRowDialog::buildUi()
     m_idEdit        = new QLineEdit(this);
     m_sourceCombo   = new QComboBox(this);
     m_sourceCombo->addItem(QStringLiteral("calendar-palm"));
+    m_targetCombo   = new QComboBox(this);
+    m_targetCombo->addItem(QStringLiteral("rawfiles-cal"));
     m_sourceCalEdit = new QLineEdit(this);
     m_targetCalEdit = new QLineEdit(this);
     m_modeCombo     = new QComboBox(this);
@@ -118,6 +120,7 @@ void MappingRowDialog::buildUi()
     form->addRow(tr("ID"), m_idEdit);
     form->addRow(tr("Source backend"), m_sourceCombo);
     form->addRow(tr("Source collection"), m_sourceCalEdit);
+    form->addRow(tr("Target backend"), m_targetCombo);
     form->addRow(tr("Target collection"), m_targetCalEdit);
     form->addRow(tr("Mode"), m_modeCombo);
     form->addRow(tr("Conflict policy"), m_conflictCombo);
@@ -138,6 +141,12 @@ void MappingRowDialog::setSourceBackends(const QStringList &ids)
     m_sourceCombo->addItems(ids);
 }
 
+void MappingRowDialog::setTargetBackends(const QStringList &ids)
+{
+    m_targetCombo->clear();
+    m_targetCombo->addItems(ids);
+}
+
 void MappingRowDialog::setMapping(const Kalburator::Sync::SyncMapping &m)
 {
     m_addMode = false;
@@ -154,6 +163,13 @@ void MappingRowDialog::applyMapping(const Kalburator::Sync::SyncMapping &m)
         m_sourceCombo->addItem(m.sourceBackend);
         m_sourceCombo->setCurrentText(m.sourceBackend);
     }
+    int tgtIdx = m_targetCombo->findText(m.targetBackend);
+    if (tgtIdx >= 0) {
+        m_targetCombo->setCurrentIndex(tgtIdx);
+    } else {
+        m_targetCombo->addItem(m.targetBackend);
+        m_targetCombo->setCurrentText(m.targetBackend);
+    }
     m_sourceCalEdit->setText(m.sourceCalendar);
     m_targetCalEdit->setText(m.targetCalendar);
     m_modeCombo->setCurrentText(modeToString(m.mode));
@@ -167,8 +183,7 @@ Kalburator::Sync::SyncMapping MappingRowDialog::mapping() const
     m.id              = m_idEdit->text();
     m.sourceBackend   = m_sourceCombo->currentText();
     m.sourceCalendar  = m_sourceCalEdit->text();
-    // RawFiles target locked per design spec §5.1; not exposed in MVP UI.
-    m.targetBackend   = QStringLiteral("rawfiles-cal");
+    m.targetBackend   = m_targetCombo->currentText();
     m.targetCalendar  = m_targetCalEdit->text();
     m.mode            = modeFromString(m_modeCombo->currentText());
     m.conflictPolicy  = policyFromString(m_conflictCombo->currentText());

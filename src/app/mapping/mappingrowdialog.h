@@ -26,6 +26,10 @@ public:
     // "calendar-palm" entry if not called.
     void setSourceBackends(const QStringList &ids);
 
+    // Populate the target-backend picker. Defaults to "rawfiles-cal" if
+    // not called (preserves add-mode default for old callers).
+    void setTargetBackends(const QStringList &ids);
+
     // Pre-populate the form from an existing mapping. Caller indicates
     // edit-mode by calling this; otherwise the dialog is in "Add" mode
     // and seeds a new uuid into id.
@@ -40,15 +44,15 @@ private:
     void buildUi();
     void applyMapping(const Kalburator::Sync::SyncMapping &m);
 
-    QLineEdit  *m_idEdit         = nullptr;
-    QComboBox  *m_sourceCombo    = nullptr;
-    QLineEdit  *m_sourceCalEdit  = nullptr;
-    QLineEdit  *m_targetCalEdit  = nullptr;
-    QComboBox  *m_modeCombo      = nullptr;
-    QComboBox  *m_conflictCombo  = nullptr;
-    QCheckBox  *m_enabledCheck   = nullptr;
-
-    bool m_addMode = true;
+    QLineEdit  *m_idEdit        = nullptr;
+    QComboBox  *m_sourceCombo   = nullptr;
+    QComboBox  *m_targetCombo   = nullptr;
+    QLineEdit  *m_sourceCalEdit = nullptr;
+    QLineEdit  *m_targetCalEdit = nullptr;
+    QComboBox  *m_modeCombo     = nullptr;
+    QComboBox  *m_conflictCombo = nullptr;
+    QCheckBox  *m_enabledCheck  = nullptr;
+    bool        m_addMode       = true;
 };
 
 #endif // MAPPINGROWDIALOG_H
