@@ -21,6 +21,8 @@
 #include <QJsonObject>
 #include <QUuid>
 
+#include <algorithm>
+
 namespace WildPalms::Runtime {
 
 using Kalburator::Sync::ProviderManager;
@@ -120,7 +122,19 @@ bool AccountController::removeProvider(const QString &providerId) {
     if (m_palmRuntime->isRunning()) return false;
     if (!m_providerManager->providerById(providerId)) return false;
 
-    // Cascade-delete is finished in Task 6. For now, just drop the provider.
+    // Cascade-delete mappings.
+    const QList<int> indices = mappingIndicesFor(providerId);
+    if (!indices.isEmpty()) {
+        QJsonArray arr = m_profile->syncMappingsJson();
+        // Remove from highest index to lowest so positions stay valid.
+        QList<int> sorted = indices;
+        std::sort(sorted.begin(), sorted.end(), std::greater<int>());
+        for (int idx : sorted) arr.removeAt(idx);
+        m_profile->setSyncMappingsJson(arr);
+        m_profile->save();
+        emit mappingsChanged();
+    }
+
     m_providerManager->removeProvider(providerId);
     m_states.remove(providerId);
     m_lastErrors.remove(providerId);
@@ -150,10 +164,22 @@ int AccountController::mappingCountFor(const QString &id) const {
     return mappingIndicesFor(id).size();
 }
 
-QStringList AccountController::mappingDescriptionsFor(const QString &/*id*/,
-                                                     int /*max*/) const {
-    // Filled in Task 6.
-    return {};
+QStringList AccountController::mappingDescriptionsFor(const QString &id,
+                                                     int max) const {
+    QStringList out;
+    const QJsonArray arr = m_profile->syncMappingsJson();
+    const QString prefix = id + QStringLiteral(":");
+    for (int i = 0; i < arr.size() && out.size() < max; ++i) {
+        const QJsonObject row = arr.at(i).toObject();
+        const QString src = row.value("sourceBackend").toString();
+        const QString tgt = row.value("targetBackend").toString();
+        if (src.startsWith(prefix) || tgt.startsWith(prefix)) {
+            const QString sCol = row.value("sourceCalendar").toString();
+            const QString tCol = row.value("targetCalendar").toString();
+            out.append(QStringLiteral("%1/%2 \xe2\x86\x92 %3/%4").arg(src, sCol, tgt, tCol));
+        }
+    }
+    return out;
 }
 
 ProviderManager *AccountController::providerManager() const {

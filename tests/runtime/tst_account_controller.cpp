@@ -2,6 +2,9 @@
 #include <QTemporaryDir>
 #include <QDir>
 #include <QFile>
+#include <QSignalSpy>
+#include <QJsonArray>
+#include <QJsonObject>
 
 #include "runtime/accountcontroller.h"
 #include "runtime/palmruntime.h"
@@ -25,6 +28,8 @@ private slots:
     void addProvider_refused_for_unsupported_kind();
     void removeProvider_drops_from_list_and_sidecar();
     void loadFromProfile_handlesUnreachableServer();
+    void removeProvider_cascadesMappings();
+    void mappingDescriptionsFor_returns_first_N();
 };
 
 void TstAccountController::constructs_and_destructs_cleanly()
@@ -187,6 +192,74 @@ void TstAccountController::loadFromProfile_handlesUnreachableServer()
     QCOMPARE(ac.providers().size(), 1);
     QCOMPARE(ac.providers().first()->id(),
              QStringLiteral("dead-uuid"));
+}
+
+void TstAccountController::removeProvider_cascadesMappings()
+{
+    QTemporaryDir dir;
+    Profile profile(dir.path()); profile.initialize();
+    WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
+    WildPalms::Runtime::AccountController ac(dir.path(),
+        &rt.backendRegistry(), &profile, &rt);
+
+    Kalburator::Sync::BackendConfiguration cfg;
+    cfg.connectionParams["url"] = "https://x/";
+    const QString uuid = ac.addProvider("carddav", cfg);
+
+    // Seed three mappings: 2 reference the provider, 1 doesn't.
+    QJsonArray maps;
+    maps.append(QJsonObject{
+        {"id", "m1"}, {"sourceBackend", "palm:contact/0"},
+        {"targetBackend", uuid + ":addrbook-1"},
+        {"sourceCalendar", ""}, {"targetCalendar", ""}});
+    maps.append(QJsonObject{
+        {"id", "m2"}, {"sourceBackend", uuid + ":addrbook-2"},
+        {"targetBackend", "palm:contact/1"},
+        {"sourceCalendar", ""}, {"targetCalendar", ""}});
+    maps.append(QJsonObject{
+        {"id", "m3"}, {"sourceBackend", "palm:calendar/0"},
+        {"targetBackend", "rawfiles-cal"},
+        {"sourceCalendar", ""}, {"targetCalendar", ""}});
+    profile.setSyncMappingsJson(maps);
+    profile.save();
+
+    QCOMPARE(ac.mappingCountFor(uuid), 2);
+
+    QSignalSpy spy(&ac, &WildPalms::Runtime::AccountController::mappingsChanged);
+    QVERIFY(ac.removeProvider(uuid));
+    QCOMPARE(spy.count(), 1);
+
+    const QJsonArray after = profile.syncMappingsJson();
+    QCOMPARE(after.size(), 1);
+    QCOMPARE(after.first().toObject().value("id").toString(),
+             QStringLiteral("m3"));
+}
+
+void TstAccountController::mappingDescriptionsFor_returns_first_N()
+{
+    QTemporaryDir dir;
+    Profile profile(dir.path()); profile.initialize();
+    WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
+    WildPalms::Runtime::AccountController ac(dir.path(),
+        &rt.backendRegistry(), &profile, &rt);
+
+    Kalburator::Sync::BackendConfiguration cfg;
+    cfg.connectionParams["url"] = "https://x/";
+    const QString uuid = ac.addProvider("carddav", cfg);
+
+    QJsonArray maps;
+    for (int i = 0; i < 5; ++i) {
+        maps.append(QJsonObject{
+            {"id", QString("m%1").arg(i)},
+            {"sourceBackend", "palm:contact/0"},
+            {"targetBackend", uuid + QString(":book-%1").arg(i)},
+            {"sourceCalendar", ""}, {"targetCalendar", ""}});
+    }
+    profile.setSyncMappingsJson(maps);
+
+    auto descs = ac.mappingDescriptionsFor(uuid, 3);
+    QCOMPARE(descs.size(), 3);
+    QVERIFY(descs.first().startsWith("palm:contact/0"));
 }
 
 QTEST_MAIN(TstAccountController)
