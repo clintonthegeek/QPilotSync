@@ -6,8 +6,6 @@
 #include "runtime/palmruntime.h"
 #include "profile.h"
 
-#include "backendregistry.h"
-
 class TstAccountController : public QObject {
     Q_OBJECT
 private slots:
