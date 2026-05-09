@@ -15,6 +15,7 @@
 #include "../profile.h"
 
 #include "../core/iconduit.h"
+#include "../runtime/accountcontroller.h"
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
 #include "../core/ibackendplugin.h"
@@ -712,6 +713,13 @@ void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString
 
 void KF6MainWindow::loadProfile(const QString &path)
 {
+    // Phase Ic: AccountController borrows the old profile + runtime; it
+    // must be reset BEFORE the old Profile is deleted and the old
+    // PalmRuntime is replaced.
+    if (m_accountController) {
+        m_accountController.reset();
+    }
+
     if (m_currentProfile) {
         m_currentProfile->save();
         delete m_currentProfile;
@@ -757,6 +765,14 @@ void KF6MainWindow::loadProfile(const QString &path)
             this, &KF6MainWindow::onPalmRunStarted);
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
             this, &KF6MainWindow::onPalmRunFinished);
+
+    // Phase Ic: AccountController borrows registry + profile + runtime.
+    m_accountController = std::make_unique<WildPalms::Runtime::AccountController>(
+        m_currentProfile->syncFolderPath(),
+        &m_palmRuntime->backendRegistry(),
+        m_currentProfile,
+        m_palmRuntime.get(),
+        this);
 
     // M5a — construct and install the libkalburator-side conflict handler.
     // Recreate per profile so it points at the new engine.
@@ -870,6 +886,11 @@ void KF6MainWindow::loadProfile(const QString &path)
 
 void KF6MainWindow::closeProfile()
 {
+    // Phase Ic: AccountController teardown precedes Profile teardown.
+    if (m_accountController) {
+        m_accountController.reset();
+    }
+
     if (m_currentProfile) {
         m_currentProfile->save();
         delete m_currentProfile;

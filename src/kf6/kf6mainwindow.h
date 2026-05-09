@@ -26,7 +26,10 @@ class AutoSyncOrchestrator;
 // Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
 // until E.16 retires the old surface.
 namespace WildPalms { class BackendPluginManager; class IBackendPlugin; }
-namespace WildPalms::Runtime { class PalmRuntime; }
+namespace WildPalms::Runtime {
+    class PalmRuntime;
+    class AccountController;
+}
 
 namespace Sync {
 class SyncEngine;
@@ -194,6 +197,13 @@ private:
 
     // M2 — PalmRuntime owns the new hotSync path.
     std::unique_ptr<WildPalms::Runtime::PalmRuntime> m_palmRuntime;
+
+    // Phase Ic — AccountController is profile-scoped, recreated alongside
+    // m_palmRuntime in loadProfile(). Borrows m_palmRuntime->backendRegistry(),
+    // m_currentProfile, and m_palmRuntime — torn down BEFORE m_palmRuntime
+    // and m_currentProfile in closeProfile()/loadProfile() to avoid dangling
+    // borrowed pointers.
+    std::unique_ptr<WildPalms::Runtime::AccountController> m_accountController;
 
     // Action manager
     ActionManager *m_actionManager;

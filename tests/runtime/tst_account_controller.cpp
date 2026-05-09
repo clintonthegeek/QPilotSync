@@ -30,6 +30,7 @@ private slots:
     void loadFromProfile_handlesUnreachableServer();
     void removeProvider_cascadesMappings();
     void mappingDescriptionsFor_returns_first_N();
+    void ac_lifetime_matches_profile_switch();
 };
 
 void TstAccountController::constructs_and_destructs_cleanly()
@@ -260,6 +261,27 @@ void TstAccountController::mappingDescriptionsFor_returns_first_N()
     auto descs = ac.mappingDescriptionsFor(uuid, 3);
     QCOMPARE(descs.size(), 3);
     QVERIFY(descs.first().startsWith("palm:contact/0"));
+}
+
+void TstAccountController::ac_lifetime_matches_profile_switch()
+{
+    // Simulates the loadProfile teardown order: AC first (releases borrowed
+    // registry), then PalmRuntime, then Profile. Inverted order would
+    // crash (registry destroyed while AC's ProviderManager still holds it).
+    QTemporaryDir dir;
+    Profile profile(dir.path()); profile.initialize();
+    auto rt = std::make_unique<WildPalms::Runtime::PalmRuntime>(
+        dir.path() + "/state");
+
+    auto ac = std::make_unique<WildPalms::Runtime::AccountController>(
+        dir.path(),
+        &rt->backendRegistry(),
+        &profile,
+        rt.get());
+
+    ac.reset();
+    rt.reset();
+    QVERIFY(true);  // Reaching here means no use-after-free.
 }
 
 QTEST_MAIN(TstAccountController)
