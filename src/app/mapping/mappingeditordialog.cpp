@@ -146,9 +146,18 @@ QJsonObject MappingEditorDialog::rowToJson(int row) const
     return json;
 }
 
+void MappingEditorDialog::setKnownBackends(const QStringList &ids)
+{
+    m_knownBackends = ids;
+}
+
 void MappingEditorDialog::onAddClicked()
 {
     MappingRowDialog dlg(this);
+    if (!m_knownBackends.isEmpty()) {
+        dlg.setSourceBackends(m_knownBackends);
+        dlg.setTargetBackends(m_knownBackends);
+    }
     if (dlg.exec() != QDialog::Accepted)
         return;
     appendRow(Kalburator::Sync::syncMappingToJson(dlg.mapping()));
@@ -165,6 +174,10 @@ void MappingEditorDialog::onEditClicked()
         Kalburator::Sync::syncMappingFromJson(json);
 
     MappingRowDialog dlg(this);
+    if (!m_knownBackends.isEmpty()) {
+        dlg.setSourceBackends(m_knownBackends);
+        dlg.setTargetBackends(m_knownBackends);
+    }
     dlg.setMapping(current);
     if (dlg.exec() != QDialog::Accepted)
         return;

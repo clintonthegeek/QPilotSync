@@ -17,6 +17,10 @@ public:
     void setMappings(const QJsonArray &json);
     QJsonArray mappings() const;
 
+    // Populate both source and target combos in the row dialog with the
+    // given backend ids. Call before exec().
+    void setKnownBackends(const QStringList &ids);
+
     // Test seam — not part of the user-facing UI; called by unit tests
     // to simulate a Delete-button click.
     void removeRowForTest(int row);
@@ -34,6 +38,7 @@ private:
 
     QTableView         *m_tableView = nullptr;
     QStandardItemModel *m_model     = nullptr;
+    QStringList         m_knownBackends;
 };
 
 #endif // MAPPINGEDITORDIALOG_H
