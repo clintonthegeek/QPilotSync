@@ -1,6 +1,6 @@
 #include <QtTest/QtTest>
 
-#include "plugins/calendar/calendarblobbackend.h"
+#include "plugins/calendar/palmcalendarbackend.h"
 #include "plugins/calendar/icstranscoder.h"
 #include "palm/calendar/categorymappingstore.h"
 #include "palm/calendar/datebookcodec.h"
@@ -12,7 +12,9 @@
 
 using Kalburator::Sync::BackendRecord;
 using Kalburator::Sync::CollectionInfo;
-using WildPalms::CalendarPlugin::CalendarBlobBackend;
+using Kalburator::Shape::DomainId;
+using Kalburator::Shape::EncodingId;
+using WildPalms::CalendarPlugin::PalmCalendarBackend;
 using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCalendar::DatebookCodec;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
@@ -35,11 +37,13 @@ PalmRecord eventRecord(const QString &uid, int slot)
 
 } // namespace
 
-class TestCalendarBlobBackend : public QObject
+class TestPalmCalendarBackend : public QObject
 {
     Q_OBJECT
 private slots:
     void backendIdAndDisplayName();
+    void nativeShapes_returnsCalendarIcal();
+    void backendType_returnsPalmCalendar();
     void availableCollectionsReflectsStore();
     void availableCollectionsAlwaysIncludesUnfiled();
     void loadRecordsFiltersBySlot();
@@ -51,48 +55,70 @@ private slots:
     void slotParsingHelpers();
 };
 
-void TestCalendarBlobBackend::backendIdAndDisplayName()
+void TestPalmCalendarBackend::backendIdAndDisplayName()
 {
     MockPalmDatabaseAccess dev;
     PalmBackend pb(&dev);
     CategoryMappingStore store;
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
     QCOMPARE(backend.backendId(), QStringLiteral("calendar"));
     QVERIFY(!backend.displayName().isEmpty());
     QVERIFY(backend.isAvailable());
 }
 
-void TestCalendarBlobBackend::availableCollectionsReflectsStore()
+void TestPalmCalendarBackend::nativeShapes_returnsCalendarIcal()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&pb, &store);
+
+    auto shapes = backend.nativeShapes();
+    QCOMPARE(shapes.size(), 1);
+    QCOMPARE(shapes.first().domain.toString(), QStringLiteral("calendar"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("ical"));
+}
+
+void TestPalmCalendarBackend::backendType_returnsPalmCalendar()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&pb, &store);
+    QCOMPARE(backend.backendType(), QStringLiteral("palm-calendar"));
+}
+
+void TestPalmCalendarBackend::availableCollectionsReflectsStore()
 {
     MockPalmDatabaseAccess dev;
     PalmBackend pb(&dev);
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("DatebookDB"), 1, QStringLiteral("Work"));
     store.setSlotName(QStringLiteral("DatebookDB"), 3, QStringLiteral("Personal"));
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
     auto cols = backend.availableCollections();
     QStringList ids;
     for (const auto &c : cols) ids << c.id;
-    QCOMPARE(ids.size(), 3);          // 0 + 1 + 3
+    QCOMPARE(ids.size(), 3);
     QVERIFY(ids.contains(QStringLiteral("palm:calendar/0")));
     QVERIFY(ids.contains(QStringLiteral("palm:calendar/1")));
     QVERIFY(ids.contains(QStringLiteral("palm:calendar/3")));
 }
 
-void TestCalendarBlobBackend::availableCollectionsAlwaysIncludesUnfiled()
+void TestPalmCalendarBackend::availableCollectionsAlwaysIncludesUnfiled()
 {
     MockPalmDatabaseAccess dev;
     PalmBackend pb(&dev);
-    CategoryMappingStore store;       // empty
-    CalendarBlobBackend backend(&pb, &store);
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&pb, &store);
 
     auto cols = backend.availableCollections();
     QCOMPARE(cols.size(), 1);
     QCOMPARE(cols.first().id, QStringLiteral("palm:calendar/0"));
 }
 
-void TestCalendarBlobBackend::loadRecordsFiltersBySlot()
+void TestPalmCalendarBackend::loadRecordsFiltersBySlot()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
@@ -104,21 +130,21 @@ void TestCalendarBlobBackend::loadRecordsFiltersBySlot()
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("DatebookDB"), 1, QStringLiteral("Work"));
     store.setSlotName(QStringLiteral("DatebookDB"), 2, QStringLiteral("Personal"));
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
     QCOMPARE(backend.loadRecords(QStringLiteral("palm:calendar/0")).size(), 1);
     QCOMPARE(backend.loadRecords(QStringLiteral("palm:calendar/1")).size(), 2);
     QCOMPARE(backend.loadRecords(QStringLiteral("palm:calendar/2")).size(), 1);
 }
 
-void TestCalendarBlobBackend::loadRecordsReturnsIcsContentType()
+void TestPalmCalendarBackend::loadRecordsReturnsIcsContentType()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
     dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("a", 0));
     PalmBackend pb(&dev);
     CategoryMappingStore store;
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
     auto recs = backend.loadRecords(QStringLiteral("palm:calendar/0"));
     QCOMPARE(recs.size(), 1);
@@ -127,17 +153,15 @@ void TestCalendarBlobBackend::loadRecordsReturnsIcsContentType()
     QVERIFY(recs.first().data.contains("BEGIN:VEVENT"));
 }
 
-void TestCalendarBlobBackend::createRecordRoutesToSlot()
+void TestPalmCalendarBackend::createRecordRoutesToSlot()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
     PalmBackend pb(&dev);
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("DatebookDB"), 5, QStringLiteral("Travel"));
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
-    // Build an ICS payload from a slot-7 event ... but write into
-    // collection palm:calendar/5. The collection slot wins.
     auto seedPr = eventRecord("new-uid", 7);
     BackendRecord br;
     br.id   = QString();
@@ -153,7 +177,7 @@ void TestCalendarBlobBackend::createRecordRoutesToSlot()
     QCOMPARE(static_cast<int>(stored.first().category), 5);
 }
 
-void TestCalendarBlobBackend::updateRecordPreservesSlot()
+void TestPalmCalendarBackend::updateRecordPreservesSlot()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
@@ -162,12 +186,11 @@ void TestCalendarBlobBackend::updateRecordPreservesSlot()
     PalmBackend pb(&dev);
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("DatebookDB"), 4, QStringLiteral("Volunteering"));
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
     auto recs = backend.loadRecords(QStringLiteral("palm:calendar/4"));
     QCOMPARE(recs.size(), 1);
     auto br = recs.first();
-    // Mutate summary by string-replacement (cheap, sufficient).
     br.data.replace("SUMMARY:Event u-1", "SUMMARY:Event u-1 (revised)");
     QVERIFY(backend.updateRecord(br));
 
@@ -176,7 +199,7 @@ void TestCalendarBlobBackend::updateRecordPreservesSlot()
     QCOMPARE(static_cast<int>(stored->category), 4);
 }
 
-void TestCalendarBlobBackend::deleteRecordForwards()
+void TestPalmCalendarBackend::deleteRecordForwards()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
@@ -184,7 +207,7 @@ void TestCalendarBlobBackend::deleteRecordForwards()
                                    eventRecord("d-1", 0));
     PalmBackend pb(&dev);
     CategoryMappingStore store;
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
     auto recs = backend.loadRecords(QStringLiteral("palm:calendar/0"));
     QCOMPARE(recs.size(), 1);
@@ -192,12 +215,8 @@ void TestCalendarBlobBackend::deleteRecordForwards()
     QVERIFY(!dev.readRecord(QStringLiteral("DatebookDB"), seedId).has_value());
 }
 
-void TestCalendarBlobBackend::deletedSinceReturnsAllSlots()
+void TestPalmCalendarBackend::deletedSinceReturnsAllSlots()
 {
-    // Documents the current intentional limitation: deletedSince does
-    // not filter by collection slot because the deleted record's
-    // category is not retained. BlobSyncEngine tolerates over-broad
-    // returns. See KNOWN LIMITATION comment in calendarblobbackend.cpp.
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
     auto idA = dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("a", 0));
@@ -210,9 +229,8 @@ void TestCalendarBlobBackend::deletedSinceReturnsAllSlots()
     PalmBackend pb(&dev);
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("DatebookDB"), 1, QStringLiteral("Work"));
-    CalendarBlobBackend backend(&pb, &store);
+    PalmCalendarBackend backend(&pb, &store);
 
-    // Both ids appear regardless of which collection we ask about.
     auto fromUnfiled = backend.deletedSince(QStringLiteral("palm:calendar/0"), t0);
     auto fromWork    = backend.deletedSince(QStringLiteral("palm:calendar/1"), t0);
     QCOMPARE(fromUnfiled.size(), 2);
@@ -220,19 +238,19 @@ void TestCalendarBlobBackend::deletedSinceReturnsAllSlots()
     QCOMPARE(fromUnfiled, fromWork);
 }
 
-void TestCalendarBlobBackend::slotParsingHelpers()
+void TestPalmCalendarBackend::slotParsingHelpers()
 {
-    QCOMPARE(CalendarBlobBackend::slotFromCollectionId(
+    QCOMPARE(PalmCalendarBackend::slotFromCollectionId(
         QStringLiteral("palm:calendar/0")), 0);
-    QCOMPARE(CalendarBlobBackend::slotFromCollectionId(
+    QCOMPARE(PalmCalendarBackend::slotFromCollectionId(
         QStringLiteral("palm:calendar/15")), 15);
-    QCOMPARE(CalendarBlobBackend::slotFromCollectionId(
+    QCOMPARE(PalmCalendarBackend::slotFromCollectionId(
         QStringLiteral("palm:calendar/16")), -1);
-    QCOMPARE(CalendarBlobBackend::slotFromCollectionId(
+    QCOMPARE(PalmCalendarBackend::slotFromCollectionId(
         QStringLiteral("not-a-calendar-id")), -1);
-    QCOMPARE(CalendarBlobBackend::collectionIdForSlot(7),
+    QCOMPARE(PalmCalendarBackend::collectionIdForSlot(7),
              QStringLiteral("palm:calendar/7"));
 }
 
-QTEST_MAIN(TestCalendarBlobBackend)
+QTEST_MAIN(TestPalmCalendarBackend)
 #include "tst_calendarblobbackend.moc"

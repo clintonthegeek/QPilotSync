@@ -47,14 +47,20 @@ target_link_libraries(tst_icstranscoder
 add_test(NAME tst_icstranscoder COMMAND tst_icstranscoder)
 set_tests_properties(tst_icstranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 4: CalendarBlobBackend ---
+# --- Task 4: PalmCalendarBackend (migrated from CalendarBlobBackend, Phase J) ---
 add_executable(tst_calendarblobbackend
     tst_calendarblobbackend.cpp
-    ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/palmcalendarbackend.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
 )
 target_include_directories(tst_calendarblobbackend
     PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+# Prepend libkalburator's include dirs so "syncbackend.h" resolves to
+# Kalburator::Sync::SyncBackend (same as the plugin target itself).
+target_include_directories(tst_calendarblobbackend BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
 )
 target_link_libraries(tst_calendarblobbackend
     PRIVATE
@@ -93,7 +99,7 @@ set_tests_properties(tst_calendarconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_
 add_executable(tst_calendarbackendplugin
     tst_calendarbackendplugin.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarbackendplugin.cpp
-    ${CALENDAR_PLUGIN_SRC_DIR}/calendarblobbackend.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/palmcalendarbackend.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarconflicthandler.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarview.cpp
