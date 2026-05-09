@@ -275,6 +275,11 @@ add_subdirectory(palm/memo)
 add_subdirectory(palm/todo)
 add_subdirectory(palm/transformations)
 
+# Phase Ic — AccountsPage + AddAccountDialog + MappingPromptDialog.
+# Same pattern as WildPalmsAppConflict / WildPalmsAppMapping: separate lib so
+# libkalburator headers resolve to Kalburator::Sync (not WP-local Sync::).
+add_subdirectory(app/accounts)
+
 # M5a — libkalburator-side interactive ConflictHandler. Separate lib to
 # avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard collision between
 # libkalburator's conflict/conflictpolicy.h and WildPalms' local
