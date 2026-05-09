@@ -6,6 +6,7 @@
 #include <QPromise>
 #include <QDir>
 #include <QFileInfo>
+#include <algorithm>
 #include <QDateTime>
 #include <QSet>
 #include <QtConcurrent>
@@ -330,44 +331,46 @@ void PalmRuntime::finishConnect()
 
         qDebug() << "[PalmRuntime::connectDevice] Registered backend plugin:" << id;
 
-        // Auto-create RawFiles defaults the first time we connect, but only
-        // if the user has not already loaded their own mappings via
-        // reloadMappings(). User-saved mappings win.
-        if (m_mappings.isEmpty()) {
-            // Build a default RawFiles PC-side backend + SyncMapping for each Palm
-            // collection.
-            for (const auto &palmCol : palmCollections) {
-                // Sanitize the collection ID for filesystem safety.
-                QString safeColId = palmCol.id;
-                safeColId.replace(QLatin1Char(':'), QLatin1Char('_'))
-                         .replace(QLatin1Char('/'), QLatin1Char('_'));
+        // Per-slot default: only create a RawFiles mapping for slots not already
+        // covered by a user-configured mapping. Pre-existing user mappings win.
+        for (const auto &palmCol : palmCollections) {
+            const bool alreadyCovered = std::any_of(
+                m_mappings.cbegin(), m_mappings.cend(),
+                [&](const Kalburator::Sync::SyncMapping &m) {
+                    return m.sourceBackend == id && m.sourceCalendar == palmCol.id;
+                });
+            if (alreadyCovered)
+                continue;
 
-                const QString pcId = QStringLiteral("rawfiles-%1-%2").arg(id, safeColId);
-                const QString rootPath = QDir(m_profilePath).filePath(
-                    QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
+            QString safeColId = palmCol.id;
+            safeColId.replace(QLatin1Char(':'), QLatin1Char('_'))
+                     .replace(QLatin1Char('/'), QLatin1Char('_'));
 
-                auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
-                Kalburator::Sync::CollectionInfo pcCol;
-                pcCol.id   = safeColId;
-                pcCol.name = palmCol.name;
-                pcBackend->createCollection(pcCol);
+            const QString pcId = QStringLiteral("rawfiles-%1-%2").arg(id, safeColId);
+            const QString rootPath = QDir(m_profilePath).filePath(
+                QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
 
-                m_registry->registerBackendInstance(pcId, pcBackend.get());
-                m_ownedBackends.push_back(std::move(pcBackend));
+            auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
+            Kalburator::Sync::CollectionInfo pcCol;
+            pcCol.id   = safeColId;
+            pcCol.name = palmCol.name;
+            pcBackend->createCollection(pcCol);
 
-                Kalburator::Sync::SyncMapping m;
-                m.id             = QStringLiteral("default-%1-%2").arg(id, safeColId);
-                m.sourceBackend  = id;
-                m.targetBackend  = pcId;
-                m.sourceCalendar = palmCol.id;
-                m.targetCalendar = safeColId;
-                m.mode           = Kalburator::Sync::SyncMode::TwoWay;
-                m.enabled        = true;
-                m_mappings.append(m);
+            m_registry->registerBackendInstance(pcId, pcBackend.get());
+            m_ownedBackends.push_back(std::move(pcBackend));
 
-                qDebug() << "[PalmRuntime::connectDevice] Default mapping:"
-                         << palmCol.id << "->" << rootPath;
-            }
+            Kalburator::Sync::SyncMapping m;
+            m.id             = QStringLiteral("default-%1-%2").arg(id, safeColId);
+            m.sourceBackend  = id;
+            m.targetBackend  = pcId;
+            m.sourceCalendar = palmCol.id;
+            m.targetCalendar = safeColId;
+            m.mode           = Kalburator::Sync::SyncMode::TwoWay;
+            m.enabled        = true;
+            m_mappings.append(m);
+
+            qDebug() << "[PalmRuntime::connectDevice] Default mapping:"
+                     << palmCol.id << "->" << rootPath;
         }
     }
 

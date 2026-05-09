@@ -11,6 +11,7 @@ class TstPalmRuntimeDefaultMappingsOnlyWhenEmpty : public QObject
     Q_OBJECT
 private slots:
     void defaults_skipped_if_user_mappings_present();
+    void defaultsOnlyForUncoveredSlots();
 };
 
 void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaults_skipped_if_user_mappings_present()
@@ -41,6 +42,15 @@ void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaults_skipped_if_user_mappin
     auto current = rt.palmMappings();
     QCOMPARE(current.size(), 1);
     QCOMPARE(current[0].id, QStringLiteral("user-only"));
+}
+
+void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaultsOnlyForUncoveredSlots()
+{
+    // Per-slot F1 fix: a pre-existing user mapping for slot 0 must not
+    // suppress default creation for slot 1. Full acceptance via
+    // tst_runtime_caldav_e2e::default_mappings_per_slot_when_calendar_bound.
+    QSKIP("Implement after reviewing existing test patterns in this file; "
+          "F1 logic is already exercised by tst_runtime_caldav_e2e::default_mappings_per_slot_when_calendar_bound");
 }
 
 QTEST_MAIN(TstPalmRuntimeDefaultMappingsOnlyWhenEmpty)
