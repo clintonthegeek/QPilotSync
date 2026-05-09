@@ -10,6 +10,8 @@
 #include "backendregistry.h"
 #include "backendconfiguration.h"
 #include "collectioninfo.h"
+#include "caldavprovider.h"
+#include "carddavprovider.h"
 
 #include <KConfig>
 #include <KConfigGroup>
@@ -81,14 +83,49 @@ void AccountController::persist() {
     cfg.sync();
 }
 
-// Stubs — filled in Tasks 5/6.
-QString AccountController::addProvider(const QString &/*kind*/,
-                                       const BackendConfiguration &/*config*/) {
-    return QString();
+QString AccountController::addProvider(const QString &kind,
+                                       const BackendConfiguration &config) {
+    if (m_palmRuntime->isRunning()) return QString();
+
+    BackendConfiguration cfg = config;
+    if (cfg.id.isEmpty()) {
+        cfg.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+
+    std::unique_ptr<IProvider> provider;
+    if (kind == QStringLiteral("caldav")) {
+        provider = std::make_unique<Kalburator::Sync::CalDavProvider>();
+    } else if (kind == QStringLiteral("carddav")) {
+        provider = std::make_unique<Kalburator::Sync::CardDavProvider>();
+    } else {
+        return QString();
+    }
+
+    cfg.type = kind;
+    provider->load(cfg);
+    const QString id = cfg.id;
+
+    m_providerManager->addProvider(std::move(provider));
+    m_states.insert(id, ConnectionState::Connecting);
+    persist();
+
+    // Kick off async connect for just-this-one (connectAll connects all,
+    // including the just-added one — ProviderManager handles idempotence).
+    m_providerManager->connectAll();
+
+    return id;
 }
 
-bool AccountController::removeProvider(const QString &/*providerId*/) {
-    return false;
+bool AccountController::removeProvider(const QString &providerId) {
+    if (m_palmRuntime->isRunning()) return false;
+    if (!m_providerManager->providerById(providerId)) return false;
+
+    // Cascade-delete is finished in Task 6. For now, just drop the provider.
+    m_providerManager->removeProvider(providerId);
+    m_states.remove(providerId);
+    m_lastErrors.remove(providerId);
+    persist();
+    return true;
 }
 
 QList<IProvider*> AccountController::providers() const {
