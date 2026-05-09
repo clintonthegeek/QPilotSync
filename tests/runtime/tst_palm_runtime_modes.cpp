@@ -310,10 +310,9 @@ private slots:
         WildPalms::Runtime::PalmRuntime rt(tmpProfile);
         Kalburator::Sync::BackendRegistry &reg = rt.backendRegistry();
 
-        // The reference must remain valid for rt's lifetime.
-        QVERIFY(&reg != nullptr);
-
         // Sanity: the registry is initially empty (no plugins loaded yet).
+        // Calling registeredInstanceIds() exercises the borrowed reference;
+        // a use-after-free would crash here rather than passing.
         QCOMPARE(reg.registeredInstanceIds().size(), 0);
     }
 };
