@@ -87,7 +87,9 @@ void AccountsPage::refreshList() {
         auto *item = new QListWidgetItem(p->displayName());
         item->setData(Qt::UserRole, p->id());
         m_list->addItem(item);
-        m_rightPane->addWidget(p->createConfigWidget(m_rightPane));
+        QWidget *cfg = p->createConfigWidget(m_rightPane);
+        if (!cfg) cfg = new QWidget(m_rightPane);
+        m_rightPane->addWidget(cfg);
         if (p->id() == currentId) restoreRow = row;
         ++row;
     }

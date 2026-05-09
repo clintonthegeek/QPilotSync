@@ -200,6 +200,27 @@ set_tests_properties(tst_account_controller PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Phase Ic Task 11: AccountsPage widget tests.
+add_executable(tst_accounts_page tst_accounts_page.cpp)
+target_link_libraries(tst_accounts_page
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsPalmDevice
+        WildPalmsCore
+        WildPalmsAppAccounts
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_accounts_page COMMAND tst_accounts_page)
+set_tests_properties(tst_accounts_page PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M5b Task 4: MappingRowDialog — modal editor for one SyncMapping
 add_executable(tst_mapping_row_dialog tst_mapping_row_dialog.cpp)
 target_link_libraries(tst_mapping_row_dialog
