@@ -10,6 +10,8 @@
 add_library(WildPalmsAppAccounts STATIC
     addaccountdialog.cpp
     addaccountdialog.h
+    accountspage.cpp
+    accountspage.h
 )
 
 target_include_directories(WildPalmsAppAccounts
@@ -22,6 +24,9 @@ target_link_libraries(WildPalmsAppAccounts
         Qt::Core
         Qt::Widgets
         Kalburator::Sync
+        # Phase Ic Task 9 — AccountsPage references AccountController and
+        # PalmRuntime (both live in PalmDeviceAccessLib per Task 3).
+        PalmDeviceAccessLib
 )
 
 set_target_properties(WildPalmsAppAccounts PROPERTIES POSITION_INDEPENDENT_CODE ON)
