@@ -9,6 +9,7 @@
 #include "mockblobbackend.h"
 #include "collectioninfo.h"
 #include "backendrecord.h"
+#include "backendregistry.h"
 #include "synctypes.h"
 #include "palm/kpilotlink.h"
 #include "palm/pilotrecord.h"
@@ -299,6 +300,21 @@ private slots:
         const QSet<QString> installed(link.installedFiles.cbegin(), link.installedFiles.cend());
         QVERIFY(installed.contains(files[0]));
         QVERIFY(installed.contains(files[1]));
+    }
+
+    void backend_registry_accessor_returns_owned_registry() {
+        QString tmpProfile = QDir(QDir::tempPath()).filePath(QStringLiteral("wp-test-profile"));
+        QDir(tmpProfile).removeRecursively();
+        QDir().mkpath(tmpProfile);
+
+        WildPalms::Runtime::PalmRuntime rt(tmpProfile);
+        Kalburator::Sync::BackendRegistry &reg = rt.backendRegistry();
+
+        // The reference must remain valid for rt's lifetime.
+        QVERIFY(&reg != nullptr);
+
+        // Sanity: the registry is initially empty (no plugins loaded yet).
+        QCOMPARE(reg.registeredInstanceIds().size(), 0);
     }
 };
 

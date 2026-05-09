@@ -104,6 +104,13 @@ public:
                                      const Kalburator::Shape::Shape &shape);
     void setLinkForTest(KPilotLink *link);
 
+    /// Borrowed reference to PalmRuntime's BackendRegistry. Lifetime ==
+    /// PalmRuntime's. AccountController borrows this for provider-supplied
+    /// backend registration; AC is constructed AFTER PalmRuntime in
+    /// KF6MainWindow::loadProfile() and torn down BEFORE PalmRuntime in
+    /// closeProfile() / loadProfile().
+    Kalburator::Sync::BackendRegistry &backendRegistry() { return *m_registry; }
+
 signals:
     void deviceConnected();
     void deviceDisconnected();
