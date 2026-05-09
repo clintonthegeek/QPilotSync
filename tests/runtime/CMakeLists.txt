@@ -32,6 +32,7 @@ target_link_libraries(tst_palm_device_access
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         # palmruntime.cpp instantiates PilotLinkPalmDatabaseAccess; pull in
         # WildPalmsPalmDevice and its transitive pisock deps to resolve it.
         WildPalmsPalmDevice
@@ -55,6 +56,7 @@ target_link_libraries(tst_palm_runtime_hotsync
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
         # DomainPlugin registrars so dispatchSync's
         # DomainRegistry::findByDomain() finds a plugin at sync time.
@@ -105,6 +107,7 @@ target_link_libraries(tst_palm_runtime_conflict_handler
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         Kalburator::Sync
         WildPalmsPalmDevice
         WildPalmsCore
@@ -125,6 +128,7 @@ target_link_libraries(tst_palm_runtime_is_running
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         Kalburator::Sync
         WildPalmsPalmDevice
         WildPalmsCore
@@ -146,6 +150,7 @@ target_link_libraries(tst_palm_runtime_reload_mappings
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         Kalburator::Sync
         WildPalmsPalmDevice
         WildPalmsCore
@@ -167,6 +172,7 @@ target_link_libraries(tst_palm_runtime_default_mappings_only_when_empty
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         Kalburator::Sync
         WildPalmsPalmDevice
         WildPalmsCore
@@ -189,6 +195,7 @@ target_link_libraries(tst_account_controller
         Qt::Widgets
         $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         WildPalmsPalmDevice
         WildPalmsCore
         pisock
@@ -209,6 +216,7 @@ target_link_libraries(tst_accounts_page
         Qt::Widgets
         $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         WildPalmsPalmDevice
         WildPalmsCore
         WildPalmsAppAccounts
@@ -284,6 +292,7 @@ target_link_libraries(tst_palm_runtime_modes
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
         # DomainPlugin registrars so dispatchSync's
         # DomainRegistry::findByDomain() finds a plugin at sync time.
@@ -312,6 +321,7 @@ target_link_libraries(tst_palm_device_access_connect
         Qt::Core
         Qt::Test
         PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
         WildPalmsPalmDevice
         WildPalmsCore
         pisock

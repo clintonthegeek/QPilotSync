@@ -90,6 +90,7 @@ target_link_libraries(wildpalms
         KF6::Notifications
         KF6::StatusNotifierItem
         WildPalmsCore
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
 )
 
 # Install target

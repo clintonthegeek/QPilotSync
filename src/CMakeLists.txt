@@ -130,11 +130,6 @@ target_link_libraries(WildPalmsCore
         bluetooth  # pilot-link transitive dep (Bluetooth HotSync)
         usb        # pilot-link transitive dep (USB HotSync)
         ${UDEV_LIBRARIES}
-        # Phase E.9 — new-ABI plugin manager used by KF6MainWindow.
-        # WildPalmsRuntime PUBLIC-links WildPalmsCore; linking it PRIVATE
-        # here embeds its static objects without creating a consumer
-        # cycle.
-        WildPalmsRuntime
         # Phase E.16 — pilot-link wrappers used by kf6mainwindow's
         # device-connect path. PalmDevice→Core is PRIVATE (demoted)
         # so the link is one-directional from Core's perspective.
@@ -143,6 +138,15 @@ target_link_libraries(WildPalmsCore
         # M2 Task 11 — PalmRuntime lives in this static lib until Task 12
         # merges it back into WildPalmsRuntime.
         PalmDeviceAccessLib
+        # Phase E.9 — new-ABI plugin manager used by KF6MainWindow.
+        # WildPalmsRuntime PUBLIC-links WildPalmsCore; linking it PRIVATE
+        # here embeds its static objects without creating a consumer
+        # cycle.
+        # Phase J Task 7: PalmDeviceAccessLib must come BEFORE WildPalmsRuntime
+        # so that palmruntime.cpp.o's reference to CalendarCollection_WP
+        # is satisfied by WildPalmsRuntime when the linker processes the
+        # archives in order (single-pass rule).
+        WildPalmsRuntime
         # M5a — libkalburator-side interactive ConflictHandler. Separate
         # static lib to avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard
         # collision between libkalburator's conflict/conflictpolicy.h and
@@ -151,6 +155,10 @@ target_link_libraries(WildPalmsCore
         # M5b — Mapping editor dialogs. Separate static lib so its TUs
         # see libkalburator's synctypes.h (not WP-local core/synctypes.h).
         WildPalmsAppMapping
+        # Phase Ic — AccountsPage + AddAccountDialog + MappingPromptDialog.
+        # SettingsDialog instantiates AccountsPage when AccountController +
+        # PalmRuntime are supplied; without this link the symbols are missing.
+        WildPalmsAppAccounts
 )
 
 target_include_directories(WildPalmsCore PUBLIC

@@ -27,6 +27,9 @@
 
 #include <rawfilesbackend.h>
 
+#include "runtime/calendarcollection_wp.h"
+
+#include <KCalendarCore/ICalFormat>
 #include <KCalendarCore/MemoryCalendar>
 #include <KCalendarCore/Incidence>
 #include <KPluginFactory>
@@ -193,6 +196,9 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
         m_registry.get(), m_syncHost.get());
     m_engine->setBlobBaselineStore(m_baselineStore.get());
+    m_calendarCollection = std::make_unique<WildPalms::FullSync::CalendarCollection_WP>(
+        QFileInfo(profilePath).fileName());
+    m_engine->setCollection(m_calendarCollection.get());
     // No-op today (handler set after construction), but keeps this consistent
     // with the re-install pattern required at every engine-construction site.
     if (m_conflictHandler)
@@ -300,6 +306,22 @@ void PalmRuntime::finishConnect()
             ownedBackend = std::make_unique<BlobBackendAdapter>(std::move(blob), id);
         }
 
+        // Eager preload: populate CalendarCollection_WP for the calendar backend so
+        // CalendarPluginWriter::apply() can find each slot's MemoryCalendar and
+        // views observe complete data immediately after readyForSync().
+        if (ownedBackend->backendType() == QStringLiteral("palm-calendar")) {
+            KCalendarCore::ICalFormat fmt;
+            for (const auto &palmCol : palmCollections) {
+                auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
+                cal->setId(palmCol.id);
+                for (const auto &rec : ownedBackend->loadRecords(palmCol.id)) {
+                    auto inc = fmt.fromString(QString::fromUtf8(rec.data));
+                    if (inc) cal->addIncidence(inc);
+                }
+                m_calendarCollection->addCalendar(cal);
+            }
+        }
+
         m_registry->registerBackendInstance(id, ownedBackend.get());
         m_ownedBackends.push_back(std::move(ownedBackend));
 
@@ -371,6 +393,8 @@ void PalmRuntime::disconnectDevice() {
     if (m_device) m_device->disconnectDevice();   // emits deviceDisconnected via forward
     m_link = nullptr;
     m_device.reset();
+    if (m_calendarCollection)
+        m_calendarCollection->clear();
 }
 
 bool PalmRuntime::isDeviceConnected() const {
