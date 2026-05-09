@@ -86,6 +86,8 @@ add_library(PalmDeviceAccessLib STATIC
     palmrunresult.h
     palmruntime.h
     palmruntime.cpp
+    accountcontroller.h
+    accountcontroller.cpp
     palmtickle.h
     palmtickle.cpp
 )
@@ -103,5 +105,8 @@ target_link_libraries(PalmDeviceAccessLib
         # so the destructor compiles. Task 12 merges this lib back into
         # WildPalmsRuntime which already links Kalburator::Sync.
         Kalburator::Sync
+        # Phase Ic Task 3 — AccountController persists provider sidecar via
+        # KConfig/KConfigGroup.
+        KF6::ConfigCore
 )
 set_target_properties(PalmDeviceAccessLib PROPERTIES POSITION_INDEPENDENT_CODE ON)

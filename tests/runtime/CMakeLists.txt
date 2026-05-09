@@ -180,6 +180,26 @@ set_tests_properties(tst_palm_runtime_default_mappings_only_when_empty PROPERTIE
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Phase Ic Task 3: AccountController smoke + integration tests.
+add_executable(tst_account_controller tst_account_controller.cpp)
+target_link_libraries(tst_account_controller
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_account_controller COMMAND tst_account_controller)
+set_tests_properties(tst_account_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M5b Task 4: MappingRowDialog — modal editor for one SyncMapping
 add_executable(tst_mapping_row_dialog tst_mapping_row_dialog.cpp)
 target_link_libraries(tst_mapping_row_dialog
