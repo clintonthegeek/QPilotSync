@@ -43,7 +43,7 @@ class TestPalmContactsBackend : public QObject
 {
     Q_OBJECT
 private slots:
-    void nativeShapes_returnsContactsVcard4();
+    void nativeShapes_returnsContactsPalm();
     void backendType_returnsPalmContacts();
     void slotFromCollectionId_validRange();
     void slotFromCollectionId_outOfRangeReturnsMinusOne();
@@ -60,7 +60,7 @@ private slots:
     void createRecordAcceptsPalmNativeBytes();
 };
 
-void TestPalmContactsBackend::nativeShapes_returnsContactsVcard4()
+void TestPalmContactsBackend::nativeShapes_returnsContactsPalm()
 {
     MockPalmDatabaseAccess device;
     PalmBackend palm(&device);
@@ -70,7 +70,7 @@ void TestPalmContactsBackend::nativeShapes_returnsContactsVcard4()
     auto shapes = be.nativeShapes();
     QCOMPARE(shapes.size(), 1);
     QCOMPARE(shapes.first().domain.toString(), QStringLiteral("contacts"));
-    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("vcard4"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
 }
 
 void TestPalmContactsBackend::backendType_returnsPalmContacts()

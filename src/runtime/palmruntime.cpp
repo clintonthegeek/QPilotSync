@@ -277,24 +277,31 @@ void PalmRuntime::finishConnect()
         }
 
         // Create the Palm backend for this plugin.
-        auto backend = v2->createPalmBackend(m_device.get());
-        if (!backend) {
+        auto blob = v2->createPalmBackend(m_device.get());
+        if (!blob) {
             qWarning() << "[PalmRuntime::connectDevice] Plugin" << meta.pluginId()
                        << "returned null backend";
             delete obj;
             continue;
         }
 
-        // Read available collections before the backend is moved into the adapter.
-        // CalendarBlobBackend::availableCollections() reads the in-memory category
-        // store (populated during createPalmBackend) — no live Palm I/O.
-        const auto palmCollections = backend->availableCollections();
-
-        // Wrap the backend in BlobBackendAdapter and register with BackendRegistry.
+        // Read available collections before any ownership transfer.
+        const auto palmCollections = blob->availableCollections();
         const QString id = v2->pluginId();
-        auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id);
-        m_registry->registerBackendInstance(id, adapter.get());
-        m_ownedBackends.push_back(std::move(adapter));
+
+        // Detect native SyncBackend subclasses (e.g. PalmCalendarBackend,
+        // PalmContactsBackend) and register them directly. Wrap plain IBlobBackend
+        // plugins (memo, todo, webcalendar) in BlobBackendAdapter for {blob,raw}.
+        std::unique_ptr<Kalburator::Sync::SyncBackend> ownedBackend;
+        if (auto *sb = dynamic_cast<Kalburator::Sync::SyncBackend *>(blob.get())) {
+            blob.release();
+            ownedBackend.reset(sb);
+        } else {
+            ownedBackend = std::make_unique<BlobBackendAdapter>(std::move(blob), id);
+        }
+
+        m_registry->registerBackendInstance(id, ownedBackend.get());
+        m_ownedBackends.push_back(std::move(ownedBackend));
 
         // Keep the QObject alive (parented to this, will be cleaned up on destruction).
         m_v2PluginObjects.append(obj);
@@ -386,21 +393,23 @@ void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPlugi
     auto blob = plugin->createPalmBackend(m_device.get());
     if (!blob) return;
     const QString id = plugin->pluginId();
-    auto adapter = std::make_unique<BlobBackendAdapter>(std::move(blob), id);
-    m_registry->registerBackendInstance(id, adapter.get());
-    m_ownedBackends.push_back(std::move(adapter));
+
+    std::unique_ptr<Kalburator::Sync::SyncBackend> backend;
+    if (auto *sb = dynamic_cast<Kalburator::Sync::SyncBackend *>(blob.get())) {
+        blob.release();
+        backend.reset(sb);
+    } else {
+        backend = std::make_unique<BlobBackendAdapter>(std::move(blob), id);
+    }
+    m_registry->registerBackendInstance(id, backend.get());
+    m_ownedBackends.push_back(std::move(backend));
 }
 
 void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> plugin,
-                                         const Kalburator::Shape::Shape &shape) {
-    m_plugins.append(plugin);
-    if (!m_device) return;
-    auto blob = plugin->createPalmBackend(m_device.get());
-    if (!blob) return;
-    const QString id = plugin->pluginId();
-    auto adapter = std::make_unique<BlobBackendAdapter>(std::move(blob), id, shape);
-    m_registry->registerBackendInstance(id, adapter.get());
-    m_ownedBackends.push_back(std::move(adapter));
+                                         const Kalburator::Shape::Shape & /*shape*/) {
+    // The shape arg is now a no-op: native SyncBackend subclasses declare
+    // their own shape via nativeShapes(); blob backends get {blob,raw} default.
+    registerPluginForTest(std::move(plugin));
 }
 
 void PalmRuntime::registerBlobBackendForTest(const QString &id,
