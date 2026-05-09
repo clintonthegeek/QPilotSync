@@ -75,6 +75,11 @@ public:
     /// MappingPromptDialog to look up providerById).
     Kalburator::Sync::ProviderManager *providerManager() const;
 
+    /// Append rows to Profile::syncMappingsJson and persist. Used by
+    /// MappingPromptDialog to bind a freshly-added provider's collections
+    /// to Palm slots. The caller decides slot semantics; AC just persists.
+    void appendMappings(const QJsonArray &rows);
+
 signals:
     void providersChanged();
     void connectStateChanged(QString providerId, ConnectionState state);

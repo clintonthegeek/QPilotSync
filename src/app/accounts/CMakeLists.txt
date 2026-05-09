@@ -12,6 +12,8 @@ add_library(WildPalmsAppAccounts STATIC
     addaccountdialog.h
     accountspage.cpp
     accountspage.h
+    mappingpromptdialog.cpp
+    mappingpromptdialog.h
 )
 
 target_include_directories(WildPalmsAppAccounts

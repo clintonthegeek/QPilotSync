@@ -31,6 +31,7 @@ private slots:
     void removeProvider_cascadesMappings();
     void mappingDescriptionsFor_returns_first_N();
     void ac_lifetime_matches_profile_switch();
+    void appendMappings_writes_and_persists();
 };
 
 void TstAccountController::constructs_and_destructs_cleanly()
@@ -282,6 +283,29 @@ void TstAccountController::ac_lifetime_matches_profile_switch()
     ac.reset();
     rt.reset();
     QVERIFY(true);  // Reaching here means no use-after-free.
+}
+
+void TstAccountController::appendMappings_writes_and_persists()
+{
+    QTemporaryDir dir;
+    Profile profile(dir.path()); profile.initialize();
+    WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
+    WildPalms::Runtime::AccountController ac(dir.path(),
+        &rt.backendRegistry(), &profile, &rt);
+
+    QJsonArray rows;
+    rows.append(QJsonObject{
+        {"id", "new-1"},
+        {"sourceBackend", "palm:contact/0"},
+        {"targetBackend", "fake-uuid:abc"},
+        {"sourceCalendar", ""}, {"targetCalendar", "abc"},
+        {"mode", "TwoWay"}, {"conflictPolicy", "AskUser"},
+        {"enabled", true}});
+
+    QSignalSpy spy(&ac, &WildPalms::Runtime::AccountController::mappingsChanged);
+    ac.appendMappings(rows);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(profile.syncMappingsJson().size(), 1);
 }
 
 QTEST_MAIN(TstAccountController)

@@ -186,6 +186,18 @@ ProviderManager *AccountController::providerManager() const {
     return m_providerManager.get();
 }
 
+void AccountController::appendMappings(const QJsonArray &rows) {
+    if (rows.isEmpty()) return;
+    QJsonArray arr = m_profile->syncMappingsJson();
+    for (const auto &v : rows) arr.append(v);
+    m_profile->setSyncMappingsJson(arr);
+    m_profile->save();
+    emit mappingsChanged();
+    if (!m_palmRuntime->isRunning()) {
+        m_palmRuntime->reloadMappings(arr);
+    }
+}
+
 QList<int> AccountController::mappingIndicesFor(const QString &id) const {
     QList<int> out;
     const QJsonArray arr = m_profile->syncMappingsJson();

@@ -1,6 +1,6 @@
 #include "accountspage.h"
 #include "addaccountdialog.h"
-// TODO(Task 10): #include "mappingpromptdialog.h"
+#include "mappingpromptdialog.h"
 
 #include "runtime/accountcontroller.h"
 #include "runtime/palmruntime.h"
@@ -119,9 +119,8 @@ void AccountsPage::onAddClicked() {
         return;
     }
 
-    // TODO(Task 10): un-comment after MappingPromptDialog lands.
-    // MappingPromptDialog prompt(m_accounts, uuid, this);
-    // prompt.exec();
+    MappingPromptDialog prompt(m_accounts, uuid, this);
+    prompt.exec();
 }
 
 void AccountsPage::onRemoveClicked() {
