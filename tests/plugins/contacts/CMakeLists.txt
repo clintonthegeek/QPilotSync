@@ -26,14 +26,17 @@ target_link_libraries(tst_contactsvcardtranscoder
 add_test(NAME tst_contactsvcardtranscoder COMMAND tst_contactsvcardtranscoder)
 set_tests_properties(tst_contactsvcardtranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 2: ContactsBlobBackend ---
+# --- Task 2: PalmContactsBackend (migrated from ContactsBlobBackend, Phase J) ---
 add_executable(tst_contactsblobbackend
     tst_contactsblobbackend.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
 )
 target_include_directories(tst_contactsblobbackend
     PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_contactsblobbackend BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
 )
 target_link_libraries(tst_contactsblobbackend
     PRIVATE
@@ -75,7 +78,7 @@ set_tests_properties(tst_contactsconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_
 add_executable(tst_contactsbackendplugin
     tst_contactsbackendplugin.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsbackendplugin.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsconflicthandler.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
@@ -111,7 +114,7 @@ set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PL
 # BackendPluginManager + runBlobTwoWay test that this file used pre-M5c).
 add_executable(tst_contacts_v2
     tst_contacts_v2.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
 )
 target_compile_definitions(tst_contacts_v2

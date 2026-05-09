@@ -1,6 +1,6 @@
 #include <QtTest/QtTest>
 
-#include "plugins/contacts/contactsblobbackend.h"
+#include "plugins/contacts/palmcontactsbackend.h"
 
 #include "palm/calendar/categorymappingstore.h"
 #include "palm/codecs/contactcodec.h"
@@ -9,7 +9,9 @@
 #include "palm/sync/palmrecord.h"
 
 using Kalburator::Sync::BackendRecord;
-using WildPalms::ContactsPlugin::ContactsBlobBackend;
+using Kalburator::Shape::DomainId;
+using Kalburator::Shape::EncodingId;
+using WildPalms::ContactsPlugin::PalmContactsBackend;
 using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCodecs::Contact;
 using WildPalms::PalmCodecs::encodeContact;
@@ -37,10 +39,12 @@ PalmRecord makeContact(std::uint32_t recordId,
 
 } // namespace
 
-class TestContactsBlobBackend : public QObject
+class TestPalmContactsBackend : public QObject
 {
     Q_OBJECT
 private slots:
+    void nativeShapes_returnsContactsVcard4();
+    void backendType_returnsPalmContacts();
     void slotFromCollectionId_validRange();
     void slotFromCollectionId_outOfRangeReturnsMinusOne();
     void availableCollections_includesUnfiledAlways();
@@ -56,41 +60,62 @@ private slots:
     void createRecordAcceptsPalmNativeBytes();
 };
 
-void TestContactsBlobBackend::slotFromCollectionId_validRange()
-{
-    for (int slot = 0; slot <= 15; ++slot) {
-        const QString cid = ContactsBlobBackend::collectionIdForSlot(slot);
-        QCOMPARE(cid, QStringLiteral("palm:contact/%1").arg(slot));
-        QCOMPARE(ContactsBlobBackend::slotFromCollectionId(cid), slot);
-    }
-    // Bad prefix
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("palm:todo/1")), -1);
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(QString()), -1);
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("garbage")), -1);
-}
-
-void TestContactsBlobBackend::slotFromCollectionId_outOfRangeReturnsMinusOne()
-{
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("palm:contact/-1")), -1);
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("palm:contact/16")), -1);
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("palm:contact/100")), -1);
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("palm:contact/abc")), -1);
-    QCOMPARE(ContactsBlobBackend::slotFromCollectionId(
-        QStringLiteral("palm:contact/")), -1);
-}
-
-void TestContactsBlobBackend::availableCollections_includesUnfiledAlways()
+void TestPalmContactsBackend::nativeShapes_returnsContactsVcard4()
 {
     MockPalmDatabaseAccess device;
     PalmBackend palm(&device);
     CategoryMappingStore store;
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
+
+    auto shapes = be.nativeShapes();
+    QCOMPARE(shapes.size(), 1);
+    QCOMPARE(shapes.first().domain.toString(), QStringLiteral("contacts"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("vcard4"));
+}
+
+void TestPalmContactsBackend::backendType_returnsPalmContacts()
+{
+    MockPalmDatabaseAccess device;
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    PalmContactsBackend be(&palm, &store);
+    QCOMPARE(be.backendType(), QStringLiteral("palm-contacts"));
+}
+
+void TestPalmContactsBackend::slotFromCollectionId_validRange()
+{
+    for (int slot = 0; slot <= 15; ++slot) {
+        const QString cid = PalmContactsBackend::collectionIdForSlot(slot);
+        QCOMPARE(cid, QStringLiteral("palm:contact/%1").arg(slot));
+        QCOMPARE(PalmContactsBackend::slotFromCollectionId(cid), slot);
+    }
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("palm:todo/1")), -1);
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(QString()), -1);
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("garbage")), -1);
+}
+
+void TestPalmContactsBackend::slotFromCollectionId_outOfRangeReturnsMinusOne()
+{
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("palm:contact/-1")), -1);
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("palm:contact/16")), -1);
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("palm:contact/100")), -1);
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("palm:contact/abc")), -1);
+    QCOMPARE(PalmContactsBackend::slotFromCollectionId(
+        QStringLiteral("palm:contact/")), -1);
+}
+
+void TestPalmContactsBackend::availableCollections_includesUnfiledAlways()
+{
+    MockPalmDatabaseAccess device;
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    PalmContactsBackend be(&palm, &store);
 
     auto cols = be.availableCollections();
     QCOMPARE(cols.size(), 1);
@@ -99,7 +124,7 @@ void TestContactsBlobBackend::availableCollections_includesUnfiledAlways()
     QCOMPARE(cols[0].type, QStringLiteral("contacts"));
 }
 
-void TestContactsBlobBackend::availableCollections_includesPopulatedSlots()
+void TestPalmContactsBackend::availableCollections_includesPopulatedSlots()
 {
     MockPalmDatabaseAccess device;
     PalmBackend palm(&device);
@@ -107,7 +132,7 @@ void TestContactsBlobBackend::availableCollections_includesPopulatedSlots()
     store.setSlotName(QStringLiteral("AddressDB"), 1, QStringLiteral("Personal"));
     store.setSlotName(QStringLiteral("AddressDB"), 4, QStringLiteral("Business"));
 
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
     auto cols = be.availableCollections();
 
     QStringList ids;
@@ -124,7 +149,7 @@ void TestContactsBlobBackend::availableCollections_includesPopulatedSlots()
     }
 }
 
-void TestContactsBlobBackend::loadRecords_filtersBySlot()
+void TestPalmContactsBackend::loadRecords_filtersBySlot()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -141,23 +166,20 @@ void TestContactsBlobBackend::loadRecords_filtersBySlot()
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("AddressDB"), 1, QStringLiteral("Personal"));
     store.setSlotName(QStringLiteral("AddressDB"), 2, QStringLiteral("Business"));
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     QCOMPARE(be.loadRecords(QStringLiteral("palm:contact/0")).size(), 1);
     auto personal = be.loadRecords(QStringLiteral("palm:contact/1"));
     QCOMPARE(personal.size(), 2);
     QCOMPARE(be.loadRecords(QStringLiteral("palm:contact/2")).size(), 1);
 
-    // type stamped correctly (Phase Ia: backend emits palm-native bytes;
-    // the engine's TransformationStage promotes to vcard4 at the edge).
     QCOMPARE(personal[0].type, QStringLiteral("contacts"));
-    // Both slot-1 records present (scan, order is implementation-defined).
     QByteArray combined = personal[0].data + personal[1].data;
     QVERIFY(combined.contains("Personalov"));
     QVERIFY(combined.contains("Personalez"));
 }
 
-void TestContactsBlobBackend::loadRecords_skipsDeletedRecords()
+void TestPalmContactsBackend::loadRecords_skipsDeletedRecords()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -170,7 +192,7 @@ void TestContactsBlobBackend::loadRecords_skipsDeletedRecords()
 
     PalmBackend palm(&device);
     CategoryMappingStore store;
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     auto records = be.loadRecords(QStringLiteral("palm:contact/0"));
     QCOMPARE(records.size(), 1);
@@ -178,7 +200,7 @@ void TestContactsBlobBackend::loadRecords_skipsDeletedRecords()
     QVERIFY(!records[0].data.contains("Goneman"));
 }
 
-void TestContactsBlobBackend::loadRecord_byId_roundTrips()
+void TestPalmContactsBackend::loadRecord_byId_roundTrips()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -188,7 +210,7 @@ void TestContactsBlobBackend::loadRecord_byId_roundTrips()
 
     PalmBackend palm(&device);
     CategoryMappingStore store;
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     auto records = be.loadRecords(QStringLiteral("palm:contact/0"));
     QCOMPARE(records.size(), 1);
@@ -198,27 +220,20 @@ void TestContactsBlobBackend::loadRecord_byId_roundTrips()
     QVERIFY(loaded.has_value());
     QCOMPARE(loaded->id, id);
     QVERIFY(loaded->data.contains("Lookuper"));
-    // Phase Ia: backend emits palm-native bytes; type tag is "contacts".
     QCOMPARE(loaded->type, QStringLiteral("contacts"));
 
-    // Bad id returns nullopt.
     QVERIFY(!be.loadRecord(QStringLiteral("not-a-real-id")).has_value());
 }
 
-void TestContactsBlobBackend::createRecord_assignsCategory()
+void TestPalmContactsBackend::createRecord_assignsCategory()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
     PalmBackend palm(&device);
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("AddressDB"), 4, QStringLiteral("Quad"));
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
-    // Phase Ia: hand the backend palm-native wire bytes (the engine
-    // demotes through the registered edge before reaching us). The
-    // record's own category byte is irrelevant — createRecord uses the
-    // collectionId slot. Verify by writing a slot-0 record into
-    // palm:contact/4 and confirming category is overwritten.
     PalmRecord seed = makeContact(0, 0, QStringLiteral("Createman"));
     BackendRecord br;
     br.id   = QString();
@@ -231,12 +246,10 @@ void TestContactsBlobBackend::createRecord_assignsCategory()
     const auto stored = device.readAllRecords(QStringLiteral("AddressDB"));
     QCOMPARE(stored.size(), 1);
     QCOMPARE(static_cast<int>(stored.first().category), 4);
-    // Sanity: the record actually round-tripped through fromWireBytes
-    // (i.e. the test isn't passing because empty bytes silently no-oped).
     QVERIFY(stored.first().data.contains("Createman"));
 }
 
-void TestContactsBlobBackend::updateRecord_preservesSlotFromExisting()
+void TestPalmContactsBackend::updateRecord_preservesSlotFromExisting()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -247,17 +260,12 @@ void TestContactsBlobBackend::updateRecord_preservesSlotFromExisting()
     PalmBackend palm(&device);
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("AddressDB"), 3, QStringLiteral("Three"));
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     auto records = be.loadRecords(QStringLiteral("palm:contact/3"));
     QCOMPARE(records.size(), 1);
     BackendRecord br = records.first();
 
-    // Phase Ia: the engine hands the backend palm-native bytes after
-    // demoting through the registered edge. Replace lastName by
-    // constructing a new PalmRecord and re-serializing. Note: the input
-    // PalmRecord's category is intentionally 0 here — updateRecord must
-    // recover the actual slot (3) from the existing record on the device.
     PalmRecord modified = makeContact(seedId, 0, QStringLiteral("Edited"));
     br.data = modified.toWireBytes();
     br.type = QStringLiteral("contacts");
@@ -266,15 +274,12 @@ void TestContactsBlobBackend::updateRecord_preservesSlotFromExisting()
     const auto stored = device.readRecord(QStringLiteral("AddressDB"), seedId);
     QVERIFY(stored.has_value());
     QCOMPARE(stored->recordId, seedId);
-    // Slot must still be 3 (recovered from existing record).
     QCOMPARE(static_cast<int>(stored->category), 3);
-    // Sanity: the new lastName actually landed (i.e. updateRecord
-    // applied the wire bytes, didn't silently no-op).
     QVERIFY(stored->data.contains("Edited"));
     QVERIFY(!stored->data.contains("Original"));
 }
 
-void TestContactsBlobBackend::deleteRecord_forwardsToPalmBackend()
+void TestPalmContactsBackend::deleteRecord_forwardsToPalmBackend()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -284,7 +289,7 @@ void TestContactsBlobBackend::deleteRecord_forwardsToPalmBackend()
 
     PalmBackend palm(&device);
     CategoryMappingStore store;
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     auto records = be.loadRecords(QStringLiteral("palm:contact/0"));
     QCOMPARE(records.size(), 1);
@@ -294,7 +299,7 @@ void TestContactsBlobBackend::deleteRecord_forwardsToPalmBackend()
     QCOMPARE(be.loadRecords(QStringLiteral("palm:contact/0")).size(), 0);
 }
 
-void TestContactsBlobBackend::modifiedSince_filtersByTimestampAndSlot()
+void TestPalmContactsBackend::modifiedSince_filtersByTimestampAndSlot()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -304,7 +309,6 @@ void TestContactsBlobBackend::modifiedSince_filtersByTimestampAndSlot()
     const QDateTime t1 = t0.addSecs(60);
     const QDateTime t2 = t0.addSecs(120);
 
-    // Two records in slot 1; one in slot 2. Mix old/new timestamps.
     auto oldOne   = makeContact(0, 1, QStringLiteral("Oldslot1"));
     oldOne.lastModified = t0;
     auto newOne   = makeContact(0, 1, QStringLiteral("Newslot1"));
@@ -319,7 +323,7 @@ void TestContactsBlobBackend::modifiedSince_filtersByTimestampAndSlot()
     CategoryMappingStore store;
     store.setSlotName(QStringLiteral("AddressDB"), 1, QStringLiteral("One"));
     store.setSlotName(QStringLiteral("AddressDB"), 2, QStringLiteral("Two"));
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     auto changed = be.modifiedSince(QStringLiteral("palm:contact/1"), t1);
     QCOMPARE(changed.size(), 1);
@@ -328,7 +332,7 @@ void TestContactsBlobBackend::modifiedSince_filtersByTimestampAndSlot()
     QVERIFY(!changed[0].data.contains("Slot2man"));
 }
 
-void TestContactsBlobBackend::loadRecordsEmitsPalmNativeBytes()
+void TestPalmContactsBackend::loadRecordsEmitsPalmNativeBytes()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
@@ -338,34 +342,27 @@ void TestContactsBlobBackend::loadRecordsEmitsPalmNativeBytes()
 
     PalmBackend palm(&device);
     CategoryMappingStore store;
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
     auto records = be.loadRecords(QStringLiteral("palm:contact/0"));
     QVERIFY(!records.isEmpty());
     const auto &r = records.first();
-    // Palm wire bytes are NOT vCard. Verify the negative:
     QVERIFY2(!r.data.startsWith("BEGIN:VCARD"),
              qPrintable("expected palm-native bytes; got vCard:\n"
                         + QString::fromUtf8(r.data.left(80))));
-    // Verify the positive: round-trip via PalmRecord.
     const auto pr = WildPalms::PalmSync::PalmRecord::fromWireBytes(r.data);
     QVERIFY(pr.recordId != 0);
-    // br.type should now be "contacts", not "text/vcard".
     QCOMPARE(r.type, QStringLiteral("contacts"));
 }
 
-void TestContactsBlobBackend::createRecordAcceptsPalmNativeBytes()
+void TestPalmContactsBackend::createRecordAcceptsPalmNativeBytes()
 {
     MockPalmDatabaseAccess device;
     device.createDatabase(QStringLiteral("AddressDB"));
     PalmBackend palm(&device);
     CategoryMappingStore store;
-    ContactsBlobBackend be(&palm, &store);
+    PalmContactsBackend be(&palm, &store);
 
-    // Construct a PalmRecord and wire-serialize it (palm-native bytes,
-    // not vCard). After Phase Ia, the engine demotes through the
-    // registered edge before reaching the backend, so the backend gets
-    // palm wire bytes directly.
     PalmRecord pr = makeContact(0, 0, QStringLiteral("Wirecreator"));
     pr.category = 0;
 
@@ -379,9 +376,8 @@ void TestContactsBlobBackend::createRecordAcceptsPalmNativeBytes()
     const auto stored = device.readAllRecords(QStringLiteral("AddressDB"));
     QCOMPARE(stored.size(), 1);
     QCOMPARE(static_cast<int>(stored.first().category), 0);
-    // Verify the contact data round-tripped (it should contain "Wirecreator").
     QVERIFY(stored.first().data.contains("Wirecreator"));
 }
 
-QTEST_MAIN(TestContactsBlobBackend)
+QTEST_MAIN(TestPalmContactsBackend)
 #include "tst_contactsblobbackend.moc"

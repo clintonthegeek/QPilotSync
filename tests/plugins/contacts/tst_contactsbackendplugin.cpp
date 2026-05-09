@@ -5,7 +5,7 @@
 #include <pi-appinfo.h>
 
 #include "plugins/contacts/contactsbackendplugin.h"
-#include "plugins/contacts/contactsblobbackend.h"
+#include "plugins/contacts/palmcontactsbackend.h"
 #include "plugins/contacts/contactsconflicthandler.h"
 
 #include "palm/calendar/categorymappingstore.h"
@@ -27,7 +27,7 @@
 #include "transformationregistry.h"
 
 using WildPalms::ContactsPlugin::ContactsBackendPlugin;
-using WildPalms::ContactsPlugin::ContactsBlobBackend;
+using WildPalms::ContactsPlugin::PalmContactsBackend;
 using WildPalms::ContactsPlugin::ContactsConflictHandler;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::Runtime::PalmDeviceAccess;
@@ -132,7 +132,7 @@ void TestContactsBackendPlugin::createBackends_populatesCategoryStoreFromAppInfo
     auto blobPtr = p.createPalmBackend(&dev);
     QVERIFY(blobPtr != nullptr);
 
-    auto *blob = static_cast<ContactsBlobBackend *>(blobPtr.get());
+    auto *blob = static_cast<PalmContactsBackend *>(blobPtr.get());
     QVERIFY(blob);
     auto cols = blob->availableCollections();
     QCOMPARE(cols.size(), 3);  // Unfiled (slot 0) + Family (slot 1) + Customers (slot 5)

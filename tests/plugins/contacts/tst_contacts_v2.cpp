@@ -32,7 +32,7 @@
 #include "core/ibackendplugin_v2.h"
 #include "palm/codecs/contactcodec.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
-#include "plugins/contacts/contactsblobbackend.h"
+#include "plugins/contacts/palmcontactsbackend.h"
 #include "runtime/palmdeviceaccess.h"
 #include "runtime/palmruntime.h"
 #include "runtime/palmrunresult.h"
@@ -47,7 +47,7 @@ using WildPalms::PalmCodecs::Contact;
 using WildPalms::PalmCodecs::encodeContact;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmRecord;
-using WildPalms::ContactsPlugin::ContactsBlobBackend;
+using WildPalms::ContactsPlugin::PalmContactsBackend;
 
 namespace {
 
@@ -105,7 +105,7 @@ Kalburator::Sync::SyncMapping makeUnfiledMapping()
     m.id              = QStringLiteral("contacts-unfiled-twoway");
     m.sourceBackend   = kContactsPluginId;
     // Source collection: the Unfiled slot ("palm:contact/0").
-    m.sourceCalendar  = ContactsBlobBackend::collectionIdForSlot(0);
+    m.sourceCalendar  = PalmContactsBackend::collectionIdForSlot(0);
     m.targetBackend   = kPcBackendId;
     m.targetCalendar  = kPcCollectionId;
     m.mode            = Kalburator::Sync::SyncMode::TwoWay;
