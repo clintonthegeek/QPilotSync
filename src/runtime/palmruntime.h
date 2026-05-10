@@ -20,10 +20,11 @@ namespace Kalburator::Sync {
     class ISyncHost;
     struct SyncMapping;
     class IBlobBackend;
-    class BlobBaselineStore;
     class SyncBackend;
     namespace QSyncCore { class ConflictHandler; }
 }
+
+namespace Kalburator::Storage { class BaselineStore; }
 
 namespace Kalburator::Shape {
     struct Shape;
@@ -157,7 +158,7 @@ private:
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;
     std::unique_ptr<Kalburator::Sync::SyncEngine>                m_engine;
-    std::unique_ptr<Kalburator::Sync::BlobBaselineStore>         m_baselineStore;
+    std::unique_ptr<Kalburator::Storage::BaselineStore>          m_baselineStore;
     QList<std::shared_ptr<WildPalms::IBackendPluginV2>>          m_plugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     bool                                                         m_running = false;

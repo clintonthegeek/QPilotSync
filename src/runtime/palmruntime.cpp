@@ -20,7 +20,7 @@
 #include "backendrecord.h"
 #include <iblobbackend.h>
 #include <isynchost.h>
-#include <blobbaselinestore.h>
+#include <baselinestore.h>
 #include <isyncconfigstore.h>
 #include "shape.h"
 #include "core/ibackendplugin_v2.h"
@@ -176,7 +176,7 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     , m_profilePath(profilePath)
     , m_backupRoot(QDir(profilePath).filePath(QStringLiteral("backup")))
     , m_registry(std::make_unique<Kalburator::Sync::BackendRegistry>())
-    , m_baselineStore(std::make_unique<Kalburator::Sync::BlobBaselineStore>(
+    , m_baselineStore(std::make_unique<Kalburator::Storage::BaselineStore>(
           QDir(profilePath).filePath(QStringLiteral(".wildpalms-blob-baselines.db"))))
 {
     qRegisterMetaType<PalmRunResult>();
@@ -184,7 +184,7 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
         m_registry.get(), m_syncHost.get());
-    m_engine->setBlobBaselineStore(m_baselineStore.get());
+    m_engine->setBaselineStore(m_baselineStore.get());
     m_calendarCollection = std::make_unique<WildPalms::FullSync::CalendarCollection_WP>(
         QFileInfo(profilePath).fileName());
     m_engine->setCollection(m_calendarCollection.get());
