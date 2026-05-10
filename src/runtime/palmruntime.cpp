@@ -456,7 +456,7 @@ void PalmRuntime::setLinkForTest(KPilotLink *link) {
 }
 
 void PalmRuntime::setConflictHandler(
-    Kalburator::Sync::QSyncCore::ConflictHandler *handler)
+    Kalburator::Conflict::ConflictHandler *handler)
 {
     m_conflictHandler = handler;
     if (m_engine) {
@@ -464,7 +464,7 @@ void PalmRuntime::setConflictHandler(
     }
 }
 
-Kalburator::Sync::QSyncCore::ConflictHandler *
+Kalburator::Conflict::ConflictHandler *
 PalmRuntime::conflictHandlerForTest() const
 {
     if (!m_engine) return nullptr;

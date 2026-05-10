@@ -9,7 +9,7 @@
 #include "conflictdialogbridge.h"
 #include "kalburatorinteractiveconflicthandler.h"
 
-// palmruntime.h only forward-declares Kalburator::Sync::QSyncCore::ConflictHandler
+// palmruntime.h only forward-declares Kalburator::Conflict::ConflictHandler
 // (no WP-local QSyncCore headers pulled in), so it is safe to include here.
 #include "../../runtime/palmruntime.h"
 

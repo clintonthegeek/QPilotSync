@@ -14,7 +14,7 @@ namespace WildPalms::PalmConflict {
 
 /**
  * @brief Palm-aware implementation of
- *        `Kalburator::Sync::QSyncCore::ConflictHandler`.
+ *        `Kalburator::Conflict::ConflictHandler`.
  *
  * Resolution algorithm:
  *
@@ -44,20 +44,20 @@ namespace WildPalms::PalmConflict {
  * Caller retains ownership; both must outlive the handler.
  */
 class PalmConflictHandler
-    : public Kalburator::Sync::QSyncCore::ConflictHandler
+    : public Kalburator::Conflict::ConflictHandler
 {
 public:
     PalmConflictHandler(WildPalms::PalmSync::IPalmDatabaseAccess *device,
                         const PalmBackendConfig *config);
     ~PalmConflictHandler() override = default;
 
-    Kalburator::Sync::QSyncCore::ConflictDecision handleConflict(
-        Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
-        const Kalburator::Sync::QSyncCore::ConflictPolicy &policy) override;
+    Kalburator::Conflict::ConflictDecision handleConflict(
+        Kalburator::Conflict::ConflictRecord &conflict,
+        const Kalburator::Conflict::ConflictPolicy &policy) override;
 
     bool canPrompt() const override { return false; }
     bool shouldKeepConnectionAlive() const override;
-    QList<Kalburator::Sync::QSyncCore::ConflictRecord> pendingConflicts()
+    QList<Kalburator::Conflict::ConflictRecord> pendingConflicts()
         const override { return m_pending; }
 
     void onSyncStart() override;
@@ -74,14 +74,14 @@ private:
         lookupPalmRecord(const QString &encodedId) const;
 
     // Overlay application — each returns the (possibly adjusted) decision.
-    Kalburator::Sync::QSyncCore::ConflictDecision applyOverlays(
-        Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
-        const Kalburator::Sync::QSyncCore::ConflictPolicy &policy,
-        Kalburator::Sync::QSyncCore::ConflictDecision baseDecision);
+    Kalburator::Conflict::ConflictDecision applyOverlays(
+        Kalburator::Conflict::ConflictRecord &conflict,
+        const Kalburator::Conflict::ConflictPolicy &policy,
+        Kalburator::Conflict::ConflictDecision baseDecision);
 
     WildPalms::PalmSync::IPalmDatabaseAccess *m_device = nullptr;
     const PalmBackendConfig *m_config = nullptr;
-    QList<Kalburator::Sync::QSyncCore::ConflictRecord> m_pending;
+    QList<Kalburator::Conflict::ConflictRecord> m_pending;
     QString m_lastOverlay;
 };
 

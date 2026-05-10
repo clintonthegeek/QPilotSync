@@ -7,7 +7,7 @@
 namespace WildPalms {
 
 QString IBackendPlugin::formatConflictRecordHtml(
-    const Kalburator::Sync::QSyncCore::RecordSnapshot &snapshot) const
+    const Kalburator::Conflict::RecordSnapshot &snapshot) const
 {
     const QString body = QString::fromUtf8(snapshot.content).toHtmlEscaped();
     return QStringLiteral("<pre>%1</pre>").arg(body);

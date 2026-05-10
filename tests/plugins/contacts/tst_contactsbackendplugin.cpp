@@ -90,7 +90,7 @@ void TestContactsBackendPlugin::cleanup()
     Kalburator::Shape::TransformationRegistry::instance().clear();
     Kalburator::Shape::DomainRegistry::instance().clear();
     Kalburator::Shape::DomainRegistry::instance().registerDomain(
-        std::make_shared<Kalburator::Contacts::KalburatorDomainContacts>());
+        std::make_shared<Kalburator::Contacts::ContactsDomainPlugin>());
 }
 
 void TestContactsBackendPlugin::pluginIdentity()
@@ -163,7 +163,7 @@ void TestContactsBackendPlugin::createConflictHandler_returnsContactsConflictHan
 void TestContactsBackendPlugin::enrichConflictSnapshot_extractsFnFromVcard()
 {
     ContactsBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral(
         "BEGIN:VCARD\r\n"
         "VERSION:4.0\r\n"
@@ -181,7 +181,7 @@ void TestContactsBackendPlugin::enrichConflictSnapshot_extractsFnFromVcard()
 void TestContactsBackendPlugin::formatConflictRecordHtml_includesTitleAndPre()
 {
     ContactsBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral("BEGIN:VCARD\nFN:Jane Doe\nEND:VCARD\n");
     snap.metadata[QStringLiteral("title")] = QStringLiteral("Jane Doe");
 
@@ -193,7 +193,7 @@ void TestContactsBackendPlugin::formatConflictRecordHtml_includesTitleAndPre()
 void TestContactsBackendPlugin::constructorRegistersPalmShape()
 {
     // The previous slot's cleanup() left both registries empty except for
-    // a freshly-seeded KalburatorDomainContacts instance in the
+    // a freshly-seeded ContactsDomainPlugin instance in the
     // DomainRegistry. Constructing a ContactsBackendPlugin must trigger
     // DomainRegistry::initialize (registering vcard4) and then register
     // the palm peer shape and palm <-> vcard4 edges.

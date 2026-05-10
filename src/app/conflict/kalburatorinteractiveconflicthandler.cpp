@@ -6,18 +6,18 @@
 #include <QTimer>
 
 using ConflictDecision =
-    Kalburator::Sync::QSyncCore::ConflictDecision;
+    Kalburator::Conflict::ConflictDecision;
 using ConflictRecord =
-    Kalburator::Sync::QSyncCore::ConflictRecord;
+    Kalburator::Conflict::ConflictRecord;
 using ConflictPolicy =
-    Kalburator::Sync::QSyncCore::ConflictPolicy;
+    Kalburator::Conflict::ConflictPolicy;
 
 // ---------------------------------------------------------------------------
 // Namespace-translation helpers
 //
 // ConflictRecord: both structs are field-for-field identical (same field
 // names, same Qt types, same order) modulo namespace.  The bridge TU casts a
-// Kalburator::Sync::QSyncCore::ConflictRecord* to QSyncCore::ConflictRecord*;
+// Kalburator::Conflict::ConflictRecord* to QSyncCore::ConflictRecord*;
 // this is safe because the layouts are bit-for-bit identical (same compiler,
 // same headers, same Qt types).
 //
@@ -34,8 +34,8 @@ using ConflictPolicy =
 // ---------------------------------------------------------------------------
 namespace {
 
-using KalRecord = Kalburator::Sync::QSyncCore::ConflictRecord;
-using KalPolicy = Kalburator::Sync::QSyncCore::ConflictPolicy;
+using KalRecord = Kalburator::Conflict::ConflictRecord;
+using KalPolicy = Kalburator::Conflict::ConflictPolicy;
 
 // Pass the record as a const KalRecord& (layout-identical to WP type).
 // The bridge receives the address and casts to const QSyncCore::ConflictRecord*.
@@ -70,7 +70,7 @@ ConflictDecision fromBridgeDecision(int d)
 } // anonymous namespace
 
 KalburatorInteractiveConflictHandler::KalburatorInteractiveConflictHandler(
-    Kalburator::Sync::QSyncCore::ConflictStore *store,
+    Kalburator::Conflict::ConflictStore *store,
     QWidget *parentWidget,
     QObject *parent)
     : QObject(parent)

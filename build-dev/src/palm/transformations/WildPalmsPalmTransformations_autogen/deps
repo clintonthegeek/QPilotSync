@@ -1,0 +1,9 @@
+WildPalmsPalmTransformations_autogen/timestamp: \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/CMakeLists.txt \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/palmaddresstovcard.cpp \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/palmaddresstovcard.h \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/palmemotoplaintext.cpp \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/palmemotoplaintext.h \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/palmtodotovtodo.cpp \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/transformations/palmtodotovtodo.h \
+	/usr/bin/cmake

@@ -8,7 +8,7 @@
 // plugin (delete on a forward-decl is UB, and IBlobBackend::backendId is
 // virtual but still needs the full type for the call).
 #include "iblobbackend.h"
-#include "conflictpolicy.h"   // brings in Kalburator::Sync::QSyncCore::ConflictHandler
+#include "conflictpolicy.h"   // brings in Kalburator::Conflict::ConflictHandler
 
 using WildPalms::CalendarPlugin::CalendarBackendPlugin;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;

@@ -39,7 +39,7 @@ void TestIBackendPluginDefaults::viewHooksDefaultToNoView()
 void TestIBackendPluginDefaults::conflictHooksDefaultToNoop()
 {
     TrivialBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = "hello";
     p.enrichConflictSnapshot(snap, true);        // must not crash
     QCOMPARE(snap.content, QByteArray("hello")); // default mutates nothing

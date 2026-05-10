@@ -8,14 +8,14 @@
 #include "palmbackendconfig.h"
 #include "palmconflicthandler.h"
 
-using Kalburator::Sync::QSyncCore::AutoResolveStrategy;
-using Kalburator::Sync::QSyncCore::ConflictDecision;
-using Kalburator::Sync::QSyncCore::ConflictPolicy;
-using Kalburator::Sync::QSyncCore::ConflictRecord;
-using Kalburator::Sync::QSyncCore::ConflictType;
-using Kalburator::Sync::QSyncCore::FallbackBehavior;
-using Kalburator::Sync::QSyncCore::PromptStrategy;
-using Kalburator::Sync::QSyncCore::RecordSnapshot;
+using Kalburator::Conflict::AutoResolveStrategy;
+using Kalburator::Conflict::ConflictDecision;
+using Kalburator::Conflict::ConflictPolicy;
+using Kalburator::Conflict::ConflictRecord;
+using Kalburator::Conflict::ConflictType;
+using Kalburator::Conflict::FallbackBehavior;
+using Kalburator::Conflict::PromptStrategy;
+using Kalburator::Conflict::RecordSnapshot;
 using WildPalms::PalmConflict::ConnectionBehavior;
 using WildPalms::PalmConflict::PalmBackendConfig;
 using WildPalms::PalmConflict::PalmConflictHandler;
@@ -193,7 +193,7 @@ void TestPalmConflictHandler::archivedSourceSurvivesModifiedVsDeleted()
     PalmConflictHandler handler(&dev, &cfg);
 
     ConflictRecord cr;
-    cr.type = Kalburator::Sync::QSyncCore::ConflictType::ModifiedVsDeleted;
+    cr.type = Kalburator::Conflict::ConflictType::ModifiedVsDeleted;
     cr.source.id = PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 7);
     cr.source.content = QByteArrayLiteral("archived-body");
     cr.source.lastModified = QDateTime::currentDateTimeUtc();
@@ -224,7 +224,7 @@ void TestPalmConflictHandler::archivedTargetSurvivesDeletedVsModified()
     PalmConflictHandler handler(&dev, &cfg);
 
     ConflictRecord cr;
-    cr.type = Kalburator::Sync::QSyncCore::ConflictType::DeletedVsModified;
+    cr.type = Kalburator::Conflict::ConflictType::DeletedVsModified;
     cr.source.id = QStringLiteral("local:memo:11");
     cr.source.content.clear();
     cr.source.lastModified = QDateTime::currentDateTimeUtc();
@@ -254,7 +254,7 @@ void TestPalmConflictHandler::nonArchivedRecordGetsDeleted()
     PalmConflictHandler handler(&dev, &cfg);
 
     ConflictRecord cr;
-    cr.type = Kalburator::Sync::QSyncCore::ConflictType::ModifiedVsDeleted;
+    cr.type = Kalburator::Conflict::ConflictType::ModifiedVsDeleted;
     cr.source.id = PalmBackend::encodeRecordId(QStringLiteral("MemoDB"), 13);
     cr.source.content = QByteArrayLiteral("plain");
     cr.source.lastModified = QDateTime::currentDateTimeUtc();

@@ -15,16 +15,24 @@ class KPilotLink;
 class KPilotDeviceLink;
 
 namespace Kalburator::Sync {
-    class SyncEngine;
     class BackendRegistry;
     class ISyncHost;
     struct SyncMapping;
     class IBlobBackend;
     class SyncBackend;
-    namespace QSyncCore { class ConflictHandler; }
 }
 
-namespace Kalburator::Storage { class BaselineStore; }
+namespace Kalburator::Engine {
+    class SyncEngine;
+}
+
+namespace Kalburator::Conflict {
+    class ConflictHandler;
+}
+
+namespace Kalburator::Storage {
+    class BaselineStore;
+}
 
 namespace Kalburator::Shape {
     struct Shape;
@@ -83,8 +91,8 @@ public:
 
     // Non-owning. Caller must ensure the handler outlives this PalmRuntime
     // (or call setConflictHandler(nullptr) before destroying the handler).
-    void setConflictHandler(Kalburator::Sync::QSyncCore::ConflictHandler *handler);
-    Kalburator::Sync::QSyncCore::ConflictHandler *conflictHandlerForTest() const;
+    void setConflictHandler(Kalburator::Conflict::ConflictHandler *handler);
+    Kalburator::Conflict::ConflictHandler *conflictHandlerForTest() const;
 
     // Test seams
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);
@@ -150,14 +158,14 @@ private:
     QFuture<PalmRunResult> runAllMappings();
     QFuture<PalmRunResult> runMirror(MirrorDir dir, const QString &modeLabel);
 
-    Kalburator::Sync::QSyncCore::ConflictHandler                *m_conflictHandler = nullptr;
+    Kalburator::Conflict::ConflictHandler                *m_conflictHandler = nullptr;
     QString                                                      m_profilePath;
     QString                                                      m_backupRoot;
     KPilotLink                                                  *m_link = nullptr;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;
-    std::unique_ptr<Kalburator::Sync::SyncEngine>                m_engine;
+    std::unique_ptr<Kalburator::Engine::SyncEngine>              m_engine;
     std::unique_ptr<Kalburator::Storage::BaselineStore>          m_baselineStore;
     QList<std::shared_ptr<WildPalms::IBackendPluginV2>>          m_plugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;

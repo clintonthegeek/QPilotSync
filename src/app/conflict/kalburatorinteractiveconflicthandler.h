@@ -8,26 +8,23 @@
 #include <QWidget>   // needed for complete type in QPointer<QWidget>
 #include <functional>
 
-namespace Kalburator::Sync::QSyncCore {
-    class ConflictStore;
-}
 
 class KalburatorInteractiveConflictHandler
     : public QObject,
-      public Kalburator::Sync::QSyncCore::ConflictHandler
+      public Kalburator::Conflict::ConflictHandler
 {
     Q_OBJECT
 public:
     explicit KalburatorInteractiveConflictHandler(
-        Kalburator::Sync::QSyncCore::ConflictStore *store = nullptr,
+        Kalburator::Conflict::ConflictStore *store = nullptr,
         QWidget *parentWidget = nullptr,
         QObject *parent = nullptr);
     ~KalburatorInteractiveConflictHandler() override = default;
 
     // ConflictHandler
-    Kalburator::Sync::QSyncCore::ConflictDecision handleConflict(
-        Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
-        const Kalburator::Sync::QSyncCore::ConflictPolicy &policy)
+    Kalburator::Conflict::ConflictDecision handleConflict(
+        Kalburator::Conflict::ConflictRecord &conflict,
+        const Kalburator::Conflict::ConflictPolicy &policy)
         override;
     void onSyncStart() override;
     void onSyncEnd(bool hadConflicts, bool allResolved) override;
@@ -35,16 +32,16 @@ public:
         { return m_parentWidget != nullptr; }
     bool shouldKeepConnectionAlive() const override
         { return m_keepAlive; }
-    QList<Kalburator::Sync::QSyncCore::ConflictRecord>
+    QList<Kalburator::Conflict::ConflictRecord>
         pendingConflicts() const override
         { return m_localPending; }
 
     void setParentWidget(QWidget *w) { m_parentWidget = w; }
 
     using OnGuiThreadHook = std::function<
-        Kalburator::Sync::QSyncCore::ConflictDecision(
-            Kalburator::Sync::QSyncCore::ConflictRecord &,
-            const Kalburator::Sync::QSyncCore::ConflictPolicy &)>;
+        Kalburator::Conflict::ConflictDecision(
+            Kalburator::Conflict::ConflictRecord &,
+            const Kalburator::Conflict::ConflictPolicy &)>;
     void setOnGuiThreadHook(OnGuiThreadHook fn) { m_hook = std::move(fn); }
 
 signals:
@@ -57,15 +54,15 @@ private:
     // (cross-thread) or directly (same-thread). Not a Qt slot: the return type is a
     // Kalburator namespace type that MOC cannot resolve in this TU due to the
     // local QSyncCore namespace collision. Called via functor invokeMethod instead.
-    Kalburator::Sync::QSyncCore::ConflictDecision
+    Kalburator::Conflict::ConflictDecision
         handleConflictOnGuiThread(
-            Kalburator::Sync::QSyncCore::ConflictRecord &conflict,
-            const Kalburator::Sync::QSyncCore::ConflictPolicy &policy);
+            Kalburator::Conflict::ConflictRecord &conflict,
+            const Kalburator::Conflict::ConflictPolicy &policy);
 
     OnGuiThreadHook                             m_hook;
-    Kalburator::Sync::QSyncCore::ConflictStore *m_store;
+    Kalburator::Conflict::ConflictStore *m_store;
     QPointer<QWidget>                           m_parentWidget;
-    QList<Kalburator::Sync::QSyncCore::ConflictRecord>
+    QList<Kalburator::Conflict::ConflictRecord>
                                                 m_localPending;
     int                                         m_conflictsHandled = 0;
     int                                         m_conflictsDeferred = 0;

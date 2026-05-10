@@ -8,7 +8,7 @@
 #include "runtime/palmdeviceaccess.h"
 
 #include "iblobbackend.h"
-#include "conflictrecord.h"   // Kalburator::Sync::QSyncCore::RecordSnapshot
+#include "conflictrecord.h"   // Kalburator::Conflict::RecordSnapshot
 
 using WildPalms::Memo::MemoBackendPlugin;
 using WildPalms::Memo::MemoBlobBackend;
@@ -67,7 +67,7 @@ void TestMemoBackendPlugin::viewHooksReportMemoSurface()
 void TestMemoBackendPlugin::conflictHtmlRendersMemoTitleAndBody()
 {
     MemoBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral("Grocery list\n- milk\n- eggs");
     snap.metadata[QStringLiteral("title")] = QStringLiteral("Grocery list");
     snap.contentType = QStringLiteral("text/plain");
@@ -80,7 +80,7 @@ void TestMemoBackendPlugin::conflictHtmlRendersMemoTitleAndBody()
 void TestMemoBackendPlugin::enrichSnapshotDecodesPalmBytesOnSourceSide()
 {
     MemoBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     const auto palm = WildPalms::PalmCodecs::encodeMemo(
         {QStringLiteral("Shopping list\nfirst line extends"), false});
     snap.content = palm;

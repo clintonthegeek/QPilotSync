@@ -18,10 +18,10 @@ using WildPalms::PalmCodecs::decodeContact;
 using WildPalms::PalmConflict::PalmBackendConfig;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmRecord;
-using Kalburator::Sync::QSyncCore::ConflictDecision;
-using Kalburator::Sync::QSyncCore::ConflictPolicy;
-using Kalburator::Sync::QSyncCore::ConflictRecord;
-using Kalburator::Sync::QSyncCore::ConflictType;
+using Kalburator::Conflict::ConflictDecision;
+using Kalburator::Conflict::ConflictPolicy;
+using Kalburator::Conflict::ConflictRecord;
+using Kalburator::Conflict::ConflictType;
 
 namespace {
 

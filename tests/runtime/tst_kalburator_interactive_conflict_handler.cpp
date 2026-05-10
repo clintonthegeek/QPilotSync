@@ -19,7 +19,7 @@ void TstKalburatorInteractiveConflictHandler::registers_into_libkalburator_regis
 {
     KalburatorInteractiveConflictHandler handler(nullptr, nullptr);
 
-    Kalburator::Sync::QSyncCore::ConflictHandlerRegistry registry;
+    Kalburator::Conflict::ConflictHandlerRegistry registry;
     registry.setDefaultHandler(&handler);
 
     QVERIFY(registry.handlerFor("nonexistent-backend") == &handler);
@@ -29,18 +29,18 @@ void TstKalburatorInteractiveConflictHandler::marshals_to_gui_thread()
 {
     KalburatorInteractiveConflictHandler handler(nullptr, nullptr);
 
-    Kalburator::Sync::QSyncCore::ConflictRecord conflict;
-    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
+    Kalburator::Conflict::ConflictRecord conflict;
+    Kalburator::Conflict::ConflictPolicy policy;
 
     QThread *mainThread = QThread::currentThread();
     QThread *observedThread = nullptr;
 
     handler.setOnGuiThreadHook([&](
-        Kalburator::Sync::QSyncCore::ConflictRecord &,
-        const Kalburator::Sync::QSyncCore::ConflictPolicy &)
-            -> Kalburator::Sync::QSyncCore::ConflictDecision {
+        Kalburator::Conflict::ConflictRecord &,
+        const Kalburator::Conflict::ConflictPolicy &)
+            -> Kalburator::Conflict::ConflictDecision {
         observedThread = QThread::currentThread();
-        return Kalburator::Sync::QSyncCore::ConflictDecision::UseSource;
+        return Kalburator::Conflict::ConflictDecision::UseSource;
     });
 
     // Use QFutureWatcher + QEventLoop so the main thread keeps
@@ -48,9 +48,9 @@ void TstKalburatorInteractiveConflictHandler::marshals_to_gui_thread()
     // BlockingQueuedConnection to be dispatched. A plain .result()
     // would deadlock because the main thread would be blocked and
     // unable to process the queued invocation.
-    QFutureWatcher<Kalburator::Sync::QSyncCore::ConflictDecision> watcher;
+    QFutureWatcher<Kalburator::Conflict::ConflictDecision> watcher;
     QEventLoop loop;
-    QObject::connect(&watcher, &QFutureWatcher<Kalburator::Sync::QSyncCore::ConflictDecision>::finished,
+    QObject::connect(&watcher, &QFutureWatcher<Kalburator::Conflict::ConflictDecision>::finished,
                      &loop, &QEventLoop::quit);
 
     auto future = QtConcurrent::run([&]() {
@@ -63,7 +63,7 @@ void TstKalburatorInteractiveConflictHandler::marshals_to_gui_thread()
 
     QCOMPARE(observedThread, mainThread);
     QCOMPARE(result,
-        Kalburator::Sync::QSyncCore::ConflictDecision::UseSource);
+        Kalburator::Conflict::ConflictDecision::UseSource);
 }
 
 void TstKalburatorInteractiveConflictHandler::hook_bypasses_dialog_when_set()
@@ -74,15 +74,15 @@ void TstKalburatorInteractiveConflictHandler::hook_bypasses_dialog_when_set()
     QWidget parent;
     KalburatorInteractiveConflictHandler handler(nullptr, &parent);
     handler.setOnGuiThreadHook([](
-        Kalburator::Sync::QSyncCore::ConflictRecord &,
-        const Kalburator::Sync::QSyncCore::ConflictPolicy &) {
-            return Kalburator::Sync::QSyncCore::ConflictDecision::UseTarget;
+        Kalburator::Conflict::ConflictRecord &,
+        const Kalburator::Conflict::ConflictPolicy &) {
+            return Kalburator::Conflict::ConflictDecision::UseTarget;
     });
 
-    Kalburator::Sync::QSyncCore::ConflictRecord conflict;
-    Kalburator::Sync::QSyncCore::ConflictPolicy policy;
+    Kalburator::Conflict::ConflictRecord conflict;
+    Kalburator::Conflict::ConflictPolicy policy;
     QCOMPARE(handler.handleConflict(conflict, policy),
-        Kalburator::Sync::QSyncCore::ConflictDecision::UseTarget);
+        Kalburator::Conflict::ConflictDecision::UseTarget);
 }
 
 QTEST_MAIN(TstKalburatorInteractiveConflictHandler)

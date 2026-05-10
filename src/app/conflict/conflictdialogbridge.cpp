@@ -41,7 +41,7 @@ int showAndGetDecision(
     const BridgePolicy &policy,
     QWidget            *parent)
 {
-    // wpRecord points to a Kalburator::Sync::QSyncCore::ConflictRecord whose
+    // wpRecord points to a Kalburator::Conflict::ConflictRecord whose
     // layout is byte-for-byte identical to QSyncCore::ConflictRecord (same
     // compiler, same field order, same Qt types, same namespace-stripped
     // struct definition).  Use memcpy to avoid strict-aliasing UB

@@ -13,10 +13,11 @@ namespace Kalburator::Sync {
     class ISyncHost;
     class IBlobBackend;
     class SyncBackend;
-    namespace QSyncCore {
-        class ConflictHandler;
-        struct RecordSnapshot;
-    }
+}
+
+namespace Kalburator::Conflict {
+    class ConflictHandler;
+    struct RecordSnapshot;
 }
 
 class PalmDeviceConnection; // concrete type lands in Phase E.9 as src/palm/palmdeviceconnection.h
@@ -58,7 +59,7 @@ public:
     // Return nullptr to use the default handler; otherwise the manager
     // registers the returned handler with the SyncEngine's
     // ConflictHandlerRegistry under this plugin's backend id.
-    virtual Kalburator::Sync::QSyncCore::ConflictHandler *createConflictHandler()
+    virtual Kalburator::Conflict::ConflictHandler *createConflictHandler()
     {
         return nullptr;
     }
@@ -98,14 +99,14 @@ public:
     // detail pane. Default implementation UTF-8-decodes
     // `snapshot.content` into a `<pre>` block.
     virtual void enrichConflictSnapshot(
-        Kalburator::Sync::QSyncCore::RecordSnapshot &snapshot,
+        Kalburator::Conflict::RecordSnapshot &snapshot,
         bool isSourceSide) const
     {
         Q_UNUSED(snapshot)
         Q_UNUSED(isSourceSide)
     }
     virtual QString formatConflictRecordHtml(
-        const Kalburator::Sync::QSyncCore::RecordSnapshot &snapshot) const;
+        const Kalburator::Conflict::RecordSnapshot &snapshot) const;
 };
 
 } // namespace WildPalms

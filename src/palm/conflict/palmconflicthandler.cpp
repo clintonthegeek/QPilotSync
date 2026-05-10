@@ -8,10 +8,10 @@
 
 namespace WildPalms::PalmConflict {
 
-using Kalburator::Sync::QSyncCore::ConflictDecision;
-using Kalburator::Sync::QSyncCore::ConflictPolicy;
-using Kalburator::Sync::QSyncCore::ConflictRecord;
-using Kalburator::Sync::QSyncCore::FallbackBehavior;
+using Kalburator::Conflict::ConflictDecision;
+using Kalburator::Conflict::ConflictPolicy;
+using Kalburator::Conflict::ConflictRecord;
+using Kalburator::Conflict::FallbackBehavior;
 using WildPalms::PalmSync::IPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmBackend;
 using WildPalms::PalmSync::PalmRecord;
@@ -109,8 +109,8 @@ ConflictDecision PalmConflictHandler::applyOverlays(
     ConflictRecord &conflict, const ConflictPolicy &policy,
     ConflictDecision baseDecision)
 {
-    using Kalburator::Sync::QSyncCore::AutoResolveStrategy;
-    using Kalburator::Sync::QSyncCore::ConflictType;
+    using Kalburator::Conflict::AutoResolveStrategy;
+    using Kalburator::Conflict::ConflictType;
 
     const auto sourcePalm = lookupPalmRecord(conflict.source.id);
     const auto targetPalm = lookupPalmRecord(conflict.target.id);

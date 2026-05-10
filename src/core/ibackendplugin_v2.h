@@ -12,11 +12,11 @@ class QWidget;
 namespace Kalburator::Sync {
     class IBlobBackend;
 }
-namespace Kalburator::Sync::QSyncCore {
-    class ConflictHandler;
-}
 namespace Kalburator::Shape {
     class DomainRegistry;
+}
+namespace Kalburator::Conflict {
+    class ConflictHandler;
 }
 namespace WildPalms::Runtime {
     class PalmDeviceAccess;
@@ -67,7 +67,7 @@ public:
     virtual QStringList runAfter()  const { return {}; }
 
     // ── Optional conflict handler ────────────────────────────────────
-    virtual Kalburator::Sync::QSyncCore::ConflictHandler *createConflictHandler()
+    virtual Kalburator::Conflict::ConflictHandler *createConflictHandler()
     {
         return nullptr;
     }
