@@ -51,7 +51,7 @@
 
 #include "backendrecord.h"
 #include "backendregistry.h"
-#include "blobbaselinestore.h"
+#include "baselinestore.h"
 #include "syncbackend.h"
 #include "collectioninfo.h"
 #include "domainregistry.h"
@@ -77,7 +77,7 @@
 
 using Kalburator::Sync::BackendRecord;
 using Kalburator::Sync::BackendRegistry;
-using Kalburator::Sync::BlobBaselineStore;
+using Kalburator::Storage::BaselineStore;
 using Kalburator::Sync::CollectionInfo;
 using Kalburator::Sync::ConflictResolution;
 using Kalburator::Sync::IBlobBackend;
@@ -406,11 +406,11 @@ void TestContactsPalmEngineSync::enginePassesPalmBytesThroughVerbatim_diagnostic
     TestSyncHost host(&registry);
 
     SyncEngine engine(&registry, &host);
-    // Wire BlobBaselineStore so dispatchBlobSync's baseline-write path
+    // Wire Storage::BaselineStore so dispatchBlobSync's baseline-write path
     // doesn't no-op silently. Path is per-test; cleaned by tmpDir.
-    BlobBaselineStore baselines(
+    BaselineStore baselines(
         tmpDir.filePath(QStringLiteral("baselines.db")));
-    engine.setBlobBaselineStore(&baselines);
+    engine.setBaselineStore(&baselines);
 
     SyncMapping mapping;
     mapping.id              = mappingId;
