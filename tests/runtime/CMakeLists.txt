@@ -332,3 +332,32 @@ add_test(NAME tst_palm_device_access_connect COMMAND tst_palm_device_access_conn
 set_tests_properties(tst_palm_device_access_connect PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Phase J Task 9: CalDAV E2E integration test.
+# Includes the libkalburator FakeCalDavServer source directly.
+add_executable(tst_runtime_caldav_e2e
+    tst_runtime_caldav_e2e.cpp
+    ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync/fakecaldavserver.cpp
+)
+target_include_directories(tst_runtime_caldav_e2e
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync
+)
+target_link_libraries(tst_runtime_caldav_e2e
+    PRIVATE
+        Qt::Core
+        Qt::Network
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_runtime_caldav_e2e COMMAND tst_runtime_caldav_e2e)
+set_tests_properties(tst_runtime_caldav_e2e PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

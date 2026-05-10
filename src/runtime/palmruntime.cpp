@@ -49,13 +49,16 @@ static QString sanitizeForFilesystem(const QString &id)
 // ──────────────────────────────────────────────────────────────────────────────
 // BlobBackendAdapter
 //
-// Wraps an IBlobBackend as a SyncBackend with blob domain.
-// nativeShapes() returns {"blob","blob"} ≠ "calendar" domain →
-// SyncEngineWorker::processSync routes to dispatchBlobSync, which:
-//   - does NOT need ICalendarCollection or CalendarBaselineStore
-//   - calls IBlobBackend::loadRecords / createRecord / updateRecord via BlockingQueued
+// Wraps an IBlobBackend as a SyncBackend so it can be stored in the
+// BackendRegistry alongside calendar backends. Forwards all
+// IBlobBackend methods to the wrapped instance.
 //
-// Calendar pure-virtuals are empty stubs — never invoked via dispatchBlobSync.
+// Phase K.4 cleanup: previously this adapter also defined no-op
+// overrides for the four formerly-pure calendar virtuals
+// (loadCalendars/storeCalendars/startSync/removeItem) plus an
+// Incidence::Ptr-typed pushItems. With K.4 those virtuals are no-op
+// by default on SyncBackend itself, so the adapter no longer needs to
+// override them — it just inherits the empty defaults.
 // ──────────────────────────────────────────────────────────────────────────────
 class BlobBackendAdapter final : public Kalburator::Sync::SyncBackend {
     Q_OBJECT
@@ -68,10 +71,7 @@ public:
         , m_id(id)
         // Phase Ia.5 follow-up: default shape must match the blob domain
         // plugin's canonical shape (blob, raw) so the unified dispatchSync
-        // can compile an identity Pipeline (blob,raw) -> (blob,raw). The
-        // previous default (blob, blob) had no registered edge to canonical
-        // and made dispatchSync fail with "no edge path" for any test that
-        // registered a backend without an explicit shape override.
+        // can compile an identity Pipeline (blob,raw) -> (blob,raw).
         , m_shape{ Kalburator::Shape::DomainId{QStringLiteral("blob")},
                    Kalburator::Shape::EncodingId{QStringLiteral("raw")} }
     {}
@@ -130,21 +130,9 @@ public:
     bool supportsDeleteTracking() const override
         { return m_blob->supportsDeleteTracking(); }
 
-    // ── SyncBackend calendar pure-virtuals — stubs (blob path never calls these)
-    void loadCalendars(const QString &) override {}
-    void storeCalendars(const QString &,
-                        const QList<KCalendarCore::MemoryCalendar *> &) override {}
-    void startSync(const QString &,
-                   KCalendarCore::MemoryCalendar *,
-                   const QList<KCalendarCore::Incidence::Ptr> &,
-                   const QList<KCalendarCore::Incidence::Ptr> &,
-                   const QMap<QString, QString> &,
-                   const Kalburator::Sync::TranscodingPlan &) override {}
-    void removeItem(const QString &, const QString &) override {}
-    Kalburator::Sync::PushOperation *pushItems(
-        const QString &,
-        const QList<KCalendarCore::Incidence::Ptr> &,
-        const Kalburator::Sync::TranscodingPlan &) override { return nullptr; }
+    // No calendar-virtual overrides: K.4 made loadCalendars/storeCalendars/
+    // startSync/removeItem default no-ops on SyncBackend itself. This
+    // adapter inherits those defaults.
 
 private:
     std::unique_ptr<Kalburator::Sync::IBlobBackend> m_blob;
