@@ -4,17 +4,20 @@
 #include <QPointer>
 #include <QSignalSpy>
 
-#include "core/ibackendplugin.h"
+#include "core/ibackendplugin_v2.h"
 #include "runtime/backendpluginmanager.h"
+
+#include <iblobbackend.h>
+#include <memory>
 
 using WildPalms::BackendPluginManager;
 
 namespace {
 
-class FakeBackendPlugin : public QObject, public WildPalms::IBackendPlugin
+class FakeBackendPlugin : public QObject, public WildPalms::IBackendPluginV2
 {
     Q_OBJECT
-    Q_INTERFACES(WildPalms::IBackendPlugin)
+    Q_INTERFACES(WildPalms::IBackendPluginV2)
 public:
     QString pluginId() const override    { return QStringLiteral("fake"); }
     QString displayName() const override { return QStringLiteral("Fake"); }
@@ -25,10 +28,10 @@ public:
     {
         return {QStringLiteral("FakeDB")};
     }
-    ProvidedBackends createBackends(Kalburator::Sync::ISyncHost *,
-                                     PalmDeviceConnection *) override
+    std::unique_ptr<Kalburator::Sync::IBlobBackend>
+    createPalmBackend(WildPalms::Runtime::PalmDeviceAccess *) override
     {
-        return {}; // both pointers nullptr; this test doesn't run the engine.
+        return nullptr; // this test doesn't run the engine.
     }
 };
 

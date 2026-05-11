@@ -4,7 +4,7 @@
 #include <QPointer>
 #include <QSignalSpy>
 
-#include "core/ibackendplugin.h"
+#include "core/ibackendplugin_v2.h"
 #include "core/ipluginaction.h"
 #include "runtime/backendpluginmanager.h"
 #include "runtime/pluginactionmanager.h"
@@ -80,7 +80,7 @@ void TestPluginFactoryRoundtrip::backendManagerLoadsAndUnloadsDummy()
     QVERIFY(mgr.loadPlugin(kBackendId));
     QCOMPARE(loadSpy.count(), 1);
 
-    WildPalms::IBackendPlugin *plug = mgr.plugin(kBackendId);
+    WildPalms::IBackendPluginV2 *plug = mgr.plugin(kBackendId);
     QVERIFY(plug != nullptr);
     QCOMPARE(plug->pluginId(), QStringLiteral("dummy_backend"));
     QCOMPARE(plug->claimedDatabases(), (QStringList{QStringLiteral("DummyDB")}));

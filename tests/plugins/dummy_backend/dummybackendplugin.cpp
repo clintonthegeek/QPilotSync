@@ -1,5 +1,6 @@
 #include "dummybackendplugin.h"
 
+#include <iblobbackend.h>
 #include <KPluginFactory>
 
 #include <QIcon>
@@ -17,10 +18,10 @@ QStringList DummyBackendPlugin::claimedDatabases() const
     return {QStringLiteral("DummyDB")};
 }
 
-WildPalms::IBackendPlugin::ProvidedBackends
-DummyBackendPlugin::createBackends(Kalburator::Sync::ISyncHost *, PalmDeviceConnection *)
+std::unique_ptr<Kalburator::Sync::IBlobBackend>
+DummyBackendPlugin::createPalmBackend(WildPalms::Runtime::PalmDeviceAccess *)
 {
-    return {}; // no real backends; the factory-path test only needs the object to exist.
+    return nullptr; // no real backends; the factory-path test only needs the object to exist.
 }
 
 K_PLUGIN_FACTORY_WITH_JSON(DummyBackendPluginFactory,

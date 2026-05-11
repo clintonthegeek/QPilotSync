@@ -25,7 +25,7 @@ class AutoSyncOrchestrator;
 
 // Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
 // until E.16 retires the old surface.
-namespace WildPalms { class BackendPluginManager; class IBackendPlugin; }
+namespace WildPalms { class BackendPluginManager; class IBackendPluginV2; }
 namespace WildPalms::Runtime {
     class PalmRuntime;
     class AccountController;
@@ -128,8 +128,8 @@ private Q_SLOTS:
 
     // Phase E.9 — new-ABI plugin lifecycle. Runs alongside the conduit
     // loop until E.16 retires ConduitManager.
-    void onBackendPluginLoaded(WildPalms::IBackendPlugin *plugin);
-    void onBackendPluginUnloading(WildPalms::IBackendPlugin *plugin);
+    void onBackendPluginLoaded(WildPalms::IBackendPluginV2 *plugin);
+    void onBackendPluginUnloading(WildPalms::IBackendPluginV2 *plugin);
 
     // Auto-sync detection
     void onAutoDeviceDetected(Profile *profile, const QStringList &ports);

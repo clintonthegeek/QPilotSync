@@ -17,10 +17,10 @@ class PalmDeviceConnection;
 
 namespace WildPalms {
 
-class IBackendPlugin;
+class IBackendPluginV2;
 
 /**
- * @brief Discovers, loads, and owns IBackendPlugin instances.
+ * @brief Discovers, loads, and owns IBackendPluginV2 instances.
  *
  * Replaces ConduitManager for the new plugin ABI. ConduitManager keeps
  * running against IConduit plugins under wildpalms/conduits/ until E.16
@@ -35,11 +35,11 @@ class BackendPluginManager : public QObject
     Q_OBJECT
 public:
     struct PluginInfo {
-        KPluginMetaData  metaData;
-        IBackendPlugin  *instance = nullptr;
-        QStringList      claimedDatabases;
-        bool             defaultEnabled = true;
-        int              sortOrder      = 0;
+        KPluginMetaData   metaData;
+        IBackendPluginV2 *instance = nullptr;
+        QStringList       claimedDatabases;
+        bool              defaultEnabled = true;
+        int               sortOrder      = 0;
     };
 
     explicit BackendPluginManager(Kalburator::Sync::ISyncHost       *host,
@@ -66,10 +66,10 @@ public:
     void unloadPlugin(const QString &pluginId);
 
     // ========== Queries ==========
-    QList<IBackendPlugin *> plugins() const;
-    QList<PluginInfo>       catalogue() const;
-    IBackendPlugin         *plugin(const QString &pluginId) const;
-    IBackendPlugin         *pluginForDatabase(const QString &palmDbName) const;
+    QList<IBackendPluginV2 *> plugins() const;
+    QList<PluginInfo>         catalogue() const;
+    IBackendPluginV2         *plugin(const QString &pluginId) const;
+    IBackendPluginV2         *pluginForDatabase(const QString &palmDbName) const;
 
     // ========== Test / customisation seams ==========
     /// Override the plugin subdir scanned by discoverPlugins. Default:
@@ -77,15 +77,15 @@ public:
     void setPluginSubdir(const QString &subdir);
 
 Q_SIGNALS:
-    void pluginLoaded(IBackendPlugin *plugin);
-    void pluginUnloading(IBackendPlugin *plugin);
+    void pluginLoaded(IBackendPluginV2 *plugin);
+    void pluginUnloading(IBackendPluginV2 *plugin);
 
 protected:
-    /// Test-only hook: inject a pre-built IBackendPlugin* into the
+    /// Test-only hook: inject a pre-built IBackendPluginV2* into the
     /// catalogue as if KPluginFactory had loaded it. The manager takes
     /// ownership of `instance` via QObject parenting. Returns false if
     /// `pluginId` already has a live instance.
-    bool registerInstanceForTest(const QString &pluginId, IBackendPlugin *instance);
+    bool registerInstanceForTest(const QString &pluginId, IBackendPluginV2 *instance);
 
 private:
     QString m_subdir;

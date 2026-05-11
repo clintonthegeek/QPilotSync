@@ -7,7 +7,7 @@
 
 #include <iblobbackend.h>
 
-#include "core/ibackendplugin.h"
+#include "core/ibackendplugin_v2.h"
 #include "runtime/backendpluginmanager.h"
 
 namespace WildPalms {
@@ -66,8 +66,7 @@ InstallSourceCollector::drainPluginBlobs(BackendPluginManager *manager,
 
     for (auto *plugin : manager->plugins()) {
         if (!plugin) continue;
-        auto backends = plugin->createBackends(nullptr, nullptr);
-        auto *blob = backends.blob;
+        auto blob = plugin->createPalmBackend(nullptr);
         if (!blob) continue;
 
         for (const auto &col : blob->availableCollections()) {
@@ -95,7 +94,6 @@ InstallSourceCollector::drainPluginBlobs(BackendPluginManager *manager,
                 out.append(e);
             }
         }
-        delete blob;
     }
     return out;
 }

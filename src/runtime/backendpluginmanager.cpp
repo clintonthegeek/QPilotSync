@@ -1,6 +1,6 @@
 #include "backendpluginmanager.h"
 
-#include "core/ibackendplugin.h"
+#include "core/ibackendplugin_v2.h"
 #include "pluginmetadatahelpers.h"
 
 #include <KPluginFactory>
@@ -101,9 +101,9 @@ bool BackendPluginManager::loadPlugin(const QString &pluginId)
         return false;
     }
 
-    auto *plug = dynamic_cast<IBackendPlugin *>(obj);
+    auto *plug = qobject_cast<IBackendPluginV2 *>(obj);
     if (!plug) {
-        qWarning() << "[BackendPluginManager] Plugin does not implement IBackendPlugin:"
+        qWarning() << "[BackendPluginManager] Plugin does not implement IBackendPluginV2:"
                    << pluginId;
         delete obj;
         return false;
@@ -139,9 +139,9 @@ void BackendPluginManager::unloadPlugin(const QString &pluginId)
     qDebug() << "[BackendPluginManager] Unloaded plugin:" << pluginId;
 }
 
-QList<IBackendPlugin *> BackendPluginManager::plugins() const
+QList<IBackendPluginV2 *> BackendPluginManager::plugins() const
 {
-    QList<IBackendPlugin *> out;
+    QList<IBackendPluginV2 *> out;
     for (const PluginInfo &info : m_plugins) {
         if (info.instance) {
             out.append(info.instance);
@@ -152,13 +152,13 @@ QList<IBackendPlugin *> BackendPluginManager::plugins() const
 
 QList<BackendPluginManager::PluginInfo> BackendPluginManager::catalogue() const { return m_plugins.values(); }
 
-IBackendPlugin *BackendPluginManager::plugin(const QString &pluginId) const
+IBackendPluginV2 *BackendPluginManager::plugin(const QString &pluginId) const
 {
     auto it = m_plugins.constFind(pluginId);
     return (it != m_plugins.constEnd()) ? it->instance : nullptr;
 }
 
-IBackendPlugin *BackendPluginManager::pluginForDatabase(const QString &palmDbName) const
+IBackendPluginV2 *BackendPluginManager::pluginForDatabase(const QString &palmDbName) const
 {
     for (const PluginInfo &info : m_plugins) {
         if (info.claimedDatabases.contains(palmDbName) && info.instance) {
@@ -169,7 +169,7 @@ IBackendPlugin *BackendPluginManager::pluginForDatabase(const QString &palmDbNam
 }
 
 bool BackendPluginManager::registerInstanceForTest(const QString &pluginId,
-                                                     IBackendPlugin *instance)
+                                                     IBackendPluginV2 *instance)
 {
     if (!instance) return false;
 

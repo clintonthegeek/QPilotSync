@@ -10,7 +10,8 @@
 
 #include <iblobbackend.h>
 
-#include "core/ibackendplugin.h"
+#include "core/ibackendplugin_v2.h"
+#include <memory>
 #include "palm/palmdeviceconnection.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "palm/sync/mockpalmfileinstaller.h"
@@ -60,10 +61,10 @@ Q_SIGNALS:
     void progressUpdated(int current, int total, const QString &message);
 };
 
-class StubBackendPlugin : public QObject, public IBackendPlugin
+class StubBackendPlugin : public QObject, public IBackendPluginV2
 {
     Q_OBJECT
-    Q_INTERFACES(WildPalms::IBackendPlugin)
+    Q_INTERFACES(WildPalms::IBackendPluginV2)
 public:
     QString pluginId()    const override { return QStringLiteral("stubplucker"); }
     QString displayName() const override { return QStringLiteral("Stub"); }
@@ -72,8 +73,8 @@ public:
     QIcon   icon()        const override { return {}; }
     QStringList claimedDatabases() const override { return {}; }
 
-    ProvidedBackends createBackends(Kalburator::Sync::ISyncHost *,
-                                     PalmDeviceConnection *) override
+    std::unique_ptr<IBlobBackend>
+    createPalmBackend(WildPalms::Runtime::PalmDeviceAccess *) override
     {
         auto *b = new StubBlobBackend;
         CollectionInfo boot;
@@ -105,7 +106,7 @@ public:
         b->m_records[boot.id]     = {syszlib, viewer};
         b->m_records[channels.id] = {ch};
 
-        return { b, nullptr };
+        return std::unique_ptr<IBlobBackend>(b);
     }
 };
 
@@ -113,7 +114,7 @@ class StubPluginManager : public BackendPluginManager
 {
 public:
     StubPluginManager() : BackendPluginManager(nullptr, nullptr, nullptr, nullptr) {}
-    bool inject(const QString &id, IBackendPlugin *p)
+    bool inject(const QString &id, IBackendPluginV2 *p)
     { return registerInstanceForTest(id, p); }
 };
 

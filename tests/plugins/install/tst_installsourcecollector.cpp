@@ -7,8 +7,10 @@
 
 #include <iblobbackend.h>
 
-#include "core/ibackendplugin.h"
+#include "core/ibackendplugin_v2.h"
 #include "runtime/backendpluginmanager.h"
+
+#include <memory>
 #include "runtime/installsourcecollector.h"
 
 using WildPalms::InstallSourceCollector;
@@ -54,10 +56,10 @@ Q_SIGNALS:
     void progressUpdated(int current, int total, const QString &message);
 };
 
-class FakeBackendPlugin : public QObject, public WildPalms::IBackendPlugin
+class FakeBackendPlugin : public QObject, public WildPalms::IBackendPluginV2
 {
     Q_OBJECT
-    Q_INTERFACES(WildPalms::IBackendPlugin)
+    Q_INTERFACES(WildPalms::IBackendPluginV2)
 public:
     QString pluginId()    const override { return QStringLiteral("fake"); }
     QString displayName() const override { return QStringLiteral("Fake"); }
@@ -66,13 +68,13 @@ public:
     QIcon   icon()        const override { return {}; }
     QStringList claimedDatabases() const override { return {}; }
 
-    ProvidedBackends createBackends(Kalburator::Sync::ISyncHost *,
-                                     PalmDeviceConnection *) override
+    std::unique_ptr<Kalburator::Sync::IBlobBackend>
+    createPalmBackend(WildPalms::Runtime::PalmDeviceAccess *) override
     {
         auto *b = new FakeBlobBackend;
         b->m_cols = {m_col};
         b->m_records[m_col.id] = m_records;
-        return { b, nullptr };
+        return std::unique_ptr<Kalburator::Sync::IBlobBackend>(b);
     }
 
     Kalburator::Sync::CollectionInfo                m_col;
@@ -83,7 +85,7 @@ class FakePluginManager : public WildPalms::BackendPluginManager
 {
 public:
     FakePluginManager() : WildPalms::BackendPluginManager(nullptr, nullptr, nullptr, nullptr) {}
-    bool injectPlugin(const QString &id, WildPalms::IBackendPlugin *p)
+    bool injectPlugin(const QString &id, WildPalms::IBackendPluginV2 *p)
     { return registerInstanceForTest(id, p); }
 };
 

@@ -18,7 +18,7 @@
 #include "../runtime/accountcontroller.h"
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
-#include "../core/ibackendplugin.h"
+#include "../core/ibackendplugin_v2.h"
 #include "../runtime/backendpluginmanager.h"
 #include "../sync/syncengine.h"
 #include "../core/synctypes.h"
@@ -629,7 +629,7 @@ void KF6MainWindow::onConduitUnloading(IConduit *conduit)
 // plugins that opt in to `hasMainView()`. Sync-engine registration is
 // deliberately absent here; the new-ABI sync path comes online in
 // E.15/E.17 once the runtime owns the PalmDeviceConnection.
-void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPlugin *plugin)
+void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPluginV2 *plugin)
 {
     if (!plugin || !plugin->hasMainView()) return;
 
@@ -645,7 +645,7 @@ void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPlugin *plugin)
              << "(" << plugin->mainViewName() << ")";
 }
 
-void KF6MainWindow::onBackendPluginUnloading(WildPalms::IBackendPlugin *plugin)
+void KF6MainWindow::onBackendPluginUnloading(WildPalms::IBackendPluginV2 *plugin)
 {
     if (!plugin) return;
     if (auto *page = m_backendPluginPages.take(plugin->pluginId())) {

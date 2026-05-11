@@ -7,6 +7,7 @@ kcoreaddons_add_plugin(dummy_backend
 
 target_link_libraries(dummy_backend
     WildPalmsCore
+    Kalburator::Sync
     KF6::CoreAddons
     Qt::Core
 )
