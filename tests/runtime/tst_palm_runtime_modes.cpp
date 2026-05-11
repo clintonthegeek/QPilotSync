@@ -13,6 +13,8 @@
 #include "synctypes.h"
 #include "palm/kpilotlink.h"
 #include "palm/pilotrecord.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using namespace WildPalms::Runtime;
 using namespace Kalburator::Sync;
@@ -100,6 +102,14 @@ public:
 class TestPalmRuntimeModes : public QObject {
     Q_OBJECT
 private slots:
+    void initTestCase()
+    {
+        // K.7: seed DomainRegistry with stock plugins so dispatchSync
+        // finds the blob domain definition (BlobPlugin).
+        Kalburator::PluginManager pm;
+        Kalburator::registerStockPlugins(pm);
+    }
+
     void fullSync_clearsBaselinesThenCopiesPalmToPC() {
         QTemporaryDir profileDir;
         QVERIFY(profileDir.isValid());

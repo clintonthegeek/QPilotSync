@@ -20,11 +20,14 @@
 #include "conflictpolicy.h"
 #include "conflictrecord.h"
 
-// Phase Ia Task 15: registry assertions for constructor-time domain
-// extension registration.
-#include "contactsdomainplugin.h"
+// K.7: registry assertions for constructor-time domain extension
+// registration. ContactsDomainPlugin removed; use registerStockPlugins.
 #include "domainregistry.h"
+#include "domainoperationsregistry.h"
 #include "transformationregistry.h"
+#include "backendregistry.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using WildPalms::ContactsPlugin::ContactsBackendPlugin;
 using WildPalms::ContactsPlugin::PalmContactsBackend;
@@ -78,19 +81,17 @@ private slots:
 
 void TestContactsBackendPlugin::cleanup()
 {
-    // The plugin constructor mutates the process-wide TransformationRegistry
-    // (Phase Ia Task 15). Reset between slots so each test sees a clean
-    // slate, then re-seed the DomainRegistry with libkalburator's contacts
-    // plugin so the next constructor call can resolve the canonical
-    // (contacts, vcard4) shape via DomainRegistry::initialize().
-    //
-    // The libkalburator plugin's static-init registrar runs once per
-    // process and does not survive clear(); re-registering by hand here
-    // simulates what the registrar did at process load.
+    // The plugin constructor mutates the process-wide TransformationRegistry.
+    // Reset all four registries between slots so re-seeding via
+    // registerStockPlugins succeeds (no CanonicalConflict / DoubleBinding
+    // from prior slot). K.7: ContactsDomainPlugin removed;
+    // registerStockPlugins() is the canonical re-seed path.
     Kalburator::Shape::TransformationRegistry::instance().clear();
     Kalburator::Shape::DomainRegistry::instance().clear();
-    Kalburator::Shape::DomainRegistry::instance().registerDomain(
-        std::make_shared<Kalburator::Contacts::ContactsDomainPlugin>());
+    Kalburator::Shape::DomainOperationsRegistry::instance().clear();
+    Kalburator::Sync::BackendRegistry::instance().clear();
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
 }
 
 void TestContactsBackendPlugin::pluginIdentity()
@@ -192,11 +193,10 @@ void TestContactsBackendPlugin::formatConflictRecordHtml_includesTitleAndPre()
 
 void TestContactsBackendPlugin::constructorRegistersPalmShape()
 {
-    // The previous slot's cleanup() left both registries empty except for
-    // a freshly-seeded ContactsDomainPlugin instance in the
-    // DomainRegistry. Constructing a ContactsBackendPlugin must trigger
-    // DomainRegistry::initialize (registering vcard4) and then register
-    // the palm peer shape and palm <-> vcard4 edges.
+    // The previous slot's cleanup() left both registries seeded via
+    // registerStockPlugins() (which registers vcard4 via ContactsPlugin).
+    // Constructing a ContactsBackendPlugin must additionally register the
+    // palm peer shape and palm <-> vcard4 edges.
     auto& reg = Kalburator::Shape::TransformationRegistry::instance();
 
     ContactsBackendPlugin plugin;

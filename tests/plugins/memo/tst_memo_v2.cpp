@@ -37,6 +37,8 @@
 #include "synctypes.h"
 #include "collectioninfo.h"
 #include "backendrecord.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmRecord;
@@ -112,6 +114,10 @@ void TestMemoV2::initTestCase()
 {
     // wildpalms_memo_v2.so installs at build/lib/wildpalms/plugins/.
     QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
+    // K.7: seed DomainRegistry with stock plugins so dispatchSync finds
+    // the memo domain definition (MemoPlugin).
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
 }
 
 void TestMemoV2::freshSync_palmMemos_arriveAsMarkdownOnPC()

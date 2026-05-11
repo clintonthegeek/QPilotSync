@@ -42,6 +42,8 @@
 #include "collectioninfo.h"
 #include "backendrecord.h"
 #include "shape.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using WildPalms::PalmCodecs::Contact;
 using WildPalms::PalmCodecs::encodeContact;
@@ -143,6 +145,10 @@ void TestContactsV2::initTestCase()
 {
     qApp->setApplicationName(QStringLiteral("tst_contacts_v2"));
     QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
+    // K.7: seed DomainRegistry + TransformationRegistry with stock plugins
+    // so SyncEngineWorker::dispatchSync finds the contacts domain definition.
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
 }
 
 void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()

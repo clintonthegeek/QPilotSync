@@ -22,6 +22,8 @@
 #include "backendconfiguration.h"
 #include "backendregistry.h"
 #include "syncbackend.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 #include <KCalendarCore/MemoryCalendar>
 #include <KCalendarCore/ICalFormat>
@@ -78,6 +80,14 @@ class TstRuntimeCalDavE2E : public QObject
 {
     Q_OBJECT
 private slots:
+    void initTestCase()
+    {
+        // K.7: seed DomainRegistry with stock plugins so dispatchSync
+        // finds domain definitions (CalendarPlugin, BlobPlugin, etc.).
+        Kalburator::PluginManager pm;
+        Kalburator::registerStockPlugins(pm);
+    }
+
     void palm_to_caldav_propagates();
     void caldav_to_palm_propagates();
     void bidirectional_no_conflict();

@@ -7,6 +7,8 @@
 #include "collectioninfo.h"
 #include "backendrecord.h"
 #include "synctypes.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using namespace WildPalms::Runtime;
 using namespace Kalburator::Sync;
@@ -14,6 +16,14 @@ using namespace Kalburator::Sync;
 class TestPalmRuntimeHotSync : public QObject {
     Q_OBJECT
 private slots:
+    void initTestCase()
+    {
+        // K.7: seed DomainRegistry with stock plugins so dispatchSync
+        // finds the blob domain definition (BlobPlugin).
+        Kalburator::PluginManager pm;
+        Kalburator::registerStockPlugins(pm);
+    }
+
     void hotSync_emptyTarget_recordPropagates() {
         QTemporaryDir profileDir;
         QVERIFY(profileDir.isValid());

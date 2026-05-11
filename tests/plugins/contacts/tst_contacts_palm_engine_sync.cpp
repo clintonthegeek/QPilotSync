@@ -66,6 +66,9 @@
 #include "palm/codecs/contactcodec.h"
 #include "palm/sync/palmrecord.h"
 #include "contactsdomainextension.h"
+#include "domainoperationsregistry.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 #include <KCalendarCore/MemoryCalendar>
 #include <KContacts/Addressee>
@@ -348,28 +351,36 @@ private slots:
 
 void TestContactsPalmEngineSync::initTestCase()
 {
+    // K.7: registerStockPlugins seeds both DomainRegistry (contacts
+    // domain definition needed by SyncEngineWorker::dispatchSync) and
+    // TransformationRegistry (contacts shapes + vcard4 canonical shape).
+    // Must run before any SyncEngine is constructed.
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
+
     // Register palm <-> vcard4 edges in the process-wide registry
     // BEFORE any SyncEngine is constructed for this test. The engine's
     // shape-resolution path (syncengine.cpp:1441-1451) consults this
     // registry to compute the LossProfile passed to ISyncHost::syncStarted.
     auto &reg = TransformationRegistry::instance();
-    // Pre-register the vcard4 endpoint that ContactsDomainExtension
-    // depends on (matches tst_contactsdomainextension's pattern: in
-    // WP-only test envs, libkalburator's KalburatorDomainContacts
-    // static registrar may not have run, so we stub vcard4 ourselves).
-    const Shape v4{ DomainId{"contacts"}, EncodingId{"vcard4"} };
-    reg.registerShape(v4, {});
     ContactsDomainExtension::registerWith(reg);
 }
 
 void TestContactsPalmEngineSync::cleanup()
 {
-    // Process-wide registry must be reset between test classes that
-    // touch it; the contacts plugin tests in this directory share
-    // process state via QTEST_MAIN. Phase F2 FINDINGS: registry is a
-    // process-wide singleton and leaks across tests otherwise.
+    // Process-wide registry must be reset between tests; contacts plugin
+    // tests in this directory share process state. Phase F2 FINDINGS:
+    // registry is a process-wide singleton and leaks across tests.
+    // K.7: clear all four registries so re-seeding via registerStockPlugins
+    // below succeeds (no CanonicalConflict / DoubleBinding from prior slot).
     TransformationRegistry::instance().clear();
     Kalburator::Shape::DomainRegistry::instance().clear();
+    Kalburator::Shape::DomainOperationsRegistry::instance().clear();
+    Kalburator::Sync::BackendRegistry::instance().clear();
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
+    auto &reg = TransformationRegistry::instance();
+    ContactsDomainExtension::registerWith(reg);
 }
 
 void TestContactsPalmEngineSync::enginePassesPalmBytesThroughVerbatim_diagnostic()

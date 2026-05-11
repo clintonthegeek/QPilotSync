@@ -34,6 +34,8 @@
 #include "synctypes.h"
 #include "collectioninfo.h"
 #include "backendrecord.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using WildPalms::PalmCodecs::Todo;
 using WildPalms::PalmCodecs::encodeTodo;
@@ -132,6 +134,10 @@ void TestTodoV2::initTestCase()
 {
     qApp->setApplicationName(QStringLiteral("tst_todo_v2"));
     QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
+    // K.7: seed DomainRegistry with stock plugins so dispatchSync finds
+    // the todo domain definition (TodoPlugin).
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
 }
 
 void TestTodoV2::freshSync_palmTodo_arrivesAsVtodoOnPC()

@@ -34,6 +34,8 @@
 #include "webcalfeed.h"
 
 #include "synctypes.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
 
 using namespace Kalburator::Sync;
 using WildPalms::WebcalPlugin::WebcalBlobBackend;
@@ -96,6 +98,10 @@ void TestWebcalV2E2E::initTestCase()
 {
     m_network = new QNetworkAccessManager(this);
     m_fetcher = new IcsFeedFetcher(m_network, this);
+    // K.7: seed DomainRegistry with stock plugins so dispatchSync finds
+    // the blob domain definition (BlobPlugin) used by BlobBackendAdapter.
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
 }
 
 void TestWebcalV2E2E::mirror_emptyTargetGainsAllSourceRecords()
