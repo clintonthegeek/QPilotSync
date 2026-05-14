@@ -27,6 +27,8 @@
 #include "palm/device/pilotlinkpalmdatabaseaccess.h"
 
 #include <rawfilesbackend.h>
+#include <caldavbackendcontribution.h>
+#include <carddavbackendcontribution.h>
 
 #include "runtime/calendarcollection_wp.h"
 
@@ -180,6 +182,14 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
           QDir(profilePath).filePath(QStringLiteral(".wildpalms-blob-baselines.db"))))
 {
     qRegisterMetaType<PalmRunResult>();
+
+    // Register provider contributions into this runtime's local registry.
+    // ProviderManager no longer auto-registers these (K.8a T6); the
+    // application layer is now responsible for seeding contributions.
+    m_registry->registerContribution(
+        std::make_shared<Kalburator::Sync::CalDavBackendContribution>());
+    m_registry->registerContribution(
+        std::make_shared<Kalburator::Sync::CardDavBackendContribution>());
 
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
