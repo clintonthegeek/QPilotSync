@@ -1,13 +1,11 @@
 #include "synchost_wp.h"
 
-#include "calendarcollection_wp.h"
 #include "syncconfigstore_wp.h"
 
 namespace WildPalms::FullSync {
 
-SyncHost_WP::SyncHost_WP(CalendarCollection_WP *collection, SyncConfigStore_WP *configStore)
-    : m_collection(collection)
-    , m_configStore(configStore)
+SyncHost_WP::SyncHost_WP(SyncConfigStore_WP *configStore)
+    : m_configStore(configStore)
 {
 }
 

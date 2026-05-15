@@ -98,7 +98,6 @@ function(add_runtime_test TEST_NAME)
     )
 endfunction()
 
-add_runtime_test(test_fullsync_calendarcollection test_fullsync_calendarcollection.cpp)
 add_runtime_test(test_fullsync_syncconfigstore    test_fullsync_syncconfigstore.cpp)
 add_runtime_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
 

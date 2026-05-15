@@ -12,14 +12,13 @@ class SyncBackend;
 
 namespace WildPalms::FullSync {
 
-class CalendarCollection_WP;
 class SyncConfigStore_WP;
 
 // G.9.a impl of Kalburator::Sync::ISyncHost with narrowed interface.
 class SyncHost_WP : public Kalburator::Sync::ISyncHost
 {
 public:
-    SyncHost_WP(CalendarCollection_WP *collection, SyncConfigStore_WP *configStore);
+    explicit SyncHost_WP(SyncConfigStore_WP *configStore);
     ~SyncHost_WP() override;
 
     void registerBackend(const QString &id, Kalburator::Sync::SyncBackend *backend);
@@ -38,7 +37,6 @@ public:
     int recordChangedCount() const { return m_recordChangedCount; }
 
 private:
-    CalendarCollection_WP *m_collection;
     SyncConfigStore_WP *m_configStore;
     QHash<QString, Kalburator::Sync::SyncBackend*> m_backends;
 

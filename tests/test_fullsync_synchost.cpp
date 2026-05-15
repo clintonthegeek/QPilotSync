@@ -5,16 +5,11 @@
 #include <QTemporaryDir>
 #include <QTimeZone>
 
-#include <KCalendarCore/Event>
-#include <KCalendarCore/MemoryCalendar>
-
-#include "calendarcollection_wp.h"
 #include "conflictpresenter_wp.h"
 #include "conflictresolver_wp.h"
 #include "synchost_wp.h"
 #include "syncconfigstore_wp.h"
 
-using WildPalms::FullSync::CalendarCollection_WP;
 using WildPalms::FullSync::ConflictPresenter_WP;
 using WildPalms::FullSync::ConflictResolver_WP;
 using WildPalms::FullSync::SyncConfigStore_WP;
@@ -40,20 +35,18 @@ private:
 
 void TestFullSyncSyncHost::configStoreIsExposed()
 {
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
     QSettings settings(m_tempDir.path() + QLatin1String("/a.ini"), QSettings::IniFormat);
     SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    SyncHost_WP host(&store);
 
     QCOMPARE(host.configStore(), static_cast<Kalburator::Sync::ISyncConfigStore*>(&store));
 }
 
 void TestFullSyncSyncHost::recordChangedCounterTicks()
 {
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
     QSettings settings(m_tempDir.path() + QLatin1String("/b.ini"), QSettings::IniFormat);
     SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    SyncHost_WP host(&store);
 
     QCOMPARE(host.recordChangedCount(), 0);
 
@@ -69,10 +62,9 @@ void TestFullSyncSyncHost::recordChangedCounterTicks()
 
 void TestFullSyncSyncHost::backendRegistrationLookup()
 {
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
     QSettings settings(m_tempDir.path() + QLatin1String("/c.ini"), QSettings::IniFormat);
     SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    SyncHost_WP host(&store);
 
     QVERIFY(host.backendById(QStringLiteral("palm")) == nullptr);
     QVERIFY(host.backends().isEmpty());

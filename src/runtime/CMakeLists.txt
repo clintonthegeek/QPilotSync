@@ -22,8 +22,9 @@ add_library(WildPalmsRuntime STATIC
     installsourcecollector.cpp
     # Phase E.15b — Full-Sync host-interface implementations relocated
     # from src/fullsync/. WildPalmsFullSync no longer exists.
-    calendarcollection_wp.h
-    calendarcollection_wp.cpp
+    # K.8b T8: CalendarCollection_WP deleted (was ICalendarCollection shim
+    # for the eager-preload loop; no longer needed after K.7 + T0 removed
+    # the CalendarPluginWriter null-guard requirement).
     conflictpresenter_wp.h
     conflictpresenter_wp.cpp
     conflictresolver_wp.h

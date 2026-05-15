@@ -43,8 +43,6 @@ namespace WildPalms {
     class IBackendPluginV2;
 }
 
-namespace WildPalms::FullSync { class CalendarCollection_WP; }
-
 namespace WildPalms::Runtime {
 
 class PalmDeviceAccess;
@@ -114,10 +112,6 @@ public:
                                         std::unique_ptr<Kalburator::Sync::SyncBackend> backend);
     void setLinkForTest(KPilotLink *link);
 
-    /// Expose the CalendarCollection_WP for E2E tests to seed and inspect.
-    WildPalms::FullSync::CalendarCollection_WP *calendarCollectionForTest() const
-        { return m_calendarCollection.get(); }
-
     /// Borrowed reference to PalmRuntime's BackendRegistry. Lifetime ==
     /// PalmRuntime's. AccountController borrows this for provider-supplied
     /// backend registration; AC is constructed AFTER PalmRuntime in
@@ -175,7 +169,6 @@ private:
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     bool                                                         m_running = false;
     std::vector<std::unique_ptr<Kalburator::Sync::SyncBackend>>  m_ownedBackends;
-    std::unique_ptr<WildPalms::FullSync::CalendarCollection_WP>  m_calendarCollection;
 };
 
 }  // namespace WildPalms::Runtime

@@ -1,5 +1,5 @@
 // Phase J Task 9: CalDAV E2E integration test.
-// Wires FakeCalDavServer + CalDavProvider + PalmRuntime + CalendarCollection_WP
+// Wires FakeCalDavServer + CalDavProvider + PalmRuntime
 // through the real SyncEngine to verify end-to-end calendar sync.
 
 #include <QtTest/QtTest>
@@ -11,7 +11,6 @@
 
 #include "runtime/palmruntime.h"
 #include "runtime/palmrunresult.h"
-#include "runtime/calendarcollection_wp.h"
 #include "mockblobbackend.h"
 #include "collectioninfo.h"
 #include "backendrecord.h"
@@ -26,10 +25,6 @@
 #include "stock_plugins.h"
 // K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
 #include "../blobsyncbackendwrapper.h"
-
-#include <KCalendarCore/MemoryCalendar>
-#include <KCalendarCore/ICalFormat>
-#include <KCalendarCore/Event>
 
 using namespace WildPalms::Runtime;
 using namespace Kalburator::Sync;
@@ -136,12 +131,6 @@ void TstRuntimeCalDavE2E::palm_to_caldav_propagates()
             std::move(palmBlob), kPalmBkId, kCalShape));
 
     {
-        auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
-        cal->setId(kPalmCalId);
-        runtime.calendarCollectionForTest()->addCalendar(cal);
-    }
-
-    {
         SyncMapping m;
         m.id = QStringLiteral("test-p2c");
         m.sourceBackend = kPalmBkId;
@@ -167,15 +156,6 @@ void TstRuntimeCalDavE2E::palm_to_caldav_propagates()
     // network PUT).
     QVERIFY(server.hasEvent(QStringLiteral("/calendars/testuser/personal/"),
                             QStringLiteral("event-palm-001@palm")));
-
-    auto *cal = runtime.calendarCollectionForTest()->calendar(kPalmCalId);
-    QVERIFY(cal != nullptr);
-    // The host MemoryCalendar is *not* auto-populated by the engine
-    // from the palm blob during sync — that would require the runtime
-    // to wire IBlobBackend reads through the CalendarCollection_WP, a
-    // separate concern downstream of K.4. The palm-side data lives in
-    // the palm IBlobBackend; what we assert here is just the
-    // propagation to caldav.
 }
 
 void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
@@ -220,12 +200,6 @@ void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
             std::move(palmBlobOwned), kPalmBkId, kCalShape));
 
     {
-        auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
-        cal->setId(kPalmCalId);
-        runtime.calendarCollectionForTest()->addCalendar(cal);
-    }
-
-    {
         SyncMapping m;
         m.id = QStringLiteral("test-c2p");
         m.sourceBackend = kCaldavBkId;
@@ -242,10 +216,6 @@ void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
     QVERIFY(future.resultAt(0).success);
 
     QVERIFY(!palmBlob->recordsIn(kPalmCalId).isEmpty());
-
-    auto *cal = runtime.calendarCollectionForTest()->calendar(kPalmCalId);
-    QVERIFY(cal != nullptr);
-    QVERIFY(!cal->events().isEmpty());
 }
 
 void TstRuntimeCalDavE2E::bidirectional_no_conflict()
@@ -292,12 +262,6 @@ void TstRuntimeCalDavE2E::bidirectional_no_conflict()
     runtime.registerBackendInstanceForTest(kPalmBkId,
         WildPalmsTest::BlobSyncBackendWrapper::wrap(
             std::move(palmBlobOwned), kPalmBkId, kCalShape));
-
-    {
-        auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
-        cal->setId(kPalmCalId);
-        runtime.calendarCollectionForTest()->addCalendar(cal);
-    }
 
     {
         SyncMapping m;
@@ -368,10 +332,6 @@ void TstRuntimeCalDavE2E::memory_calendar_observable_during_sync()
         WildPalmsTest::BlobSyncBackendWrapper::wrap(
             std::move(palmBlob), kPalmBkId, kCalShape));
 
-    auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
-    cal->setId(kPalmCalId);
-    runtime.calendarCollectionForTest()->addCalendar(cal);
-
     {
         SyncMapping m;
         m.id = QStringLiteral("live");
@@ -387,9 +347,6 @@ void TstRuntimeCalDavE2E::memory_calendar_observable_during_sync()
     auto future = runtime.hotSync();
     QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);
     QVERIFY(future.resultAt(0).success);
-
-    // CalendarCollection_WP must have the event from the server side
-    QVERIFY(!cal->events().isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TstRuntimeCalDavE2E)
