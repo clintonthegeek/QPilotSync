@@ -29,6 +29,12 @@ add_executable(tst_memoblobbackend
 target_include_directories(tst_memoblobbackend
     PRIVATE ${CMAKE_SOURCE_DIR}/src
 )
+# Prepend libkalburator's include dirs so "syncbackend.h" resolves to
+# Kalburator::Sync::SyncBackend (same as the plugin target itself).
+target_include_directories(tst_memoblobbackend BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
 target_link_libraries(tst_memoblobbackend
     PRIVATE
         WildPalmsPalmSync
@@ -52,6 +58,12 @@ add_executable(tst_memobackendplugin
 target_include_directories(tst_memobackendplugin
     PRIVATE ${CMAKE_SOURCE_DIR}/src
 )
+# Prepend libkalburator's include dirs so "syncbackend.h" resolves to
+# Kalburator::Sync::SyncBackend (same as the plugin target itself).
+target_include_directories(tst_memobackendplugin BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
 target_link_libraries(tst_memobackendplugin
     PRIVATE
         WildPalmsPalmSync
@@ -60,7 +72,6 @@ target_link_libraries(tst_memobackendplugin
         WildPalmsCore
         PalmDeviceAccessLib     # PalmDeviceAccess symbols
         Kalburator::Sync
-        KF6::CoreAddons
         KF6::I18n
         KF6::WidgetsAddons
         Qt::Widgets
@@ -70,7 +81,7 @@ target_link_libraries(tst_memobackendplugin
 add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
 set_tests_properties(tst_memobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# M5c Task 3: end-to-end via the real wildpalms_memo_v2.so plumbed
+# M5c Task 3: end-to-end via the real wildpalms_memo_static plumbed
 # through PalmRuntime + SyncEngine::runSyncFuture (replaces the V1
 # BackendPluginManager + runBlobTwoWay test that this file used pre-M5c).
 add_executable(tst_memo_v2 tst_memo_v2.cpp)

@@ -10,7 +10,7 @@
 #include "iblobbackend.h"
 #include "conflictrecord.h"   // Kalburator::Conflict::RecordSnapshot
 
-using WildPalms::Memo::MemoBackendPlugin;
+using WildPalms::Memo::MemoPlugin;
 using WildPalms::Memo::MemoBlobBackend;
 using WildPalms::Runtime::PalmDeviceAccess;
 
@@ -18,7 +18,6 @@ class TestMemoBackendPlugin : public QObject {
     Q_OBJECT
 private slots:
     void metadataStatics();
-    void claimsMemoDB();
     void createPalmBackendReturnsMemoBlobBackend();
     void viewHooksReportMemoSurface();
     void conflictHtmlRendersMemoTitleAndBody();
@@ -27,7 +26,7 @@ private slots:
 
 void TestMemoBackendPlugin::metadataStatics()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     QCOMPARE(p.pluginId(), QStringLiteral("memo"));
     QCOMPARE(p.displayName(), QStringLiteral("Memos"));
     QCOMPARE(p.description(),
@@ -35,15 +34,9 @@ void TestMemoBackendPlugin::metadataStatics()
     QCOMPARE(p.version(), QStringLiteral("2.0"));
 }
 
-void TestMemoBackendPlugin::claimsMemoDB()
-{
-    MemoBackendPlugin p;
-    QCOMPARE(p.claimedDatabases(), QStringList{QStringLiteral("MemoDB")});
-}
-
 void TestMemoBackendPlugin::createPalmBackendReturnsMemoBlobBackend()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     auto mock = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
     PalmDeviceAccess dev(std::move(mock));
 
@@ -54,7 +47,7 @@ void TestMemoBackendPlugin::createPalmBackendReturnsMemoBlobBackend()
 
 void TestMemoBackendPlugin::viewHooksReportMemoSurface()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     QCOMPARE(p.hasMainView(), true);
     QCOMPARE(p.mainViewName(), QStringLiteral("Memos"));
 
@@ -66,7 +59,7 @@ void TestMemoBackendPlugin::viewHooksReportMemoSurface()
 
 void TestMemoBackendPlugin::conflictHtmlRendersMemoTitleAndBody()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral("Grocery list\n- milk\n- eggs");
     snap.metadata[QStringLiteral("title")] = QStringLiteral("Grocery list");
@@ -79,7 +72,7 @@ void TestMemoBackendPlugin::conflictHtmlRendersMemoTitleAndBody()
 
 void TestMemoBackendPlugin::enrichSnapshotDecodesPalmBytesOnSourceSide()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     Kalburator::Conflict::RecordSnapshot snap;
     const auto palm = WildPalms::PalmCodecs::encodeMemo(
         {QStringLiteral("Shopping list\nfirst line extends"), false});
