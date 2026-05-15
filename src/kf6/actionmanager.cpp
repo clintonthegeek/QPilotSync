@@ -264,7 +264,10 @@ void ActionManager::updateProfileState(bool hasProfile)
     closeProfileAction()->setEnabled(hasProfile);
     profileSettingsAction()->setEnabled(hasProfile);
     installFilesAction()->setEnabled(hasProfile);
-    showConflictsAction()->setEnabled(hasProfile);
+    // showConflictsAction is permanently disabled: onShowConflicts() was removed
+    // when m_conflictStore was dropped in T13/T14.  Keep the action in the menu
+    // (for a future reimplementation) but never let it fire.
+    showConflictsAction()->setEnabled(false);
 }
 
 void ActionManager::updateConflictCount(int count)

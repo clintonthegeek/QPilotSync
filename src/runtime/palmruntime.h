@@ -88,6 +88,11 @@ public:
 
     bool isRunning() const { return m_running; }
 
+    /// Read-only view of the loaded Palm plugin instances.
+    /// Valid after registerPalmPlugins() (called from the constructor).
+    const std::vector<std::unique_ptr<Kalburator::Plugin>> &palmPlugins() const
+        { return m_palmPlugins; }
+
     // Replace the live mapping list. Caller must ensure isRunning() == false.
     // JSON shape is the same as Profile::syncMappingsJson() — array of objects
     // each round-trippable via syncMappingToJson()/syncMappingFromJson().
