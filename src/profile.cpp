@@ -6,6 +6,12 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QJsonDocument>
+#include <QDateTime>
+
+// K.8b T9/T10: accounts subgroup + sidecar migration
+#include <KConfig>
+#include <KConfigGroup>
+#include "backendconfiguration.h"
 
 const QString Profile::DEFAULT_CONFLICT_POLICY = "ask";
 const QString Profile::DEFAULT_DEVICE_PATH = "/dev/ttyUSB0";
@@ -345,12 +351,102 @@ bool Profile::load()
         }
     }
 
+    // K.8b T9: Accounts subgroup
+    {
+        m_accounts.clear();
+        settings.beginGroup(QStringLiteral("accounts"));
+        const QStringList acctIds = settings.childGroups();
+        for (const QString &acctId : acctIds) {
+            settings.beginGroup(acctId);
+            Kalburator::Sync::BackendConfiguration bc;
+            bc.id = acctId;
+            bc.type = settings.value(QStringLiteral("type"), QString()).toString();
+            bc.displayName = settings.value(QStringLiteral("displayName"), QString()).toString();
+            bc.enabled = settings.value(QStringLiteral("enabled"), true).toBool();
+            const QString paramsStr = settings.value(QStringLiteral("params")).toString();
+            if (!paramsStr.isEmpty()) {
+                const QJsonDocument doc = QJsonDocument::fromJson(paramsStr.toUtf8());
+                if (doc.isObject()) {
+                    const QJsonObject obj = doc.object();
+                    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+                        bc.connectionParams[it.key()] = it.value().toVariant();
+                    }
+                }
+            }
+            m_accounts.append(bc);
+            settings.endGroup();
+        }
+        settings.endGroup();
+    }
+
+    // K.8b T10: One-shot sidecar migration (added in T10)
+    // If accounts is empty AND old .wildpalms.providers sidecar exists, migrate it.
+    {
+        const QString sidecarPath = QDir(m_syncFolderPath).filePath(QStringLiteral(".wildpalms.providers"));
+        if (m_accounts.isEmpty() && QFile::exists(sidecarPath)) {
+            KConfig oldCfg(sidecarPath, KConfig::SimpleConfig);
+            KConfigGroup root = oldCfg.group(QStringLiteral("Providers"));
+            const QStringList subGroups = root.groupList();
+            for (const QString &id : subGroups) {
+                const KConfigGroup g = root.group(id);
+                Kalburator::Sync::BackendConfiguration bc;
+                bc.id = id;
+                bc.type = g.readEntry("kind", QString());
+                bc.displayName = g.readEntry("displayName", QString());
+                bc.enabled = true;
+                const QStringList keys = g.keyList();
+                for (const QString &k : keys) {
+                    if (k == QLatin1String("kind") || k == QLatin1String("displayName"))
+                        continue;
+                    bc.connectionParams[k] = g.readEntry(k, QString());
+                }
+                m_accounts.append(bc);
+            }
+            if (!m_accounts.isEmpty()) {
+                save(); // persist migrated accounts to .wildpalms.conf
+                const QString stamp = QDateTime::currentDateTimeUtc().toString(
+                    QStringLiteral("yyyyMMddTHHmmssZ"));
+                QFile::rename(sidecarPath, sidecarPath + QStringLiteral(".migrated.") + stamp);
+            }
+        }
+    }
+
     return true;
 }
 
 QJsonArray Profile::syncMappingsJson() const { return m_syncMappingsJson; }
 
 void Profile::setSyncMappingsJson(const QJsonArray &json) { m_syncMappingsJson = json; }
+
+// ========== Accounts (K.8b T9) ==========
+
+QList<Kalburator::Sync::BackendConfiguration> Profile::accounts() const
+{
+    return m_accounts;
+}
+
+void Profile::saveAccount(const Kalburator::Sync::BackendConfiguration &cfg)
+{
+    for (auto &existing : m_accounts) {
+        if (existing.id == cfg.id) {
+            existing = cfg;
+            return;
+        }
+    }
+    m_accounts.append(cfg);
+}
+
+void Profile::removeAccount(const QString &id)
+{
+    m_accounts.removeIf([&id](const Kalburator::Sync::BackendConfiguration &c) {
+        return c.id == id;
+    });
+}
+
+void Profile::setAccounts(const QList<Kalburator::Sync::BackendConfiguration> &list)
+{
+    m_accounts = list;
+}
 
 bool Profile::save()
 {
@@ -454,6 +550,28 @@ bool Profile::save()
         settings.setValue(QStringLiteral("syncMappings/json"),
                           QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
     }
+
+    // K.8b T9: Accounts subgroup — clear and rewrite
+    settings.beginGroup(QStringLiteral("accounts"));
+    settings.remove(QString()); // clear all existing entries
+    for (const auto &acct : m_accounts) {
+        settings.beginGroup(acct.id);
+        settings.setValue(QStringLiteral("type"), acct.type);
+        settings.setValue(QStringLiteral("displayName"), acct.displayName);
+        settings.setValue(QStringLiteral("enabled"), acct.enabled);
+        if (!acct.connectionParams.isEmpty()) {
+            QJsonObject paramsObj;
+            for (auto it = acct.connectionParams.constBegin();
+                 it != acct.connectionParams.constEnd(); ++it) {
+                paramsObj[it.key()] = QJsonValue::fromVariant(it.value());
+            }
+            QJsonDocument doc(paramsObj);
+            settings.setValue(QStringLiteral("params"),
+                              QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+        }
+        settings.endGroup();
+    }
+    settings.endGroup();
 
     settings.sync();
     return settings.status() == QSettings::NoError;

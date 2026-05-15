@@ -9,6 +9,9 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
+// K.8b T9: accounts subgroup — needs full type for QList<> member
+#include "backendconfiguration.h"
+
 /**
  * @brief Connection mode for Palm device
  *
@@ -258,6 +261,13 @@ public:
     QJsonArray syncMappingsJson() const;
     void setSyncMappingsJson(const QJsonArray &json);
 
+    // ========== Accounts (K.8b T9: replaces .wildpalms.providers sidecar) =========
+
+    QList<Kalburator::Sync::BackendConfiguration> accounts() const;
+    void saveAccount(const Kalburator::Sync::BackendConfiguration &cfg);
+    void removeAccount(const QString &id);
+    void setAccounts(const QList<Kalburator::Sync::BackendConfiguration> &list);
+
     // ========== Persistence ==========
 
     // Load settings from .wildpalms.conf in the sync folder
@@ -304,6 +314,9 @@ private:
     QMap<QString, QJsonObject> m_conduitSettings;
     QMap<QString, QString> m_databaseHandlers; ///< database name -> active conduit ID
     QJsonArray m_syncMappingsJson;
+
+    // K.8b T9: accounts (replaces .wildpalms.providers sidecar)
+    QList<Kalburator::Sync::BackendConfiguration> m_accounts;
 
     // Default values
     static const QString DEFAULT_CONFLICT_POLICY;

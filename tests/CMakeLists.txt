@@ -74,6 +74,23 @@ add_wildpalms_test(test_profile
     test_profile.cpp
 )
 
+# K.8b T9: Profile accounts subgroup.
+# Needs Kalburator::Sync directly because profile.h includes
+# backendconfiguration.h and the include path is not propagated
+# through WildPalmsCore (which links Kalburator::Sync PRIVATELY).
+add_executable(test_profile_accounts test_profile_accounts.cpp)
+target_link_libraries(test_profile_accounts
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Kalburator::Sync
+        WildPalmsCore
+)
+add_test(NAME test_profile_accounts COMMAND test_profile_accounts)
+set_tests_properties(test_profile_accounts PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 add_wildpalms_test(test_multidatabase test_multidatabase.cpp)
 
 # ============================================================
