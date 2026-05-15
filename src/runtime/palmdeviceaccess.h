@@ -86,11 +86,20 @@ public:
 
     QThread *linkThread() const { return m_linkThread.get(); }
 
+    // Pause/resume the tickle heartbeat around sync operations.
+    // Thread-safe: auto-marshals to m_linkThread if called from another thread.
+    void pauseTickle();
+    void resumeTickle();
+
     // Test seam: replace the link factory used by connectDevice().
     // Default factory: new KPilotDeviceLink(paths, nullptr).
     // Tests inject a factory that returns a mock subclass.
     using LinkFactory = std::function<KPilotDeviceLink*(const QStringList &paths)>;
     void setLinkFactoryForTest(LinkFactory factory);
+
+    // Test seam: inject a pre-constructed KPilotLink directly.
+    // Only for tests that exercise backup/restore without a real device.
+    void setLinkForTest(KPilotLink *link);
 
 signals:
     void connectionStarted();
@@ -113,6 +122,7 @@ private:
     QObject                                                   *m_implOwner = nullptr;
 
     KPilotLink         *m_link    = nullptr;   // owned via deleteLater on disconnect
+    bool                m_ownsLink = false;    // false for test-injected links
     PalmTickle         *m_tickle  = nullptr;   // owned, parented to m_implOwner
     HandshakeResult     m_handshake;
     QString             m_pendingError;        // captured from errorOccurred during connect

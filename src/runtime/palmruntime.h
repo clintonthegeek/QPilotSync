@@ -13,7 +13,6 @@ namespace Kalburator { class PluginManager; class Plugin; }
 
 #include "palmrunresult.h"
 
-class KPilotLink;
 class KPilotDeviceLink;
 
 namespace Kalburator::Sync {
@@ -111,7 +110,6 @@ public:
     // K.8b T7: BlobBackendAdapter deleted; tests inject SyncBackend directly.
     void registerBackendInstanceForTest(const QString &id,
                                         std::unique_ptr<Kalburator::Sync::SyncBackend> backend);
-    void setLinkForTest(KPilotLink *link);
 
     /// Borrowed reference to PalmRuntime's BackendRegistry. Lifetime ==
     /// PalmRuntime's. AccountController borrows this for provider-supplied
@@ -155,7 +153,6 @@ private:
     Kalburator::Conflict::ConflictHandler                *m_conflictHandler = nullptr;
     QString                                                      m_profilePath;
     QString                                                      m_backupRoot;
-    KPilotLink                                                  *m_link = nullptr;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;

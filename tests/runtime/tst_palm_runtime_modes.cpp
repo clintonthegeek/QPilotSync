@@ -5,6 +5,7 @@
 #include <QFile>
 
 #include "runtime/palmruntime.h"
+#include "runtime/palmdeviceaccess.h"
 #include "runtime/palmrunresult.h"
 #include "mockblobbackend.h"
 #include "collectioninfo.h"
@@ -281,7 +282,11 @@ private slots:
 
         MockKPilotLink link;
         link.dbNames = {QStringLiteral("DatebookDB"), QStringLiteral("MemoDB")};
-        runtime.setLinkForTest(&link);
+        // K.8b T15: inject link via PalmDeviceAccess seam; setLinkForTest on
+        // PalmRuntime removed — facade owns the link now.
+        auto device = std::make_unique<PalmDeviceAccess>();
+        device->setLinkForTest(&link);
+        runtime.setDeviceAccessForTest(std::move(device));
 
         auto future = runtime.backup();
         QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);
@@ -313,7 +318,10 @@ private slots:
         PalmRuntime runtime(profileDir.path());
 
         MockKPilotLink link;
-        runtime.setLinkForTest(&link);
+        // K.8b T15: inject link via PalmDeviceAccess seam.
+        auto device = std::make_unique<PalmDeviceAccess>();
+        device->setLinkForTest(&link);
+        runtime.setDeviceAccessForTest(std::move(device));
 
         auto future = runtime.restore();
         QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);

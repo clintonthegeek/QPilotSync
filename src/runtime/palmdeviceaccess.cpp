@@ -49,14 +49,18 @@ PalmDeviceAccess::PalmDeviceAccess(QObject *parent)
 PalmDeviceAccess::~PalmDeviceAccess() {
     // Defensive: disconnect any link signals before anything else, so
     // queued events from the link thread don't deliver to a half-destroyed
-    // PalmDeviceAccess.
-    if (m_link) {
+    // PalmDeviceAccess. Only for owned links — test-injected links may
+    // already be destroyed when we run (caller controls their lifetime).
+    if (m_link && m_ownsLink) {
         disconnect(m_link, nullptr, this, nullptr);
     }
 
     if (m_linkThread && m_linkThread->isRunning()) {
-        // New-path teardown if connected.
-        if (m_connected.load() || m_link) {
+        // New-path teardown if connected or if we own the link.
+        // Test-injected links (m_ownsLink == false) are skipped here —
+        // doDisconnect() would call closeConnection() on a potentially
+        // destroyed object (the caller's stack var may outlive us or not).
+        if (m_connected.load() || m_ownsLink) {
             QMetaObject::invokeMethod(m_implOwner,
                 [this]() { doDisconnect(); },
                 Qt::BlockingQueuedConnection);
@@ -105,6 +109,7 @@ void PalmDeviceAccess::doConnect(const QStringList &devicePaths)
     link->moveToThread(m_linkThread.get());
     link->setParent(m_implOwner);  // ensures cleanup if thread is torn down
     m_link = link;
+    m_ownsLink = true;
 
     connect(link, &KPilotLink::logMessage, this,
             [this](const QString &m) { emit logMessage(m); },
@@ -194,6 +199,30 @@ void PalmDeviceAccess::setLinkFactoryForTest(LinkFactory factory) {
     m_linkFactory = std::move(factory);
 }
 
+void PalmDeviceAccess::setLinkForTest(KPilotLink *link) {
+    m_link = link;
+}
+
+void PalmDeviceAccess::pauseTickle() {
+    if (QThread::currentThread() != m_linkThread.get()) {
+        QMetaObject::invokeMethod(m_implOwner,
+            [this]() { if (m_tickle) m_tickle->stop(); },
+            Qt::BlockingQueuedConnection);
+        return;
+    }
+    if (m_tickle) m_tickle->stop();
+}
+
+void PalmDeviceAccess::resumeTickle() {
+    if (QThread::currentThread() != m_linkThread.get()) {
+        QMetaObject::invokeMethod(m_implOwner,
+            [this]() { if (m_tickle) m_tickle->start(); },
+            Qt::BlockingQueuedConnection);
+        return;
+    }
+    if (m_tickle) m_tickle->start();
+}
+
 void PalmDeviceAccess::cancelConnect()
 {
     QMetaObject::invokeMethod(m_implOwner,
@@ -227,9 +256,14 @@ void PalmDeviceAccess::doDisconnect()
     }
     m_impl.reset();   // destructs PilotLinkPalmDatabaseAccess on link thread
     if (m_link) {
-        m_link->closeConnection();
-        m_link->deleteLater();
+        if (m_ownsLink) {
+            // Only close/delete links that PalmDeviceAccess created.
+            // Test-injected links (setLinkForTest) are owned by the caller.
+            m_link->closeConnection();
+            m_link->deleteLater();
+        }
         m_link = nullptr;
+        m_ownsLink = false;
     }
     if (m_connected.exchange(false)) {
         emit deviceDisconnected();

@@ -224,9 +224,6 @@ void PalmRuntime::cancelConnect()
 void PalmRuntime::finishConnect()
 {
     if (!m_device) return;
-    // Cache the link from PalmDeviceAccess so backup/restore (which read
-    // m_link directly) keep working.
-    if (!m_link) m_link = m_device->link();
 
     // K.8b T6: iterate the five statically-loaded Palm plugins registered
     // by registerPalmPlugins(). Replaces the old KPluginMetaData .so
@@ -340,8 +337,16 @@ void PalmRuntime::reloadMappings(const QJsonArray &json)
 }
 
 void PalmRuntime::disconnectDevice() {
+    if (m_running) {
+        // Cannot disconnect while a sync/backup/restore is in flight — the
+        // running lambda holds a raw KPilotLink* captured from m_device->link().
+        // Tearing down m_device here would leave that pointer dangling.
+        // The UI should disable the disconnect action while isRunning(); this
+        // is the safety net for any caller that bypasses that guard.
+        qWarning() << "[PalmRuntime] disconnectDevice() ignored — run in flight";
+        return;
+    }
     if (m_device) m_device->disconnectDevice();   // emits deviceDisconnected via forward
-    m_link = nullptr;
     m_device.reset();
 }
 
@@ -359,8 +364,10 @@ void PalmRuntime::setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess> devic
     // K.8b T6: palm backends are now registered in finishConnect(), not via
     // registerPluginForTest().  Invoke finishConnect() here so tests that
     // inject a pre-built device still get their backends wired up.
+    // finishConnect() already emits deviceConnected() at its end — no second
+    // emit here (that would be a double-emission and confuse any listeners
+    // that gate on that signal arriving exactly once).
     finishConnect();
-    emit deviceConnected();
 }
 
 // K.8b T13: registerPluginForTest overloads removed (signatures deleted in
@@ -377,10 +384,6 @@ void PalmRuntime::registerBackendInstanceForTest(const QString &id,
 void PalmRuntime::setMappingsForTest(QList<Kalburator::Sync::SyncMapping> mappings) {
     m_mappings = std::move(mappings);
     m_engine->setSyncMappings(m_mappings);
-}
-
-void PalmRuntime::setLinkForTest(KPilotLink *link) {
-    m_link = link;
 }
 
 void PalmRuntime::setConflictHandler(
@@ -437,7 +440,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     // Pause the TickleWorker before the engine starts issuing DLP calls.
     // readAllRecords() for 500+ records takes > 5 s; the tickle fires
     // mid-stream and corrupts the DLP session.
-    if (m_link) m_link->pauseTickle();
+    if (m_device) m_device->pauseTickle();
 
     auto engineFuture = m_engine->runSyncFuture(
         ids, Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored);
@@ -464,7 +467,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         // Resume tickle on the main thread (this callback runs on the
         // engine worker thread).
         QMetaObject::invokeMethod(this, [this, r]() {
-            if (m_link) m_link->resumeTickle();
+            if (m_device) m_device->resumeTickle();
             emit runFinished(r);
         });
         return r;
@@ -505,7 +508,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
 
     // Pause the TickleWorker before the engine starts issuing DLP calls —
     // same race as runAllMappings().
-    if (m_link) m_link->pauseTickle();
+    if (m_device) m_device->pauseTickle();
 
     // For M3: calendar-only, single mapping. Dispatch only the first enabled
     // mapping; Plan 3 (M4) will add multi-mapping iteration once other plugins
@@ -529,7 +532,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         // Resume tickle on the main thread (this callback runs on the
         // engine worker thread).
         QMetaObject::invokeMethod(this, [this, r]() {
-            if (m_link) m_link->resumeTickle();
+            if (m_device) m_device->resumeTickle();
             emit runFinished(r);
         });
         return r;
@@ -550,7 +553,8 @@ QFuture<PalmRunResult> PalmRuntime::backup()
 {
     emit runStarted(QStringLiteral("Backup"));
 
-    if (!m_link) {
+    KPilotLink *link = m_device ? m_device->link() : nullptr;
+    if (!link) {
         PalmRunResult r;
         r.startTime = r.endTime = QDateTime::currentDateTimeUtc();
         r.success = false;
@@ -564,13 +568,12 @@ QFuture<PalmRunResult> PalmRuntime::backup()
     // the 5-second tickle timer fires mid-loop and corrupts the DLP session.
     // pauseTickle() uses BlockingQueuedConnection so the tickle thread is
     // fully stopped before we proceed.
-    m_link->pauseTickle();
+    m_device->pauseTickle();
 
     // Snapshot the DB list on the calling (main) thread — KPilotLink is not
     // thread-safe; all link calls must happen before we hand off to the pool.
-    const QStringList databases = m_link->listDatabases();
+    const QStringList databases = link->listDatabases();
     const QString backupDir = m_backupRoot;
-    KPilotLink *link = m_link;
 
     return QtConcurrent::run([this, databases, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
@@ -596,7 +599,7 @@ QFuture<PalmRunResult> PalmRuntime::backup()
 
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
-            m_link->resumeTickle();
+            if (m_device) m_device->resumeTickle();
             emit runFinished(r);
         });
         return r;
@@ -607,7 +610,8 @@ QFuture<PalmRunResult> PalmRuntime::restore()
 {
     emit runStarted(QStringLiteral("Restore"));
 
-    if (!m_link) {
+    KPilotLink *link = m_device ? m_device->link() : nullptr;
+    if (!link) {
         PalmRunResult r;
         r.startTime = r.endTime = QDateTime::currentDateTimeUtc();
         r.success = false;
@@ -617,9 +621,8 @@ QFuture<PalmRunResult> PalmRuntime::restore()
     }
 
     const QString backupDir = m_backupRoot;
-    KPilotLink *link = m_link;
 
-    m_link->pauseTickle();
+    m_device->pauseTickle();
 
     return QtConcurrent::run([this, backupDir, link]() -> PalmRunResult {
         PalmRunResult r;
@@ -644,7 +647,7 @@ QFuture<PalmRunResult> PalmRuntime::restore()
 
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
-            m_link->resumeTickle();
+            if (m_device) m_device->resumeTickle();
             emit runFinished(r);
         });
         return r;
