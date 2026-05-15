@@ -221,6 +221,13 @@ void PalmRuntime::cancelConnect()
     if (m_device) m_device->cancelConnect();
 }
 
+void PalmRuntime::cancelSync()
+{
+    if (m_activeSyncWatcher) {
+        m_activeSyncWatcher->cancel();
+    }
+}
+
 void PalmRuntime::finishConnect()
 {
     if (!m_device) return;
@@ -445,6 +452,22 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     auto engineFuture = m_engine->runSyncFuture(
         ids, Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored);
 
+    // K.8b T16: install cancellation watcher on the engine future so
+    // cancelSync() can propagate cancel() into SyncEngine::onCancelObserved.
+    if (m_activeSyncWatcher) {
+        m_activeSyncWatcher->cancel();
+        m_activeSyncWatcher->deleteLater();
+    }
+    m_activeSyncWatcher = new QFutureWatcher<void>(this);
+    connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
+            this, [this]() {
+                if (m_activeSyncWatcher) {
+                    m_activeSyncWatcher->deleteLater();
+                    m_activeSyncWatcher = nullptr;
+                }
+            });
+    m_activeSyncWatcher->setFuture(engineFuture);
+
     return engineFuture.then([this](QList<Kalburator::Sync::SyncResult> results) {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
@@ -514,6 +537,21 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
     // mapping; Plan 3 (M4) will add multi-mapping iteration once other plugins
     // are re-enabled.
     auto engineFuture = m_engine->runSyncFuture(ids.first(), ov);
+
+    // K.8b T16: install cancellation watcher (same pattern as runAllMappings).
+    if (m_activeSyncWatcher) {
+        m_activeSyncWatcher->cancel();
+        m_activeSyncWatcher->deleteLater();
+    }
+    m_activeSyncWatcher = new QFutureWatcher<void>(this);
+    connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
+            this, [this]() {
+                if (m_activeSyncWatcher) {
+                    m_activeSyncWatcher->deleteLater();
+                    m_activeSyncWatcher = nullptr;
+                }
+            });
+    m_activeSyncWatcher->setFuture(engineFuture);
 
     return engineFuture.then([this](Kalburator::Sync::SyncResult sr) {
         PalmRunResult r;

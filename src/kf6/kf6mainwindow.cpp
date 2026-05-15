@@ -691,10 +691,8 @@ void KF6MainWindow::startListening(const QString &devicePath)
 
     m_devicePollTimer->start(500);
 
-    // Note: cancelConnectionAction triggers PalmRuntime::cancelConnect
-    // which only cancels the open handshake. Mid-sync cancel is currently
-    // unsupported (would require PalmRuntime::cancelSync via QFutureWatcher
-    // cancellation propagation — TODO for follow-up).
+    // cancelConnectionAction now dispatches to cancelSync() when isRunning()
+    // (K.8b T16) or cancelConnect() during the connection handshake.
     m_actionManager->cancelConnectionAction()->setEnabled(true);
     updateMenuState(false);
 }
@@ -1077,8 +1075,15 @@ void KF6MainWindow::onCancelConnection()
     }
 
     if (m_palmRuntime) {
-        m_palmRuntime->cancelConnect();
-        m_logWidget->logInfo(i18n("Connection cancelled by user"));
+        if (m_palmRuntime->isRunning()) {
+            // K.8b T16: mid-sync cancel — routes into SyncEngine::onCancelObserved
+            // via QFutureWatcher::cancel() propagation.
+            m_palmRuntime->cancelSync();
+            m_logWidget->logInfo(i18n("Sync cancelled by user"));
+        } else {
+            m_palmRuntime->cancelConnect();
+            m_logWidget->logInfo(i18n("Connection cancelled by user"));
+        }
     }
     m_actionManager->cancelConnectionAction()->setEnabled(false);
 }

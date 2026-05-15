@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QFuture>
+#include <QFutureWatcher>
 #include <QJsonArray>
 #include <QList>
 #include <QString>
@@ -66,6 +67,11 @@ public:
 
     /// Cancel an in-progress connect.
     void cancelConnect();
+
+    /// Cancel a running hotSync / fullSync / copyPalmToPC / copyPCToPalm.
+    /// Routes QFutureWatcher::cancel() into SyncEngine::onCancelObserved.
+    /// No-op if no sync is running.
+    void cancelSync();
 
     void disconnectDevice();
     bool isDeviceConnected() const;
@@ -153,6 +159,10 @@ private:
     Kalburator::Conflict::ConflictHandler                *m_conflictHandler = nullptr;
     QString                                                      m_profilePath;
     QString                                                      m_backupRoot;
+    // K.8b T16: watcher tracking the in-flight engine future so cancelSync()
+    // can call cancel() into SyncEngine::onCancelObserved.
+    // QFutureWatcher<void> accepts any QFuture<T> via setFuture().
+    QFutureWatcher<void>                                        *m_activeSyncWatcher = nullptr;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;

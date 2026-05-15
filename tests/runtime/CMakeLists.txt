@@ -73,6 +73,27 @@ add_test(NAME tst_palm_runtime_hotsync COMMAND tst_palm_runtime_hotsync)
 set_tests_properties(tst_palm_runtime_hotsync PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# K.8b T16: PalmRuntime::cancelSync() — mid-sync cancel restoration
+add_executable(tst_palm_runtime_cancel_sync tst_palm_runtime_cancel_sync.cpp)
+target_link_libraries(tst_palm_runtime_cancel_sync
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_cancel_sync COMMAND tst_palm_runtime_cancel_sync)
+set_tests_properties(tst_palm_runtime_cancel_sync PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M5a Task 2: KalburatorInteractiveConflictHandler unit test
 add_executable(tst_kalburator_interactive_conflict_handler
     tst_kalburator_interactive_conflict_handler.cpp
