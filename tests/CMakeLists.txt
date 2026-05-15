@@ -160,24 +160,8 @@ add_subdirectory(palmcalendar)
 
 add_subdirectory(palmadapters)
 
-# ============================================================
-# Smoke Test - libkalburator linkage (Phase A)
-# ============================================================
-# Deliberately does NOT go through add_wildpalms_test(); the smoke test
-# links only Kalburator::Sync to isolate library linkage from WP-side
-# deps (WildPalmsCore, pisock, etc.).
-
-add_executable(test_libkalburator_smoke test_libkalburator_smoke.cpp)
-target_link_libraries(test_libkalburator_smoke
-    PRIVATE
-        Qt::Core
-        Qt::Test
-        Kalburator::Sync
-)
-add_test(NAME test_libkalburator_smoke COMMAND test_libkalburator_smoke)
-set_tests_properties(test_libkalburator_smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-)
+# K.8b T18: Smoke test deleted — libkalburator owns its own contract testing.
+# Consumer smoke tests are anti-patterns.
 
 # ============================================================
 # Test Data Directory
