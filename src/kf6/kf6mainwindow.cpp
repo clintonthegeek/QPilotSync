@@ -750,11 +750,12 @@ void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
 
     // Wire signals (Qt::UniqueConnection prevents duplicate wiring on
     // repeated connect attempts to the same PalmRuntime instance).
+    // NOTE: Qt::UniqueConnection requires PMF slots; with lambdas it
+    // returns an invalid connection and silently fails to wire.
     connect(m_palmRuntime.get(),
             &WildPalms::Runtime::PalmRuntime::connectionStarted,
-            this, [this]() {
-                statusBar()->showMessage(i18n("Connecting…"));
-            }, Qt::UniqueConnection);
+            this, &KF6MainWindow::onConnectionStarted,
+            Qt::UniqueConnection);
 
     connect(m_palmRuntime.get(),
             &WildPalms::Runtime::PalmRuntime::connectionComplete,
@@ -767,17 +768,8 @@ void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
 
     connect(m_palmRuntime.get(),
             &WildPalms::Runtime::PalmRuntime::deviceDisconnected,
-            this, [this]() {
-                updateMenuState(false);
-                statusBar()->showMessage(i18n("Disconnected"));
-
-                KNotification *notification = new KNotification(
-                    QStringLiteral("deviceDisconnected"), KNotification::CloseOnTimeout, this);
-                notification->setTitle(i18n("Device Disconnected"));
-                notification->setText(i18n("Palm device has been disconnected"));
-                notification->setIconName(QStringLiteral("network-disconnect"));
-                notification->sendEvent();
-            }, Qt::UniqueConnection);
+            this, &KF6MainWindow::onDeviceDisconnected,
+            Qt::UniqueConnection);
 
     connect(m_palmRuntime.get(),
             &WildPalms::Runtime::PalmRuntime::logMessage,
@@ -795,6 +787,24 @@ void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
 void KF6MainWindow::startConnection(const QString &devicePath)
 {
     startConnectionMultiPort(QStringList{devicePath});
+}
+
+void KF6MainWindow::onConnectionStarted()
+{
+    statusBar()->showMessage(i18n("Connecting…"));
+}
+
+void KF6MainWindow::onDeviceDisconnected()
+{
+    updateMenuState(false);
+    statusBar()->showMessage(i18n("Disconnected"));
+
+    KNotification *notification = new KNotification(
+        QStringLiteral("deviceDisconnected"), KNotification::CloseOnTimeout, this);
+    notification->setTitle(i18n("Device Disconnected"));
+    notification->setText(i18n("Palm device has been disconnected"));
+    notification->setIconName(QStringLiteral("network-disconnect"));
+    notification->sendEvent();
 }
 
 void KF6MainWindow::onConnectionComplete(bool success, const QString &error)

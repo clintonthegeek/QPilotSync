@@ -54,7 +54,9 @@ protected:
 private Q_SLOTS:
     // Device connection
     void onConnectDevice();
+    void onConnectionStarted();
     void onConnectionComplete(bool success, const QString &error);
+    void onDeviceDisconnected();
     void onDisconnectDevice();
     void onDevicePoll();
     void onCancelConnection();
