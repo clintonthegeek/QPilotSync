@@ -32,8 +32,8 @@ namespace WildPalms::Runtime {
 /// AccountController only manages credentials, connection state, and cascades
 /// mapping deletion when an account is removed.
 ///
-/// Persistence: <syncFolderPath>/.wildpalms.providers (KConfig sidecar to
-/// .wildpalms.conf). Same shape PlanStan adopted in Phase H.5.
+/// Persistence: Profile::accounts() (K.8b T11). Provider construction goes
+/// through BackendRegistry::contributionFor(kind)->createProvider().
 class AccountController : public QObject {
     Q_OBJECT
 public:
@@ -50,6 +50,7 @@ public:
                       Profile *profile,
                       PalmRuntime *palmRuntime,
                       QObject *parent = nullptr);
+    // syncFolderPath kept for API compatibility; not used for persistence.
     ~AccountController() override;
 
     /// Add a new provider. Persists immediately; connect() runs async.
@@ -75,6 +76,9 @@ public:
     /// MappingPromptDialog to look up providerById).
     Kalburator::Sync::ProviderManager *providerManager() const;
 
+    /// BackendRegistry (used by AddAccountDialog to enumerate contributions).
+    Kalburator::Sync::BackendRegistry *backendRegistry() const;
+
     /// Append rows to Profile::syncMappingsJson and persist. Used by
     /// MappingPromptDialog to bind a freshly-added provider's collections
     /// to Palm slots. The caller decides slot semantics; AC just persists.
@@ -87,12 +91,9 @@ signals:
     void mappingsChanged();   // emitted on cascade-delete (Task 6)
 
 private:
-    QString sidecarPath() const;
     void loadAndConnect();
-    void persist();
     QList<int> mappingIndicesFor(const QString &providerId) const;
 
-    QString                                          m_syncFolderPath;
     Kalburator::Sync::BackendRegistry               *m_registry;        // borrowed
     Profile                                         *m_profile;         // borrowed
     PalmRuntime                                     *m_palmRuntime;     // borrowed

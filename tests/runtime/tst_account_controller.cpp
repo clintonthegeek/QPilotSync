@@ -10,23 +10,17 @@
 #include "runtime/palmruntime.h"
 #include "profile.h"
 
-#include <KConfig>
-#include <KConfigGroup>
-
-#include <providermanager.h>
 #include <iprovider.h>
-#include <carddavprovider.h>
 #include <backendconfiguration.h>
 
 class TstAccountController : public QObject {
     Q_OBJECT
 private slots:
     void constructs_and_destructs_cleanly();
-    void loadFromProfile_reads_existing_sidecar();
-    void persist_writes_sidecar();
-    void addProvider_returns_uuid_and_persists();
+    void loadFromProfile_reads_existing_accounts();
+    void addProvider_returns_uuid_and_persists_to_profile();
     void addProvider_refused_for_unsupported_kind();
-    void removeProvider_drops_from_list_and_sidecar();
+    void removeProvider_drops_from_list_and_profile();
     void loadFromProfile_handlesUnreachableServer();
     void removeProvider_cascadesMappings();
     void mappingDescriptionsFor_returns_first_N();
@@ -54,25 +48,28 @@ void TstAccountController::constructs_and_destructs_cleanly()
     QCOMPARE(ac.mappingCountFor("nonexistent"), 0);
 }
 
-void TstAccountController::loadFromProfile_reads_existing_sidecar()
+void TstAccountController::loadFromProfile_reads_existing_accounts()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
 
-    // Hand-write a sidecar with one CardDAV provider.
+    // Seed Profile with one CardDAV account before constructing AC.
     {
-        KConfig cfg(QDir(dir.path()).filePath(".wildpalms.providers"),
-                    KConfig::SimpleConfig);
-        KConfigGroup root = cfg.group(QStringLiteral("Providers"));
-        KConfigGroup sub  = root.group(QStringLiteral("test-uuid-1"));
-        sub.writeEntry("kind", "carddav");
-        sub.writeEntry("displayName", "Personal CardDAV");
-        sub.writeEntry("url", "https://nonresolvable.example/");
-        sub.writeEntry("username", "alice");
-        cfg.sync();
+        Profile p(dir.path());
+        p.initialize();
+        Kalburator::Sync::BackendConfiguration cfg;
+        cfg.id = QStringLiteral("test-uuid-1");
+        cfg.type = QStringLiteral("carddav");
+        cfg.displayName = QStringLiteral("Personal CardDAV");
+        cfg.connectionParams[QStringLiteral("url")] =
+            QStringLiteral("https://nonresolvable.example/");
+        cfg.connectionParams[QStringLiteral("username")] = QStringLiteral("alice");
+        p.saveAccount(cfg);
+        QVERIFY(p.save());
     }
 
-    Profile profile(dir.path()); profile.initialize();
+    Profile profile(dir.path());
+    QVERIFY(profile.load());
     WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
 
     WildPalms::Runtime::AccountController ac(dir.path(),
@@ -87,31 +84,7 @@ void TstAccountController::loadFromProfile_reads_existing_sidecar()
              QStringLiteral("Personal CardDAV"));
 }
 
-void TstAccountController::persist_writes_sidecar()
-{
-    QTemporaryDir dir;
-    Profile profile(dir.path()); profile.initialize();
-    WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
-
-    {
-        WildPalms::Runtime::AccountController ac(dir.path(),
-            &rt.backendRegistry(), &profile, &rt);
-
-        Kalburator::Sync::BackendConfiguration cfg;
-        cfg.id = "manual-uuid";
-        cfg.displayName = "Manual";
-        cfg.connectionParams["url"] = "https://example.test/";
-        ac.addProvider("carddav", cfg);
-    }
-
-    QVERIFY(QFile::exists(QDir(dir.path())
-        .filePath(".wildpalms.providers")));
-    KConfig cfg(QDir(dir.path()).filePath(".wildpalms.providers"),
-                KConfig::SimpleConfig);
-    QVERIFY(cfg.hasGroup(QStringLiteral("Providers")));
-}
-
-void TstAccountController::addProvider_returns_uuid_and_persists()
+void TstAccountController::addProvider_returns_uuid_and_persists_to_profile()
 {
     QTemporaryDir dir;
     Profile profile(dir.path()); profile.initialize();
@@ -120,22 +93,21 @@ void TstAccountController::addProvider_returns_uuid_and_persists()
         &rt.backendRegistry(), &profile, &rt);
 
     Kalburator::Sync::BackendConfiguration cfg;
-    cfg.displayName = "TestServer";
-    cfg.connectionParams["url"] = "https://nonresolvable.example/";
-    cfg.connectionParams["username"] = "alice";
+    cfg.id = QStringLiteral("manual-uuid");
+    cfg.displayName = QStringLiteral("TestServer");
+    cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://nonresolvable.example/");
+    cfg.connectionParams[QStringLiteral("username")] = QStringLiteral("alice");
 
-    QString uuid = ac.addProvider("carddav", cfg);
+    QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
     QVERIFY(!uuid.isEmpty());
+    QCOMPARE(uuid, QStringLiteral("manual-uuid"));
     QCOMPARE(ac.providers().size(), 1);
 
-    QVERIFY(QFile::exists(QDir(dir.path()).filePath(".wildpalms.providers")));
-    KConfig sc(QDir(dir.path()).filePath(".wildpalms.providers"),
-               KConfig::SimpleConfig);
-    QVERIFY(sc.hasGroup("Providers"));
-    KConfigGroup root = sc.group("Providers");
-    QVERIFY(root.hasGroup(uuid));
-    QCOMPARE(root.group(uuid).readEntry("kind"),
-             QStringLiteral("carddav"));
+    // Verify account was persisted to Profile, not a sidecar.
+    const auto accts = profile.accounts();
+    QCOMPARE(accts.size(), 1);
+    QCOMPARE(accts.first().id, QStringLiteral("manual-uuid"));
+    QCOMPARE(accts.first().type, QStringLiteral("carddav"));
 }
 
 void TstAccountController::addProvider_refused_for_unsupported_kind()
@@ -147,13 +119,13 @@ void TstAccountController::addProvider_refused_for_unsupported_kind()
         &rt.backendRegistry(), &profile, &rt);
 
     Kalburator::Sync::BackendConfiguration cfg;
-    cfg.connectionParams["url"] = "https://x/";
-    QString uuid = ac.addProvider("unsupported-kind", cfg);
+    cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
+    QString uuid = ac.addProvider(QStringLiteral("unsupported-kind"), cfg);
     QVERIFY(uuid.isEmpty());
     QCOMPARE(ac.providers().size(), 0);
 }
 
-void TstAccountController::removeProvider_drops_from_list_and_sidecar()
+void TstAccountController::removeProvider_drops_from_list_and_profile()
 {
     QTemporaryDir dir;
     Profile profile(dir.path()); profile.initialize();
@@ -162,31 +134,38 @@ void TstAccountController::removeProvider_drops_from_list_and_sidecar()
         &rt.backendRegistry(), &profile, &rt);
 
     Kalburator::Sync::BackendConfiguration cfg;
-    cfg.connectionParams["url"] = "https://x/";
-    QString uuid = ac.addProvider("carddav", cfg);
+    cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
+    QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
     QCOMPARE(ac.providers().size(), 1);
+    QCOMPARE(profile.accounts().size(), 1);
 
     QVERIFY(ac.removeProvider(uuid));
     QCOMPARE(ac.providers().size(), 0);
 
-    KConfig sc(QDir(dir.path()).filePath(".wildpalms.providers"),
-               KConfig::SimpleConfig);
-    QVERIFY(!sc.group("Providers").hasGroup(uuid));
+    // Account must be gone from Profile, not just from the in-memory list.
+    QCOMPARE(profile.accounts().size(), 0);
 }
 
 void TstAccountController::loadFromProfile_handlesUnreachableServer()
 {
     QTemporaryDir dir;
+
+    // Seed Profile with an unreachable CardDAV account.
     {
-        KConfig sc(QDir(dir.path()).filePath(".wildpalms.providers"),
-                   KConfig::SimpleConfig);
-        KConfigGroup g = sc.group("Providers").group("dead-uuid");
-        g.writeEntry("kind", "carddav");
-        g.writeEntry("url", "https://this-server-does-not-resolve.invalid/");
-        g.writeEntry("username", "x");
-        sc.sync();
+        Profile p(dir.path());
+        p.initialize();
+        Kalburator::Sync::BackendConfiguration cfg;
+        cfg.id = QStringLiteral("dead-uuid");
+        cfg.type = QStringLiteral("carddav");
+        cfg.connectionParams[QStringLiteral("url")] =
+            QStringLiteral("https://this-server-does-not-resolve.invalid/");
+        cfg.connectionParams[QStringLiteral("username")] = QStringLiteral("x");
+        p.saveAccount(cfg);
+        QVERIFY(p.save());
     }
-    Profile profile(dir.path()); profile.initialize();
+
+    Profile profile(dir.path());
+    QVERIFY(profile.load());
     WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
     WildPalms::Runtime::AccountController ac(dir.path(),
         &rt.backendRegistry(), &profile, &rt);
@@ -205,8 +184,8 @@ void TstAccountController::removeProvider_cascadesMappings()
         &rt.backendRegistry(), &profile, &rt);
 
     Kalburator::Sync::BackendConfiguration cfg;
-    cfg.connectionParams["url"] = "https://x/";
-    const QString uuid = ac.addProvider("carddav", cfg);
+    cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
+    const QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
 
     // Seed three mappings: 2 reference the provider, 1 doesn't.
     QJsonArray maps;
@@ -246,8 +225,8 @@ void TstAccountController::mappingDescriptionsFor_returns_first_N()
         &rt.backendRegistry(), &profile, &rt);
 
     Kalburator::Sync::BackendConfiguration cfg;
-    cfg.connectionParams["url"] = "https://x/";
-    const QString uuid = ac.addProvider("carddav", cfg);
+    cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
+    const QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
 
     QJsonArray maps;
     for (int i = 0; i < 5; ++i) {

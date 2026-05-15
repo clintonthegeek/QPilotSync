@@ -109,7 +109,7 @@ void AccountsPage::onProviderRowChanged(int row) {
 }
 
 void AccountsPage::onAddClicked() {
-    AddAccountDialog dlg(this);
+    AddAccountDialog dlg(m_accounts->backendRegistry(), this);
     if (dlg.exec() != QDialog::Accepted) return;
 
     const QString uuid = m_accounts->addProvider(

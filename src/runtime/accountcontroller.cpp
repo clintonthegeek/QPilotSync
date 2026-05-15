@@ -8,15 +8,10 @@
 #include "providermanager.h"
 #include "iprovider.h"
 #include "backendregistry.h"
+#include "backendcontribution.h"
 #include "backendconfiguration.h"
 #include "collectioninfo.h"
-#include "caldavprovider.h"
-#include "carddavprovider.h"
 
-#include <KConfig>
-#include <KConfigGroup>
-
-#include <QDir>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUuid>
@@ -30,6 +25,7 @@ using Kalburator::Sync::IProvider;
 using Kalburator::Sync::BackendConfiguration;
 using Kalburator::Sync::CollectionInfo;
 using Kalburator::Sync::BackendRegistry;
+using Kalburator::Sync::BackendContribution;
 
 AccountController::AccountController(const QString &syncFolderPath,
                                      BackendRegistry *registry,
@@ -37,12 +33,12 @@ AccountController::AccountController(const QString &syncFolderPath,
                                      PalmRuntime *palmRuntime,
                                      QObject *parent)
     : QObject(parent)
-    , m_syncFolderPath(syncFolderPath)
     , m_registry(registry)
     , m_profile(profile)
     , m_palmRuntime(palmRuntime)
     , m_providerManager(std::make_unique<ProviderManager>(registry, this))
 {
+    Q_UNUSED(syncFolderPath)
     Q_ASSERT(m_registry);
     Q_ASSERT(m_profile);
     Q_ASSERT(m_palmRuntime);
@@ -64,52 +60,42 @@ AccountController::AccountController(const QString &syncFolderPath,
 
 AccountController::~AccountController() = default;
 
-QString AccountController::sidecarPath() const {
-    return QDir(m_syncFolderPath).filePath(QStringLiteral(".wildpalms.providers"));
-}
-
 void AccountController::loadAndConnect() {
-    KConfig cfg(sidecarPath(), KConfig::SimpleConfig);
-    KConfigGroup root = cfg.group(QStringLiteral("Providers"));
-    m_providerManager->loadFromProfile(root);
-    for (IProvider *p : m_providerManager->providers()) {
-        m_states.insert(p->id(), ConnectionState::Connecting);
+    for (const auto &cfg : m_profile->accounts()) {
+        BackendContribution *contribution = m_registry->contributionFor(cfg.type);
+        if (!contribution) continue;
+        auto provider = contribution->createProvider(this);
+        if (!provider) continue;
+        provider->load(cfg);
+        m_states.insert(cfg.id, ConnectionState::Connecting);
+        m_providerManager->addProvider(std::move(provider));
     }
     m_providerManager->connectAll();
-}
-
-void AccountController::persist() {
-    KConfig cfg(sidecarPath(), KConfig::SimpleConfig);
-    KConfigGroup root = cfg.group(QStringLiteral("Providers"));
-    m_providerManager->saveToProfile(root);
-    cfg.sync();
 }
 
 QString AccountController::addProvider(const QString &kind,
                                        const BackendConfiguration &config) {
     if (m_palmRuntime->isRunning()) return QString();
 
+    BackendContribution *contribution = m_registry->contributionFor(kind);
+    if (!contribution) return QString();
+
     BackendConfiguration cfg = config;
     if (cfg.id.isEmpty()) {
         cfg.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
-
-    std::unique_ptr<IProvider> provider;
-    if (kind == QStringLiteral("caldav")) {
-        provider = std::make_unique<Kalburator::Sync::CalDavProvider>();
-    } else if (kind == QStringLiteral("carddav")) {
-        provider = std::make_unique<Kalburator::Sync::CardDavProvider>();
-    } else {
-        return QString();
-    }
-
     cfg.type = kind;
+
+    auto provider = contribution->createProvider(this);
+    if (!provider) return QString();
     provider->load(cfg);
+
     const QString id = cfg.id;
+    m_profile->saveAccount(cfg);
+    m_profile->save();
 
     m_providerManager->addProvider(std::move(provider));
     m_states.insert(id, ConnectionState::Connecting);
-    persist();
 
     // Kick off async connect for just-this-one (connectAll connects all,
     // including the just-added one — ProviderManager handles idempotence).
@@ -138,7 +124,9 @@ bool AccountController::removeProvider(const QString &providerId) {
     m_providerManager->removeProvider(providerId);
     m_states.remove(providerId);
     m_lastErrors.remove(providerId);
-    persist();
+
+    m_profile->removeAccount(providerId);
+    m_profile->save();
     return true;
 }
 
@@ -184,6 +172,10 @@ QStringList AccountController::mappingDescriptionsFor(const QString &id,
 
 ProviderManager *AccountController::providerManager() const {
     return m_providerManager.get();
+}
+
+BackendRegistry *AccountController::backendRegistry() const {
+    return m_registry;
 }
 
 void AccountController::appendMappings(const QJsonArray &rows) {

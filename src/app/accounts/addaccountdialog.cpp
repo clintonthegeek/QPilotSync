@@ -1,8 +1,8 @@
 #include "addaccountdialog.h"
 
+#include <backendregistry.h>
+#include <backendcontribution.h>
 #include <iprovider.h>
-#include <caldavprovider.h>
-#include <carddavprovider.h>
 #include <backendconfiguration.h>
 
 #include <QComboBox>
@@ -17,11 +17,14 @@
 namespace WildPalms::App::Accounts {
 
 using Kalburator::Sync::IProvider;
-using Kalburator::Sync::CalDavProvider;
-using Kalburator::Sync::CardDavProvider;
+using Kalburator::Sync::BackendRegistry;
+using Kalburator::Sync::BackendContribution;
 using Kalburator::Sync::BackendConfiguration;
 
-AddAccountDialog::AddAccountDialog(QWidget *parent) : QDialog(parent) {
+AddAccountDialog::AddAccountDialog(BackendRegistry *registry, QWidget *parent)
+    : QDialog(parent)
+    , m_registry(registry)
+{
     setWindowTitle(tr("Add Account"));
     setModal(true);
     buildUi();
@@ -33,17 +36,31 @@ void AddAccountDialog::buildUi() {
     auto *outer = new QVBoxLayout(this);
 
     m_kindCombo = new QComboBox(this);
-    m_kindCombo->addItem(tr("CalDAV (calendar)"),  QStringLiteral("caldav"));
-    m_kindCombo->addItem(tr("CardDAV (contacts)"), QStringLiteral("carddav"));
-    outer->addWidget(m_kindCombo);
-
     m_configStack = new QStackedWidget(this);
-    outer->addWidget(m_configStack);
 
-    m_calDavProvider  = std::make_unique<CalDavProvider>();
-    m_cardDavProvider = std::make_unique<CardDavProvider>();
-    m_configStack->addWidget(m_calDavProvider->createConfigWidget(this));
-    m_configStack->addWidget(m_cardDavProvider->createConfigWidget(this));
+    for (auto *contribution : m_registry->contributions()) {
+        // Use the backendType() as the label; format it for display.
+        // e.g. "caldav" → "CalDAV", "carddav" → "CardDAV"
+        // For unknown types, just capitalise the first letter.
+        QString label = contribution->backendType();
+        if (label == QStringLiteral("caldav"))
+            label = tr("CalDAV (calendar)");
+        else if (label == QStringLiteral("carddav"))
+            label = tr("CardDAV (contacts)");
+        else {
+            label[0] = label[0].toUpper();
+        }
+        m_kindCombo->addItem(label, contribution->backendType());
+
+        auto provider = contribution->createProvider(this);
+        QWidget *cfg = provider ? provider->createConfigWidget(m_configStack) : nullptr;
+        if (!cfg) cfg = new QWidget(m_configStack);
+        m_configStack->addWidget(cfg);
+        m_providers.push_back(std::move(provider));
+    }
+
+    outer->addWidget(m_kindCombo);
+    outer->addWidget(m_configStack);
 
     m_testButton  = new QPushButton(tr("Test Connection"), this);
     m_statusLabel = new QLabel(this);
@@ -63,7 +80,12 @@ void AddAccountDialog::buildUi() {
     connect(m_testButton, &QPushButton::clicked,
             this, &AddAccountDialog::onTestConnection);
 
-    onKindChanged(0);
+    // Disable OK / Test if no contributions registered.
+    const bool hasItems = m_kindCombo->count() > 0;
+    m_testButton->setEnabled(hasItems);
+    buttons->button(QDialogButtonBox::Ok)->setEnabled(hasItems);
+
+    if (hasItems) onKindChanged(0);
 }
 
 QString AddAccountDialog::selectedKind() const {
@@ -76,10 +98,12 @@ void AddAccountDialog::onKindChanged(int index) {
 }
 
 void AddAccountDialog::onTestConnection() {
-    m_statusLabel->setText(tr("Testing..."));
-    IProvider *p = (selectedKind() == QStringLiteral("caldav"))
-        ? m_calDavProvider.get() : m_cardDavProvider.get();
+    const int idx = m_kindCombo->currentIndex();
+    if (idx < 0 || static_cast<std::size_t>(idx) >= m_providers.size()) return;
+    IProvider *p = m_providers.at(static_cast<std::size_t>(idx)).get();
+    if (!p) return;
 
+    m_statusLabel->setText(tr("Testing..."));
     auto fut = p->connect();
     auto *w = new QFutureWatcher<bool>(this);
     connect(w, &QFutureWatcher<bool>::finished, this, [this, w, p]() {
@@ -92,8 +116,10 @@ void AddAccountDialog::onTestConnection() {
 }
 
 BackendConfiguration AddAccountDialog::configuration() const {
-    IProvider *p = (selectedKind() == QStringLiteral("caldav"))
-        ? m_calDavProvider.get() : m_cardDavProvider.get();
+    const int idx = m_kindCombo->currentIndex();
+    if (idx < 0 || static_cast<std::size_t>(idx) >= m_providers.size()) return {};
+    IProvider *p = m_providers.at(static_cast<std::size_t>(idx)).get();
+    if (!p) return {};
     return p->save();
 }
 
