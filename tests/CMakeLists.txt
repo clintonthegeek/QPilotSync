@@ -13,6 +13,8 @@ function(add_wildpalms_test TEST_NAME)
             Qt::Test
             Qt::Widgets
             KF6::CalendarCore
+            KF6::ConfigCore
+            Kalburator::Sync
             WildPalmsCore
             pisock
             bluetooth
@@ -74,20 +76,35 @@ add_wildpalms_test(test_profile
     test_profile.cpp
 )
 
-# K.8b T9: Profile accounts subgroup.
-# Needs Kalburator::Sync directly because profile.h includes
-# backendconfiguration.h and the include path is not propagated
-# through WildPalmsCore (which links Kalburator::Sync PRIVATELY).
+# K.8b T9/T10: Profile accounts subgroup + sidecar migration.
+# Needs Kalburator::Sync and KF6::ConfigCore directly because profile.h
+# includes backendconfiguration.h and the include path / KConfig dep is
+# not propagated through WildPalmsCore (which links both PRIVATELY).
 add_executable(test_profile_accounts test_profile_accounts.cpp)
 target_link_libraries(test_profile_accounts
     PRIVATE
         Qt::Core
         Qt::Test
         Kalburator::Sync
+        KF6::ConfigCore
         WildPalmsCore
 )
 add_test(NAME test_profile_accounts COMMAND test_profile_accounts)
 set_tests_properties(test_profile_accounts PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+add_executable(test_profile_sidecar_migration test_profile_sidecar_migration.cpp)
+target_link_libraries(test_profile_sidecar_migration
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Kalburator::Sync
+        KF6::ConfigCore
+        WildPalmsCore
+)
+add_test(NAME test_profile_sidecar_migration COMMAND test_profile_sidecar_migration)
+set_tests_properties(test_profile_sidecar_migration PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
