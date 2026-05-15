@@ -177,15 +177,23 @@ private:
 };
 
 // K.8b T6: helper for building PluginManifests for the static Palm plugins.
+// K.8b T6 fix: Palm plugins have no definesDomains / shapeContributions /
+// domainOperations — applyPlugin() is a no-op for them.  requiresDomains
+// must NOT be set here: PluginManager::resolve() only checks within the
+// same batch, so a "calendar" requirement would fail with MissingDependency
+// whenever stock plugins are already loaded from a prior loadInProcess()
+// call (common in tests).  The domain parameter is kept for callers that
+// may need it in future, but ignored in the manifest.
 static Kalburator::PluginManifest mkPalmManifest(const QString &id,
-                                                  const QString &domain)
+                                                  const QString & /*domain*/)
 {
     Kalburator::PluginManifest m;
     m.id                    = id;
     m.version               = QStringLiteral("1.0");
     m.displayName           = id;
     m.kalburatorPluginVersion = QStringLiteral("1.0");
-    m.requiresDomains       = { domain };
+    // definesDomains and requiresDomains intentionally empty: Palm plugins
+    // do not participate in the libkalburator domain/shape system.
     return m;
 }
 
@@ -244,25 +252,39 @@ void PalmRuntime::registerPalmPlugins()
     using namespace WildPalms::TodoPlugin;
     using namespace WildPalms::WebcalPlugin;
 
-    m_pluginManager = std::make_unique<Kalburator::PluginManager>();
-
+    // Always create fresh plugin instances — each PalmRuntime owns its own
+    // set so that createPalmBackend() and createConflictHandler() can hold
+    // per-runtime state (device pointer, category store, etc.).
     auto cal  = std::make_unique<CalendarBackendPlugin>();
     auto con  = std::make_unique<ContactsBackendPlugin>();
     auto memo = std::make_unique<MemoPlugin>();
     auto todo = std::make_unique<TodoBackendPlugin>();
     auto webc = std::make_unique<WebcalBackendPlugin>();
 
-    QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
-        { cal.get(),  mkPalmManifest(QStringLiteral("wildpalms.calendar"),    QStringLiteral("calendar")) },
-        { con.get(),  mkPalmManifest(QStringLiteral("wildpalms.contacts"),    QStringLiteral("contacts")) },
-        { memo.get(), mkPalmManifest(QStringLiteral("wildpalms.memo"),        QStringLiteral("memo"))     },
-        { todo.get(), mkPalmManifest(QStringLiteral("wildpalms.todo"),        QStringLiteral("todo"))     },
-        { webc.get(), mkPalmManifest(QStringLiteral("wildpalms.webcalendar"), QStringLiteral("calendar")) },
-    };
+    // K.8b T6: loadInProcess registers the plugins into the process-wide
+    // singletons (DomainRegistry, TransformationRegistry, BackendRegistry).
+    // These singletons live for the process lifetime, so a second PalmRuntime
+    // in the same process (common in tests) must NOT call loadInProcess()
+    // again — the singletons reject duplicate ids with CanonicalConflict /
+    // DoubleBinding.  Guard with a process-level flag; registrations from
+    // the first instance remain valid for all subsequent instances.
+    static bool s_globalRegistrationDone = false;
+    if (!s_globalRegistrationDone) {
+        m_pluginManager = std::make_unique<Kalburator::PluginManager>();
 
-    if (!m_pluginManager->loadInProcess(items)) {
-        qWarning() << "[PalmRuntime] Failed to load Palm plugins via PluginManager";
-        return;
+        QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
+            { cal.get(),  mkPalmManifest(QStringLiteral("wildpalms.calendar"),    QStringLiteral("calendar")) },
+            { con.get(),  mkPalmManifest(QStringLiteral("wildpalms.contacts"),    QStringLiteral("contacts")) },
+            { memo.get(), mkPalmManifest(QStringLiteral("wildpalms.memo"),        QStringLiteral("memo"))     },
+            { todo.get(), mkPalmManifest(QStringLiteral("wildpalms.todo"),        QStringLiteral("todo"))     },
+            { webc.get(), mkPalmManifest(QStringLiteral("wildpalms.webcalendar"), QStringLiteral("calendar")) },
+        };
+
+        if (!m_pluginManager->loadInProcess(items)) {
+            qWarning() << "[PalmRuntime] Failed to load Palm plugins via PluginManager";
+            return;
+        }
+        s_globalRegistrationDone = true;
     }
 
     m_palmPlugins.push_back(std::move(cal));
@@ -462,6 +484,10 @@ KPilotDeviceLink *PalmRuntime::deviceLink() const {
 
 void PalmRuntime::setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess> device) {
     m_device = std::move(device);
+    // K.8b T6: palm backends are now registered in finishConnect(), not via
+    // registerPluginForTest().  Invoke finishConnect() here so tests that
+    // inject a pre-built device still get their backends wired up.
+    finishConnect();
     emit deviceConnected();
 }
 

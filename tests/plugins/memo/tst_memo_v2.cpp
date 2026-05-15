@@ -17,15 +17,15 @@
 //   - a TwoWay SyncMapping
 // then runtime.hotSync() executes the full SyncEngine::runSyncFuture path.
 
+// K.8b T6: KPluginFactory / IBackendPluginV2 includes removed.
+// The stale wildpalms_memo_v2.so no longer exists (plugins are now STATIC).
+// PalmRuntime::registerPalmPlugins() loads the backend in-process;
+// setDeviceAccessForTest() calls finishConnect() which wires the backend.
 #include <QtTest/QtTest>
 #include <QApplication>
 #include <QTemporaryDir>
 #include <QFuture>
 
-#include <KPluginFactory>
-#include <KPluginMetaData>
-
-#include "core/ibackendplugin_v2.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "palm/codecs/memocodec.h"
 #include "plugins/memo/memomarkdown.h"
@@ -78,27 +78,6 @@ Kalburator::Sync::SyncMapping makeTwoWayMapping()
     return m;
 }
 
-// Loads wildpalms_memo_v2.so via KPluginFactory and returns a QObject
-// pointer downcast to IBackendPluginV2*. The QObject is parented to
-// `parent` so Qt cleanup handles it.
-WildPalms::IBackendPluginV2 *loadMemoPluginV2(QObject *parent)
-{
-    const auto metaDatas = KPluginMetaData::findPlugins(
-        QStringLiteral("wildpalms/plugins"),
-        [](const KPluginMetaData &md) {
-            return md.value(QStringLiteral("X-WildPalms-PluginType"))
-                       == QStringLiteral("backend")
-                && md.fileName().contains(QStringLiteral("memo"));
-        });
-    if (metaDatas.isEmpty()) return nullptr;
-
-    auto factoryResult = KPluginFactory::loadFactory(metaDatas.first());
-    if (!factoryResult) return nullptr;
-
-    QObject *obj = factoryResult.plugin->create<QObject>(parent);
-    return qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
-}
-
 } // namespace
 
 class TestMemoV2 : public QObject
@@ -112,10 +91,8 @@ private slots:
 
 void TestMemoV2::initTestCase()
 {
-    // wildpalms_memo_v2.so installs at build/lib/wildpalms/plugins/.
-    QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
-    // K.7: seed DomainRegistry with stock plugins so dispatchSync finds
-    // the memo domain definition (MemoPlugin).
+    // K.8b T6: library path for stale .so files removed (plugins are now STATIC).
+    // Stock plugins seeded so dispatchSync finds the memo/blob domain definitions.
     Kalburator::PluginManager pm;
     Kalburator::registerStockPlugins(pm);
 }
@@ -125,10 +102,11 @@ void TestMemoV2::freshSync_palmMemos_arriveAsMarkdownOnPC()
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
 
-    // 1. PalmRuntime + Palm-side mock device with three seeded memos.
-    auto *plugin = loadMemoPluginV2(this);
-    QVERIFY2(plugin != nullptr, "wildpalms_memo_v2.so failed to load as IBackendPluginV2");
+    // K.8b T6: PalmRuntime::registerPalmPlugins() loads the memo backend
+    // in-process at construction time; setDeviceAccessForTest() calls
+    // finishConnect() which wires it.  No KPluginFactory loading needed.
 
+    // 1. PalmRuntime + Palm-side mock device with three seeded memos.
     WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
     auto palmDb = std::make_unique<MockPalmDatabaseAccess>();
@@ -144,16 +122,7 @@ void TestMemoV2::freshSync_palmMemos_arriveAsMarkdownOnPC()
         std::move(palmDb));
     runtime.setDeviceAccessForTest(std::move(deviceAccess));
 
-    // 2. Wire the real V2 plugin into PalmRuntime — palm-side backend
-    //    registered under plugin->pluginId() = "memo".
-    runtime.registerPluginForTest(
-        std::shared_ptr<WildPalms::IBackendPluginV2>(
-            plugin, [](WildPalms::IBackendPluginV2 *) {
-                // Qt parent owns the QObject; the shared_ptr is just a
-                // handle. No-op deleter avoids double-free.
-            }));
-
-    // 3. PC-side: a MockBlobBackend for raw blob storage.
+    // 2. PC-side: a MockBlobBackend for raw blob storage.
     auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();
     auto *pcBlobRaw = pcBlob.get();
     Kalburator::Sync::CollectionInfo pcInfo;
@@ -194,9 +163,7 @@ void TestMemoV2::idempotent_secondSync_isNoop()
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
 
-    auto *plugin = loadMemoPluginV2(this);
-    QVERIFY(plugin != nullptr);
-
+    // K.8b T6: plugin loaded in-process; no KPluginFactory needed.
     WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
     auto palmDb = std::make_unique<MockPalmDatabaseAccess>();
@@ -205,10 +172,6 @@ void TestMemoV2::idempotent_secondSync_isNoop()
              {0, 0});
     runtime.setDeviceAccessForTest(
         std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(std::move(palmDb)));
-
-    runtime.registerPluginForTest(
-        std::shared_ptr<WildPalms::IBackendPluginV2>(
-            plugin, [](WildPalms::IBackendPluginV2 *) {}));
 
     auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();
     auto *pcRaw = pcBlob.get();

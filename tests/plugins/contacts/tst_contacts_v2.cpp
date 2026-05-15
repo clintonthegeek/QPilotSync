@@ -25,11 +25,10 @@
 #include <QFuture>
 #include <cstring>
 
-#include <KPluginFactory>
-#include <KPluginMetaData>
+// K.8b T6: KPluginFactory / IBackendPluginV2 includes removed.
+// ContactsBackendPlugin is now STATIC; PalmRuntime loads it in-process.
 #include <pi-appinfo.h>
 
-#include "core/ibackendplugin_v2.h"
 #include "palm/codecs/contactcodec.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "plugins/contacts/palmcontactsbackend.h"
@@ -115,22 +114,6 @@ Kalburator::Sync::SyncMapping makeUnfiledMapping()
     return m;
 }
 
-WildPalms::IBackendPluginV2 *loadContactsPluginV2(QObject *parent)
-{
-    const auto metaDatas = KPluginMetaData::findPlugins(
-        QStringLiteral("wildpalms/plugins"),
-        [](const KPluginMetaData &md) {
-            return md.value(QStringLiteral("X-WildPalms-PluginType"))
-                       == QStringLiteral("backend")
-                && md.fileName().contains(QStringLiteral("contacts"));
-        });
-    if (metaDatas.isEmpty()) return nullptr;
-    auto factoryResult = KPluginFactory::loadFactory(metaDatas.first());
-    if (!factoryResult) return nullptr;
-    QObject *obj = factoryResult.plugin->create<QObject>(parent);
-    return qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
-}
-
 } // namespace
 
 class TestContactsV2 : public QObject
@@ -144,9 +127,10 @@ private slots:
 void TestContactsV2::initTestCase()
 {
     qApp->setApplicationName(QStringLiteral("tst_contacts_v2"));
-    QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
-    // K.7: seed DomainRegistry + TransformationRegistry with stock plugins
-    // so SyncEngineWorker::dispatchSync finds the contacts domain definition.
+    // K.8b T6: library path for stale .so files removed (plugins are STATIC).
+    // Stock plugins seeded so dispatchSync finds the contacts domain definitions.
+    // ContactsBackendPlugin constructor registers palm↔vcard4 edges when
+    // PalmRuntime constructs it via registerPalmPlugins().
     Kalburator::PluginManager pm;
     Kalburator::registerStockPlugins(pm);
 }
@@ -156,9 +140,9 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
 
-    auto *plugin = loadContactsPluginV2(this);
-    QVERIFY2(plugin != nullptr, "wildpalms_contacts_v2.so failed to load as IBackendPluginV2");
-
+    // K.8b T6: ContactsBackendPlugin is STATIC; PalmRuntime loads it in-process.
+    // setDeviceAccessForTest() calls finishConnect() which registers
+    // PalmContactsBackend (shape: contacts/palm) under id "contacts".
     WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
     // Seed AddressDB with one contact in the Unfiled slot.
@@ -172,20 +156,6 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
 
     runtime.setDeviceAccessForTest(
         std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(std::move(palmDb)));
-
-    // Wire the V2 plugin in — palm-side backend registered under
-    // plugin->pluginId() = "contacts". Phase Ia.5 Task 19: declare the
-    // palm-side adapter with the (contacts, palm) native shape so the
-    // unified dispatchSync can compile the (contacts, palm) ->
-    // (contacts, vcard4) Pipeline.
-    const Kalburator::Shape::Shape palmShape{
-        Kalburator::Shape::DomainId{QStringLiteral("contacts")},
-        Kalburator::Shape::EncodingId{QStringLiteral("palm")}
-    };
-    runtime.registerPluginForTest(
-        std::shared_ptr<WildPalms::IBackendPluginV2>(
-            plugin, [](WildPalms::IBackendPluginV2 *) {}),
-        palmShape);
 
     // PC side: a MockBlobBackend with an empty Unfiled-equivalent collection.
     auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();

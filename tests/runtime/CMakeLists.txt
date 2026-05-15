@@ -264,20 +264,23 @@ set_tests_properties(tst_mapping_editor_dialog PROPERTIES
 # KF6MainWindow uses) and asserts every plugin claiming hasMainView()=true
 # returns a non-null QWidget from createMainView() — the contract that
 # onBackendPluginLoaded depends on.
+# K.8b T6: rewritten — plugins are now STATIC in WildPalmsCore; no longer
+# discovered via KPluginFactory.  CMAKE_BINARY_DIR define and KF6::CoreAddons
+# dep removed; plugin headers live under ${WP_SRC}/plugins/.
 add_executable(tst_main_window_plugin_pages_populated
     tst_main_window_plugin_pages_populated.cpp)
-target_compile_definitions(tst_main_window_plugin_pages_populated
-    PRIVATE
-        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-)
 target_link_libraries(tst_main_window_plugin_pages_populated
     PRIVATE
         Qt::Core
         Qt::Test
         Qt::Widgets
-        KF6::CoreAddons
         WildPalmsCore
         WildPalmsRuntime
+        wildpalms_calendar_static
+        wildpalms_contacts_static
+        wildpalms_memo_static
+        wildpalms_todos_static
+        wildpalms_webcalendar_static
 )
 add_test(NAME tst_main_window_plugin_pages_populated
     COMMAND tst_main_window_plugin_pages_populated)

@@ -18,11 +18,10 @@
 #include <QFuture>
 #include <cstring>
 
-#include <KPluginFactory>
-#include <KPluginMetaData>
+// K.8b T6: KPluginFactory / IBackendPluginV2 includes removed.
+// TodoBackendPlugin is now STATIC; PalmRuntime loads it in-process.
 #include <pi-appinfo.h>
 
-#include "core/ibackendplugin_v2.h"
 #include "palm/codecs/todocodec.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "plugins/todos/todoblobbackend.h"
@@ -104,22 +103,6 @@ Kalburator::Sync::SyncMapping makeUnfiledMapping()
     return m;
 }
 
-WildPalms::IBackendPluginV2 *loadTodoPluginV2(QObject *parent)
-{
-    const auto metaDatas = KPluginMetaData::findPlugins(
-        QStringLiteral("wildpalms/plugins"),
-        [](const KPluginMetaData &md) {
-            return md.value(QStringLiteral("X-WildPalms-PluginType"))
-                       == QStringLiteral("backend")
-                && md.fileName().contains(QStringLiteral("todos"));
-        });
-    if (metaDatas.isEmpty()) return nullptr;
-    auto factoryResult = KPluginFactory::loadFactory(metaDatas.first());
-    if (!factoryResult) return nullptr;
-    QObject *obj = factoryResult.plugin->create<QObject>(parent);
-    return qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
-}
-
 } // namespace
 
 class TestTodoV2 : public QObject
@@ -133,9 +116,8 @@ private slots:
 void TestTodoV2::initTestCase()
 {
     qApp->setApplicationName(QStringLiteral("tst_todo_v2"));
-    QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
-    // K.7: seed DomainRegistry with stock plugins so dispatchSync finds
-    // the todo domain definition (TodoPlugin).
+    // K.8b T6: library path for stale .so removed. Stock plugins seeded so
+    // dispatchSync finds the todo/blob domain definitions.
     Kalburator::PluginManager pm;
     Kalburator::registerStockPlugins(pm);
 }
@@ -145,9 +127,7 @@ void TestTodoV2::freshSync_palmTodo_arrivesAsVtodoOnPC()
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
 
-    auto *plugin = loadTodoPluginV2(this);
-    QVERIFY2(plugin != nullptr, "wildpalms_todos_v2.so failed to load as IBackendPluginV2");
-
+    // K.8b T6: TodoBackendPlugin is STATIC; PalmRuntime loads it in-process.
     WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
     auto palmDb = std::make_unique<MockPalmDatabaseAccess>();
@@ -160,10 +140,6 @@ void TestTodoV2::freshSync_palmTodo_arrivesAsVtodoOnPC()
 
     runtime.setDeviceAccessForTest(
         std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(std::move(palmDb)));
-
-    runtime.registerPluginForTest(
-        std::shared_ptr<WildPalms::IBackendPluginV2>(
-            plugin, [](WildPalms::IBackendPluginV2 *) {}));
 
     auto pcBlob = std::make_unique<Kalburator::Sync::MockBlobBackend>();
     auto *pcRaw = pcBlob.get();

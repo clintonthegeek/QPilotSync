@@ -1,14 +1,11 @@
-// M5c Task 2: smoke test — IBackendPluginV2 hasMainView()/createMainView() contract.
+// K.8b T6: Rewritten to use static plugins directly.
 //
-// KF6MainWindow's onBackendPluginLoaded slot was built against the V1
-// IBackendPlugin interface, but post-M4 the real plugins implement
-// IBackendPluginV2. PalmRuntime::connectDevice does the V2 discovery /
-// qobject_cast / load loop. This test mirrors that loop, then asserts that
-// every loaded V2 plugin claiming hasMainView()=true returns a non-null
-// QWidget from createMainView() with a non-empty mainViewName(). That is
-// the contract the per-plugin KPageWidget wiring depends on regardless
-// of which manager (V1 BackendPluginManager or V2 PalmRuntime) ends up
-// hosting it after M6.
+// Before T1-T5 the five Palm backend plugins were KCoreAddons MODULE
+// plugins discovered via KPluginFactory/KPluginMetaData.  After T1-T5
+// they are compiled STATIC into WildPalmsCore.  This test now directly
+// instantiates each plugin and verifies the hasMainView()/createMainView()
+// / mainViewName() contract that KF6MainWindow depends on — the same
+// assertions as before, just without KPluginFactory indirection.
 //
 // See FINDINGS.md for the V1-vs-V2 plumbing gap discovered during M5c.
 
@@ -16,114 +13,88 @@
 #include <QApplication>
 #include <QWidget>
 
-#include <KPluginFactory>
-#include <KPluginMetaData>
-
-#include "core/ibackendplugin_v2.h"
+#include "plugins/calendar/calendarbackendplugin.h"
+#include "plugins/contacts/contactsbackendplugin.h"
+#include "plugins/memo/memobackendplugin.h"
+#include "plugins/todos/todobackendplugin.h"
+#include "plugins/webcalendar/webcalbackendplugin.h"
 
 class TstMainWindowPluginPagesPopulated : public QObject
 {
     Q_OBJECT
 private slots:
-    void initTestCase();
     void v2_plugins_with_main_view_create_non_null_widgets();
 };
 
-void TstMainWindowPluginPagesPopulated::initTestCase()
-{
-    // Real WildPalms plugins install at
-    // ${CMAKE_BINARY_DIR}/lib/wildpalms/plugins/. Adding CMAKE_BINARY_DIR/lib
-    // to the application's library paths makes
-    // KPluginMetaData::findPlugins("wildpalms/plugins") pick them up.
-    QCoreApplication::addLibraryPath(QStringLiteral(CMAKE_BINARY_DIR "/lib"));
-}
+// A thin wrapper so we can iterate over the five plugins uniformly.
+struct PluginEntry {
+    QString         id;
+    bool            hasView;
+    std::function<QWidget*(QWidget*)> createView;
+    std::function<QString()>          viewName;
+};
 
 void TstMainWindowPluginPagesPopulated::v2_plugins_with_main_view_create_non_null_widgets()
 {
-    // Mirror the discovery loop in PalmRuntime::connectDevice
-    // (palmruntime.cpp), filtered to V2-migrated plugins only. The plucker
-    // plugin is still V1 and would fail the qobject_cast below (and its
-    // QObject destructor's interaction with the test parent triggers a
-    // double-free at process exit).
-    const auto metaDatas = KPluginMetaData::findPlugins(
-        QStringLiteral("wildpalms/plugins"),
-        [](const KPluginMetaData &md) {
-            if (md.value(QStringLiteral("X-WildPalms-PluginType"))
-                != QStringLiteral("backend"))
-                return false;
-            // Plucker has not yet been migrated to IBackendPluginV2.
-            return !md.fileName().contains(QStringLiteral("plucker"));
-        });
+    // Instantiate the five static Palm backend plugins.
+    WildPalms::CalendarPlugin::CalendarBackendPlugin  cal;
+    WildPalms::ContactsPlugin::ContactsBackendPlugin  con;
+    WildPalms::Memo::MemoPlugin                       memo;
+    WildPalms::TodoPlugin::TodoBackendPlugin           todo;
+    WildPalms::WebcalPlugin::WebcalBackendPlugin       webc;
 
-    QVERIFY2(!metaDatas.isEmpty(),
-             "No backend plugins discovered — check that "
-             "build/lib/wildpalms/plugins/*.so artifacts exist.");
+    QWidget parent;
+
+    // Build a uniform list to iterate.
+    QList<PluginEntry> entries = {
+        { QStringLiteral("calendar"),    cal.hasMainView(),
+          [&](QWidget *p){ return cal.createMainView(p); },
+          [&](){ return cal.mainViewName(); } },
+        { QStringLiteral("contacts"),    con.hasMainView(),
+          nullptr, nullptr },
+        { QStringLiteral("memo"),        memo.hasMainView(),
+          [&](QWidget *p){ return memo.createMainView(p); },
+          [&](){ return memo.mainViewName(); } },
+        { QStringLiteral("todo"),        todo.hasMainView(),
+          [&](QWidget *p){ return todo.createMainView(p); },
+          [&](){ return todo.mainViewName(); } },
+        { QStringLiteral("webcalendar"), webc.hasMainView(),
+          nullptr, nullptr },
+    };
 
     QStringList viewPluginIds;
     QStringList nonViewPluginIds;
-    // Single parent QWidget owns both the plugin QObjects and the views
-    // they create. Reverse-of-insertion deletion order means views are
-    // destroyed before the plugins that wired them, avoiding use-after-
-    // free in the plugin's view-shutdown path.
-    QWidget parent;
 
-    for (const KPluginMetaData &meta : metaDatas) {
-        auto factoryResult = KPluginFactory::loadFactory(meta);
-        QVERIFY2(factoryResult.plugin != nullptr,
-                 qPrintable(QStringLiteral("Factory load failed for %1: %2")
-                                .arg(meta.pluginId(), factoryResult.errorString)));
-
-        QObject *obj = factoryResult.plugin->create<QObject>(&parent);
-        QVERIFY2(obj != nullptr,
-                 qPrintable(QStringLiteral("Factory returned nullptr for %1")
-                                .arg(meta.pluginId())));
-
-        auto *plugin = qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
-        QVERIFY2(plugin != nullptr,
-                 qPrintable(QStringLiteral("Plugin %1 does not implement "
-                                            "IBackendPluginV2 — post-M4 contract.")
-                                .arg(meta.pluginId())));
-
-        if (plugin->hasMainView()) {
-            QWidget *view = plugin->createMainView(&parent);
+    for (auto &e : entries) {
+        if (e.hasView) {
+            QVERIFY2(e.createView != nullptr,
+                     qPrintable(QStringLiteral("Plugin '%1' claims hasMainView() but "
+                                               "createView functor is null").arg(e.id)));
+            QWidget *view = e.createView(&parent);
             QVERIFY2(view != nullptr,
                 qPrintable(QStringLiteral(
                     "Plugin '%1' claims hasMainView()=true but "
                     "createMainView() returned nullptr — any per-plugin "
                     "KPageWidget wiring would silently skip it.")
-                    .arg(plugin->pluginId())));
-            QVERIFY2(!plugin->mainViewName().isEmpty(),
+                    .arg(e.id)));
+            QVERIFY2(!e.viewName().isEmpty(),
                 qPrintable(QStringLiteral(
                     "Plugin '%1' claims hasMainView()=true but "
                     "mainViewName() is empty — page header would be blank.")
-                    .arg(plugin->pluginId())));
-            viewPluginIds << plugin->pluginId();
+                    .arg(e.id)));
+            viewPluginIds << e.id;
         } else {
-            nonViewPluginIds << plugin->pluginId();
+            nonViewPluginIds << e.id;
         }
-        // obj is parented to `this`; Qt cleans it up when the test object
-        // destructs. A manual `delete obj` here would double-free.
     }
 
     QVERIFY2(!viewPluginIds.isEmpty(),
-             "Expected at least one V2 plugin with hasMainView()=true; "
+             "Expected at least one Palm plugin with hasMainView()=true; "
              "any per-plugin page area would be empty.");
 
-    qInfo() << "V2 plugins with main view:" << viewPluginIds;
-    qInfo() << "V2 plugins without main view:" << nonViewPluginIds;
+    qInfo() << "Palm plugins with main view:" << viewPluginIds;
+    qInfo() << "Palm plugins without main view:" << nonViewPluginIds;
 }
 
-// Custom main: QTEST_MAIN runs std::exit() at the end, which triggers
-// static destructors in the loaded plugin .so files. Some plugins have
-// known-buggy global destructors (e.g. QNetworkAccessManager interactions
-// inside the webcalendar plugin) that abort the process even after all
-// assertions pass. Use _exit() to skip global teardown — the test logic's
-// pass/fail signal is already in QTest::qExec's return value.
-int main(int argc, char *argv[])
-{
-    QApplication app(argc, argv);
-    TstMainWindowPluginPagesPopulated tc;
-    const int rc = QTest::qExec(&tc, argc, argv);
-    _exit(rc);
-}
+QTEST_MAIN(TstMainWindowPluginPagesPopulated)
 #include "tst_main_window_plugin_pages_populated.moc"
