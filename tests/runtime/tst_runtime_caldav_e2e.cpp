@@ -24,6 +24,8 @@
 #include "syncbackend.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../blobsyncbackendwrapper.h"
 
 #include <KCalendarCore/MemoryCalendar>
 #include <KCalendarCore/ICalFormat>
@@ -129,7 +131,9 @@ void TstRuntimeCalDavE2E::palm_to_caldav_propagates()
         rec.type = QStringLiteral("text/calendar");
         palmBlob->createRecord(kPalmCalId, rec);
     }
-    runtime.registerBlobBackendForTest(kPalmBkId, std::move(palmBlob), kCalShape);
+    runtime.registerBackendInstanceForTest(kPalmBkId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(palmBlob), kPalmBkId, kCalShape));
 
     {
         auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
@@ -211,7 +215,9 @@ void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
         CollectionInfo ci; ci.id = kPalmCalId; ci.name = QStringLiteral("Unfiled");
         palmBlob->createCollection(ci);
     }
-    runtime.registerBlobBackendForTest(kPalmBkId, std::move(palmBlobOwned), kCalShape);
+    runtime.registerBackendInstanceForTest(kPalmBkId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(palmBlobOwned), kPalmBkId, kCalShape));
 
     {
         auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
@@ -283,7 +289,9 @@ void TstRuntimeCalDavE2E::bidirectional_no_conflict()
         rec.type = QStringLiteral("text/calendar");
         palmBlob->createRecord(kPalmCalId, rec);
     }
-    runtime.registerBlobBackendForTest(kPalmBkId, std::move(palmBlobOwned), kCalShape);
+    runtime.registerBackendInstanceForTest(kPalmBkId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(palmBlobOwned), kPalmBkId, kCalShape));
 
     {
         auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
@@ -356,7 +364,9 @@ void TstRuntimeCalDavE2E::memory_calendar_observable_during_sync()
         CollectionInfo ci; ci.id = kPalmCalId; ci.name = QStringLiteral("Unfiled");
         palmBlob->createCollection(ci);
     }
-    runtime.registerBlobBackendForTest(kPalmBkId, std::move(palmBlob), kCalShape);
+    runtime.registerBackendInstanceForTest(kPalmBkId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(palmBlob), kPalmBkId, kCalShape));
 
     auto *cal = new KCalendarCore::MemoryCalendar(QTimeZone::systemTimeZone());
     cal->setId(kPalmCalId);

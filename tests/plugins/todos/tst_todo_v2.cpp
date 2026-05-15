@@ -35,6 +35,8 @@
 #include "backendrecord.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../../blobsyncbackendwrapper.h"
 
 using WildPalms::PalmCodecs::Todo;
 using WildPalms::PalmCodecs::encodeTodo;
@@ -148,7 +150,9 @@ void TestTodoV2::freshSync_palmTodo_arrivesAsVtodoOnPC()
     pcInfo.name = QStringLiteral("PC Todos (Unfiled)");
     pcInfo.type = QStringLiteral("calendar");
     pcBlob->createCollection(pcInfo);
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob));
+    runtime.registerBackendInstanceForTest(kPcBackendId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(pcBlob), kPcBackendId));
 
     runtime.setMappingsForTest({makeUnfiledMapping()});
 

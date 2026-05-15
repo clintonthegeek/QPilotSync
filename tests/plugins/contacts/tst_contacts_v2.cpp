@@ -43,6 +43,8 @@
 #include "shape.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../../blobsyncbackendwrapper.h"
 
 using WildPalms::PalmCodecs::Contact;
 using WildPalms::PalmCodecs::encodeContact;
@@ -174,7 +176,9 @@ void TestContactsV2::freshSync_seededPalmContact_arrivesOnPC()
         Kalburator::Shape::DomainId{QStringLiteral("contacts")},
         Kalburator::Shape::EncodingId{QStringLiteral("vcard4")}
     };
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob), pcShape);
+    runtime.registerBackendInstanceForTest(kPcBackendId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(pcBlob), kPcBackendId, pcShape));
 
     runtime.setMappingsForTest({makeUnfiledMapping()});
 

@@ -36,6 +36,8 @@
 #include "synctypes.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../../blobsyncbackendwrapper.h"
 
 using namespace Kalburator::Sync;
 using WildPalms::WebcalPlugin::WebcalBlobBackend;
@@ -99,7 +101,7 @@ void TestWebcalV2E2E::initTestCase()
     m_network = new QNetworkAccessManager(this);
     m_fetcher = new IcsFeedFetcher(m_network, this);
     // K.7: seed DomainRegistry with stock plugins so dispatchSync finds
-    // the blob domain definition (BlobPlugin) used by BlobBackendAdapter.
+    // the blob domain definition (BlobPlugin).
     Kalburator::PluginManager pm;
     Kalburator::registerStockPlugins(pm);
 }
@@ -112,15 +114,16 @@ void TestWebcalV2E2E::mirror_emptyTargetGainsAllSourceRecords()
     WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
     // Source: webcal feed (3 events fixture).
+    // K.8b T7: WebcalBlobBackend is now a SyncBackend; register directly.
     auto src = std::make_unique<WebcalBlobBackend>(
         QList<WebcalFeed>{makeFeed(5, QStringLiteral("three_events.ics"))},
         m_fetcher);
     // Drive a fetch first to populate cache + lastFetchSucceeded gate.
     src->loadRecords(kSlot5Collection);
     QVERIFY(src->lastFetchSucceeded(5));
-    runtime.registerBlobBackendForTest(kSrcBackendId, std::move(src));
+    runtime.registerBackendInstanceForTest(kSrcBackendId, std::move(src));
 
-    // Target: empty MockBlobBackend.
+    // Target: empty MockBlobBackend wrapped as SyncBackend.
     auto pc = std::make_unique<MockBlobBackend>();
     auto *pcRaw = pc.get();
     CollectionInfo c;
@@ -128,7 +131,9 @@ void TestWebcalV2E2E::mirror_emptyTargetGainsAllSourceRecords()
     c.name = QStringLiteral("Slot 5");
     c.type = QStringLiteral("calendar");
     pc->createCollection(c);
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pc));
+    runtime.registerBackendInstanceForTest(kPcBackendId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(pc), kPcBackendId));
 
     runtime.setMappingsForTest({makeMirrorMapping()});
 
@@ -146,12 +151,13 @@ void TestWebcalV2E2E::mirror_staleTargetLosesAndGainsCorrectly()
 
     WildPalms::Runtime::PalmRuntime runtime(profileDir.path());
 
+    // K.8b T7: WebcalBlobBackend is now a SyncBackend; register directly.
     auto src = std::make_unique<WebcalBlobBackend>(
         QList<WebcalFeed>{makeFeed(5, QStringLiteral("three_events.ics"))},
         m_fetcher);
     src->loadRecords(kSlot5Collection);
     QVERIFY(src->lastFetchSucceeded(5));
-    runtime.registerBlobBackendForTest(kSrcBackendId, std::move(src));
+    runtime.registerBackendInstanceForTest(kSrcBackendId, std::move(src));
 
     auto pc = std::make_unique<MockBlobBackend>();
     auto *pcRaw = pc.get();
@@ -174,7 +180,9 @@ void TestWebcalV2E2E::mirror_staleTargetLosesAndGainsCorrectly()
     pc->createRecord(kSlot5Collection, s2);
     QCOMPARE(pcRaw->loadRecords(kSlot5Collection).size(), 2);
 
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pc));
+    runtime.registerBackendInstanceForTest(kPcBackendId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(pc), kPcBackendId));
     runtime.setMappingsForTest({makeMirrorMapping()});
 
     auto future = runtime.copyPalmToPC();

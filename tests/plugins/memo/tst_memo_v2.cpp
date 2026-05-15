@@ -39,6 +39,8 @@
 #include "backendrecord.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../../blobsyncbackendwrapper.h"
 
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmRecord;
@@ -130,7 +132,9 @@ void TestMemoV2::freshSync_palmMemos_arriveAsMarkdownOnPC()
     pcInfo.name = QStringLiteral("PC Memos");
     pcInfo.type = QStringLiteral("memos");
     pcBlob->createCollection(pcInfo);
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob));
+    runtime.registerBackendInstanceForTest(kPcBackendId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(pcBlob), kPcBackendId));
 
     // 4. Two-way mapping memo → pc, then HotSync.
     runtime.setMappingsForTest({makeTwoWayMapping()});
@@ -180,7 +184,9 @@ void TestMemoV2::idempotent_secondSync_isNoop()
     pcInfo.name = QStringLiteral("PC Memos");
     pcInfo.type = QStringLiteral("memos");
     pcBlob->createCollection(pcInfo);
-    runtime.registerBlobBackendForTest(kPcBackendId, std::move(pcBlob));
+    runtime.registerBackendInstanceForTest(kPcBackendId,
+        WildPalmsTest::BlobSyncBackendWrapper::wrap(
+            std::move(pcBlob), kPcBackendId));
 
     runtime.setMappingsForTest({makeTwoWayMapping()});
 

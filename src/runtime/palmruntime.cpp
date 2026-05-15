@@ -18,7 +18,6 @@
 #include "synctypes.h"
 #include "collectioninfo.h"
 #include "backendrecord.h"
-#include <iblobbackend.h>
 #include <isynchost.h>
 #include <baselinestore.h>
 #include <isyncconfigstore.h>
@@ -56,100 +55,6 @@ static QString sanitizeForFilesystem(const QString &id)
      .replace(QLatin1Char('/'), QLatin1Char('_'));
     return s;
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
-// BlobBackendAdapter
-//
-// Wraps an IBlobBackend as a SyncBackend so it can be stored in the
-// BackendRegistry alongside calendar backends. Forwards all
-// IBlobBackend methods to the wrapped instance.
-//
-// Phase K.4 cleanup: previously this adapter also defined no-op
-// overrides for the four formerly-pure calendar virtuals
-// (loadCalendars/storeCalendars/startSync/removeItem) plus an
-// Incidence::Ptr-typed pushItems. With K.4 those virtuals are no-op
-// by default on SyncBackend itself, so the adapter no longer needs to
-// override them — it just inherits the empty defaults.
-// ──────────────────────────────────────────────────────────────────────────────
-class BlobBackendAdapter final : public Kalburator::Sync::SyncBackend {
-    Q_OBJECT
-public:
-    BlobBackendAdapter(std::unique_ptr<Kalburator::Sync::IBlobBackend> blob,
-                       const QString &id,
-                       QObject *parent = nullptr)
-        : Kalburator::Sync::SyncBackend(parent)
-        , m_blob(std::move(blob))
-        , m_id(id)
-        // Phase Ia.5 follow-up: default shape must match the blob domain
-        // plugin's canonical shape (blob, raw) so the unified dispatchSync
-        // can compile an identity Pipeline (blob,raw) -> (blob,raw).
-        , m_shape{ Kalburator::Shape::DomainId{QStringLiteral("blob")},
-                   Kalburator::Shape::EncodingId{QStringLiteral("raw")} }
-    {}
-
-    // Phase Ia.5 Task 19: optional shape override so cross-shape
-    // mappings (e.g. contacts/palm -> contacts/vcard4) can compile a
-    // Pipeline through the registered TransformationRegistry edges.
-    BlobBackendAdapter(std::unique_ptr<Kalburator::Sync::IBlobBackend> blob,
-                       const QString &id,
-                       const Kalburator::Shape::Shape &shape,
-                       QObject *parent = nullptr)
-        : Kalburator::Sync::SyncBackend(parent)
-        , m_blob(std::move(blob))
-        , m_id(id)
-        , m_shape(shape)
-    {}
-
-    // ── SyncBackend identity ──────────────────────────────────────────────────
-    QString backendType() const override { return m_id; }
-    QList<Kalburator::Shape::Shape> nativeShapes() const override {
-        return { m_shape };
-    }
-
-    // ── IBlobBackend identity ─────────────────────────────────────────────────
-    QString backendId()   const override { return m_id; }
-    QString displayName() const override { return m_blob->displayName(); }
-    bool    isAvailable() const override { return m_blob->isAvailable(); }
-
-    // ── IBlobBackend collections ──────────────────────────────────────────────
-    QList<Kalburator::Sync::CollectionInfo> availableCollections() override
-        { return m_blob->availableCollections(); }
-    Kalburator::Sync::CollectionInfo collectionInfo(const QString &id) override
-        { return m_blob->collectionInfo(id); }
-    QString createCollection(const Kalburator::Sync::CollectionInfo &info) override
-        { return m_blob->createCollection(info); }
-
-    // ── IBlobBackend records ──────────────────────────────────────────────────
-    QList<Kalburator::Sync::BackendRecord> loadRecords(const QString &colId) override
-        { return m_blob->loadRecords(colId); }
-    std::optional<Kalburator::Sync::BackendRecord> loadRecord(const QString &id) override
-        { return m_blob->loadRecord(id); }
-    QString createRecord(const QString &colId,
-                         const Kalburator::Sync::BackendRecord &rec) override
-        { return m_blob->createRecord(colId, rec); }
-    bool updateRecord(const Kalburator::Sync::BackendRecord &rec) override
-        { return m_blob->updateRecord(rec); }
-    bool deleteRecord(const QString &id) override
-        { return m_blob->deleteRecord(id); }
-
-    // ── IBlobBackend change detection ─────────────────────────────────────────
-    QList<Kalburator::Sync::BackendRecord> modifiedSince(
-        const QString &colId, const QDateTime &dt) override
-        { return m_blob->modifiedSince(colId, dt); }
-    QStringList deletedSince(const QString &colId, const QDateTime &dt) override
-        { return m_blob->deletedSince(colId, dt); }
-    bool supportsDeleteTracking() const override
-        { return m_blob->supportsDeleteTracking(); }
-
-    // No calendar-virtual overrides: K.4 made loadCalendars/storeCalendars/
-    // startSync/removeItem default no-ops on SyncBackend itself. This
-    // adapter inherits those defaults.
-
-private:
-    std::unique_ptr<Kalburator::Sync::IBlobBackend> m_blob;
-    QString m_id;
-    Kalburator::Shape::Shape m_shape;
-};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // PalmSyncHost
@@ -362,14 +267,9 @@ void PalmRuntime::finishConnect()
             ownedBackend = p->createPalmBackend(m_device.get());
         } else if (auto *p = dynamic_cast<WebcalBackendPlugin *>(plugin.get())) {
             id = p->pluginId();
-            // WebcalBlobBackend : SyncBackendBase, not SyncBackend.
-            // Wrap in BlobBackendAdapter for {blob,raw} registration.
-            // (BlobBackendAdapter is deleted in T7; webcal wiring is
-            // revisited then.)
-            auto wb = p->createPalmBackend(m_device.get());
-            if (wb) {
-                ownedBackend = std::make_unique<BlobBackendAdapter>(std::move(wb), id);
-            }
+            // K.8b T7: WebcalBlobBackend now inherits SyncBackend directly;
+            // no adapter needed.
+            ownedBackend = p->createPalmBackend(m_device.get());
         }
 
         if (!ownedBackend) {
@@ -503,23 +403,12 @@ void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPlugi
     registerPluginForTest(std::move(plugin));
 }
 
-void PalmRuntime::registerBlobBackendForTest(const QString &id,
-                                              std::unique_ptr<Kalburator::Sync::IBlobBackend> backend)
+void PalmRuntime::registerBackendInstanceForTest(const QString &id,
+                                                  std::unique_ptr<Kalburator::Sync::SyncBackend> backend)
 {
     if (!backend) return;
-    auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id);
-    m_registry->registerBackendInstance(id, adapter.get());
-    m_ownedBackends.push_back(std::move(adapter));
-}
-
-void PalmRuntime::registerBlobBackendForTest(const QString &id,
-                                              std::unique_ptr<Kalburator::Sync::IBlobBackend> backend,
-                                              const Kalburator::Shape::Shape &shape)
-{
-    if (!backend) return;
-    auto adapter = std::make_unique<BlobBackendAdapter>(std::move(backend), id, shape);
-    m_registry->registerBackendInstance(id, adapter.get());
-    m_ownedBackends.push_back(std::move(adapter));
+    m_registry->registerBackendInstance(id, backend.get());
+    m_ownedBackends.push_back(std::move(backend));
 }
 
 void PalmRuntime::setMappingsForTest(QList<Kalburator::Sync::SyncMapping> mappings) {

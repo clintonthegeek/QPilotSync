@@ -20,7 +20,6 @@ namespace Kalburator::Sync {
     class BackendRegistry;
     class ISyncHost;
     struct SyncMapping;
-    class IBlobBackend;
     class SyncBackend;
 }
 
@@ -110,16 +109,9 @@ public:
     void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>,
                                 const Kalburator::Shape::Shape &shape);
     void setMappingsForTest(QList<Kalburator::Sync::SyncMapping>);
-    void registerBlobBackendForTest(const QString &id,
-                                     std::unique_ptr<Kalburator::Sync::IBlobBackend> backend);
-    // Phase Ia.5 Task 19 overload: optionally declare the adapter's
-    // native Shape so the unified dispatchSync can compile a Pipeline
-    // between source and target shapes. The default overload above
-    // declares blob/blob, which matches no DomainPlugin and triggers
-    // "no edge path" on cross-shape mappings.
-    void registerBlobBackendForTest(const QString &id,
-                                     std::unique_ptr<Kalburator::Sync::IBlobBackend> backend,
-                                     const Kalburator::Shape::Shape &shape);
+    // K.8b T7: BlobBackendAdapter deleted; tests inject SyncBackend directly.
+    void registerBackendInstanceForTest(const QString &id,
+                                        std::unique_ptr<Kalburator::Sync::SyncBackend> backend);
     void setLinkForTest(KPilotLink *link);
 
     /// Expose the CalendarCollection_WP for E2E tests to seed and inspect.

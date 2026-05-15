@@ -15,6 +15,8 @@
 #include "palm/pilotrecord.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../blobsyncbackendwrapper.h"
 
 using namespace WildPalms::Runtime;
 using namespace Kalburator::Sync;
@@ -129,7 +131,9 @@ private slots:
                                "DTSTART:20260501T090000Z\r\nDTEND:20260501T100000Z\r\n"
                                "END:VEVENT\r\nEND:VCALENDAR\r\n")));
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("palm"), std::move(palmBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("palm"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(palmBlob), QStringLiteral("palm")));
 
         auto pcBlob = std::make_unique<MockBlobBackend>();
         MockBlobBackend *pcRaw = pcBlob.get();
@@ -139,7 +143,9 @@ private slots:
             ci.name = QStringLiteral("PC");
             pcBlob->createCollection(ci);
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("pc"), std::move(pcBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("pc"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(pcBlob), QStringLiteral("pc")));
 
         runtime.setMappingsForTest(
             {makeTwoWayMapping(QStringLiteral("palm"), QStringLiteral("palm-col"),
@@ -175,7 +181,9 @@ private slots:
                                "DTSTART:20260501T090000Z\r\nDTEND:20260501T100000Z\r\n"
                                "END:VEVENT\r\nEND:VCALENDAR\r\n")));
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("palm"), std::move(palmBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("palm"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(palmBlob), QStringLiteral("palm")));
 
         auto pcBlob = std::make_unique<MockBlobBackend>();
         MockBlobBackend *pcRaw = pcBlob.get();
@@ -191,7 +199,9 @@ private slots:
                                "DTSTART:20260502T090000Z\r\nDTEND:20260502T100000Z\r\n"
                                "END:VEVENT\r\nEND:VCALENDAR\r\n")));
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("pc"), std::move(pcBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("pc"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(pcBlob), QStringLiteral("pc")));
 
         runtime.setMappingsForTest(
             {makeTwoWayMapping(QStringLiteral("palm"), QStringLiteral("palm-col"),
@@ -228,7 +238,9 @@ private slots:
                                "DTSTART:20260502T090000Z\r\nDTEND:20260502T100000Z\r\n"
                                "END:VEVENT\r\nEND:VCALENDAR\r\n")));
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("palm"), std::move(palmBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("palm"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(palmBlob), QStringLiteral("palm")));
 
         auto pcBlob = std::make_unique<MockBlobBackend>();
         {
@@ -243,7 +255,9 @@ private slots:
                                "DTSTART:20260501T090000Z\r\nDTEND:20260501T100000Z\r\n"
                                "END:VEVENT\r\nEND:VCALENDAR\r\n")));
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("pc"), std::move(pcBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("pc"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(pcBlob), QStringLiteral("pc")));
 
         runtime.setMappingsForTest(
             {makeTwoWayMapping(QStringLiteral("palm"), QStringLiteral("palm-col"),

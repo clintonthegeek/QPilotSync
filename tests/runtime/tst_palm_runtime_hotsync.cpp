@@ -9,6 +9,8 @@
 #include "synctypes.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+// K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
+#include "../blobsyncbackendwrapper.h"
 
 using namespace WildPalms::Runtime;
 using namespace Kalburator::Sync;
@@ -46,7 +48,9 @@ private slots:
                                   "END:VEVENT\r\nEND:VCALENDAR\r\n");
             palmBlob->createRecord(QStringLiteral("palm:calendar/0"), rec);
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("palm-calendar"), std::move(palmBlob));
+        runtime.registerBackendInstanceForTest(QStringLiteral("palm-calendar"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(palmBlob), QStringLiteral("palm-calendar")));
 
         // PC target: empty — keep raw pointer for post-sync assertion
         auto pcBlobOwned = std::make_unique<MockBlobBackend>();
@@ -57,7 +61,9 @@ private slots:
             ci.name = QStringLiteral("PC Calendar");
             pcBlob->createCollection(ci);
         }
-        runtime.registerBlobBackendForTest(QStringLiteral("pc-calendar"), std::move(pcBlobOwned));
+        runtime.registerBackendInstanceForTest(QStringLiteral("pc-calendar"),
+            WildPalmsTest::BlobSyncBackendWrapper::wrap(
+                std::move(pcBlobOwned), QStringLiteral("pc-calendar")));
 
         // Mapping: palm → pc, TwoWay
         {
