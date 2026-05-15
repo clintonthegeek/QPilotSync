@@ -7,8 +7,9 @@ add_library(WildPalmsCore SHARED
     # Plugin ABI interfaces (Q_OBJECT meta-object for ActionContext)
     core/ipluginaction.h
     core/ipluginaction.cpp
-    core/ibackendplugin.h
-    core/ibackendplugin.cpp
+    # K.8b T13: IBackendPlugin V1 (ibackendplugin.h/cpp) and V2
+    # (ibackendplugin_v2.h) deleted along with BackendPluginManager. The
+    # five Palm plugins migrated to Kalburator::Plugin in K.8b T1-T5.
 
     # Application UI
     app/logwidget.cpp
@@ -17,8 +18,8 @@ add_library(WildPalmsCore SHARED
     app/conflictdialog.h
     app/conflictreviewwidget.cpp
     app/conflictreviewwidget.h
-    app/interactiveconflicthandler.cpp
-    app/interactiveconflicthandler.h
+    # K.8b T13: Native InteractiveConflictHandler deleted; superseded by
+    # KalburatorInteractiveConflictHandler in src/app/conflict/.
 
     # Settings and dialogs
     settingsdialog.cpp
@@ -55,23 +56,21 @@ add_library(WildPalmsCore SHARED
     core/synctypes.h
 
     # Sync engine (Phase 4)
+    # K.8b T13: SyncEngine + LocalFileBackend + SyncConduitBase (conduit.{h,cpp})
+    # deleted. SyncState retained — still used by kf6mainwindow.cpp (T14
+    # markers) and tests/test_syncstate.cpp. syncbackend.h kept until T14
+    # cleanup confirms no remaining consumers.
     sync/syncstate.cpp
     sync/syncstate.h
     sync/syncbackend.h
-    sync/conduit.cpp
-    sync/conduit.h
-    sync/syncengine.cpp
-    sync/syncengine.h
-    sync/localfilebackend.cpp
-    sync/localfilebackend.h
 
     # KF6 integration
     kf6/actionmanager.cpp
     kf6/actionmanager.h
     kf6/autosyncorchestrator.cpp
     kf6/autosyncorchestrator.h
-    kf6/conduitmanager.cpp
-    kf6/conduitmanager.h
+    # K.8b T13: ConduitManager deleted (plugin loop removed in T6; only
+    # kf6mainwindow had remaining references, now T14-marked).
     kf6/kf6mainwindow.cpp
     kf6/kf6mainwindow.h
     kf6/kf6settings.cpp
@@ -215,18 +214,15 @@ install(TARGETS WildPalmsCore
 )
 
 # Install public SDK headers
+# K.8b T13: iconduit/isyncconduit/itoolconduit/ibackendplugin deleted.
 install(FILES
-    core/iconduit.h
-    core/isyncconduit.h
-    core/itoolconduit.h
     core/iplugin.h
-    core/ibackendplugin.h
     core/ipluginaction.h
     DESTINATION include/wildpalms/core
 )
 
+# K.8b T13: conduit.h (SyncConduitBase) deleted.
 install(FILES
-    sync/conduit.h
     sync/syncstate.h
     sync/syncbackend.h
     DESTINATION include/wildpalms/sync

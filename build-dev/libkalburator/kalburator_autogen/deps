@@ -5,8 +5,12 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/backend/resourcelinearization.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobbatchdiff.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobbatchdiff.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobdomainplugin.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobdomainplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobdomaindefinition.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobdomaindefinition.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobstockshapes.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/blobstockshapes.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/localblobbackend.cpp \
@@ -15,16 +19,20 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/mockblobbackend.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/backendcapabilities.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/backendcapabilities.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/backendregistry.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/backendregistry.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/caldavcapabilitydiscovery.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/caldavcapabilitydiscovery.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendardomainplugin.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendardomainplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendardomaindefinition.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendardomaindefinition.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendardomainoperations.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendardomainoperations.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarmanager.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarmanager.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarplugin.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarplugin_writer.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarplugin_writer.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarstockshapes.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/calendarstockshapes.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/createincidenceitem.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/createincidenceitem.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/decsyncactivecontroller.cpp \
@@ -89,8 +97,12 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictstore.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictstore.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/synccommon.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsdomainplugin.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsdomainplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsdomaindefinition.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsdomaindefinition.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsstockshapes.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/contactsstockshapes.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/remotecontactsbackend.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/remotecontactsbackend.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/contacts/vcard3to4transformation.cpp \
@@ -119,19 +131,35 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/journal/asyncfilewriter.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/journal/calendarjournal.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/journal/calendarjournal.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memodomainplugin.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memodomainplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memodomaindefinition.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memodomaindefinition.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memoplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memoplugin.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memoproperties.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/memoproperties.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/textdiffer.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/textdiffer.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/textmerger.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/memo/textmerger.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/caldavproviderplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/caldavproviderplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/carddavproviderplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/carddavproviderplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/manifest.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/manifest.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/plugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/pluginloaderror.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/pluginmanager.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/pluginmanager.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/stock_plugins.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/stock_plugins.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/canonicalrecord.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/defaultblobwriter.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/defaultblobwriter.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainplugin.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domaindefinition.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainoperations.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainoperationsregistry.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainoperationsregistry.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainregistry.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/domainregistry.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/lossprofile.cpp \
@@ -144,6 +172,7 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/recordmerger.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/recordwriter.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shapecontribution.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/transformationedge.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/transformationedge.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/transformationregistry.cpp \
@@ -152,15 +181,22 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/storage/baselinestore.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/storage/idmappingstore.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/storage/idmappingstore.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendcontribution.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendregistry.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendregistry.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavbackendcontribution.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavconfigwidget.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavconfigwidget.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavprovider.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavprovider.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavbackendcontribution.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavcapabilitydiscovery.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavcapabilitydiscovery.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavprovider.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavprovider.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/iprovider.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/neutralprovider.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/neutralprovider.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/providermanager.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/providermanager.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.cpp \
@@ -171,8 +207,12 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/icalvtodomerger.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/icalvtodoproperties.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/icalvtodoproperties.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/tododomainplugin.cpp \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/tododomainplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/tododomaindefinition.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/tododomaindefinition.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/todoplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/todoplugin.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/todostockshapes.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/todostockshapes.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/todotxttransformation.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/todo/todotxttransformation.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/incidencediff.cpp \
@@ -199,6 +239,8 @@ kalburator_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/universal/genericsqlitebackend.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/universal/rawfilesbackend.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/universal/rawfilesbackend.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/universal/universalstorageplugin.cpp \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/universal/universalstorageplugin.h \
 	/usr/include/KF6/KCalendarCore/KCalendarCore/Event \
 	/usr/include/KF6/KCalendarCore/KCalendarCore/Incidence \
 	/usr/include/KF6/KCalendarCore/KCalendarCore/MemoryCalendar \

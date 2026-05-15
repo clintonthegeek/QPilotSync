@@ -22,7 +22,7 @@
 #include <baselinestore.h>
 #include <isyncconfigstore.h>
 #include "shape.h"
-#include "core/ibackendplugin_v2.h"   // K.8b T6: still needed for registerPluginForTest signature (deleted in T13)
+// K.8b T13: ibackendplugin_v2.h include removed — V2 plugin ABI deleted.
 #include "palm/device/pilotlinkpalmdatabaseaccess.h"
 
 // K.8b T6: in-process plugin loading via PluginManager.
@@ -363,17 +363,8 @@ void PalmRuntime::setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess> devic
     emit deviceConnected();
 }
 
-void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> /*plugin*/) {
-    // K.8b T6: IBackendPluginV2 test seam removed — m_plugins deleted.
-    // Replaced by static plugin construction in registerPalmPlugins().
-    // Tests that called this will regress; fixed in Tasks 14/18.
-}
-
-void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> plugin,
-                                         const Kalburator::Shape::Shape & /*shape*/) {
-    // K.8b T6: shape override was a no-op; both overloads are now dead.
-    registerPluginForTest(std::move(plugin));
-}
+// K.8b T13: registerPluginForTest overloads removed (signatures deleted in
+// palmruntime.h). Bodies were no-ops since K.8b T6; no live callers.
 
 void PalmRuntime::registerBackendInstanceForTest(const QString &id,
                                                   std::unique_ptr<Kalburator::Sync::SyncBackend> backend)

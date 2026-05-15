@@ -4,7 +4,7 @@
 
 find_package(KF6 REQUIRED COMPONENTS CoreAddons)
 
-add_subdirectory(dummy_backend)
+# K.8b T13: dummy_backend deleted along with IBackendPluginV2.
 add_subdirectory(dummy_action)
 
 # Phase E.10 — Calendar plugin tests.

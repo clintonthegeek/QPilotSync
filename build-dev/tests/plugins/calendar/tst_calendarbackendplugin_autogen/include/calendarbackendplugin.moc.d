@@ -12,19 +12,26 @@
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/sync/palmbackend.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/sync/palmrecord.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarbackendplugin.h \
-  /home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarblobbackend.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarconflicthandler.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarview.h \
+  /home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/palmcalendarbackend.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/palmdeviceaccess.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncbackend.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictpolicy.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictrecord.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/synccommon.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingplan.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/calendartype.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \
   /usr/include/KF6/KCalendarCore/KCalendarCore/Event \
   /usr/include/KF6/KCalendarCore/KCalendarCore/ICalFormat \
+  /usr/include/KF6/KCalendarCore/KCalendarCore/Incidence \
   /usr/include/KF6/KCalendarCore/KCalendarCore/MemoryCalendar \
+  /usr/include/KF6/KCalendarCore/KCalendarCore/Recurrence \
   /usr/include/KF6/KCalendarCore/kcalendarcore/alarm.h \
   /usr/include/KF6/KCalendarCore/kcalendarcore/attachment.h \
   /usr/include/KF6/KCalendarCore/kcalendarcore/attendee.h \
@@ -549,6 +556,7 @@
   /usr/include/qt6/QtCore/qversiontagging.h \
   /usr/include/qt6/QtCore/qxptype_traits.h \
   /usr/include/qt6/QtCore/qyieldcpu.h \
+  /usr/include/qt6/QtGui/QColor \
   /usr/include/qt6/QtGui/QIcon \
   /usr/include/qt6/QtGui/qaction.h \
   /usr/include/qt6/QtGui/qbitmap.h \

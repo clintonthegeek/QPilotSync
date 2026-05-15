@@ -228,10 +228,10 @@ void *FakeBackendPlugin::qt_metacast(const char *_clname)
     if (!_clname) return nullptr;
     if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN17FakeBackendPluginE_t>.strings))
         return static_cast<void*>(this);
-    if (!strcmp(_clname, "WildPalms::IBackendPlugin"))
-        return static_cast< WildPalms::IBackendPlugin*>(this);
-    if (!strcmp(_clname, "ca.vibekoder.WildPalms.IBackendPlugin/1.0"))
-        return static_cast< WildPalms::IBackendPlugin*>(this);
+    if (!strcmp(_clname, "WildPalms::IBackendPluginV2"))
+        return static_cast< WildPalms::IBackendPluginV2*>(this);
+    if (!strcmp(_clname, "ca.vibekoder.WildPalms.IBackendPluginV2/1.0"))
+        return static_cast< WildPalms::IBackendPluginV2*>(this);
     return QObject::qt_metacast(_clname);
 }
 

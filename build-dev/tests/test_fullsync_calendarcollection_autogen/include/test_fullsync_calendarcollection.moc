@@ -43,7 +43,8 @@ template <> constexpr inline auto TestFullSyncCalendarCollection::qt_create_meta
         "addCalendarAndRetrieve",
         "addRejectsNullptrAndEmptyId",
         "setColorOnlyAppliesWhenCalendarPresent",
-        "setVisibleOnlyAppliesWhenCalendarPresent"
+        "setVisibleOnlyAppliesWhenCalendarPresent",
+        "clear_removesAllCalendars"
     };
 
     QtMocHelpers::UintData qt_methods {
@@ -57,6 +58,8 @@ template <> constexpr inline auto TestFullSyncCalendarCollection::qt_create_meta
         QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'setVisibleOnlyAppliesWhenCalendarPresent'
         QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'clear_removesAllCalendars'
+        QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -85,6 +88,7 @@ void TestFullSyncCalendarCollection::qt_static_metacall(QObject *_o, QMetaObject
         case 2: _t->addRejectsNullptrAndEmptyId(); break;
         case 3: _t->setColorOnlyAppliesWhenCalendarPresent(); break;
         case 4: _t->setVisibleOnlyAppliesWhenCalendarPresent(); break;
+        case 5: _t->clear_removesAllCalendars(); break;
         default: ;
         }
     }
@@ -110,14 +114,14 @@ int TestFullSyncCalendarCollection::qt_metacall(QMetaObject::Call _c, int _id, v
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 5)
+        if (_id < 6)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 5;
+        _id -= 6;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 5)
+        if (_id < 6)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 5;
+        _id -= 6;
     }
     return _id;
 }

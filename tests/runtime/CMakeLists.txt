@@ -19,10 +19,10 @@ function(add_wildpalms_runtime_test TEST_NAME)
 endfunction()
 
 add_wildpalms_runtime_test(tst_pluginmetadatahelpers tst_pluginmetadatahelpers.cpp)
-add_wildpalms_runtime_test(tst_backendpluginmanager tst_backendpluginmanager.cpp)
+# K.8b T13: tst_backendpluginmanager + tst_plugin_factory_roundtrip deleted
+# along with BackendPluginManager + IBackendPluginV2.
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
-add_wildpalms_runtime_test(tst_plugin_factory_roundtrip tst_plugin_factory_roundtrip.cpp)
 # tst_palm_device_access links PalmDeviceAccessLib directly (kept after
 # the M5c deletion of SyncRunner_wp because PalmDeviceAccessLib has the
 # same include paths and Qt::Core linkage that this test needs).
@@ -45,11 +45,8 @@ add_test(NAME tst_palm_device_access COMMAND tst_palm_device_access)
 set_tests_properties(tst_palm_device_access PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
-# Force the dummy .so files to be built before running this test.
-add_dependencies(tst_plugin_factory_roundtrip
-    dummy_backend
-    dummy_action
-)
+# K.8b T13: tst_plugin_factory_roundtrip deleted, so the dependency on
+# dummy_backend/dummy_action is gone too (dummy_backend itself deleted).
 add_executable(tst_palm_runtime_hotsync tst_palm_runtime_hotsync.cpp)
 target_link_libraries(tst_palm_runtime_hotsync
     PRIVATE

@@ -1,6 +1,6 @@
 /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/runtime/tst_plugin_factory_roundtrip_autogen/include/tst_plugin_factory_roundtrip.moc: /home/clinton/dev/refactor-engine-merger/WildPalms/tests/runtime/tst_plugin_factory_roundtrip.cpp \
   /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/runtime/tst_plugin_factory_roundtrip_autogen/moc_predefs.h \
-  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin.h \
+  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin_v2.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/iplugin.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ipluginaction.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/backendpluginmanager.h \

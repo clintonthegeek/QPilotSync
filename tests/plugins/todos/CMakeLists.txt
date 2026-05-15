@@ -109,45 +109,5 @@ target_link_libraries(tst_todobackendplugin
 add_test(NAME tst_todobackendplugin COMMAND tst_todobackendplugin)
 set_tests_properties(tst_todobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# M5c Task 5: end-to-end via the real wildpalms_todos_v2.so plumbed
-# through PalmRuntime + SyncEngine::runSyncFuture (replaces the V1
-# BackendPluginManager + runBlobTwoWay test that this file used pre-M5c).
-add_executable(tst_todo_v2
-    tst_todo_v2.cpp
-    ${TODOS_PLUGIN_SRC_DIR}/todoblobbackend.cpp
-    ${TODOS_PLUGIN_SRC_DIR}/todoicstranscoder.cpp
-)
-target_compile_definitions(tst_todo_v2
-    PRIVATE
-        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-)
-target_include_directories(tst_todo_v2
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${PILOT_LINK_INCLUDE_DIR}
-)
-target_link_libraries(tst_todo_v2
-    PRIVATE
-        WildPalmsRuntime
-        WildPalmsPalmCalendar
-        WildPalmsPalmCodecs
-        WildPalmsPalmSync
-        WildPalmsPalmDevice
-        WildPalmsCore
-        PalmDeviceAccessLib
-        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
-        # DomainPlugin registrars so dispatchSync's
-        # DomainRegistry::findByDomain() finds a plugin at sync time.
-        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
-        KF6::CoreAddons
-        KF6::CalendarCore
-        Qt::Test
-        Qt::Core
-        pisock
-        bluetooth
-        usb
-        ${PILOT_LINK_LIBRARIES}
-)
-add_dependencies(tst_todo_v2 wildpalms_todos_static)
-add_test(NAME tst_todo_v2 COMMAND tst_todo_v2)
-set_tests_properties(tst_todo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# K.8b T13: tst_todo_v2 deleted along with IBackendPluginV2 + SyncEngine
+# (replaced by the in-process PalmRuntime plugin path).

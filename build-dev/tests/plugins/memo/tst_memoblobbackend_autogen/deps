@@ -13,8 +13,35 @@ tst_memoblobbackend_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/tests/plugins/memo/CMakeLists.txt \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/tests/plugins/memo/tst_memoblobbackend.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncbackend.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingplan.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/calendartype.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \
+	/usr/include/KF6/KCalendarCore/KCalendarCore/Incidence \
+	/usr/include/KF6/KCalendarCore/KCalendarCore/MemoryCalendar \
+	/usr/include/KF6/KCalendarCore/KCalendarCore/Recurrence \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/alarm.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/attachment.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/attendee.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/calendar.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/conference.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/customproperties.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/duration.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/event.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/incidence.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/incidencebase.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/journal.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/kcalendarcore_export.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/memorycalendar.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/period.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/person.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/recurrence.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/recurrencerule.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore/todo.h \
+	/usr/include/KF6/KCalendarCore/kcalendarcore_version.h \
 	/usr/include/alloca.h \
 	/usr/include/asm-generic/bitsperlong.h \
 	/usr/include/asm-generic/errno-base.h \
@@ -138,6 +165,7 @@ tst_memoblobbackend_autogen/timestamp: \
 	/usr/include/c++/15.2.1/bits/exception.h \
 	/usr/include/c++/15.2.1/bits/exception_defines.h \
 	/usr/include/c++/15.2.1/bits/exception_ptr.h \
+	/usr/include/c++/15.2.1/bits/formatfwd.h \
 	/usr/include/c++/15.2.1/bits/functexcept.h \
 	/usr/include/c++/15.2.1/bits/functional_hash.h \
 	/usr/include/c++/15.2.1/bits/hash_bytes.h \
@@ -159,6 +187,7 @@ tst_memoblobbackend_autogen/timestamp: \
 	/usr/include/c++/15.2.1/bits/max_size_type.h \
 	/usr/include/c++/15.2.1/bits/memory_resource.h \
 	/usr/include/c++/15.2.1/bits/memoryfwd.h \
+	/usr/include/c++/15.2.1/bits/monostate.h \
 	/usr/include/c++/15.2.1/bits/move.h \
 	/usr/include/c++/15.2.1/bits/nested_exception.h \
 	/usr/include/c++/15.2.1/bits/new_allocator.h \
@@ -220,6 +249,8 @@ tst_memoblobbackend_autogen/timestamp: \
 	/usr/include/c++/15.2.1/bits/string_view.tcc \
 	/usr/include/c++/15.2.1/bits/stringfwd.h \
 	/usr/include/c++/15.2.1/bits/this_thread_sleep.h \
+	/usr/include/c++/15.2.1/bits/unicode-data.h \
+	/usr/include/c++/15.2.1/bits/unicode.h \
 	/usr/include/c++/15.2.1/bits/uniform_int_dist.h \
 	/usr/include/c++/15.2.1/bits/unique_lock.h \
 	/usr/include/c++/15.2.1/bits/unique_ptr.h \
@@ -278,18 +309,23 @@ tst_memoblobbackend_autogen/timestamp: \
 	/usr/include/c++/15.2.1/memory_resource \
 	/usr/include/c++/15.2.1/mutex \
 	/usr/include/c++/15.2.1/new \
+	/usr/include/c++/15.2.1/numbers \
 	/usr/include/c++/15.2.1/numeric \
 	/usr/include/c++/15.2.1/optional \
 	/usr/include/c++/15.2.1/ostream \
 	/usr/include/c++/15.2.1/pstl/execution_defs.h \
+	/usr/include/c++/15.2.1/pstl/glue_algorithm_defs.h \
+	/usr/include/c++/15.2.1/pstl/glue_memory_defs.h \
 	/usr/include/c++/15.2.1/pstl/glue_numeric_defs.h \
 	/usr/include/c++/15.2.1/pstl/pstl_config.h \
 	/usr/include/c++/15.2.1/random \
+	/usr/include/c++/15.2.1/ranges \
 	/usr/include/c++/15.2.1/ratio \
 	/usr/include/c++/15.2.1/semaphore \
 	/usr/include/c++/15.2.1/set \
 	/usr/include/c++/15.2.1/shared_mutex \
 	/usr/include/c++/15.2.1/source_location \
+	/usr/include/c++/15.2.1/span \
 	/usr/include/c++/15.2.1/sstream \
 	/usr/include/c++/15.2.1/stdexcept \
 	/usr/include/c++/15.2.1/stop_token \
@@ -369,13 +405,17 @@ tst_memoblobbackend_autogen/timestamp: \
 	/usr/include/qt6/QtCore/QMutex \
 	/usr/include/qt6/QtCore/QObject \
 	/usr/include/qt6/QtCore/QRect \
+	/usr/include/qt6/QtCore/QSet \
 	/usr/include/qt6/QtCore/QSharedDataPointer \
+	/usr/include/qt6/QtCore/QSharedPointer \
 	/usr/include/qt6/QtCore/QSize \
 	/usr/include/qt6/QtCore/QSizeF \
 	/usr/include/qt6/QtCore/QString \
 	/usr/include/qt6/QtCore/QStringList \
+	/usr/include/qt6/QtCore/QTimeZone \
 	/usr/include/qt6/QtCore/QUrl \
 	/usr/include/qt6/QtCore/QVariant \
+	/usr/include/qt6/QtCore/QVariantMap \
 	/usr/include/qt6/QtCore/QtCore \
 	/usr/include/qt6/QtCore/QtCoreDepends \
 	/usr/include/qt6/QtCore/q17memory.h \

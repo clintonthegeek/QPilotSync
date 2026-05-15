@@ -1,8 +1,11 @@
 /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/runtime/tst_backendpluginmanager_autogen/include/tst_backendpluginmanager.moc: /home/clinton/dev/refactor-engine-merger/WildPalms/tests/runtime/tst_backendpluginmanager.cpp \
   /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/runtime/tst_backendpluginmanager_autogen/moc_predefs.h \
-  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin.h \
+  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin_v2.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/iplugin.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/backendpluginmanager.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \
   /usr/include/KF6/KCoreAddons/KPluginMetaData \
   /usr/include/KF6/KCoreAddons/kcoreaddons_export.h \
   /usr/include/KF6/KCoreAddons/kcoreaddons_version.h \
@@ -343,6 +346,8 @@
   /usr/include/locale.h \
   /usr/include/pthread.h \
   /usr/include/qt6/QtCore/QAbstractItemModel \
+  /usr/include/qt6/QtCore/QByteArray \
+  /usr/include/qt6/QtCore/QDateTime \
   /usr/include/qt6/QtCore/QDeadlineTimer \
   /usr/include/qt6/QtCore/QEvent \
   /usr/include/qt6/QtCore/QExplicitlySharedDataPointer \

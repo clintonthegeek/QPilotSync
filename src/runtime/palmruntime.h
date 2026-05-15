@@ -39,9 +39,9 @@ namespace Kalburator::Shape {
     struct Shape;
 }
 
-namespace WildPalms {
-    class IBackendPluginV2;
-}
+// K.8b T13: IBackendPluginV2 forward-decl dropped — the V2 plugin ABI is
+// gone. registerPluginForTest overloads removed below (they had no live
+// callers after K.8b T6 turned them into no-ops).
 
 namespace WildPalms::Runtime {
 
@@ -100,12 +100,8 @@ public:
 
     // Test seams
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);
-    void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>);
-    // Phase Ia.5 Task 19 overload: explicitly declare the plugin's
-    // native palm-side Shape so unified dispatchSync can compile a
-    // Pipeline through registered TransformationRegistry edges.
-    void registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2>,
-                                const Kalburator::Shape::Shape &shape);
+    // K.8b T13: registerPluginForTest(IBackendPluginV2) overloads removed
+    // along with the V2 plugin ABI (the bodies were no-ops since K.8b T6).
     void setMappingsForTest(QList<Kalburator::Sync::SyncMapping>);
     // K.8b T7: BlobBackendAdapter deleted; tests inject SyncBackend directly.
     void registerBackendInstanceForTest(const QString &id,

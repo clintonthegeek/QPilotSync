@@ -1,6 +1,6 @@
 /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/plugins/install/tst_installsourcecollector_autogen/include/tst_installsourcecollector.moc: /home/clinton/dev/refactor-engine-merger/WildPalms/tests/plugins/install/tst_installsourcecollector.cpp \
   /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/plugins/install/tst_installsourcecollector_autogen/moc_predefs.h \
-  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin.h \
+  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin_v2.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/iplugin.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/backendpluginmanager.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/installsourcecollector.h \

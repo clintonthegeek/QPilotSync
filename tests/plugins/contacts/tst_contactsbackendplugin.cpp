@@ -12,7 +12,7 @@
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "runtime/palmdeviceaccess.h"
 
-#include "core/ibackendplugin_v2.h"
+// K.8b T13: core/ibackendplugin_v2.h deleted along with the V2 plugin ABI.
 
 // Complete-type includes for libkalburator pointers (delete on a forward
 // decl is UB; ConflictHandler is needed for dynamic_cast).

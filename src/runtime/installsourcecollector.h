@@ -50,8 +50,8 @@ public:
 private:
     QList<FileEntry> scanFolder(const QString &folderPath,
                                   QStringList    *outFolderPaths);
-    QList<FileEntry> drainPluginBlobs(BackendPluginManager *manager,
-                                        QTemporaryDir       *dir);
+    // K.8b T13: drainPluginBlobs removed — V2 plugin ABI +
+    // BackendPluginManager deleted. T14 reintroduces blob aggregation.
     static bool      isInstallableType(const QString &type);
     static QString   inferExtension(const QString &type,
                                       const QString &displayName);

@@ -10,6 +10,7 @@
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncbackend.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncoperation.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingplan.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/calendartype.h \

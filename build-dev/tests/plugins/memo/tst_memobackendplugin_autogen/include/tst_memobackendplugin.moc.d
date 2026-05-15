@@ -1,7 +1,5 @@
 /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/plugins/memo/tst_memobackendplugin_autogen/include/tst_memobackendplugin.moc: /home/clinton/dev/refactor-engine-merger/WildPalms/tests/plugins/memo/tst_memobackendplugin.cpp \
   /home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/tests/plugins/memo/tst_memobackendplugin_autogen/moc_predefs.h \
-  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/ibackendplugin_v2.h \
-  /home/clinton/dev/refactor-engine-merger/WildPalms/src/core/iplugin.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/codecs/memocodec.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/kpilotdevicelink.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/kpilotlink.h \
@@ -12,10 +10,38 @@
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/memo/memoblobbackend.h \
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/palmdeviceaccess.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncbackend.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictrecord.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/synccommon.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/plugin.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingplan.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/calendartype.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \
+  /usr/include/KF6/KCalendarCore/KCalendarCore/Incidence \
+  /usr/include/KF6/KCalendarCore/KCalendarCore/MemoryCalendar \
+  /usr/include/KF6/KCalendarCore/KCalendarCore/Recurrence \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/alarm.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/attachment.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/attendee.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/calendar.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/conference.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/customproperties.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/duration.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/event.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/incidence.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/incidencebase.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/journal.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/kcalendarcore_export.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/memorycalendar.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/period.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/person.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/recurrence.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/recurrencerule.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore/todo.h \
+  /usr/include/KF6/KCalendarCore/kcalendarcore_version.h \
   /usr/include/alloca.h \
   /usr/include/asm-generic/bitsperlong.h \
   /usr/include/asm-generic/errno-base.h \
@@ -370,17 +396,21 @@
   /usr/include/qt6/QtCore/QMutex \
   /usr/include/qt6/QtCore/QObject \
   /usr/include/qt6/QtCore/QRect \
+  /usr/include/qt6/QtCore/QSet \
   /usr/include/qt6/QtCore/QSharedDataPointer \
+  /usr/include/qt6/QtCore/QSharedPointer \
   /usr/include/qt6/QtCore/QSize \
   /usr/include/qt6/QtCore/QSizeF \
   /usr/include/qt6/QtCore/QString \
   /usr/include/qt6/QtCore/QStringList \
   /usr/include/qt6/QtCore/QThread \
+  /usr/include/qt6/QtCore/QTimeZone \
   /usr/include/qt6/QtCore/QUrl \
   /usr/include/qt6/QtCore/QVariant \
   /usr/include/qt6/QtCore/QVariantMap \
   /usr/include/qt6/QtCore/QtCore \
   /usr/include/qt6/QtCore/QtCoreDepends \
+  /usr/include/qt6/QtCore/QtPlugin \
   /usr/include/qt6/QtCore/q17memory.h \
   /usr/include/qt6/QtCore/q20algorithm.h \
   /usr/include/qt6/QtCore/q20bit.h \

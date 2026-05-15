@@ -64,13 +64,8 @@ add_wildpalms_test(test_conflict
     test_conflict.cpp
 )
 
-add_wildpalms_test(test_localfilebackend
-    test_localfilebackend.cpp
-)
-
-add_wildpalms_test(test_syncengine
-    test_syncengine.cpp
-)
+# K.8b T13: test_localfilebackend / test_syncengine deleted along with
+# LocalFileBackend + SyncEngine. test_multidatabase (further down) likewise.
 
 add_wildpalms_test(test_profile
     test_profile.cpp
@@ -108,7 +103,7 @@ set_tests_properties(test_profile_sidecar_migration PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
-add_wildpalms_test(test_multidatabase test_multidatabase.cpp)
+# K.8b T13: test_multidatabase deleted along with SyncEngine + SyncConduitBase.
 
 # ============================================================
 # Helper for runtime-only tests (Phase D originally; consolidated under

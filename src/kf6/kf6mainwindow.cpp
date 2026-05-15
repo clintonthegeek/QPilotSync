@@ -1,7 +1,7 @@
 #include "kf6mainwindow.h"
 #include "kf6settings.h"
 #include "actionmanager.h"
-#include "conduitmanager.h"
+// K.8b T14: conduitmanager.h deleted in T13.
 #include "autosyncorchestrator.h"
 
 #include "../app/logwidget.h"
@@ -14,19 +14,16 @@
 #include "../palm/categoryinfo.h"
 #include "../profile.h"
 
-#include "../core/iconduit.h"
+// K.8b T14: core/iconduit.h, core/ibackendplugin_v2.h,
+// runtime/backendpluginmanager.h, sync/syncengine.h, sync/conduit.h,
+// sync/localfilebackend.h, app/interactiveconflicthandler.h all deleted
+// in T13.
 #include "../runtime/accountcontroller.h"
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
-#include "../core/ibackendplugin_v2.h"
-#include "../runtime/backendpluginmanager.h"
-#include "../sync/syncengine.h"
 #include "../core/synctypes.h"
-#include "../sync/conduit.h"
-#include "../sync/localfilebackend.h"
 #include "../sync/qsynccore/conflictstore.h"
 #include "../sync/syncstate.h"
-#include "../app/interactiveconflicthandler.h"
 // M5a: bridge header — safe to include alongside WP-local QSyncCore headers.
 // The full KalburatorInteractiveConflictHandler header must NOT appear here;
 // see src/app/conflict/CMakeLists.txt for the include-guard collision rationale.
@@ -108,11 +105,11 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     setupUI();
     setupActions();
 
-    // Initialize sync engine
-    initializeSyncEngine();
-
-    // Initialize conduit manager (discovers and loads conduit plugins)
-    initializeConduits();
+    // K.8b T14: initializeSyncEngine / initializeConduits commented out —
+    // both depend on classes deleted in T13. T14 finishes the cleanup by
+    // removing the methods entirely.
+    // initializeSyncEngine();
+    // initializeConduits();
 
     // Auto-detection
     m_deviceMonitor = new PalmDeviceMonitor(this);
@@ -199,14 +196,8 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
 KF6MainWindow::~KF6MainWindow()
 {
-    // Disconnect conduit manager signals. Its destructor emits
-    // conduitUnloading() for each plugin, which would try to call our
-    // onConduitUnloading() slot. By disconnecting here, the signal fires
-    // harmlessly into the void when deleteChildren() eventually destroys
-    // the manager (after all base-class destructors have run cleanly).
-    if (m_conduitManager) {
-        disconnect(m_conduitManager, nullptr, this, nullptr);
-    }
+    // K.8b T14: ConduitManager-disconnect block removed — ConduitManager
+    // type deleted in T13. (m_conduitManager is always nullptr now.)
 
     // Stop udev monitor
     if (m_deviceMonitor) {
@@ -223,13 +214,11 @@ KF6MainWindow::~KF6MainWindow()
         m_palmRuntime->disconnectDevice();
     }
 
-    // Clear sync engine's device link reference
-    if (m_syncEngine) {
-        m_syncEngine->setDeviceLink(nullptr);
-    }
-
-    // Delete non-parented objects only
-    // m_syncEngine is a QObject child - Qt will delete it
+    // K.8b T14: sync-engine teardown commented out — Sync::SyncEngine
+    // deleted in T13. m_syncEngine is always nullptr now.
+    // if (m_syncEngine) {
+    //     m_syncEngine->setDeviceLink(nullptr);
+    // }
 
     // Safety check: verify m_currentProfile is a valid heap pointer
     // before deleting. This guards against memory corruption that could
@@ -491,6 +480,12 @@ void KF6MainWindow::updateProfileMenuState()
     }
 }
 
+// K.8b T14: Native SyncEngine + ConduitManager + BackendPluginManager loops
+// commented out below. Their underlying classes were deleted in T13;
+// T14 removes the method bodies entirely along with the matching declarations
+// in kf6mainwindow.h.
+#if 0  // K.8b T14: dead initializers gated out
+
 // ========== Sync Engine ==========
 
 void KF6MainWindow::initializeSyncEngine()
@@ -648,12 +643,21 @@ void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPluginV2 *plugin)
 void KF6MainWindow::onBackendPluginUnloading(WildPalms::IBackendPluginV2 *plugin)
 {
     if (!plugin) return;
-    if (auto *page = m_backendPluginPages.take(plugin->pluginId())) {
-        m_pageWidget->removePage(page);
-        page->deleteLater();
-    }
-    qDebug() << "[KF6MainWindow] Backend plugin unloading:" << plugin->pluginId();
+    // K.8b T14: body uses IBackendPluginV2 — gated out alongside the rest.
+    Q_UNUSED(plugin);
 }
+
+#endif  // K.8b T14: end of dead initializer / slot block
+
+// K.8b T14: empty stubs for the slot/init methods declared in the header.
+// Their real bodies (above, inside #if 0) referenced deleted classes; T14
+// removes both the stubs and the matching declarations from the header.
+void KF6MainWindow::initializeSyncEngine() {}
+void KF6MainWindow::initializeConduits() {}
+void KF6MainWindow::onConduitLoaded(IConduit *) {}
+void KF6MainWindow::onConduitUnloading(IConduit *) {}
+void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPluginV2 *) {}
+void KF6MainWindow::onBackendPluginUnloading(WildPalms::IBackendPluginV2 *) {}
 
 void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString &operationName)
 {
@@ -754,9 +758,9 @@ void KF6MainWindow::loadProfile(const QString &path)
 
     m_syncPath = path;
 
-    // Configure sync engine
-    m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
-
+    // K.8b T14: native sync-engine state-directory setup commented out —
+    // SyncEngine deleted in T13.
+    // m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
 
     // M2 — (re)create PalmRuntime for the new profile path.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
@@ -791,6 +795,11 @@ void KF6MainWindow::loadProfile(const QString &path)
         m_palmConflictHandler,
         [this]() { onPalmConflictHandlerKeepAlive(); });
 
+    // K.8b T14: native SyncEngine + InteractiveConflictHandler +
+    // LocalFileBackend + ConduitManager wiring commented out — all the
+    // underlying classes were deleted in T13. The Kalburator::Plugin path
+    // through PalmRuntime now owns conflict + backend wiring.
+#if 0  // K.8b T14
     m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
     m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
     m_syncEngine->setConflictPromptStrategy(m_currentProfile->conflictPromptStrategy());
@@ -814,9 +823,7 @@ void KF6MainWindow::loadProfile(const QString &path)
             return dynamic_cast<const ISyncConduit*>(c);
         });
 
-    // Connect keepAlive signal — tickle pause/resume is now driven by
-    // PalmTickle inside PalmDeviceAccess; refresh it when the user is
-    // reading a conflict dialog for a long time.
+    // Connect keepAlive signal
     connect(m_interactiveConflictHandler, &InteractiveConflictHandler::keepAliveRequested,
             this, [this]() {
                 if (m_palmRuntime && m_palmRuntime->deviceLink()) {
@@ -830,11 +837,9 @@ void KF6MainWindow::loadProfile(const QString &path)
     // Apply profile's conduit enabled settings
     for (const QString &conduitId : m_syncEngine->registeredConduits()) {
         if (m_conduitManager && m_conduitManager->hasDatabaseClaims(conduitId)) {
-            // Sync conduit: enabled if it's the active handler for any of its claimed databases
             QStringList activeDBs = m_conduitManager->activeDatabasesForConduit(conduitId, m_currentProfile);
             m_syncEngine->setConduitEnabled(conduitId, !activeDBs.isEmpty());
         } else {
-            // Standalone conduit: use simple enable/disable toggle
             m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
         }
 
@@ -847,11 +852,17 @@ void KF6MainWindow::loadProfile(const QString &path)
         }
     }
 
-    // Set up database reference resolver for @ sigil in dependency ordering
     if (m_conduitManager && m_currentProfile) {
         m_syncEngine->setDatabaseResolver([this](const QString &dbName) -> QString {
             return m_conduitManager->activeConduitForDatabase(dbName, m_currentProfile);
         });
+    }
+#endif  // K.8b T14
+
+    // Conflict store still needed for the Kalburator-side conflict review
+    // dialog; keep it allocated.
+    if (!m_conflictStore) {
+        m_conflictStore = new QSyncCore::ConflictStore(this);
     }
 
     // Connection mode (USB serial vs network) is now encoded in the
@@ -1249,10 +1260,12 @@ void KF6MainWindow::onConnectionComplete(bool success, const QString &error)
                                   ramFree, ramTotal));
     }
 
-    m_syncEngine->setDeviceLink(deviceLink);
-    if (deviceLink->handshakeUserInfoValid()) {
-        m_syncEngine->setPalmUserName(deviceLink->handshakeUserName());
-    }
+    // K.8b T14: native SyncEngine deleted — device link is now wired up
+    // through PalmRuntime / PalmDeviceAccess, not Sync::SyncEngine.
+    // m_syncEngine->setDeviceLink(deviceLink);
+    // if (deviceLink->handshakeUserInfoValid()) {
+    //     m_syncEngine->setPalmUserName(deviceLink->handshakeUserName());
+    // }
 
     updateMenuState(true);
     m_dashboardWidget->updateStatus(m_currentProfile, true);
@@ -1380,7 +1393,8 @@ void KF6MainWindow::onDisconnectDevice()
             deviceLink->endSync();
         }
 
-        m_syncEngine->setDeviceLink(nullptr);
+        // K.8b T14: m_syncEngine->setDeviceLink(nullptr); — SyncEngine
+        // deleted in T13.
 
         // Tear down PalmRuntime's device.
         m_palmRuntime->disconnectDevice();
@@ -1728,14 +1742,16 @@ void KF6MainWindow::onProfileSettings()
 
     auto *dlg = new ProfilePropertiesDialog(m_currentProfile, m_conduitManager, this);
     connect(dlg, &ProfilePropertiesDialog::settingsChanged, this, [this]() {
-        // Re-apply conduit enabled settings to sync engine
+        // K.8b T14: SyncEngine + ConduitManager + SyncConduitBase deleted in
+        // T13; the Conduit Settings page is now a stub (see
+        // profilepropertiesdialog.cpp). The Kalburator::Plugin path picks
+        // up settings on the next sync via PalmRuntime.
+#if 0  // K.8b T14
         for (const QString &conduitId : m_syncEngine->registeredConduits()) {
             if (m_conduitManager && m_conduitManager->hasDatabaseClaims(conduitId)) {
-                // Sync conduit: enabled if it's the active handler for any of its claimed databases
                 QStringList activeDBs = m_conduitManager->activeDatabasesForConduit(conduitId, m_currentProfile);
                 m_syncEngine->setConduitEnabled(conduitId, !activeDBs.isEmpty());
             } else {
-                // Standalone conduit: use simple enable/disable toggle
                 m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
             }
 
@@ -1747,8 +1763,7 @@ void KF6MainWindow::onProfileSettings()
                 }
             }
         }
-
-        // Connection mode now encoded in devicePaths passed to PalmRuntime.
+#endif  // K.8b T14
 
         updateWindowTitle();
     });
@@ -1907,9 +1922,11 @@ void KF6MainWindow::onSyncStarted()
 {
     statusBar()->showMessage(i18n("Syncing..."));
 
-    if (m_interactiveConflictHandler) {
-        m_interactiveConflictHandler->onSyncStart();
-    }
+    // K.8b T14: InteractiveConflictHandler deleted in T13 — the Kalburator
+    // side handles conflict-handler lifecycle now (via PalmRuntime).
+    // if (m_interactiveConflictHandler) {
+    //     m_interactiveConflictHandler->onSyncStart();
+    // }
 
     KNotification *notification = new KNotification(QStringLiteral("syncStarted"), KNotification::CloseOnTimeout, this);
     notification->setTitle(i18n("Sync Started"));
@@ -1990,11 +2007,8 @@ void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)
 
 void KF6MainWindow::onSyncFinished(const Sync::SyncResult &result)
 {
-    if (m_interactiveConflictHandler) {
-        bool hadConflicts = (result.palmStats.conflicts + result.pcStats.conflicts) > 0;
-        bool allResolved = m_interactiveConflictHandler->conflictsDeferred() == 0;
-        m_interactiveConflictHandler->onSyncEnd(hadConflicts, allResolved);
-    }
+    // K.8b T14: InteractiveConflictHandler deleted in T13.
+    Q_UNUSED(result);
     statusBar()->showMessage(i18n("Sync complete"));
 }
 
@@ -2097,11 +2111,12 @@ void KF6MainWindow::onShowConflicts()
     } else {
         m_logWidget->logInfo(i18n("Found %1 pending conflicts to review", totalConflicts));
 
-        auto conduitLookup = [this](const QString &conduitId) -> const ISyncConduit* {
-            if (!m_conduitManager) return nullptr;
-            IConduit *c = m_conduitManager->conduit(conduitId);
-            return dynamic_cast<const ISyncConduit*>(c);
-        };
+        // K.8b T14: ConduitManager + IConduit + ISyncConduit deleted in T13.
+        // The lookup now returns nullptr (plain-text fallback in
+        // ConflictReviewWidget). T14 replaces it with a Kalburator::Plugin
+        // lookup once the new conflict-rendering hook lands.
+        ConduitLookupFn conduitLookup =
+            [](const QString &) -> const void * { return nullptr; };
 
         ConflictReviewDialog dialog(m_conflictStore, conduitLookup, this);
         connect(&dialog, &ConflictReviewDialog::applyResolutionsRequested,

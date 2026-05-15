@@ -14,26 +14,33 @@ tst_calendarbackendplugin_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendar-backend-plugin.json \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarbackendplugin.cpp \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarbackendplugin.h \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarblobbackend.cpp \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarblobbackend.h \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarconflicthandler.cpp \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarconflicthandler.h \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarview.cpp \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/calendarview.h \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/icstranscoder.cpp \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/icstranscoder.h \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/palmcalendarbackend.cpp \
+	/home/clinton/dev/refactor-engine-merger/WildPalms/src/plugins/calendar/palmcalendarbackend.h \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/palmdeviceaccess.h \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/tests/plugins/calendar/CMakeLists.txt \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/tests/plugins/calendar/tst_calendarbackendplugin.cpp \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncbackend.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictpolicy.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/conflictrecord.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/conflict/synccommon.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingplan.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/calendartype.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \
 	/usr/include/KF6/KCalendarCore/KCalendarCore/Event \
 	/usr/include/KF6/KCalendarCore/KCalendarCore/ICalFormat \
+	/usr/include/KF6/KCalendarCore/KCalendarCore/Incidence \
 	/usr/include/KF6/KCalendarCore/KCalendarCore/MemoryCalendar \
+	/usr/include/KF6/KCalendarCore/KCalendarCore/Recurrence \
 	/usr/include/KF6/KCalendarCore/kcalendarcore/alarm.h \
 	/usr/include/KF6/KCalendarCore/kcalendarcore/attachment.h \
 	/usr/include/KF6/KCalendarCore/kcalendarcore/attendee.h \
@@ -186,6 +193,7 @@ tst_calendarbackendplugin_autogen/timestamp: \
 	/usr/include/c++/15.2.1/bits/exception.h \
 	/usr/include/c++/15.2.1/bits/exception_defines.h \
 	/usr/include/c++/15.2.1/bits/exception_ptr.h \
+	/usr/include/c++/15.2.1/bits/formatfwd.h \
 	/usr/include/c++/15.2.1/bits/functexcept.h \
 	/usr/include/c++/15.2.1/bits/functional_hash.h \
 	/usr/include/c++/15.2.1/bits/hash_bytes.h \
@@ -207,6 +215,7 @@ tst_calendarbackendplugin_autogen/timestamp: \
 	/usr/include/c++/15.2.1/bits/max_size_type.h \
 	/usr/include/c++/15.2.1/bits/memory_resource.h \
 	/usr/include/c++/15.2.1/bits/memoryfwd.h \
+	/usr/include/c++/15.2.1/bits/monostate.h \
 	/usr/include/c++/15.2.1/bits/move.h \
 	/usr/include/c++/15.2.1/bits/nested_exception.h \
 	/usr/include/c++/15.2.1/bits/new_allocator.h \
@@ -268,6 +277,8 @@ tst_calendarbackendplugin_autogen/timestamp: \
 	/usr/include/c++/15.2.1/bits/string_view.tcc \
 	/usr/include/c++/15.2.1/bits/stringfwd.h \
 	/usr/include/c++/15.2.1/bits/this_thread_sleep.h \
+	/usr/include/c++/15.2.1/bits/unicode-data.h \
+	/usr/include/c++/15.2.1/bits/unicode.h \
 	/usr/include/c++/15.2.1/bits/uniform_int_dist.h \
 	/usr/include/c++/15.2.1/bits/unique_lock.h \
 	/usr/include/c++/15.2.1/bits/unique_ptr.h \
@@ -326,18 +337,23 @@ tst_calendarbackendplugin_autogen/timestamp: \
 	/usr/include/c++/15.2.1/memory_resource \
 	/usr/include/c++/15.2.1/mutex \
 	/usr/include/c++/15.2.1/new \
+	/usr/include/c++/15.2.1/numbers \
 	/usr/include/c++/15.2.1/numeric \
 	/usr/include/c++/15.2.1/optional \
 	/usr/include/c++/15.2.1/ostream \
 	/usr/include/c++/15.2.1/pstl/execution_defs.h \
+	/usr/include/c++/15.2.1/pstl/glue_algorithm_defs.h \
+	/usr/include/c++/15.2.1/pstl/glue_memory_defs.h \
 	/usr/include/c++/15.2.1/pstl/glue_numeric_defs.h \
 	/usr/include/c++/15.2.1/pstl/pstl_config.h \
 	/usr/include/c++/15.2.1/random \
+	/usr/include/c++/15.2.1/ranges \
 	/usr/include/c++/15.2.1/ratio \
 	/usr/include/c++/15.2.1/semaphore \
 	/usr/include/c++/15.2.1/set \
 	/usr/include/c++/15.2.1/shared_mutex \
 	/usr/include/c++/15.2.1/source_location \
+	/usr/include/c++/15.2.1/span \
 	/usr/include/c++/15.2.1/sstream \
 	/usr/include/c++/15.2.1/stdexcept \
 	/usr/include/c++/15.2.1/stop_token \
@@ -400,6 +416,7 @@ tst_calendarbackendplugin_autogen/timestamp: \
 	/usr/include/pthread.h \
 	/usr/include/qt6/QtCore/QAbstractItemModel \
 	/usr/include/qt6/QtCore/QByteArray \
+	/usr/include/qt6/QtCore/QCryptographicHash \
 	/usr/include/qt6/QtCore/QDataStream \
 	/usr/include/qt6/QtCore/QDate \
 	/usr/include/qt6/QtCore/QDateTime \

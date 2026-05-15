@@ -19,7 +19,6 @@ PalmDeviceAccessLib_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/palmtickle.cpp \
 	/home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/palmtickle.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
-	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/backendregistry.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/isynchost.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncbackend.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/syncoperation.h \
@@ -33,10 +32,18 @@ PalmDeviceAccessLib_autogen/timestamp: \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/propertycatalogue.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/storage/baselinestore.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendcontribution.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendregistry.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavbackendcontribution.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/caldavprovider.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavbackendcontribution.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/carddavprovider.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/iprovider.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/syncbackendbase.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/syncdiff.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingplan.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/transcoding/transcodingrouter.h \
+	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendconfiguration.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/calendartype.h \
 	/home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \

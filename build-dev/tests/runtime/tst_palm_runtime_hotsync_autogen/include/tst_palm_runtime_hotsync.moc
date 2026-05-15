@@ -38,13 +38,16 @@ template <> constexpr inline auto TestPalmRuntimeHotSync::qt_create_metaobjectda
     namespace QMC = QtMocConstants;
     QtMocHelpers::StringRefStorage qt_stringData {
         "TestPalmRuntimeHotSync",
-        "hotSync_emptyTarget_recordPropagates",
-        ""
+        "initTestCase",
+        "",
+        "hotSync_emptyTarget_recordPropagates"
     };
 
     QtMocHelpers::UintData qt_methods {
-        // Slot 'hotSync_emptyTarget_recordPropagates'
+        // Slot 'initTestCase'
         QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'hotSync_emptyTarget_recordPropagates'
+        QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -68,7 +71,8 @@ void TestPalmRuntimeHotSync::qt_static_metacall(QObject *_o, QMetaObject::Call _
     auto *_t = static_cast<TestPalmRuntimeHotSync *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
-        case 0: _t->hotSync_emptyTarget_recordPropagates(); break;
+        case 0: _t->initTestCase(); break;
+        case 1: _t->hotSync_emptyTarget_recordPropagates(); break;
         default: ;
         }
     }
@@ -94,14 +98,14 @@ int TestPalmRuntimeHotSync::qt_metacall(QMetaObject::Call _c, int _id, void **_a
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 1)
+        if (_id < 2)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 1;
+        _id -= 2;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 1)
+        if (_id < 2)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 1;
+        _id -= 2;
     }
     return _id;
 }

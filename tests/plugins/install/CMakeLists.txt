@@ -20,33 +20,10 @@ target_link_libraries(tst_palmfileinstaller
 add_test(NAME tst_palmfileinstaller COMMAND tst_palmfileinstaller)
 set_tests_properties(tst_palmfileinstaller PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 4: InstallSourceCollector (folder side) ---
-add_executable(tst_installsourcecollector
-    tst_installsourcecollector.cpp
-    ${CMAKE_SOURCE_DIR}/src/runtime/installsourcecollector.cpp
-)
-target_compile_definitions(tst_installsourcecollector
-    PRIVATE
-        INSTALL_FIXTURE_DIR="${INSTALL_FIXTURE_DIR}"
-)
-target_include_directories(tst_installsourcecollector
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-)
-target_include_directories(tst_installsourcecollector BEFORE
-    PRIVATE
-        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
-)
-target_link_libraries(tst_installsourcecollector
-    PRIVATE
-        Qt::Test
-        Qt::Core
-        WildPalmsCore
-        WildPalmsRuntime
-        Kalburator::Sync
-)
-add_test(NAME tst_installsourcecollector COMMAND tst_installsourcecollector)
-set_tests_properties(tst_installsourcecollector PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# K.8b T13: tst_installsourcecollector deleted along with BackendPluginManager
+# (the test inherited from BackendPluginManager to fake the plugin-blob drain
+# path; folder-side scanning is now covered by tst_install_v2_e2e's removal
+# leaves the InstallSourceCollector unit coverage to be re-added in T18+).
 
 # --- Task 6: InstallActionPlugin ---
 add_executable(tst_installactionplugin
@@ -74,33 +51,5 @@ target_link_libraries(tst_installactionplugin
 add_test(NAME tst_installactionplugin COMMAND tst_installactionplugin)
 set_tests_properties(tst_installactionplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 8: end-to-end ---
-add_executable(tst_install_v2_e2e
-    tst_install_v2_e2e.cpp
-    ${CMAKE_SOURCE_DIR}/src/runtime/installsourcecollector.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/install/installactionplugin.cpp
-)
-target_compile_definitions(tst_install_v2_e2e
-    PRIVATE
-        INSTALL_FIXTURE_DIR="${INSTALL_FIXTURE_DIR}"
-)
-target_include_directories(tst_install_v2_e2e
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-)
-target_include_directories(tst_install_v2_e2e BEFORE
-    PRIVATE
-        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
-)
-target_link_libraries(tst_install_v2_e2e
-    PRIVATE
-        Qt::Test
-        Qt::Core
-        WildPalmsCore
-        WildPalmsRuntime
-        WildPalmsPalmSync
-        KF6::CoreAddons
-        Kalburator::Sync
-)
-add_test(NAME tst_install_v2_e2e COMMAND tst_install_v2_e2e)
-set_tests_properties(tst_install_v2_e2e PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# K.8b T13: tst_install_v2_e2e deleted along with IBackendPluginV2 +
+# BackendPluginManager (the test inherited from BackendPluginManager).

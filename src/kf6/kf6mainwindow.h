@@ -17,25 +17,32 @@ class LogWidget;
 class KPilotDeviceLink;
 class Profile;
 class DashboardWidget;
+// K.8b T14: ConduitManager + IConduit + BackendPluginManager + V2 plugin
+// ABI deleted in T13. Forward declarations kept as opaque types so the
+// remaining T14-marked uses in this header compile; the bodies in the
+// .cpp are commented out under K.8b T14: markers and will be removed
+// entirely when T14 lands.
 class ConduitManager;
 class IConduit;
 class KStatusNotifierItem;
 class PalmDeviceMonitor;
 class AutoSyncOrchestrator;
 
-// Phase E.9 — new-ABI plugin manager. Coexists with ConduitManager
-// until E.16 retires the old surface.
 namespace WildPalms { class BackendPluginManager; class IBackendPluginV2; }
 namespace WildPalms::Runtime {
     class PalmRuntime;
     class AccountController;
 }
 
+// K.8b T13: Sync::SyncEngine deleted. Sync::SyncResult lives in
+// core/synctypes.h and is still in use.
 namespace Sync {
 class SyncEngine;
-class SyncResult;
+struct SyncResult;
 }
 
+// K.8b T13: native InteractiveConflictHandler deleted. T14 removes the
+// remaining ref in this header.
 class InteractiveConflictHandler;
 
 namespace QSyncCore {

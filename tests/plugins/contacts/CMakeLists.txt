@@ -115,87 +115,9 @@ target_link_libraries(tst_contactsbackendplugin
 add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
 set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# M5c Task 4: end-to-end via the real wildpalms_contacts_v2.so plumbed
-# through PalmRuntime + SyncEngine::runSyncFuture (replaces the V1
-# BackendPluginManager + runBlobTwoWay test that this file used pre-M5c).
-add_executable(tst_contacts_v2
-    tst_contacts_v2.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
-)
-target_compile_definitions(tst_contacts_v2
-    PRIVATE
-        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-)
-target_include_directories(tst_contacts_v2
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${PILOT_LINK_INCLUDE_DIR}
-)
-target_link_libraries(tst_contacts_v2
-    PRIVATE
-        WildPalmsRuntime
-        WildPalmsPalmCalendar
-        WildPalmsPalmCodecs
-        WildPalmsPalmSync
-        WildPalmsPalmDevice
-        WildPalmsCore
-        PalmDeviceAccessLib
-        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
-        # DomainPlugin registrars (KalburatorDomainContacts et al.) so
-        # dispatchSync's DomainRegistry::findByDomain(srcShape.domain)
-        # finds a plugin at sync time. Without WHOLE_ARCHIVE the linker
-        # drops the registrars as unreferenced TUs.
-        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
-        KF6::CoreAddons
-        KF6::Contacts
-        Qt::Test
-        Qt::Core
-        pisock
-        bluetooth
-        usb
-        ${PILOT_LINK_LIBRARIES}
-)
-add_dependencies(tst_contacts_v2 wildpalms_contacts_static)
-add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
-set_tests_properties(tst_contacts_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
-
-# --- Phase Ia Task 19: engine-level palm <-> vcard4 sync integration ---
-# Diagnostic test pinning the architectural gap that
-# SyncEngine::dispatchBlobSync passes bytes through verbatim, even
-# when source and target declare distinct shapes connected by a
-# registered TransformationEdge. When Phase Ib upgrades the engine
-# to compile + run a Pipeline at the edge, this test's diagnostic
-# assertions flip to assert vcard4 bytes on the target side.
-add_executable(tst_contacts_palm_engine_sync
-    tst_contacts_palm_engine_sync.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
-)
-target_include_directories(tst_contacts_palm_engine_sync
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${CONTACTS_PLUGIN_SRC_DIR}
-)
-target_link_libraries(tst_contacts_palm_engine_sync
-    PRIVATE
-        WildPalmsPalmCodecs   # encodeContact / Contact
-        WildPalmsPalmSync     # PalmRecord::toWireBytes / fromWireBytes
-        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
-        # DomainPlugin registrars (KalburatorDomainContacts) so
-        # dispatchSync's DomainRegistry::findByDomain("contacts") finds
-        # a plugin at sync time. SyncEngine, SyncBackend,
-        # BackendRegistry, TransformationRegistry, BlobBaselineStore
-        # also live in this archive.
-        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
-        KF6::Contacts
-        Qt::Test
-        Qt::Core
-)
-add_test(NAME tst_contacts_palm_engine_sync COMMAND tst_contacts_palm_engine_sync)
-set_tests_properties(tst_contacts_palm_engine_sync
-    PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# K.8b T13: tst_contacts_v2 + tst_contacts_palm_engine_sync deleted along
+# with IBackendPluginV2 + SyncEngine. Contract is covered end-to-end via
+# tst_palm_runtime_* (in-process Kalburator::Plugin path).
 
 # --- Phase Ia Task 14: ContactsDomainExtension (path A registration) ---
 add_executable(tst_contactsdomainextension

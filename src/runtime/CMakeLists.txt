@@ -10,8 +10,10 @@ find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 add_library(WildPalmsRuntime STATIC
     pluginmetadatahelpers.h
     pluginmetadatahelpers.cpp
-    backendpluginmanager.h
-    backendpluginmanager.cpp
+    # K.8b T13: BackendPluginManager deleted (IBackendPluginV2 also gone;
+    # plugin discovery is now in-process via Kalburator::Plugin / PalmRuntime
+    # since K.8b T6). InstallSourceCollector::drainPluginBlobs that took a
+    # BackendPluginManager* is also commented out at the call site below.
     pluginactionmanager.h
     pluginactionmanager.cpp
     simpleactioncontext.h

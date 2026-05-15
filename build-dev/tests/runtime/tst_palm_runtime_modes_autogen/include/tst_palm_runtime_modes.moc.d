@@ -6,7 +6,13 @@
   /home/clinton/dev/refactor-engine-merger/WildPalms/src/runtime/palmruntime.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/iblobbackend.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/blob/mockblobbackend.h \
-  /home/clinton/dev/refactor-engine-merger/libkalburator/src/calendar/backendregistry.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/manifest.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/pluginloaderror.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/pluginmanager.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/plugin/stock_plugins.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/shape/shape.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendcontribution.h \
+  /home/clinton/dev/refactor-engine-merger/libkalburator/src/sync/backendregistry.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/backendrecord.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/collectioninfo.h \
   /home/clinton/dev/refactor-engine-merger/libkalburator/src/types/synctypes.h \
@@ -354,6 +360,7 @@
   /usr/include/qt6/QtCore/QMetaEnum \
   /usr/include/qt6/QtCore/QMetaType \
   /usr/include/qt6/QtCore/QObject \
+  /usr/include/qt6/QtCore/QPair \
   /usr/include/qt6/QtCore/QRect \
   /usr/include/qt6/QtCore/QSharedDataPointer \
   /usr/include/qt6/QtCore/QSize \

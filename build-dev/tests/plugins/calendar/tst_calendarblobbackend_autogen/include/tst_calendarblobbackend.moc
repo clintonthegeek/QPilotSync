@@ -30,16 +30,18 @@ QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 QT_WARNING_DISABLE_GCC("-Wuseless-cast")
 namespace {
-struct qt_meta_tag_ZN23TestCalendarBlobBackendE_t {};
+struct qt_meta_tag_ZN23TestPalmCalendarBackendE_t {};
 } // unnamed namespace
 
-template <> constexpr inline auto TestCalendarBlobBackend::qt_create_metaobjectdata<qt_meta_tag_ZN23TestCalendarBlobBackendE_t>()
+template <> constexpr inline auto TestPalmCalendarBackend::qt_create_metaobjectdata<qt_meta_tag_ZN23TestPalmCalendarBackendE_t>()
 {
     namespace QMC = QtMocConstants;
     QtMocHelpers::StringRefStorage qt_stringData {
-        "TestCalendarBlobBackend",
+        "TestPalmCalendarBackend",
         "backendIdAndDisplayName",
         "",
+        "nativeShapes_returnsCalendarIcal",
+        "backendType_returnsPalmCalendar",
         "availableCollectionsReflectsStore",
         "availableCollectionsAlwaysIncludesUnfiled",
         "loadRecordsFiltersBySlot",
@@ -54,90 +56,96 @@ template <> constexpr inline auto TestCalendarBlobBackend::qt_create_metaobjectd
     QtMocHelpers::UintData qt_methods {
         // Slot 'backendIdAndDisplayName'
         QtMocHelpers::SlotData<void()>(1, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'availableCollectionsReflectsStore'
+        // Slot 'nativeShapes_returnsCalendarIcal'
         QtMocHelpers::SlotData<void()>(3, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'availableCollectionsAlwaysIncludesUnfiled'
+        // Slot 'backendType_returnsPalmCalendar'
         QtMocHelpers::SlotData<void()>(4, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'loadRecordsFiltersBySlot'
+        // Slot 'availableCollectionsReflectsStore'
         QtMocHelpers::SlotData<void()>(5, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'loadRecordsReturnsIcsContentType'
+        // Slot 'availableCollectionsAlwaysIncludesUnfiled'
         QtMocHelpers::SlotData<void()>(6, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'createRecordRoutesToSlot'
+        // Slot 'loadRecordsFiltersBySlot'
         QtMocHelpers::SlotData<void()>(7, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'updateRecordPreservesSlot'
+        // Slot 'loadRecordsReturnsIcsContentType'
         QtMocHelpers::SlotData<void()>(8, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'deleteRecordForwards'
+        // Slot 'createRecordRoutesToSlot'
         QtMocHelpers::SlotData<void()>(9, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'deletedSinceReturnsAllSlots'
+        // Slot 'updateRecordPreservesSlot'
         QtMocHelpers::SlotData<void()>(10, 2, QMC::AccessPrivate, QMetaType::Void),
-        // Slot 'slotParsingHelpers'
+        // Slot 'deleteRecordForwards'
         QtMocHelpers::SlotData<void()>(11, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'deletedSinceReturnsAllSlots'
+        QtMocHelpers::SlotData<void()>(12, 2, QMC::AccessPrivate, QMetaType::Void),
+        // Slot 'slotParsingHelpers'
+        QtMocHelpers::SlotData<void()>(13, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
     QtMocHelpers::UintData qt_enums {
     };
-    return QtMocHelpers::metaObjectData<TestCalendarBlobBackend, qt_meta_tag_ZN23TestCalendarBlobBackendE_t>(QMC::MetaObjectFlag{}, qt_stringData,
+    return QtMocHelpers::metaObjectData<TestPalmCalendarBackend, qt_meta_tag_ZN23TestPalmCalendarBackendE_t>(QMC::MetaObjectFlag{}, qt_stringData,
             qt_methods, qt_properties, qt_enums);
 }
-Q_CONSTINIT const QMetaObject TestCalendarBlobBackend::staticMetaObject = { {
+Q_CONSTINIT const QMetaObject TestPalmCalendarBackend::staticMetaObject = { {
     QMetaObject::SuperData::link<QObject::staticMetaObject>(),
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN23TestCalendarBlobBackendE_t>.stringdata,
-    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN23TestCalendarBlobBackendE_t>.data,
+    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN23TestPalmCalendarBackendE_t>.stringdata,
+    qt_staticMetaObjectStaticContent<qt_meta_tag_ZN23TestPalmCalendarBackendE_t>.data,
     qt_static_metacall,
     nullptr,
-    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN23TestCalendarBlobBackendE_t>.metaTypes,
+    qt_staticMetaObjectRelocatingContent<qt_meta_tag_ZN23TestPalmCalendarBackendE_t>.metaTypes,
     nullptr
 } };
 
-void TestCalendarBlobBackend::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
+void TestPalmCalendarBackend::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
 {
-    auto *_t = static_cast<TestCalendarBlobBackend *>(_o);
+    auto *_t = static_cast<TestPalmCalendarBackend *>(_o);
     if (_c == QMetaObject::InvokeMetaMethod) {
         switch (_id) {
         case 0: _t->backendIdAndDisplayName(); break;
-        case 1: _t->availableCollectionsReflectsStore(); break;
-        case 2: _t->availableCollectionsAlwaysIncludesUnfiled(); break;
-        case 3: _t->loadRecordsFiltersBySlot(); break;
-        case 4: _t->loadRecordsReturnsIcsContentType(); break;
-        case 5: _t->createRecordRoutesToSlot(); break;
-        case 6: _t->updateRecordPreservesSlot(); break;
-        case 7: _t->deleteRecordForwards(); break;
-        case 8: _t->deletedSinceReturnsAllSlots(); break;
-        case 9: _t->slotParsingHelpers(); break;
+        case 1: _t->nativeShapes_returnsCalendarIcal(); break;
+        case 2: _t->backendType_returnsPalmCalendar(); break;
+        case 3: _t->availableCollectionsReflectsStore(); break;
+        case 4: _t->availableCollectionsAlwaysIncludesUnfiled(); break;
+        case 5: _t->loadRecordsFiltersBySlot(); break;
+        case 6: _t->loadRecordsReturnsIcsContentType(); break;
+        case 7: _t->createRecordRoutesToSlot(); break;
+        case 8: _t->updateRecordPreservesSlot(); break;
+        case 9: _t->deleteRecordForwards(); break;
+        case 10: _t->deletedSinceReturnsAllSlots(); break;
+        case 11: _t->slotParsingHelpers(); break;
         default: ;
         }
     }
     (void)_a;
 }
 
-const QMetaObject *TestCalendarBlobBackend::metaObject() const
+const QMetaObject *TestPalmCalendarBackend::metaObject() const
 {
     return QObject::d_ptr->metaObject ? QObject::d_ptr->dynamicMetaObject() : &staticMetaObject;
 }
 
-void *TestCalendarBlobBackend::qt_metacast(const char *_clname)
+void *TestPalmCalendarBackend::qt_metacast(const char *_clname)
 {
     if (!_clname) return nullptr;
-    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN23TestCalendarBlobBackendE_t>.strings))
+    if (!strcmp(_clname, qt_staticMetaObjectStaticContent<qt_meta_tag_ZN23TestPalmCalendarBackendE_t>.strings))
         return static_cast<void*>(this);
     return QObject::qt_metacast(_clname);
 }
 
-int TestCalendarBlobBackend::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
+int TestPalmCalendarBackend::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
 {
     _id = QObject::qt_metacall(_c, _id, _a);
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 10)
+        if (_id < 12)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 10;
+        _id -= 12;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 10)
+        if (_id < 12)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 10;
+        _id -= 12;
     }
     return _id;
 }
