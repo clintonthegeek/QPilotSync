@@ -18,7 +18,6 @@ namespace WildPalms::App::Accounts {
 
 using Kalburator::Sync::IProvider;
 using Kalburator::Sync::BackendRegistry;
-using Kalburator::Sync::BackendContribution;
 using Kalburator::Sync::BackendConfiguration;
 
 AddAccountDialog::AddAccountDialog(BackendRegistry *registry, QWidget *parent)
