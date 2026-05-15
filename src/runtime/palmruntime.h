@@ -9,6 +9,8 @@
 #include <memory>
 #include <vector>
 
+namespace Kalburator { class PluginManager; class Plugin; }
+
 #include "palmrunresult.h"
 
 class KPilotLink;
@@ -59,6 +61,11 @@ public:
     /// connectionComplete(true, "") on success or connectionComplete(false,
     /// error) on failure. Internally drives PalmDeviceAccess; on success,
     /// loads plugins + sets up engine via finishConnect().
+    /// Load the five static Palm plugins via PluginManager::loadInProcess().
+    /// Called from the constructor; replaces the old KPluginMetaData
+    /// .so discovery loop in finishConnect().
+    void registerPalmPlugins();
+
     void connectDevice(const QStringList &devicePaths);
 
     /// Cancel an in-progress connect.
@@ -167,12 +174,16 @@ private:
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;
     std::unique_ptr<Kalburator::Engine::SyncEngine>              m_engine;
     std::unique_ptr<Kalburator::Storage::BaselineStore>          m_baselineStore;
-    QList<std::shared_ptr<WildPalms::IBackendPluginV2>>          m_plugins;
+    // K.8b T6: PluginManager + owned plugin instances for the five static
+    // Palm plugins. m_pluginManager MUST be declared before m_palmPlugins
+    // (C++ destructs in reverse declaration order — plugins destruct before
+    // manager, which is the correct teardown sequence).
+    std::unique_ptr<Kalburator::PluginManager>                   m_pluginManager;
+    std::vector<std::unique_ptr<Kalburator::Plugin>>             m_palmPlugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     bool                                                         m_running = false;
     std::vector<std::unique_ptr<Kalburator::Sync::SyncBackend>>  m_ownedBackends;
     std::unique_ptr<WildPalms::FullSync::CalendarCollection_WP>  m_calendarCollection;
-    QList<QObject*>                                              m_v2PluginObjects;
 };
 
 }  // namespace WildPalms::Runtime

@@ -23,8 +23,19 @@
 #include <baselinestore.h>
 #include <isyncconfigstore.h>
 #include "shape.h"
-#include "core/ibackendplugin_v2.h"
+#include "core/ibackendplugin_v2.h"   // K.8b T6: still needed for registerPluginForTest signature (deleted in T13)
 #include "palm/device/pilotlinkpalmdatabaseaccess.h"
+
+// K.8b T6: in-process plugin loading via PluginManager.
+// Kalburator::Sync exposes src/plugin/ on its PUBLIC include path,
+// so headers are reachable without a path prefix.
+#include "pluginmanager.h"
+#include "manifest.h"
+#include "plugins/calendar/calendarbackendplugin.h"
+#include "plugins/contacts/contactsbackendplugin.h"
+#include "plugins/memo/memobackendplugin.h"
+#include "plugins/todos/todobackendplugin.h"
+#include "plugins/webcalendar/webcalbackendplugin.h"
 
 #include <rawfilesbackend.h>
 #include <caldavbackendcontribution.h>
@@ -35,8 +46,6 @@
 #include <KCalendarCore/ICalFormat>
 #include <KCalendarCore/MemoryCalendar>
 #include <KCalendarCore/Incidence>
-#include <KPluginFactory>
-#include <KPluginMetaData>
 
 namespace {
 
@@ -167,6 +176,19 @@ private:
     Kalburator::Sync::BackendRegistry *m_registry = nullptr;
 };
 
+// K.8b T6: helper for building PluginManifests for the static Palm plugins.
+static Kalburator::PluginManifest mkPalmManifest(const QString &id,
+                                                  const QString &domain)
+{
+    Kalburator::PluginManifest m;
+    m.id                    = id;
+    m.version               = QStringLiteral("1.0");
+    m.displayName           = id;
+    m.kalburatorPluginVersion = QStringLiteral("1.0");
+    m.requiresDomains       = { domain };
+    return m;
+}
+
 }  // namespace
 
 #include "palmruntime.moc"
@@ -203,6 +225,9 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     if (m_conflictHandler)
         m_engine->conflictRegistry()->setDefaultHandler(m_conflictHandler);
 
+    // K.8b T6: load the five static Palm plugins in-process.
+    registerPalmPlugins();
+
     connect(this, &PalmRuntime::runStarted,
             this, [this]() { m_running = true; });
     connect(this, &PalmRuntime::runFinished,
@@ -210,6 +235,42 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
 }
 
 PalmRuntime::~PalmRuntime() = default;
+
+void PalmRuntime::registerPalmPlugins()
+{
+    using namespace WildPalms::CalendarPlugin;
+    using namespace WildPalms::ContactsPlugin;
+    using namespace WildPalms::Memo;
+    using namespace WildPalms::TodoPlugin;
+    using namespace WildPalms::WebcalPlugin;
+
+    m_pluginManager = std::make_unique<Kalburator::PluginManager>();
+
+    auto cal  = std::make_unique<CalendarBackendPlugin>();
+    auto con  = std::make_unique<ContactsBackendPlugin>();
+    auto memo = std::make_unique<MemoPlugin>();
+    auto todo = std::make_unique<TodoBackendPlugin>();
+    auto webc = std::make_unique<WebcalBackendPlugin>();
+
+    QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
+        { cal.get(),  mkPalmManifest(QStringLiteral("wildpalms.calendar"),    QStringLiteral("calendar")) },
+        { con.get(),  mkPalmManifest(QStringLiteral("wildpalms.contacts"),    QStringLiteral("contacts")) },
+        { memo.get(), mkPalmManifest(QStringLiteral("wildpalms.memo"),        QStringLiteral("memo"))     },
+        { todo.get(), mkPalmManifest(QStringLiteral("wildpalms.todo"),        QStringLiteral("todo"))     },
+        { webc.get(), mkPalmManifest(QStringLiteral("wildpalms.webcalendar"), QStringLiteral("calendar")) },
+    };
+
+    if (!m_pluginManager->loadInProcess(items)) {
+        qWarning() << "[PalmRuntime] Failed to load Palm plugins via PluginManager";
+        return;
+    }
+
+    m_palmPlugins.push_back(std::move(cal));
+    m_palmPlugins.push_back(std::move(con));
+    m_palmPlugins.push_back(std::move(memo));
+    m_palmPlugins.push_back(std::move(todo));
+    m_palmPlugins.push_back(std::move(webc));
+}
 
 void PalmRuntime::connectDevice(const QStringList &devicePaths)
 {
@@ -249,65 +310,60 @@ void PalmRuntime::finishConnect()
     // m_link directly) keep working.
     if (!m_link) m_link = m_device->link();
 
-    // Discover and load IBackendPluginV2 plugins from wildpalms/plugins/
-    const auto metaDatas = KPluginMetaData::findPlugins(
-        QStringLiteral("wildpalms/plugins"),
-        [](const KPluginMetaData &md) {
-            return md.value(QStringLiteral("X-WildPalms-PluginType"))
-                   == QStringLiteral("backend");
-        });
+    // K.8b T6: iterate the five statically-loaded Palm plugins registered
+    // by registerPalmPlugins(). Replaces the old KPluginMetaData .so
+    // discovery loop.
+    for (auto &plugin : m_palmPlugins) {
+        std::unique_ptr<Kalburator::Sync::SyncBackend> ownedBackend;
+        QString id;
 
-    for (const KPluginMetaData &meta : metaDatas) {
-        auto factoryResult = KPluginFactory::loadFactory(meta);
-        if (!factoryResult) {
-            qWarning() << "[PalmRuntime::connectDevice] Failed to load factory for"
-                       << meta.pluginId() << ":" << factoryResult.errorString;
-            continue;
+        // Dynamic dispatch to each concrete plugin type for
+        // createPalmBackend(). The method is non-virtual on Kalburator::Plugin
+        // — each concrete class declares it independently.
+        using namespace WildPalms::CalendarPlugin;
+        using namespace WildPalms::ContactsPlugin;
+        using namespace WildPalms::Memo;
+        using namespace WildPalms::TodoPlugin;
+        using namespace WildPalms::WebcalPlugin;
+
+        if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
+            id = p->pluginId();
+            ownedBackend = p->createPalmBackend(m_device.get());
+        } else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get())) {
+            id = p->pluginId();
+            ownedBackend = p->createPalmBackend(m_device.get());
+        } else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get())) {
+            id = p->pluginId();
+            ownedBackend = p->createPalmBackend(m_device.get());
+        } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
+            id = p->pluginId();
+            ownedBackend = p->createPalmBackend(m_device.get());
+        } else if (auto *p = dynamic_cast<WebcalBackendPlugin *>(plugin.get())) {
+            id = p->pluginId();
+            // WebcalBlobBackend : SyncBackendBase, not SyncBackend.
+            // Wrap in BlobBackendAdapter for {blob,raw} registration.
+            // (BlobBackendAdapter is deleted in T7; webcal wiring is
+            // revisited then.)
+            auto wb = p->createPalmBackend(m_device.get());
+            if (wb) {
+                ownedBackend = std::make_unique<BlobBackendAdapter>(std::move(wb), id);
+            }
         }
 
-        QObject *obj = factoryResult.plugin->create<QObject>(this);
-        if (!obj) {
-            qWarning() << "[PalmRuntime::connectDevice] Factory returned nullptr for"
-                       << meta.pluginId();
-            continue;
-        }
-
-        // Try to cast to IBackendPluginV2.
-        auto *v2 = qobject_cast<WildPalms::IBackendPluginV2 *>(obj);
-        if (!v2) {
-            qDebug() << "[PalmRuntime::connectDevice] Plugin" << meta.pluginId()
-                     << "does not implement IBackendPluginV2 -- skipping";
-            delete obj;
-            continue;
-        }
-
-        // Create the Palm backend for this plugin.
-        auto blob = v2->createPalmBackend(m_device.get());
-        if (!blob) {
-            qWarning() << "[PalmRuntime::connectDevice] Plugin" << meta.pluginId()
-                       << "returned null backend";
-            delete obj;
+        if (!ownedBackend) {
+            if (!id.isEmpty())
+                qWarning() << "[PalmRuntime::finishConnect] Plugin" << id
+                           << "returned null backend";
             continue;
         }
 
         // Read available collections before any ownership transfer.
-        const auto palmCollections = blob->availableCollections();
-        const QString id = v2->pluginId();
+        const auto palmCollections = ownedBackend->availableCollections();
 
-        // Detect native SyncBackend subclasses (e.g. PalmCalendarBackend,
-        // PalmContactsBackend) and register them directly. Wrap plain IBlobBackend
-        // plugins (memo, todo, webcalendar) in BlobBackendAdapter for {blob,raw}.
-        std::unique_ptr<Kalburator::Sync::SyncBackend> ownedBackend;
-        if (auto *sb = dynamic_cast<Kalburator::Sync::SyncBackend *>(blob.get())) {
-            blob.release();
-            ownedBackend.reset(sb);
-        } else {
-            ownedBackend = std::make_unique<BlobBackendAdapter>(std::move(blob), id);
-        }
-
-        // Eager preload: populate CalendarCollection_WP for the calendar backend so
-        // CalendarPluginWriter::apply() can find each slot's MemoryCalendar and
-        // views observe complete data immediately after readyForSync().
+        // Eager preload: populate CalendarCollection_WP for the calendar
+        // backend so CalendarPluginWriter::apply() can find each slot's
+        // MemoryCalendar and views observe complete data immediately after
+        // readyForSync(). (Deleted in T8 along with CalendarCollection_WP.)
         if (ownedBackend->backendType() == QStringLiteral("palm-calendar")) {
             KCalendarCore::ICalFormat fmt;
             for (const auto &palmCol : palmCollections) {
@@ -324,13 +380,10 @@ void PalmRuntime::finishConnect()
         m_registry->registerBackendInstance(id, ownedBackend.get());
         m_ownedBackends.push_back(std::move(ownedBackend));
 
-        // Keep the QObject alive (parented to this, will be cleaned up on destruction).
-        m_v2PluginObjects.append(obj);
+        qDebug() << "[PalmRuntime::finishConnect] Registered backend plugin:" << id;
 
-        qDebug() << "[PalmRuntime::connectDevice] Registered backend plugin:" << id;
-
-        // Per-slot default: only create a RawFiles mapping for slots not already
-        // covered by a user-configured mapping. Pre-existing user mappings win.
+        // Per-slot default: only create a RawFiles mapping for slots not
+        // already covered by a user-configured mapping.
         for (const auto &palmCol : palmCollections) {
             const bool alreadyCovered = std::any_of(
                 m_mappings.cbegin(), m_mappings.cend(),
@@ -367,7 +420,7 @@ void PalmRuntime::finishConnect()
             m.enabled        = true;
             m_mappings.append(m);
 
-            qDebug() << "[PalmRuntime::connectDevice] Default mapping:"
+            qDebug() << "[PalmRuntime::finishConnect] Default mapping:"
                      << palmCol.id << "->" << rootPath;
         }
     }
@@ -412,28 +465,15 @@ void PalmRuntime::setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess> devic
     emit deviceConnected();
 }
 
-void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> plugin) {
-    m_plugins.append(plugin);
-    if (!m_device) return;
-    auto blob = plugin->createPalmBackend(m_device.get());
-    if (!blob) return;
-    const QString id = plugin->pluginId();
-
-    std::unique_ptr<Kalburator::Sync::SyncBackend> backend;
-    if (auto *sb = dynamic_cast<Kalburator::Sync::SyncBackend *>(blob.get())) {
-        blob.release();
-        backend.reset(sb);
-    } else {
-        backend = std::make_unique<BlobBackendAdapter>(std::move(blob), id);
-    }
-    m_registry->registerBackendInstance(id, backend.get());
-    m_ownedBackends.push_back(std::move(backend));
+void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> /*plugin*/) {
+    // K.8b T6: IBackendPluginV2 test seam removed — m_plugins deleted.
+    // Replaced by static plugin construction in registerPalmPlugins().
+    // Tests that called this will regress; fixed in Tasks 14/18.
 }
 
 void PalmRuntime::registerPluginForTest(std::shared_ptr<WildPalms::IBackendPluginV2> plugin,
                                          const Kalburator::Shape::Shape & /*shape*/) {
-    // The shape arg is now a no-op: native SyncBackend subclasses declare
-    // their own shape via nativeShapes(); blob backends get {blob,raw} default.
+    // K.8b T6: shape override was a no-op; both overloads are now dead.
     registerPluginForTest(std::move(plugin));
 }
 
@@ -483,7 +523,10 @@ PalmRuntime::conflictHandlerForTest() const
 
 QList<QString> PalmRuntime::enabledPluginIds() const {
     QList<QString> ids;
-    for (const auto &p : m_plugins) ids.append(p->pluginId());
+    if (m_pluginManager) {
+        for (const auto &lp : m_pluginManager->loaded())
+            ids.append(lp.id);
+    }
     return ids;
 }
 

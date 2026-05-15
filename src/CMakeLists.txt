@@ -159,6 +159,18 @@ target_link_libraries(WildPalmsCore
         # SettingsDialog instantiates AccountsPage when AccountController +
         # PalmRuntime are supplied; without this link the symbols are missing.
         WildPalmsAppAccounts
+        # K.8b T6: five static Palm plugins loaded in-process by
+        # PalmRuntime::registerPalmPlugins(). Linked here into WildPalmsCore.so
+        # so that palmruntime.o (in PalmDeviceAccessLib, also PRIVATE here) can
+        # resolve plugin constructor symbols at the shared-lib link step.
+        # Note: WildPalmsCore was removed from the plugin statics' own
+        # target_link_libraries to break the CMake autogen cycle; symbols from
+        # WildPalmsCore that the plugins need are satisfied at this same link step.
+        wildpalms_calendar_static
+        wildpalms_contacts_static
+        wildpalms_memo_static
+        wildpalms_todos_static
+        wildpalms_webcalendar_static
 )
 
 target_include_directories(WildPalmsCore PUBLIC
