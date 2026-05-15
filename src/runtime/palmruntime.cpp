@@ -284,6 +284,12 @@ void PalmRuntime::finishConnect()
 
         // Per-slot default: only create a RawFiles mapping for slots not
         // already covered by a user-configured mapping.
+        //
+        // K.9: the RawFiles mirror declares the source's shape per
+        // collection. Pre-K.9 it declared Shape::Any(), which made
+        // SyncEngine::dispatchSync bail with "cross-domain mappings
+        // not supported" on the first real sync.
+        auto *registeredSrc = m_registry->backendInstance(id);
         for (const auto &palmCol : palmCollections) {
             const bool alreadyCovered = std::any_of(
                 m_mappings.cbegin(), m_mappings.cend(),
@@ -301,11 +307,15 @@ void PalmRuntime::finishConnect()
             const QString rootPath = QDir(m_profilePath).filePath(
                 QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
 
+            const auto palmShape = registeredSrc
+                ? registeredSrc->shapeFor(palmCol.id)
+                : Kalburator::Shape::Shape::Any();
+
             auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
             Kalburator::Sync::CollectionInfo pcCol;
             pcCol.id   = safeColId;
             pcCol.name = palmCol.name;
-            pcBackend->createCollection(pcCol);
+            pcBackend->createCollection(pcCol, palmShape);
 
             m_registry->registerBackendInstance(pcId, pcBackend.get());
             m_ownedBackends.push_back(std::move(pcBackend));
@@ -475,8 +485,15 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
 
         PalmRunResult::PluginStats stats;
         for (const auto &sr : results) {
-            if (!sr.success && !sr.cancelled && !sr.skipped)
+            if (!sr.success && !sr.cancelled && !sr.skipped) {
                 r.success = false;
+                // K.9: surface the first real failure to the UI. Without
+                // this, runFinished arrived with an empty errorMessage
+                // and the log read "HotSync finished with errors: "
+                // with nothing after the colon.
+                if (r.errorMessage.isEmpty() && !sr.errorMessage.isEmpty())
+                    r.errorMessage = sr.errorMessage;
+            }
             stats.created   += sr.targetStats.created;
             stats.updated   += sr.targetStats.updated;
             stats.deleted   += sr.targetStats.deleted;
@@ -557,6 +574,9 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
         r.success   = sr.success;
+        // K.9: propagate engine error message to the UI (see runAllMappings).
+        if (!sr.success)
+            r.errorMessage = sr.errorMessage;
 
         PalmRunResult::PluginStats stats;
         stats.created   = sr.targetStats.created;
