@@ -16,6 +16,7 @@
 
 // Complete-type includes for libkalburator pointers (delete on a forward
 // decl is UB; ConflictHandler is needed for dynamic_cast).
+#include "syncbackend.h"      // Kalburator::Sync::SyncBackend (calendar-typed)
 #include "iblobbackend.h"
 #include "conflictpolicy.h"
 

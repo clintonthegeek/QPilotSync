@@ -5,8 +5,9 @@
 #include "runtime/palmdeviceaccess.h"
 
 // Complete-type includes for the libkalburator pointers returned by the
-// plugin (delete on a forward-decl is UB, and IBlobBackend::backendId is
-// virtual but still needs the full type for the call).
+// plugin (delete on a forward-decl is UB; SyncBackend::backendId is
+// virtual but needs the full type for the call and unique_ptr destructor).
+#include "syncbackend.h"      // Kalburator::Sync::SyncBackend (calendar-typed)
 #include "iblobbackend.h"
 #include "conflictpolicy.h"   // brings in Kalburator::Conflict::ConflictHandler
 

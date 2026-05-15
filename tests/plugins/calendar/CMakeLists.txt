@@ -109,6 +109,12 @@ target_include_directories(tst_calendarbackendplugin
         ${CMAKE_SOURCE_DIR}/src
         ${PILOT_LINK_INCLUDE_DIR}
 )
+# Prepend libkalburator's include dirs so "syncbackend.h" resolves to
+# Kalburator::Sync::SyncBackend (same resolution as the plugin target itself).
+target_include_directories(tst_calendarbackendplugin BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
 target_link_libraries(tst_calendarbackendplugin
     PRIVATE
         WildPalmsPalmCalendar
