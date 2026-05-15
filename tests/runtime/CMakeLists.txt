@@ -382,3 +382,52 @@ add_test(NAME tst_runtime_caldav_e2e COMMAND tst_runtime_caldav_e2e)
 set_tests_properties(tst_runtime_caldav_e2e PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Phase J Task 11: CardDAV E2E integration test (contacts equivalent of caldav).
+# Includes the libkalburator FakeCardDavServer source directly.
+add_executable(tst_runtime_carddav_e2e
+    tst_runtime_carddav_e2e.cpp
+    ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync/fakecarddavserver.cpp
+)
+target_include_directories(tst_runtime_carddav_e2e
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync
+)
+target_link_libraries(tst_runtime_carddav_e2e
+    PRIVATE
+        Qt::Core
+        Qt::Network
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_runtime_carddav_e2e COMMAND tst_runtime_carddav_e2e)
+set_tests_properties(tst_runtime_carddav_e2e PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase J Task 10: PalmRuntime stress test — 10 hotSync iterations, no leak.
+add_executable(tst_runtime_stress tst_runtime_stress.cpp)
+target_link_libraries(tst_runtime_stress
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_runtime_stress COMMAND tst_runtime_stress)
+set_tests_properties(tst_runtime_stress PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

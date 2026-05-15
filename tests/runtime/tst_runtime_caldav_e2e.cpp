@@ -160,12 +160,6 @@ void TstRuntimeCalDavE2E::palm_to_caldav_propagates()
 
 void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
 {
-    QSKIP("Phase J Task 9 — caldav -> palm blocked on the second of two "
-          "documented blockers: URL-key mismatch between the discovery URL "
-          "(http://USER@HOST/...) and the multiget URL (http://HOST/...) in "
-          "RemoteCalendarBackend::fetchItems' fetchedItemsMap lookup. "
-          "Tracked in coordination FINDINGS.md (2026-05-09). Outside K.4 scope.");
-
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
     PalmRuntime runtime(profileDir.path());
@@ -220,10 +214,6 @@ void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
 
 void TstRuntimeCalDavE2E::bidirectional_no_conflict()
 {
-    QSKIP("Phase J Task 9 — bidirectional sync depends on caldav -> palm "
-          "direction, which is blocked on the documented URL-key mismatch "
-          "in RemoteCalendarBackend::fetchItems. See FINDINGS.md (2026-05-09).");
-
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
     PalmRuntime runtime(profileDir.path());
@@ -295,11 +285,6 @@ void TstRuntimeCalDavE2E::default_mappings_per_slot_when_calendar_bound()
 
 void TstRuntimeCalDavE2E::memory_calendar_observable_during_sync()
 {
-    QSKIP("Phase J Task 9 — exercises caldav -> palm direction (server-seeded "
-          "events should land in the local MemoryCalendar). Blocked on the "
-          "URL-key mismatch in RemoteCalendarBackend::fetchItems. See "
-          "FINDINGS.md (2026-05-09). Outside K.4 scope.");
-
     QTemporaryDir profileDir;
     QVERIFY(profileDir.isValid());
     PalmRuntime runtime(profileDir.path());
