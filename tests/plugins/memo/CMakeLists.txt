@@ -101,6 +101,6 @@ target_link_libraries(tst_memo_v2
         bluetooth
         usb
 )
-add_dependencies(tst_memo_v2 wildpalms_memo_v2)
+add_dependencies(tst_memo_v2 wildpalms_memo_static)
 add_test(NAME tst_memo_v2 COMMAND tst_memo_v2)
 set_tests_properties(tst_memo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -142,6 +142,6 @@ target_link_libraries(tst_todo_v2
         usb
         ${PILOT_LINK_LIBRARIES}
 )
-add_dependencies(tst_todo_v2 wildpalms_todos_v2)
+add_dependencies(tst_todo_v2 wildpalms_todos_static)
 add_test(NAME tst_todo_v2 COMMAND tst_todo_v2)
 set_tests_properties(tst_todo_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

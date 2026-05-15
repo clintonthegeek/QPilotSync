@@ -150,7 +150,7 @@ target_link_libraries(tst_contacts_v2
         usb
         ${PILOT_LINK_LIBRARIES}
 )
-add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
+add_dependencies(tst_contacts_v2 wildpalms_contacts_static)
 add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
 set_tests_properties(tst_contacts_v2 PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
