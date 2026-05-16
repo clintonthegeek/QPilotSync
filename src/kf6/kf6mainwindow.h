@@ -102,6 +102,9 @@ private Q_SLOTS:
 
     // Auto-sync detection
     void onAutoDeviceDetected(Profile *profile, const QStringList &ports);
+    void onUnregisteredDeviceDetected(const QString &usbSerial,
+                                       const QString &userName,
+                                       quint32 userId);
 
     // M2/M3 — PalmRuntime callbacks
     void onPalmRunStarted(const QString &label);

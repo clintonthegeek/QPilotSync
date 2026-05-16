@@ -103,6 +103,14 @@ set_tests_properties(test_profile_sidecar_migration PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Phase L Task 0.A: AutoSyncOrchestrator unregistered-device confirmation path
+add_wildpalms_test(test_autosyncorchestrator_unregistered
+    test_autosyncorchestrator_unregistered.cpp
+)
+set_tests_properties(test_autosyncorchestrator_unregistered PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${CMAKE_BINARY_DIR}/test-home-autosync;XDG_CONFIG_HOME=${CMAKE_BINARY_DIR}/test-xdg-autosync"
+)
+
 # K.8b T13: test_multidatabase deleted along with SyncEngine + SyncConduitBase.
 
 # ============================================================

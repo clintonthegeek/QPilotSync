@@ -62,7 +62,8 @@ void AutoSyncOrchestrator::onPalmDetected(const QStringList &ports, const QStrin
                 .arg(ports.size()));
     }
 
-    // Try to resolve profile by USB serial
+    // Resolve profile by USB serial only (fingerprint-keyed registry
+    // removed in Task 0.B; the serial registry is the sole lookup).
     Profile *profile = nullptr;
     KF6Settings &settings = KF6Settings::instance();
 
@@ -83,27 +84,17 @@ void AutoSyncOrchestrator::onPalmDetected(const QStringList &ports, const QStrin
         }
     }
 
-    // If not found by serial, try device registry with fingerprint
-    if (!profile && !usbSerial.isEmpty()) {
-        DeviceFingerprint fp;
-        fp.usbSerialNumber = usbSerial;
-        QString profilePath = settings.findProfileForDevice(fp);
-        if (!profilePath.isEmpty() && QDir(profilePath).exists()) {
-            auto *p = new Profile(profilePath);
-            if (p->exists()) {
-                p->load();
-                profile = p;
-                if (m_logWidget) {
-                    m_logWidget->logInfo(
-                        QStringLiteral("Found profile by fingerprint: %1").arg(profilePath));
-                }
-            } else {
-                delete p;
-            }
+    if (profile) {
+        Q_EMIT deviceDetected(profile, ports);
+    } else {
+        // Unrecognised device: do NOT silently auto-create. UI prompts.
+        if (m_logWidget) {
+            m_logWidget->logInfo(
+                QStringLiteral("Unrecognised Palm (S/N: %1) — prompting user").arg(usbSerial));
         }
+        Q_EMIT unregisteredDeviceDetected(usbSerial, QString(), 0u);
+        Q_EMIT deviceDetected(nullptr, ports);
     }
-
-    Q_EMIT deviceDetected(profile, ports);
 
     m_busy = false;
 }
@@ -155,29 +146,37 @@ Profile* AutoSyncOrchestrator::findOrCreateProfile(const QString &usbSerial,
         delete profile;
     }
 
-    // 3. No profile found -- auto-create one
+    // 3. No profile found -- auto-create one via the now-shared path.
+    return createProfileForDevice(usbSerial, userName, userId);
+}
+
+Profile* AutoSyncOrchestrator::createProfileForDevice(const QString &usbSerial,
+                                                       const QString &userName,
+                                                       quint32 userId)
+{
+    KF6Settings &settings = KF6Settings::instance();
+
+    DeviceFingerprint fingerprint;
+    fingerprint.userId = userId;
+    fingerprint.userName = userName;
+    fingerprint.usbSerialNumber = usbSerial;
+
     QString safeName = userName.isEmpty() ? QStringLiteral("PalmUser") : userName;
-    // Sanitize the username for use as a directory name
     safeName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
                      QStringLiteral("_"));
 
     QString basePath = QDir::homePath() + QStringLiteral("/PalmSync/") + safeName;
-
-    // Ensure uniqueness if the directory already exists with a different device
     QString finalPath = basePath;
     int suffix = 1;
     while (QDir(finalPath).exists()) {
-        // Check if the existing directory is actually a profile for a different device
         Profile existingProfile(finalPath);
         if (existingProfile.exists()) {
             existingProfile.load();
             DeviceFingerprint existingFp = existingProfile.deviceFingerprint();
             if (existingFp.isEmpty() || existingFp.matches(fingerprint)) {
-                // Same device or unregistered -- reuse this profile
                 break;
             }
         } else {
-            // Directory exists but no profile config -- safe to use
             break;
         }
         finalPath = basePath + QStringLiteral("_%1").arg(suffix++);
@@ -203,8 +202,7 @@ Profile* AutoSyncOrchestrator::findOrCreateProfile(const QString &usbSerial,
 
     profile->save();
 
-    // Register the device in settings
-    settings.registerDevice(fingerprint, finalPath);
+    // Register only by USB serial (Task 0.B removes the fingerprint-keyed registry).
     if (!usbSerial.isEmpty()) {
         settings.registerDeviceBySerial(usbSerial, finalPath);
     }

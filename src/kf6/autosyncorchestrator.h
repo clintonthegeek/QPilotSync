@@ -38,12 +38,37 @@ public:
     Profile* findOrCreateProfile(const QString &usbSerial,
                                   const QString &userName, quint32 userId);
 
+    /**
+     * @brief Create + register a profile for a confirmed-new device.
+     *
+     * Called by the UI after the user confirms creation in the
+     * unregistered-device dialog. Does NOT prompt itself.
+     * @return the newly-created Profile (caller takes ownership), or
+     *         nullptr if profile init failed.
+     */
+    Profile* createProfileForDevice(const QString &usbSerial,
+                                    const QString &userName,
+                                    quint32 userId);
+
+    QString currentUsbSerial() const { return m_currentUsbSerial; }
+
 Q_SIGNALS:
     /** Emitted when a device is detected and profile resolved (profile may be nullptr for unknown devices) */
     void deviceDetected(Profile *profile, const QStringList &ports);
 
     /** Emitted when a new profile is auto-created */
     void profileCreated(const QString &profilePath, const QString &userName);
+
+    /**
+     * @brief Emitted when an unrecognised Palm device is detected.
+     *
+     * Replaces the previous silent auto-create-profile behavior. The UI is
+     * expected to connect to this signal and prompt the user; on consent,
+     * it calls createProfileForDevice() to actually create the profile.
+     */
+    void unregisteredDeviceDetected(const QString &usbSerial,
+                                    const QString &userName,
+                                    quint32 userId);
 
     void error(const QString &message);
     void statusChanged(const QString &status);

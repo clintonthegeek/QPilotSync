@@ -107,6 +107,8 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
             this, [this](const QString &path, const QString &userName) {
                 m_logWidget->logInfo(i18n("Created profile for %1 at %2", userName, path));
             });
+    connect(m_autoSync, &AutoSyncOrchestrator::unregisteredDeviceDetected,
+            this, &KF6MainWindow::onUnregisteredDeviceDetected);
     connect(m_autoSync, &AutoSyncOrchestrator::error,
             m_logWidget, &LogWidget::logError);
     connect(m_autoSync, &AutoSyncOrchestrator::statusChanged,
@@ -1171,6 +1173,38 @@ void KF6MainWindow::onAutoDeviceDetected(Profile *profile, const QStringList &po
         m_logWidget->logInfo(i18n("New Palm device detected — connecting to identify..."));
         startConnectionMultiPort(ports);
     }
+}
+
+void KF6MainWindow::onUnregisteredDeviceDetected(const QString &usbSerial,
+                                                  const QString &userName,
+                                                  quint32 userId)
+{
+    Q_UNUSED(userName)
+    Q_UNUSED(userId)
+
+    QString prompt = i18n("An unrecognised Palm device was detected.\n\n"
+                          "USB serial: %1\n\n"
+                          "Create a new profile for this device?",
+                          usbSerial.isEmpty() ? i18n("(unknown)") : usbSerial);
+
+    int ret = QMessageBox::question(this, i18n("New Palm Device"), prompt,
+                                    QMessageBox::Yes | QMessageBox::No,
+                                    QMessageBox::Yes);
+    if (ret != QMessageBox::Yes) {
+        if (m_logWidget) {
+            m_logWidget->logInfo(i18n("User declined to create profile for new device."));
+        }
+        return;
+    }
+
+    Profile *p = m_autoSync->createProfileForDevice(usbSerial, userName, userId);
+    if (!p) {
+        QMessageBox::warning(this, i18n("Profile Creation Failed"),
+                             i18n("Could not create a profile for this device."));
+        return;
+    }
+    // Hand off to the normal "device detected with profile" path.
+    Q_EMIT m_autoSync->deviceDetected(p, QStringList{ m_autoSync->currentUsbSerial() });
 }
 
 void KF6MainWindow::onDeviceReady(const QString &userName, const QString &deviceName)
