@@ -140,9 +140,9 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     // K.8b T6: load the five static Palm plugins in-process.
     registerPalmPlugins();
 
-    connect(this, &PalmRuntime::runStarted,
+    QObject::connect(this, &PalmRuntime::runStarted,
             this, [this]() { m_running = true; });
-    connect(this, &PalmRuntime::runFinished,
+    QObject::connect(this, &PalmRuntime::runFinished,
             this, [this]() { m_running = false; });
 }
 
@@ -218,21 +218,21 @@ void PalmRuntime::connectDevice(const QStringList &devicePaths)
     if (!m_device) {
         m_device = std::make_unique<PalmDeviceAccess>(this);
 
-        connect(m_device.get(), &PalmDeviceAccess::connectionStarted,
+        QObject::connect(m_device.get(), &PalmDeviceAccess::connectionStarted,
                 this, &PalmRuntime::connectionStarted);
 
-        connect(m_device.get(), &PalmDeviceAccess::connectionComplete,
+        QObject::connect(m_device.get(), &PalmDeviceAccess::connectionComplete,
                 this, [this](bool ok, const QString &err) {
-                    emit connectionComplete(ok, err);
+                    Q_EMIT connectionComplete(ok, err);
                     if (ok) {
                         finishConnect();
                     }
                 });
 
-        connect(m_device.get(), &PalmDeviceAccess::deviceDisconnected,
+        QObject::connect(m_device.get(), &PalmDeviceAccess::deviceDisconnected,
                 this, &PalmRuntime::deviceDisconnected);
 
-        connect(m_device.get(), &PalmDeviceAccess::logMessage,
+        QObject::connect(m_device.get(), &PalmDeviceAccess::logMessage,
                 this, &PalmRuntime::logMessage);
     }
 
@@ -360,8 +360,8 @@ void PalmRuntime::finishConnect()
 
     m_engine->setSyncMappings(m_mappings);
 
-    emit deviceConnected();
-    emit readyForSync();
+    Q_EMIT deviceConnected();
+    Q_EMIT readyForSync();
 }
 
 void PalmRuntime::reloadMappings(const QJsonArray &json)
@@ -492,7 +492,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         m_activeSyncWatcher->deleteLater();
     }
     m_activeSyncWatcher = new QFutureWatcher<void>(this);
-    connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
+    QObject::connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
             this, [this]() {
                 if (m_activeSyncWatcher) {
                     m_activeSyncWatcher->deleteLater();
@@ -537,14 +537,14 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
-            emit runFinished(r);
+            Q_EMIT runFinished(r);
         });
         return r;
     });
 }
 
 QFuture<PalmRunResult> PalmRuntime::hotSync() {
-    emit runStarted(QStringLiteral("HotSync"));
+    Q_EMIT runStarted(QStringLiteral("HotSync"));
     if (m_mappings.isEmpty())
         return makeSuccessFuture();
     return runAllMappings();
@@ -552,7 +552,7 @@ QFuture<PalmRunResult> PalmRuntime::hotSync() {
 
 QFuture<PalmRunResult> PalmRuntime::fullSync()
 {
-    emit runStarted(QStringLiteral("FullSync"));
+    Q_EMIT runStarted(QStringLiteral("FullSync"));
     // Clear all baselines so the engine treats this as a fresh first sync.
     for (const auto &m : m_mappings)
         m_baselineStore->clearMappingV3(m.id);
@@ -561,7 +561,7 @@ QFuture<PalmRunResult> PalmRuntime::fullSync()
 
 QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &modeLabel)
 {
-    emit runStarted(modeLabel);
+    Q_EMIT runStarted(modeLabel);
 
     QList<QString> ids;
     for (const auto &m : m_mappings) {
@@ -590,7 +590,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         m_activeSyncWatcher->deleteLater();
     }
     m_activeSyncWatcher = new QFutureWatcher<void>(this);
-    connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
+    QObject::connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
             this, [this]() {
                 if (m_activeSyncWatcher) {
                     m_activeSyncWatcher->deleteLater();
@@ -620,7 +620,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         // engine worker thread).
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
-            emit runFinished(r);
+            Q_EMIT runFinished(r);
         });
         return r;
     });
@@ -638,7 +638,7 @@ QFuture<PalmRunResult> PalmRuntime::copyPCToPalm()
 
 QFuture<PalmRunResult> PalmRuntime::backup()
 {
-    emit runStarted(QStringLiteral("Backup"));
+    Q_EMIT runStarted(QStringLiteral("Backup"));
 
     KPilotLink *link = m_device ? m_device->link() : nullptr;
     if (!link) {
@@ -646,7 +646,7 @@ QFuture<PalmRunResult> PalmRuntime::backup()
         r.startTime = r.endTime = QDateTime::currentDateTimeUtc();
         r.success = false;
         r.errorMessage = QStringLiteral("backup: no device connected");
-        emit runFinished(r);
+        Q_EMIT runFinished(r);
         return QtFuture::makeReadyValueFuture(r);
     }
 
@@ -687,7 +687,7 @@ QFuture<PalmRunResult> PalmRuntime::backup()
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
-            emit runFinished(r);
+            Q_EMIT runFinished(r);
         });
         return r;
     });
@@ -695,7 +695,7 @@ QFuture<PalmRunResult> PalmRuntime::backup()
 
 QFuture<PalmRunResult> PalmRuntime::restore()
 {
-    emit runStarted(QStringLiteral("Restore"));
+    Q_EMIT runStarted(QStringLiteral("Restore"));
 
     KPilotLink *link = m_device ? m_device->link() : nullptr;
     if (!link) {
@@ -703,7 +703,7 @@ QFuture<PalmRunResult> PalmRuntime::restore()
         r.startTime = r.endTime = QDateTime::currentDateTimeUtc();
         r.success = false;
         r.errorMessage = QStringLiteral("restore: no device connected");
-        emit runFinished(r);
+        Q_EMIT runFinished(r);
         return QtFuture::makeReadyValueFuture(r);
     }
 
@@ -735,7 +735,7 @@ QFuture<PalmRunResult> PalmRuntime::restore()
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
-            emit runFinished(r);
+            Q_EMIT runFinished(r);
         });
         return r;
     });
