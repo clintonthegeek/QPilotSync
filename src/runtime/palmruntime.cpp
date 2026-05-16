@@ -501,15 +501,16 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         r.success   = true;
 
         PalmRunResult::PluginStats stats;
+        int linkLostCount = 0;
         for (const auto &sr : results) {
             if (!sr.success && !sr.cancelled && !sr.skipped) {
                 r.success = false;
-                // K.9: surface the first real failure to the UI. Without
-                // this, runFinished arrived with an empty errorMessage
-                // and the log read "HotSync finished with errors: "
-                // with nothing after the colon.
-                if (r.errorMessage.isEmpty() && !sr.errorMessage.isEmpty())
+                if (sr.errorMessage.contains(QLatin1String("Palm link"),
+                                             Qt::CaseInsensitive)) {
+                    ++linkLostCount;
+                } else if (r.errorMessage.isEmpty() && !sr.errorMessage.isEmpty()) {
                     r.errorMessage = sr.errorMessage;
+                }
             }
             stats.created   += sr.targetStats.created;
             stats.updated   += sr.targetStats.updated;
@@ -517,12 +518,17 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
             stats.unchanged += sr.targetStats.unchanged;
             stats.errors    += (sr.success ? 0 : 1);
         }
+        // Layer B: collapse N "Palm link lost" errors into one summary so
+        // the UI shows a single message instead of repeating the same string.
+        if (linkLostCount > 0 && r.errorMessage.isEmpty()) {
+            r.errorMessage = QStringLiteral(
+                "HotSync aborted: Palm device disconnected "
+                "(%1 of %2 mappings affected)").arg(linkLostCount).arg(results.size());
+        }
         if (!results.isEmpty())
             r.perPluginStats.insert(QStringLiteral("calendar"), stats);
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        // Resume tickle on the main thread (this callback runs on the
-        // engine worker thread).
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
             emit runFinished(r);
