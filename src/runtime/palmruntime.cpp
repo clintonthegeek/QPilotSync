@@ -30,6 +30,8 @@
 // so headers are reachable without a path prefix.
 #include "pluginmanager.h"
 #include "manifest.h"
+#include "stock_plugins.h"
+#include "domainregistry.h"
 #include "plugins/calendar/calendarbackendplugin.h"
 #include "plugins/contacts/contactsbackendplugin.h"
 #include "plugins/memo/memobackendplugin.h"
@@ -167,6 +169,21 @@ void PalmRuntime::registerPalmPlugins()
     static bool s_globalRegistrationDone = false;
     if (!s_globalRegistrationDone) {
         m_pluginManager = std::make_unique<Kalburator::PluginManager>();
+
+        // Stock plugins own the DomainDefinitions (blob/calendar/contacts/
+        // memo/todo). Without this, SyncEngine::dispatchSync() bails with
+        // "no definition for domain '<X>'" on every mapping because the
+        // process-wide DomainRegistry is empty. Tests already seed the
+        // registry themselves in initTestCase(); calling registerStockPlugins
+        // a second time exercises a stock-plugin re-registration path that
+        // intermittently corrupts the heap at teardown. Guard with a presence
+        // check on the calendar definition — cheap, and sidesteps the path
+        // entirely when tests have pre-loaded the stock plugins.
+        using Kalburator::Shape::DomainId;
+        if (!Kalburator::Shape::DomainRegistry::instance().definitionFor(
+                DomainId{QStringLiteral("calendar")})) {
+            Kalburator::registerStockPlugins(*m_pluginManager);
+        }
 
         QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
             { cal.get(),  mkPalmManifest(QStringLiteral("wildpalms.calendar"),    QStringLiteral("calendar")) },
