@@ -410,22 +410,23 @@ void SettingsDialog::loadSettings()
         m_recentProfilesList->addItem(item);
     }
 
-    // Device registry
+    // Registered devices (by USB serial \u2014 Phase L Task 0.B consolidated
+    // the previous fingerprint-keyed DeviceRegistry into DeviceSerials).
     m_deviceRegistryList->clear();
-    QMap<QString, QString> registry = s.deviceRegistry();
-    for (auto it = registry.begin(); it != registry.end(); ++it) {
-        DeviceFingerprint fp = DeviceFingerprint::fromRegistryKey(it.key());
-        QFileInfo profileInfo(it.value());
+    KConfigGroup serials = s.deviceSerialsGroup();
+    QStringList serialKeys = serials.keyList();
+    for (const QString &serial : serialKeys) {
+        QString profilePath = serials.readEntry(serial, QString());
+        if (profilePath.isEmpty()) continue;
+        QFileInfo profileInfo(profilePath);
 
         auto *item = new QListWidgetItem(
-            QStringLiteral("%1 \u2192 %2")
-                .arg(fp.displayString(), profileInfo.fileName()));
-        item->setToolTip(
-            i18n("Device: %1\nProfile: %2", fp.displayString(), it.value()));
+            QStringLiteral("%1 \u2192 %2").arg(serial, profileInfo.fileName()));
+        item->setToolTip(i18n("USB Serial: %1\nProfile: %2", serial, profilePath));
         m_deviceRegistryList->addItem(item);
     }
 
-    if (registry.isEmpty()) {
+    if (serialKeys.isEmpty()) {
         auto *item = new QListWidgetItem(i18n("(No devices registered yet)"));
         item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
         item->setForeground(Qt::gray);
@@ -518,8 +519,14 @@ void SettingsDialog::onClearRecentProfiles()
 
 void SettingsDialog::onClearDeviceRegistry()
 {
-    KF6Settings::instance().clearDeviceRegistry();
-    KF6Settings::instance().sync();
+    // Phase L Task 0.B: DeviceRegistry removed; clear DeviceSerials instead.
+    KF6Settings &s = KF6Settings::instance();
+    KConfigGroup serials = s.deviceSerialsGroup();
+    const QStringList keys = serials.keyList();
+    for (const QString &key : keys) {
+        serials.deleteEntry(key);
+    }
+    s.sync();
     loadSettings();
 }
 

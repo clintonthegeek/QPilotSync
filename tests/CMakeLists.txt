@@ -111,6 +111,14 @@ set_tests_properties(test_autosyncorchestrator_unregistered PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${CMAKE_BINARY_DIR}/test-home-autosync;XDG_CONFIG_HOME=${CMAKE_BINARY_DIR}/test-xdg-autosync"
 )
 
+# Phase L Task 0.B: KF6Settings DeviceRegistry → DeviceSerials migration
+add_wildpalms_test(test_kf6settings_registry_migration
+    test_kf6settings_registry_migration.cpp
+)
+set_tests_properties(test_kf6settings_registry_migration PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${CMAKE_BINARY_DIR}/test-home-kf6mig;XDG_CONFIG_HOME=${CMAKE_BINARY_DIR}/test-xdg-kf6mig"
+)
+
 # K.8b T13: test_multidatabase deleted along with SyncEngine + SyncConduitBase.
 
 # ============================================================

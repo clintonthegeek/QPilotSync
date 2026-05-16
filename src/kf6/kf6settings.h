@@ -4,11 +4,8 @@
 #include <QString>
 #include <QStringList>
 #include <QByteArray>
-#include <QMap>
 #include <KSharedConfig>
 #include <KConfigGroup>
-
-#include "../profile.h"  // For DeviceFingerprint
 
 /**
  * @brief KDE Frameworks 6 settings manager using KConfig
@@ -40,25 +37,6 @@ public:
 
     // Maximum number of recent profiles to remember
     static const int MAX_RECENT_PROFILES = 10;
-
-    // ========== Device Registry ==========
-    // Maps device fingerprints to profile paths
-    // This allows us to identify which profile a connected device belongs to
-
-    // Register a device with a profile
-    void registerDevice(const DeviceFingerprint &fingerprint, const QString &profilePath);
-
-    // Unregister a device (when profile is deleted or device is unassigned)
-    void unregisterDevice(const DeviceFingerprint &fingerprint);
-
-    // Look up which profile a device belongs to (returns empty string if not found)
-    QString findProfileForDevice(const DeviceFingerprint &fingerprint);
-
-    // Get all registered devices (fingerprint key -> profile path)
-    QMap<QString, QString> deviceRegistry();
-
-    // Clear all device registrations
-    void clearDeviceRegistry();
 
     // ========== Export Settings ==========
     QString lastExportPath() const;
@@ -95,6 +73,7 @@ public:
     void registerDeviceBySerial(const QString &usbSerial, const QString &profilePath);
     QString findProfileBySerial(const QString &usbSerial) const;
     void unregisterDeviceBySerial(const QString &usbSerial);
+    KConfigGroup deviceSerialsGroup() const;
 
     // ========== Advanced Settings ==========
     bool debugLogging() const;
@@ -122,13 +101,13 @@ private:
 
     // Helper to get config groups
     KConfigGroup profilesGroup() const;
-    KConfigGroup deviceRegistryGroup() const;
     KConfigGroup exportGroup() const;
     KConfigGroup windowGroup() const;
     KConfigGroup viewGroup() const;
     KConfigGroup advancedGroup() const;
     KConfigGroup systemTrayGroup() const;
-    KConfigGroup deviceSerialsGroup() const;
+
+    void migrateLegacyDeviceRegistry();
 };
 
 #endif // KF6SETTINGS_H

@@ -28,8 +28,6 @@ private slots:
     void testFingerprintMatchesByUserId();
     void testFingerprintMatchesByUsername();
     void testFingerprintDisplayString();
-    void testFingerprintRegistryKey();
-    void testFingerprintFromRegistryKey();
 
     // ========== Profile Construction Tests ==========
     void testDefaultConstruction();
@@ -167,30 +165,6 @@ void TestProfile::testFingerprintDisplayString()
     // Empty fingerprint
     DeviceFingerprint fp2;
     QVERIFY(fp2.displayString().isEmpty());
-}
-
-void TestProfile::testFingerprintRegistryKey()
-{
-    DeviceFingerprint fp;
-    fp.userId = 12345;
-    fp.userName = "TestUser";
-
-    QString key = fp.registryKey();
-    QVERIFY(key.contains("12345"));
-    QVERIFY(key.contains("TestUser"));
-}
-
-void TestProfile::testFingerprintFromRegistryKey()
-{
-    DeviceFingerprint original;
-    original.userId = 12345;
-    original.userName = "TestUser";
-
-    QString key = original.registryKey();
-    DeviceFingerprint parsed = DeviceFingerprint::fromRegistryKey(key);
-
-    QCOMPARE(parsed.userId, original.userId);
-    QCOMPARE(parsed.userName, original.userName);
 }
 
 // ========== Profile Construction Tests ==========

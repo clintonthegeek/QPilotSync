@@ -867,7 +867,14 @@ void KF6MainWindow::onConnectionComplete(bool success, const QString &error)
                 return;
             }
         } else {
-            QString knownProfile = KF6Settings::instance().findProfileForDevice(connectedDevice);
+            // Phase L Task 0.B: look up by USB serial only (fingerprint
+            // registry removed). In direct-USB connections the serial may
+            // be absent; findProfileBySerial returns "" if serial is empty.
+            QString knownProfile;
+            if (!connectedDevice.usbSerialNumber.isEmpty()) {
+                knownProfile = KF6Settings::instance().findProfileBySerial(
+                    connectedDevice.usbSerialNumber);
+            }
             if (!knownProfile.isEmpty()) {
                 int ret = QMessageBox::question(this, i18n("Known Device"),
                     i18n("This device (%1) is registered with profile:\n%2\n\nLoad that profile?",
@@ -1029,7 +1036,12 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
         m_logWidget->logWarning(i18n("User chose to continue with mismatched device"));
         return true;
     } else if (msgBox.clickedButton() == switchBtn) {
-        QString profilePath = KF6Settings::instance().findProfileForDevice(connectedDevice);
+        // Phase L Task 0.B: look up by USB serial only.
+        QString profilePath;
+        if (!connectedDevice.usbSerialNumber.isEmpty()) {
+            profilePath = KF6Settings::instance().findProfileBySerial(
+                connectedDevice.usbSerialNumber);
+        }
         if (!profilePath.isEmpty()) {
             m_logWidget->logInfo(i18n("Switching to profile: %1", profilePath));
             loadProfile(profilePath);
@@ -1053,7 +1065,11 @@ void KF6MainWindow::registerDeviceWithCurrentProfile(const DeviceFingerprint &fi
     m_currentProfile->setDeviceFingerprint(fingerprint);
     m_currentProfile->save();
 
-    KF6Settings::instance().registerDevice(fingerprint, m_currentProfile->syncFolderPath());
+    // Phase L Task 0.B: register by USB serial only.
+    if (!fingerprint.usbSerialNumber.isEmpty()) {
+        KF6Settings::instance().registerDeviceBySerial(
+            fingerprint.usbSerialNumber, m_currentProfile->syncFolderPath());
+    }
     KF6Settings::instance().sync();
 
     m_logWidget->logInfo(i18n("Device registered: %1", fingerprint.displayString()));

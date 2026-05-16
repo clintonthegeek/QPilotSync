@@ -124,26 +124,6 @@ struct DeviceFingerprint
         return !modelName.isEmpty() || romVersion != 0 || ramSize != 0;
     }
 
-    // Create a unique key for registry lookups (format: userId:userName:serial)
-    QString registryKey() const {
-        return QString("%1:%2:%3").arg(userId).arg(userName, usbSerialNumber);
-    }
-
-    static DeviceFingerprint fromRegistryKey(const QString &key) {
-        DeviceFingerprint fp;
-        int firstColon = key.indexOf(':');
-        if (firstColon > 0) {
-            fp.userId = key.left(firstColon).toUInt();
-            int secondColon = key.indexOf(':', firstColon + 1);
-            if (secondColon > 0) {
-                fp.userName = key.mid(firstColon + 1, secondColon - firstColon - 1);
-                fp.usbSerialNumber = key.mid(secondColon + 1);
-            } else {
-                fp.userName = key.mid(firstColon + 1);
-            }
-        }
-        return fp;
-    }
 };
 
 /**

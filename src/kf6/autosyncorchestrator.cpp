@@ -125,28 +125,7 @@ Profile* AutoSyncOrchestrator::findOrCreateProfile(const QString &usbSerial,
         }
     }
 
-    // 2. Look up by device fingerprint (fallback)
-    DeviceFingerprint fingerprint;
-    fingerprint.userId = userId;
-    fingerprint.userName = userName;
-    fingerprint.usbSerialNumber = usbSerial;
-
-    QString profilePath = settings.findProfileForDevice(fingerprint);
-    if (!profilePath.isEmpty() && QDir(profilePath).exists()) {
-        if (m_logWidget) {
-            m_logWidget->logInfo(
-                QStringLiteral("Found profile by fingerprint: %1").arg(profilePath));
-        }
-
-        auto *profile = new Profile(profilePath);
-        if (profile->exists()) {
-            profile->load();
-            return profile;
-        }
-        delete profile;
-    }
-
-    // 3. No profile found -- auto-create one via the now-shared path.
+    // 2. No profile found -- auto-create one via the now-shared path.
     return createProfileForDevice(usbSerial, userName, userId);
 }
 
