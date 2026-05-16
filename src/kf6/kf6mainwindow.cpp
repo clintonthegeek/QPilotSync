@@ -1145,10 +1145,26 @@ void KF6MainWindow::onAutoDeviceDetected(Profile *profile, const QStringList &po
     }
 
     if (profile) {
-        // Known device — load profile and connect
-        QString profilePath = profile->syncFolderPath();
-        delete profile;  // loadProfile creates its own copy
-        loadProfile(profilePath);
+        // Device's USB serial is registered to a known profile. Respect
+        // the user's explicit choice: only auto-switch when no profile is
+        // currently open. If a different profile is open, log clearly and
+        // keep it — silently swapping out the user's selection meant
+        // tests against a fresh profile were actually running against the
+        // serial-registered one, with no visible warning.
+        if (!m_currentProfile) {
+            QString profilePath = profile->syncFolderPath();
+            delete profile;  // loadProfile creates its own copy
+            loadProfile(profilePath);
+        } else if (m_currentProfile->syncFolderPath() != profile->syncFolderPath()) {
+            m_logWidget->logWarning(i18n(
+                "Device is registered to profile '%1', but '%2' is currently open. "
+                "Using the open profile. Close it first if you want to switch.",
+                profile->name(), m_currentProfile->name()));
+            delete profile;
+        } else {
+            // Serial-matched profile is the one already open — nothing to do.
+            delete profile;
+        }
         startConnectionMultiPort(ports);
     } else {
         // Unknown device — connect first, then we'll read identity and create profile
