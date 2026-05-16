@@ -88,6 +88,7 @@ public:
 
 public Q_SLOTS:
     void setProviderEnabled(const QString &providerId, bool enabled);
+    void setMappingEnabled(const QString &mappingId, bool enabled);
 
 signals:
     void providersChanged();
@@ -95,6 +96,7 @@ signals:
     void connectFailed(QString providerId, QString error);
     void mappingsChanged();   // emitted on cascade-delete (Task 6)
     void providerEnabledChanged(QString providerId, bool enabled);
+    void mappingEnabledChanged(QString mappingId, bool enabled);
 
 private:
     void loadAndConnect();

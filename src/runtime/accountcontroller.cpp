@@ -234,6 +234,22 @@ void AccountController::appendMappings(const QJsonArray &rows) {
     }
 }
 
+void AccountController::setMappingEnabled(const QString &mappingId, bool enabled) {
+    if (!m_profile) return;
+    QJsonArray arr = m_profile->syncMappingsJson();
+    for (int i = 0; i < arr.size(); ++i) {
+        QJsonObject row = arr.at(i).toObject();
+        if (row.value(QStringLiteral("id")).toString() == mappingId) {
+            row[QStringLiteral("enabled")] = enabled;
+            arr.replace(i, row);
+            m_profile->setSyncMappingsJson(arr);
+            m_profile->save();
+            Q_EMIT mappingEnabledChanged(mappingId, enabled);
+            return;
+        }
+    }
+}
+
 QList<int> AccountController::mappingIndicesFor(const QString &id) const {
     QList<int> out;
     const QJsonArray arr = m_profile->syncMappingsJson();
