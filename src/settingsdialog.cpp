@@ -2,6 +2,7 @@
 #include "kf6/kf6settings.h"
 #include "profile.h"
 
+#include <KConfigGroup>
 #include <KLocalizedString>
 #include <KPageWidgetItem>
 
