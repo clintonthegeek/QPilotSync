@@ -14,6 +14,7 @@
 
 namespace WildPalms::PalmCalendar {
 
+using Kalburator::Sync::BackendRecord;
 using Kalburator::Sync::DeleteOperation;
 using Kalburator::Sync::FetchOperation;
 using Kalburator::Sync::PushOperation;
@@ -147,6 +148,30 @@ void PalmCalendarBackend::removeItem(const QString &calId,
     emit itemRemoved(calId, itemUid);
 }
 
+// ========== Blob-level disconnect guard (Layer B) ==========
+bool PalmCalendarBackend::loadRecordsOrError(const QString &collectionId,
+                                              QList<BackendRecord> &records,
+                                              QString &error)
+{
+    records.clear();
+    error.clear();
+
+    if (collectionId != QLatin1String(CollectionId)) {
+        error = QStringLiteral("unknown collection: %1").arg(collectionId);
+        return false;
+    }
+    if (!m_device) {
+        error = QStringLiteral("backend not ready (no device)");
+        return false;
+    }
+    if (!m_device->isConnected()) {
+        error = QStringLiteral("Palm link not connected before reading %1")
+                  .arg(QLatin1String(DatabaseName));
+        return false;
+    }
+    return true;
+}
+
 // ========== Operation API (Task 5) ==========
 FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
 {
@@ -169,8 +194,24 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
 
     op->setState(SyncOperation::Running);
 
+    if (!m_device->isConnected()) {
+        const auto err = QStringLiteral("Palm link not connected before reading %1")
+                           .arg(QLatin1String(DatabaseName));
+        op->fail(err);
+        emit fetchFinished(calendarId, false, err);
+        return op;
+    }
+
     const auto records = m_device->readAllRecords(QLatin1String(DatabaseName));
     emit fetchStarted(calendarId, records.size());
+
+    if (!m_device->isConnected()) {
+        const auto err = QStringLiteral("Palm link lost while reading %1")
+                           .arg(QLatin1String(DatabaseName));
+        op->fail(err);
+        emit fetchFinished(calendarId, false, err);
+        return op;
+    }
 
     QList<KCalendarCore::Incidence::Ptr> items;
     for (const auto &rec : records) {

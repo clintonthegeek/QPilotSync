@@ -68,6 +68,11 @@ public:
         const Kalburator::Sync::TranscodingPlan &plan) override;
     void removeItem(const QString &calId, const QString &itemUid) override;
 
+    // ========== Blob-level disconnect guard (Layer B) ==========
+    bool loadRecordsOrError(const QString &collectionId,
+                            QList<Kalburator::Sync::BackendRecord> &records,
+                            QString &error) override;
+
     // ========== Operation-based API (Task 5) ==========
     Kalburator::Sync::FetchOperation *fetchItems(
         const QString &calendarId) override;
