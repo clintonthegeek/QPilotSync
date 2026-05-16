@@ -44,6 +44,9 @@ public:
     // --- Blob operations (IBlobBackend) ---
     QList<Kalburator::Sync::BackendRecord> loadRecords(
         const QString &collectionId) override;
+    bool loadRecordsOrError(const QString &collectionId,
+                            QList<Kalburator::Sync::BackendRecord> &records,
+                            QString &error) override;
     std::optional<Kalburator::Sync::BackendRecord> loadRecord(
         const QString &recordId) override;
     QString createRecord(const QString &collectionId,
