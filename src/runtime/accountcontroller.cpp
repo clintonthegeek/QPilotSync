@@ -43,16 +43,16 @@ AccountController::AccountController(const QString &syncFolderPath,
     Q_ASSERT(m_profile);
     Q_ASSERT(m_palmRuntime);
 
-    connect(m_providerManager.get(), &ProviderManager::providersChanged,
+    QObject::connect(m_providerManager.get(), &ProviderManager::providersChanged,
             this, &AccountController::providersChanged);
-    connect(m_providerManager.get(),
+    QObject::connect(m_providerManager.get(),
             &ProviderManager::providerConnectionStateChanged,
             this, [this](const QString &providerId, bool connected) {
         const ConnectionState s = connected
             ? ConnectionState::Connected
             : ConnectionState::Disconnected;
         m_states.insert(providerId, s);
-        emit connectStateChanged(providerId, s);
+        Q_EMIT connectStateChanged(providerId, s);
     });
 
     loadAndConnect();
@@ -162,7 +162,7 @@ bool AccountController::removeProvider(const QString &providerId) {
         for (int idx : sorted) arr.removeAt(idx);
         m_profile->setSyncMappingsJson(arr);
         m_profile->save();
-        emit mappingsChanged();
+        Q_EMIT mappingsChanged();
     }
 
     m_providerManager->removeProvider(providerId);
@@ -228,7 +228,7 @@ void AccountController::appendMappings(const QJsonArray &rows) {
     for (const auto &v : rows) arr.append(v);
     m_profile->setSyncMappingsJson(arr);
     m_profile->save();
-    emit mappingsChanged();
+    Q_EMIT mappingsChanged();
     if (!m_palmRuntime->isRunning()) {
         m_palmRuntime->reloadMappings(arr);
     }

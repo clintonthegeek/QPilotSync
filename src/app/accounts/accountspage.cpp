@@ -32,13 +32,13 @@ AccountsPage::AccountsPage(AC *accounts,
     buildUi();
     refreshList();
 
-    connect(m_accounts, &AC::providersChanged,
+    QObject::connect(m_accounts, &AC::providersChanged,
             this, &AccountsPage::refreshList);
-    connect(m_accounts, &AC::mappingsChanged,
+    QObject::connect(m_accounts, &AC::mappingsChanged,
             this, &AccountsPage::refreshList);
-    connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runStarted,
+    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runStarted,
             this, &AccountsPage::onPalmRunStarted);
-    connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runFinished,
+    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runFinished,
             this, &AccountsPage::onPalmRunFinished);
 }
 
@@ -61,11 +61,11 @@ void AccountsPage::buildUi() {
     m_rightPane = new QStackedWidget(this);
     outer->addWidget(m_rightPane, 2);
 
-    connect(m_list, &QListWidget::currentRowChanged,
+    QObject::connect(m_list, &QListWidget::currentRowChanged,
             this, &AccountsPage::onProviderRowChanged);
-    connect(m_addBtn, &QPushButton::clicked,
+    QObject::connect(m_addBtn, &QPushButton::clicked,
             this, &AccountsPage::onAddClicked);
-    connect(m_removeBtn, &QPushButton::clicked,
+    QObject::connect(m_removeBtn, &QPushButton::clicked,
             this, &AccountsPage::onRemoveClicked);
 
     updateInterlock();
@@ -86,7 +86,7 @@ void AccountsPage::refreshList() {
     int restoreRow = -1;
     int row = 0;
     for (auto *p : m_accounts->providers()) {
-        auto *item = new QListWidgetItem;
+        auto *item = new QListWidgetItem(p->displayName());
         item->setData(Qt::UserRole, p->id());
         m_list->addItem(item);
 
