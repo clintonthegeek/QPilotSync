@@ -61,6 +61,7 @@ public:
         m_lastCallThread.store(QThread::currentThreadId());
         return false;
     }
+    bool isConnected() const override { return true; }
 
     Qt::HANDLE lastCallThread() const { return m_lastCallThread.load(); }
 

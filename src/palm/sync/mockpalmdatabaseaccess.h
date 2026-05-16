@@ -45,12 +45,16 @@ public:
     QList<std::uint32_t> recordsDeletedSince(
         const QString &dbName, const QDateTime &since) const override;
     bool supportsDeleteTracking() const override { return true; }
+    bool isConnected() const override { return m_connected; }
 
     QByteArray readAppBlock(const QString &dbName) const override;
 
     /// Test setter: stores `bytes` under `dbName`. Subsequent
     /// readAppBlock(dbName) returns `bytes` verbatim.
     void setAppBlock(const QString &dbName, const QByteArray &bytes);
+
+    /// Test setter: controls what isConnected() returns. Defaults to true.
+    void setConnected(bool c) { m_connected = c; }
 
 private:
     struct Database {
@@ -63,6 +67,7 @@ private:
     };
 
     QHash<QString, Database> m_dbs;
+    bool                     m_connected = true;
 };
 
 } // namespace WildPalms::PalmSync

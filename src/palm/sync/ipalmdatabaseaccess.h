@@ -84,6 +84,14 @@ public:
     /// Whether the impl tracks deletions natively. PalmBackend surfaces
     /// this via IBlobBackend::supportsDeleteTracking().
     virtual bool supportsDeleteTracking() const = 0;
+
+    /// Whether the underlying transport is currently live.
+    /// For pilot-link, reflects whether the USB link has not dropped since
+    /// the last successful call. Backends override
+    /// IBlobBackend::loadRecordsOrError and consult this after each read to
+    /// distinguish "0 records" from "couldn't read."
+    /// Layer B silent-success fix (2026-05-16).
+    virtual bool isConnected() const = 0;
 };
 
 } // namespace WildPalms::PalmSync

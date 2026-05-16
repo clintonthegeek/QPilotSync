@@ -48,7 +48,7 @@ public:
     /// Blocks until link-thread cleanup completes.
     void disconnectDevice();
 
-    bool isConnected()  const;
+    bool isConnected()  const override;
     bool isConnecting() const;
 
     /// Handshake info — only valid after connectionComplete(true, "").

@@ -28,6 +28,11 @@ PilotLinkPalmDatabaseAccess::PilotLinkPalmDatabaseAccess(KPilotLink *link)
 {
 }
 
+bool PilotLinkPalmDatabaseAccess::isConnected() const
+{
+    return m_link && m_link->isConnected();
+}
+
 QStringList PilotLinkPalmDatabaseAccess::availableDatabases() const
 {
     if (!m_link) return {};
