@@ -75,6 +75,49 @@ QList<BackendRecord> PalmToDoBackend::loadRecords(const QString &collectionId)
     return result;
 }
 
+bool PalmToDoBackend::loadRecordsOrError(const QString &collectionId,
+                                          QList<BackendRecord> &records,
+                                          QString &error)
+{
+    records.clear();
+    error.clear();
+
+    if (collectionId != QLatin1String(CollectionId)) {
+        error = QStringLiteral("unknown collection: %1").arg(collectionId);
+        return false;
+    }
+    if (!m_device) {
+        error = QStringLiteral("backend not ready (no device)");
+        return false;
+    }
+    if (!m_device->isConnected()) {
+        error = QStringLiteral("Palm link not connected before reading %1")
+                  .arg(QLatin1String(DatabaseName));
+        return false;
+    }
+
+    const auto palmRecords = m_device->readAllRecords(QLatin1String(DatabaseName));
+    if (!m_device->isConnected()) {
+        error = QStringLiteral("Palm link lost while reading %1")
+                  .arg(QLatin1String(DatabaseName));
+        return false;
+    }
+
+    records.reserve(palmRecords.size());
+    for (const PalmRecord &pr : palmRecords) {
+        if (pr.isDeleted()) continue;
+        BackendRecord r;
+        r.id           = encodeRecordId(pr.recordId);
+        r.type         = QStringLiteral("todo");
+        r.data         = pr.data;
+        r.contentHash  = QString::fromLatin1(
+            QCryptographicHash::hash(pr.data, QCryptographicHash::Sha256).toHex());
+        r.lastModified = pr.lastModified;
+        records.append(std::move(r));
+    }
+    return true;
+}
+
 std::optional<BackendRecord> PalmToDoBackend::loadRecord(const QString &recordId)
 {
     if (!m_device) return std::nullopt;
