@@ -22,3 +22,23 @@ add_test(NAME tst_palmdeviceconnection COMMAND tst_palmdeviceconnection)
 set_tests_properties(tst_palmdeviceconnection PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+add_executable(tst_palm_backend_disconnect tst_palm_backend_disconnect.cpp)
+target_include_directories(tst_palm_backend_disconnect PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(tst_palm_backend_disconnect
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Kalburator::Sync
+        WildPalmsPalmSync
+        WildPalmsPalmMemo
+        WildPalmsPalmToDo
+        WildPalmsPalmContacts
+        WildPalmsPalmCalendar
+)
+add_test(NAME tst_palm_backend_disconnect COMMAND tst_palm_backend_disconnect)
+set_tests_properties(tst_palm_backend_disconnect PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
