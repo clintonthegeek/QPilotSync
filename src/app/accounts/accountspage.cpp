@@ -5,17 +5,11 @@
 #include "runtime/accountcontroller.h"
 #include "runtime/palmruntime.h"
 
-#include <iprovider.h>
+#include <accountslistwidget.h>
 #include <backendconfiguration.h>
+#include <iprovider.h>
 
-#include <QCheckBox>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QListWidget>
-#include <QListWidgetItem>
 #include <QMessageBox>
-#include <QPushButton>
-#include <QStackedWidget>
 #include <QVBoxLayout>
 
 namespace WildPalms::App::Accounts {
@@ -31,101 +25,62 @@ AccountsPage::AccountsPage(AC *accounts,
 {
     buildUi();
     refreshList();
-
-    QObject::connect(m_accounts, &AC::providersChanged,
-            this, &AccountsPage::refreshList);
-    QObject::connect(m_accounts, &AC::mappingsChanged,
-            this, &AccountsPage::refreshList);
-    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runStarted,
-            this, &AccountsPage::onPalmRunStarted);
-    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runFinished,
-            this, &AccountsPage::onPalmRunFinished);
 }
 
 void AccountsPage::buildUi() {
-    auto *outer = new QHBoxLayout(this);
+    auto *outer = new QVBoxLayout(this);
+    m_listWidget = new Kalburator::Ui::AccountsListWidget(this);
+    outer->addWidget(m_listWidget);
 
-    auto *leftCol = new QVBoxLayout();
-    m_list = new QListWidget(this);
-    leftCol->addWidget(m_list, 1);
+    QObject::connect(m_listWidget, &Kalburator::Ui::AccountsListWidget::accountAddRequested,
+                     this, &AccountsPage::onAddClicked);
 
-    auto *btnRow = new QHBoxLayout();
-    m_addBtn    = new QPushButton(tr("Add..."), this);
-    m_removeBtn = new QPushButton(tr("Remove"), this);
-    m_removeBtn->setEnabled(false);
-    btnRow->addWidget(m_addBtn);
-    btnRow->addWidget(m_removeBtn);
-    leftCol->addLayout(btnRow);
-    outer->addLayout(leftCol, 1);
+    QObject::connect(m_listWidget, &Kalburator::Ui::AccountsListWidget::accountRemoved,
+                     this, [this](const QString &id) {
+                         const int n = m_accounts->mappingCountFor(id);
+                         const QStringList sample = m_accounts->mappingDescriptionsFor(id, 3);
+                         QString body = tr("Remove account?");
+                         if (n > 0) {
+                             body = tr("Remove account? This will delete %1 sync mapping(s):\n\n%2")
+                                       .arg(n).arg(sample.join(u'\n'));
+                             if (n > sample.size())
+                                 body += tr("\n... and %1 more.").arg(n - sample.size());
+                         }
+                         if (QMessageBox::question(this, tr("Remove Account"), body)
+                                 != QMessageBox::Yes)
+                             return;
+                         if (!m_accounts->removeProvider(id))
+                             QMessageBox::warning(this, tr("Remove Account"),
+                                                  tr("Couldn't remove (sync may be running)."));
+                     });
 
-    m_rightPane = new QStackedWidget(this);
-    outer->addWidget(m_rightPane, 2);
+    QObject::connect(m_listWidget, &Kalburator::Ui::AccountsListWidget::accountEnabledChanged,
+                     m_accounts, &AC::setProviderEnabled);
 
-    QObject::connect(m_list, &QListWidget::currentRowChanged,
-            this, &AccountsPage::onProviderRowChanged);
-    QObject::connect(m_addBtn, &QPushButton::clicked,
-            this, &AccountsPage::onAddClicked);
-    QObject::connect(m_removeBtn, &QPushButton::clicked,
-            this, &AccountsPage::onRemoveClicked);
+    QObject::connect(m_listWidget, &Kalburator::Ui::AccountsListWidget::accountEditRequested,
+                     this, [this](const QString &) {
+                         QMessageBox::information(this, tr("Edit Account"),
+                             tr("Account editing will be available in a future release."));
+                     });
 
-    updateInterlock();
+    QObject::connect(m_accounts, &AC::providersChanged,
+                     this, &AccountsPage::refreshList);
+    QObject::connect(m_accounts, &AC::mappingsChanged,
+                     this, &AccountsPage::refreshList);
+    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runStarted,
+                     this, &AccountsPage::onPalmRunStarted);
+    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runFinished,
+                     this, &AccountsPage::onPalmRunFinished);
 }
 
 void AccountsPage::refreshList() {
-    const QString currentId = (m_list->currentRow() >= 0 && m_list->currentItem())
-        ? m_list->currentItem()->data(Qt::UserRole).toString()
-        : QString();
-
-    m_list->clear();
-    while (m_rightPane->count() > 0) {
-        QWidget *w = m_rightPane->widget(0);
-        m_rightPane->removeWidget(w);
-        w->deleteLater();
-    }
-
-    int restoreRow = -1;
-    int row = 0;
+    QList<Kalburator::Sync::BackendConfiguration> configs;
     for (auto *p : m_accounts->providers()) {
-        auto *item = new QListWidgetItem(p->displayName());
-        item->setData(Qt::UserRole, p->id());
-        m_list->addItem(item);
-
-        auto *rowWidget = new QWidget(m_list);
-        auto *hbox = new QHBoxLayout(rowWidget);
-        hbox->setContentsMargins(4, 2, 4, 2);
-        auto *cb = new QCheckBox;
-        cb->setChecked(m_accounts->providerEnabled(p->id()));
-        cb->setToolTip(tr("Enable/disable this account"));
-        auto *lbl = new QLabel(p->displayName());
-        hbox->addWidget(cb);
-        hbox->addWidget(lbl, 1);
-        m_list->setItemWidget(item, rowWidget);
-
-        const QString providerId = p->id();
-        QObject::connect(cb, &QCheckBox::toggled,
-            this, [this, providerId](bool on){
-                m_accounts->setProviderEnabled(providerId, on);
-            });
-
-        QWidget *cfg = p->createConfigWidget(m_rightPane);
-        if (!cfg) cfg = new QWidget(m_rightPane);
-        m_rightPane->addWidget(cfg);
-        if (p->id() == currentId) restoreRow = row;
-        ++row;
+        auto cfg = p->save();
+        cfg.enabled = m_accounts->providerEnabled(p->id());
+        configs.append(cfg);
     }
-    if (restoreRow >= 0) m_list->setCurrentRow(restoreRow);
-    else if (m_list->count() > 0) m_list->setCurrentRow(0);
-
-    updateInterlock();
-}
-
-void AccountsPage::onProviderRowChanged(int row) {
-    if (row < 0) {
-        m_removeBtn->setEnabled(false);
-        return;
-    }
-    m_rightPane->setCurrentIndex(row);
-    m_removeBtn->setEnabled(!m_palmRuntime->isRunning());
+    m_listWidget->setAccounts(configs);
 }
 
 void AccountsPage::onAddClicked() {
@@ -145,40 +100,7 @@ void AccountsPage::onAddClicked() {
     prompt.exec();
 }
 
-void AccountsPage::onRemoveClicked() {
-    if (m_list->currentRow() < 0 || !m_list->currentItem()) return;
-    const QString id = m_list->currentItem()->data(Qt::UserRole).toString();
-    const int n = m_accounts->mappingCountFor(id);
-    const QStringList sample = m_accounts->mappingDescriptionsFor(id, 3);
-
-    QString body = tr("Remove account?");
-    if (n > 0) {
-        body = tr("Remove account? This will delete %1 sync mapping(s):\n\n%2")
-            .arg(n).arg(sample.join("\n"));
-        if (n > sample.size()) body += tr("\n... and %1 more.")
-            .arg(n - sample.size());
-    }
-
-    if (QMessageBox::question(this, tr("Remove Account"), body)
-        != QMessageBox::Yes) return;
-
-    if (!m_accounts->removeProvider(id)) {
-        QMessageBox::warning(this, tr("Remove Account"),
-            tr("Couldn't remove (sync may be running)."));
-    }
-}
-
-void AccountsPage::onPalmRunStarted()  { updateInterlock(); }
-void AccountsPage::onPalmRunFinished() { updateInterlock(); }
-
-void AccountsPage::updateInterlock() {
-    const bool busy = m_palmRuntime->isRunning();
-    m_addBtn->setEnabled(!busy);
-    m_removeBtn->setEnabled(!busy && m_list->currentRow() >= 0
-                            && m_list->currentItem() != nullptr);
-    const QString tip = busy ? tr("Sync in progress.") : QString();
-    m_addBtn->setToolTip(tip);
-    m_removeBtn->setToolTip(tip);
-}
+void AccountsPage::onPalmRunStarted()  { m_listWidget->setEnabled(false); }
+void AccountsPage::onPalmRunFinished() { m_listWidget->setEnabled(true); }
 
 }  // namespace WildPalms::App::Accounts

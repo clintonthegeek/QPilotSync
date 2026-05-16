@@ -1,8 +1,10 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
 #include <QTemporaryDir>
-#include <QListWidget>
+#include <QLabel>
 #include <QPushButton>
+
+#include "../wildpalms_qtest_main.h"
 
 #include "app/accounts/accountspage.h"
 #include "app/accounts/addaccountdialog.h"
@@ -10,6 +12,7 @@
 #include "runtime/palmruntime.h"
 #include "profile.h"
 
+#include <accountslistwidget.h>
 #include <backendconfiguration.h>
 
 class TstAccountsPage : public QObject {
@@ -32,12 +35,16 @@ void TstAccountsPage::emptyState_addEnabled()
     page.show();
     QTest::qWait(50);
 
-    auto *list   = page.findChild<QListWidget*>();
-    auto buttons = page.findChildren<QPushButton*>();
-    QVERIFY(list);
-    QVERIFY(!buttons.isEmpty());
-    QCOMPARE(list->count(), 0);
-    QVERIFY(buttons.at(0)->isEnabled());
+    auto *listWidget = page.findChild<Kalburator::Ui::AccountsListWidget*>();
+    QVERIFY(listWidget);
+
+    // No account rows — only the "Add account…" button is present.
+    auto labels = listWidget->findChildren<QLabel*>();
+    QCOMPARE(labels.size(), 0);
+
+    auto *addBtn = listWidget->findChild<QPushButton*>(QStringLiteral("addAccount"));
+    QVERIFY(addBtn);
+    QVERIFY(addBtn->isEnabled());
 }
 
 void TstAccountsPage::afterAdd_listShowsProvider()
@@ -57,10 +64,13 @@ void TstAccountsPage::afterAdd_listShowsProvider()
     page.show();
     QTest::qWait(50);
 
-    auto *list = page.findChild<QListWidget*>();
-    QVERIFY(list);
-    QCOMPARE(list->count(), 1);
-    QCOMPARE(list->item(0)->text(), QStringLiteral("Server X"));
+    auto *listWidget = page.findChild<Kalburator::Ui::AccountsListWidget*>();
+    QVERIFY(listWidget);
+
+    // One row present: the label contains "Server X".
+    auto labels = listWidget->findChildren<QLabel*>();
+    QCOMPARE(labels.size(), 1);
+    QVERIFY(labels.at(0)->text().contains(QStringLiteral("Server X")));
 }
 
 void TstAccountsPage::interlock_disablesAddRemoveDuringRun()
@@ -79,15 +89,15 @@ void TstAccountsPage::interlock_disablesAddRemoveDuringRun()
     emit rt.runStarted("test");
     QTest::qWait(50);
 
-    auto buttons = page.findChildren<QPushButton*>();
-    QVERIFY(!buttons.isEmpty());
-    // Add button is disabled during sync.
-    QVERIFY(!buttons.at(0)->isEnabled());
+    auto *listWidget = page.findChild<Kalburator::Ui::AccountsListWidget*>();
+    QVERIFY(listWidget);
+    // Whole widget disabled during sync.
+    QVERIFY(!listWidget->isEnabled());
 
     emit rt.runFinished({});
     QTest::qWait(50);
-    QVERIFY(buttons.at(0)->isEnabled());
+    QVERIFY(listWidget->isEnabled());
 }
 
-QTEST_MAIN(TstAccountsPage)
+WILDPALMS_QTEST_MAIN(TstAccountsPage)
 #include "tst_accounts_page.moc"
