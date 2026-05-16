@@ -195,3 +195,28 @@ add_subdirectory(core)
 
 # Phase E.9 — concrete PalmDeviceConnection aggregator.
 add_subdirectory(palm)
+
+# ============================================================
+# M.12 — AddAccountDialog baseline (pre-migration smoke test)
+# ============================================================
+# WildPalmsAppAccounts is a separate static lib (not in WildPalmsCore)
+# so we can't use the add_wildpalms_test() helper here.
+add_executable(test_addaccountdialog_baseline
+    test_addaccountdialog_baseline.cpp
+)
+target_link_libraries(test_addaccountdialog_baseline
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        Kalburator::Sync
+        # WildPalmsCore (SHARED) absorbs WildPalmsAppAccounts + PalmDeviceAccessLib
+        # + pisock/bluetooth/usb transitive symbols via WHOLE_ARCHIVE; this is
+        # the same approach all add_wildpalms_test() targets use.
+        WildPalmsCore
+        WildPalmsAppAccounts
+)
+add_test(NAME test_addaccountdialog_baseline COMMAND test_addaccountdialog_baseline)
+set_tests_properties(test_addaccountdialog_baseline PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
