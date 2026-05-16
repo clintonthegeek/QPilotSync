@@ -46,6 +46,8 @@ void AddAccountDialog::buildUi() {
             label = tr("CalDAV (calendar)");
         else if (label == QStringLiteral("carddav"))
             label = tr("CardDAV (contacts)");
+        else if (label == QStringLiteral("multiproto-dav"))
+            label = tr("Multi-protocol DAV (calendar + contacts)");
         else {
             label[0] = label[0].toUpper();
         }
