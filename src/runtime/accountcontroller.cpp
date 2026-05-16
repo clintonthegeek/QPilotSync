@@ -71,6 +71,50 @@ void AccountController::loadAndConnect() {
         m_providerManager->addProvider(std::move(provider));
     }
     m_providerManager->connectAll();
+
+    // Re-apply disabled provider states so mappings start in the right state.
+    for (const auto &cfg : m_profile->accounts()) {
+        if (!cfg.enabled)
+            setProviderEnabled(cfg.id, false);
+    }
+}
+
+bool AccountController::providerEnabled(const QString &id) const {
+    for (const auto &bc : m_profile->accounts()) {
+        if (bc.id == id) return bc.enabled;
+    }
+    return true; // unknown → assume enabled
+}
+
+void AccountController::setProviderEnabled(const QString &providerId, bool enabled) {
+    if (!m_profile) return;
+    // Update the BackendConfiguration enabled flag
+    auto accts = m_profile->accounts();
+    auto it = std::find_if(accts.begin(), accts.end(),
+        [&](const auto &bc){ return bc.id == providerId; });
+    if (it == accts.end()) return;
+    it->enabled = enabled;
+    m_profile->saveAccount(*it);
+
+    // Fan out to all mappings referencing this provider
+    QJsonArray arr = m_profile->syncMappingsJson();
+    const QString prefix = providerId + QLatin1Char(':');
+    bool changed = false;
+    for (int i = 0; i < arr.size(); ++i) {
+        QJsonObject row = arr.at(i).toObject();
+        const QString src = row.value(QStringLiteral("sourceBackend")).toString();
+        const QString tgt = row.value(QStringLiteral("targetBackend")).toString();
+        if (src.startsWith(prefix) || tgt.startsWith(prefix)) {
+            row[QStringLiteral("enabled")] = enabled;
+            arr.replace(i, row);
+            changed = true;
+        }
+    }
+    if (changed) {
+        m_profile->setSyncMappingsJson(arr);
+        m_profile->save();
+    }
+    Q_EMIT providerEnabledChanged(providerId, enabled);
 }
 
 QString AccountController::addProvider(const QString &kind,

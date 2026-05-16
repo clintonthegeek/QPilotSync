@@ -8,7 +8,9 @@
 #include <iprovider.h>
 #include <backendconfiguration.h>
 
+#include <QCheckBox>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
@@ -84,9 +86,27 @@ void AccountsPage::refreshList() {
     int restoreRow = -1;
     int row = 0;
     for (auto *p : m_accounts->providers()) {
-        auto *item = new QListWidgetItem(p->displayName());
+        auto *item = new QListWidgetItem;
         item->setData(Qt::UserRole, p->id());
         m_list->addItem(item);
+
+        auto *rowWidget = new QWidget;
+        auto *hbox = new QHBoxLayout(rowWidget);
+        hbox->setContentsMargins(4, 2, 4, 2);
+        auto *cb = new QCheckBox;
+        cb->setChecked(m_accounts->providerEnabled(p->id()));
+        cb->setToolTip(tr("Enable/disable this account"));
+        auto *lbl = new QLabel(p->displayName());
+        hbox->addWidget(cb);
+        hbox->addWidget(lbl, 1);
+        m_list->setItemWidget(item, rowWidget);
+
+        const QString providerId = p->id();
+        QObject::connect(cb, &QCheckBox::toggled,
+            this, [this, providerId](bool on){
+                m_accounts->setProviderEnabled(providerId, on);
+            });
+
         QWidget *cfg = p->createConfigWidget(m_rightPane);
         if (!cfg) cfg = new QWidget(m_rightPane);
         m_rightPane->addWidget(cfg);

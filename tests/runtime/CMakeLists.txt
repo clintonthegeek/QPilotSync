@@ -225,6 +225,27 @@ set_tests_properties(tst_account_controller PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# L.9: per-provider enable/disable + fan-out to mappings
+add_executable(tst_provider_enable_fanout tst_provider_enable_fanout.cpp)
+target_link_libraries(tst_provider_enable_fanout
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_provider_enable_fanout COMMAND tst_provider_enable_fanout)
+set_tests_properties(tst_provider_enable_fanout PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # Phase Ic Task 11: AccountsPage widget tests.
 add_executable(tst_accounts_page tst_accounts_page.cpp)
 target_link_libraries(tst_accounts_page

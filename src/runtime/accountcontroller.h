@@ -84,11 +84,17 @@ public:
     /// to Palm slots. The caller decides slot semantics; AC just persists.
     void appendMappings(const QJsonArray &rows);
 
+    bool providerEnabled(const QString &id) const;
+
+public Q_SLOTS:
+    void setProviderEnabled(const QString &providerId, bool enabled);
+
 signals:
     void providersChanged();
     void connectStateChanged(QString providerId, ConnectionState state);
     void connectFailed(QString providerId, QString error);
     void mappingsChanged();   // emitted on cascade-delete (Task 6)
+    void providerEnabledChanged(QString providerId, bool enabled);
 
 private:
     void loadAndConnect();

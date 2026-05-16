@@ -17,7 +17,6 @@
 #include "syncbackend.h"
 #include "synctypes.h"
 #include "collectioninfo.h"
-#include "backendrecord.h"
 #include <isynchost.h>
 #include <baselinestore.h>
 #include <isyncconfigstore.h>
