@@ -51,7 +51,8 @@ pkg_check_modules(UDEV REQUIRED libudev)
 # docs/plans/2026-04-20-libkalburator-integration.md.
 # Phase A: linked only by the smoke test; no WP source consumes it yet.
 set(KALBURATOR_HAVE_ORG_IO OFF CACHE BOOL "" FORCE)
-set(KALBURATOR_HAVE_AKONADI OFF CACHE BOOL "" FORCE)
+# Phase L.8: allow KALBURATOR_HAVE_AKONADI to be set by the caller; default OFF
+option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" OFF)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../libkalburator libkalburator EXCLUDE_FROM_ALL)
 
 # Build pilot-link first

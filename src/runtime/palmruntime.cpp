@@ -41,6 +41,9 @@
 #include <rawfilesbackend.h>
 #include <caldavbackendcontribution.h>
 #include <carddavbackendcontribution.h>
+#ifdef HAVE_AKONADI
+#include <akonadibackendcontribution.h>
+#endif
 
 namespace {
 
@@ -121,6 +124,10 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
         std::make_shared<Kalburator::Sync::CalDavBackendContribution>());
     m_registry->registerContribution(
         std::make_shared<Kalburator::Sync::CardDavBackendContribution>());
+#ifdef HAVE_AKONADI
+    m_registry->registerContribution(
+        std::make_shared<Kalburator::Sync::AkonadiBackendContribution>());
+#endif
 
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
