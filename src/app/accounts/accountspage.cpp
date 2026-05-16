@@ -90,7 +90,7 @@ void AccountsPage::refreshList() {
         item->setData(Qt::UserRole, p->id());
         m_list->addItem(item);
 
-        auto *rowWidget = new QWidget;
+        auto *rowWidget = new QWidget(m_list);
         auto *hbox = new QHBoxLayout(rowWidget);
         hbox->setContentsMargins(4, 2, 4, 2);
         auto *cb = new QCheckBox;
