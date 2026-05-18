@@ -46,11 +46,20 @@ AccountController::AccountController(const QString &syncFolderPath,
     QObject::connect(m_providerManager.get(), &ProviderManager::providersChanged,
             this, &AccountController::providersChanged);
     QObject::connect(m_providerManager.get(),
-            &ProviderManager::providerConnectionStateChanged,
-            this, [this](const QString &providerId, bool connected) {
-        const ConnectionState s = connected
-            ? ConnectionState::Connected
-            : ConnectionState::Disconnected;
+            &ProviderManager::providerStateChanged,
+            this, [this](const QString &providerId,
+                         Kalburator::Sync::ProviderConnectionState state) {
+        ConnectionState s = ConnectionState::Disconnected;
+        switch (state) {
+            case Kalburator::Sync::ProviderConnectionState::Disconnected:
+                s = ConnectionState::Disconnected; break;
+            case Kalburator::Sync::ProviderConnectionState::Connecting:
+                s = ConnectionState::Connecting; break;
+            case Kalburator::Sync::ProviderConnectionState::Connected:
+                s = ConnectionState::Connected; break;
+            case Kalburator::Sync::ProviderConnectionState::Error:
+                s = ConnectionState::Error; break;
+        }
         m_states.insert(providerId, s);
         Q_EMIT connectStateChanged(providerId, s);
     });
