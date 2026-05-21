@@ -594,12 +594,12 @@ for Phase-E sub-phase state.
 | ✅ **E.15b** | `git mv src/fullsync/* src/runtime/` complete; `WildPalmsFullSync` static lib folded into `WildPalmsRuntime`; Kalburator::Sync promoted to PUBLIC link on Runtime. Header guards renamed WILDPALMS_FULLSYNC_* → WILDPALMS_RUNTIME_*. `_wp` filename suffix retained (avoids name clash with libkalburator types). QSettings group keys `"fullsync/..."` in `syncconfigstore_wp.cpp` retained verbatim (config-compat). Test helper renamed `add_fullsync_test` → `add_runtime_test`. Landed 2026-04-26. Plan: `docs/superpowers/plans/2026-04-26-phase-e15b-fullsync-relocation.md`. | WP | E.15a | WP ctest passes (76/76); library graph one node smaller; no behavior change. |
 | 🟡 **E.16** | **Landed (partial) 2026-04-28.** Collapse Client Mode / Full Sync Mode into unified runtime. New `WildPalms::Runtime::SyncRunner` (`src/runtime/syncrunner_wp.{h,cpp}`) drives `BlobSyncEngine::twoWayWithBaseline` per loaded `IBackendPlugin` for the six Tools-menu sync modes (HotSync/FullSync/CopyPalmToPC/CopyPCToPalm/Backup/Restore); modes implemented as `ConflictPolicy` + baseline-clear variants on a single code path. `synctypes.h` relocated `src/sync/` → `src/core/synctypes.h` (header guard `WILDPALMS_CORE_SYNCTYPES_H`); `Sync::SyncMode` enum int ordering preserved for QSettings compat. `DeviceSession::requestSync` + `DeviceWorker::doSync` overloaded with new SyncRunner-taking variants; legacy SyncEngine overloads retained. `KF6MainWindow` constructs `m_syncRunner` and routes all six menu handlers through it; `setKPilotLink()` builds a real `PalmDeviceConnection` via new `pilotlinkconnectionfactory` (compiled into WildPalmsCore; PalmDevice's link to Core demoted PUBLIC→include-path-only via `INTERFACE_INCLUDE_DIRECTORIES` query + AUTOMOC-off to break the Core↔PalmDevice cycle). All seven plugins' legacy `*Conduit` halves + matching `*-conduit.json` manifests + legacy mappers deleted (six plugins are submodules; submodule pointer bumps included). 4 mapper tests removed; 11 new SyncRunner test methods added (`tests/runtime/tst_syncrunner.cpp`) covering all six SyncMode policies + cancellation. Real-device smoke test on a Palm m505: 621 records flowed Palm→PC across calendar/contacts/memo/todos plugins on first HotSync. **Deferred to follow-up:** (a) `InteractiveConflictHandler` rebind from WP-internal `QSyncCore` to `Kalburator::Sync::QSyncCore::ConflictHandler` — required before `src/sync/` can actually be deleted; (b) WebCalendar plugin cross-thread parenting bug in `createBackends`; (c) multi-collection plugins re-read Palm DB N times (perf); (d) `LocalBlobBackend` cross-id-space mapping (likely duplicates on second sync, untested); (e) `WildPalms::FullSync` → `WildPalms::Runtime` namespace rename. `src/sync/`, `ConduitManager`, and the `IConduit` family **still exist on disk and still build** — they are unreachable from the Tools menu and from any plugin manifest, but kf6mainwindow still constructs `m_syncEngine` + `m_conduitManager` at startup (dead code). Plan: `docs/superpowers/plans/2026-04-28-phase-e16-unified-runtime.md`. | WP | E.15 | WP builds; SyncRunner-driven sync verified on a real Palm m505 (621-record first HotSync); WP ctest 71/71 passing. Final delete of `src/sync/` family blocked on conflict-handler rebind. |
 | **E.17** | Migrate app-layer call sites: `kf6mainwindow`, `devicesession`, `deviceworker`, `conflictdialog`, `conflictreviewwidget`, `interactiveconflicthandler`, `profile`. Most already adjusted by earlier sub-phases; this cleans up the last stragglers. | WP | E.16 | WP builds + runs end-to-end in development configuration; manual smoke test passes. |
-| **E.18** | Integration tests: Palm emulator sandbox ↔ `LocalBlobBackend` round-trips for each plugin. Category routing verified against a DateBk6-style multi-category Datebook. Conflict scenarios exercised. | WP | E.17 | New integration tests pass; no WP ctest regressions. |
-| **E.19** | In-tree docs superseded: `CONDUIT_PLUGIN_DESIGN.md`, `plugin-developer-guide.md`, `sdk-plugin-guide.md`, `sdk-shadowstan-advisory.md` marked historical; new `docs/PLUGIN_ABI.md` describes `IPlugin`/`IBackendPlugin`/`IPluginAction`. Update `docs/ARCHITECTURE_2026.md` + `docs/SYNC_ENGINE_ARCHITECTURE.md` to reflect the unified runtime. Update `docs/LIBKALBURATOR.md` status pointer. Mark Phase E done in the integration plan. | WP | E.18 | Docs committed; integration plan's Phase E row flipped to done. |
+| ❌ **E.18** | **Cancelled 2026-05-21.** Original scope: integration tests driven by a POSE64 emulator sandbox. POSE64's DLP timing is unstable enough that building a reliable harness on top of it is not feasible at this time; the effort to stabilise it is out of proportion with the value. Coverage is provided by the per-plugin e2e tests already in the WP ctest suite (`tst_calendar_v2`, `tst_todo_v2`, `tst_contacts_v2`, `tst_memo_v2`, `tst_webcalendar_v2`, `tst_plucker_v2`, `tst_install_v2_e2e`) plus periodic manual smoke runs against real Palm hardware. Revisit if a viable emulator harness appears later. | WP | — | n/a — exit condition voided. |
+| 🟡 **E.19** | **Partial 2026-05-21.** Done: legacy conduit / SDK docs (`CONDUIT_PLUGIN_DESIGN.md`, `plugin-developer-guide.md`, `sdk-plugin-guide.md`, `sdk-shadowstan-advisory.md`) + three pre-Phase-E TODO files moved to `docs/archived/` with an inventory `README.md`. Integration plan's Phase E row + this spec's status rows reconciled with reality. Pending: write new `docs/PLUGIN_ABI.md` describing `IPlugin`/`IBackendPlugin`/`IPluginAction`; refresh `docs/ARCHITECTURE_2026.md` + `docs/SYNC_ENGINE_ARCHITECTURE.md` for the unified runtime; flip integration plan's Phase E row to ✅ once the E.16 conflict-handler rebind also lands. | WP | E.16 (was E.18, now voided) | New docs committed; integration plan's Phase E row flips to ✅. |
 
 **Total:** 19 sub-phases plus E.0 (this spec). Two upstream (E.1, E.2).
-Thirteen WP code (E.3–E.15). Three WP integration/delete (E.16–E.18).
-One docs (E.19).
+Thirteen WP code (E.3–E.15). Three WP integration/delete (E.16–E.18);
+E.18 cancelled 2026-05-21 (POSE64 not viable). One docs (E.19).
 
 Sub-phase dependencies form a mostly-linear chain with E.7 parallel to
 E.5/E.6. Every sub-phase's exit gate includes a green `ctest` run.
@@ -628,25 +628,31 @@ E.5/E.6. Every sub-phase's exit gate includes a green `ctest` run.
 - **E.9–E.15:** per-plugin smoke: build the plugin, register with a
   coordinator configured with a `LocalBlobBackend`, run `coordinator.runSync()`,
   assert expected record motion.
-- **E.18 integration:**
-  - Palm emulator sandbox (POSE64) preloaded with a DateBk6-style DatebookDB
-    containing records in 4+ distinct categories.
-  - `LocalBlobBackend` target directory.
-  - Run `coordinator.runSync()`; assert one `.ics` file per category appears
-    in the expected subdirectory.
-  - Modify an event on the emulator; re-sync; assert the `.ics` file
-    reflects the change.
-  - Delete an event on the emulator; re-sync; assert the `.ics` file is
-    removed (validates `BlobBaselineStore` deletion-propagation).
-  - Create a conflict (modify both sides between syncs); assert
-    `PalmConflictHandler` resolves per policy.
+- **E.18 integration:** ❌ Cancelled 2026-05-21. The originally-scoped
+  POSE64-driven automated integration suite is not feasible because the
+  emulator's DLP timing is too unstable. The scenarios below are still
+  valuable; they are exercised today as a mix of per-plugin e2e ctests
+  (against `MockBlobBackend` / `LocalBlobBackend`) plus periodic manual
+  smoke against real Palm hardware:
+  - DateBk6-style multi-category DatebookDB → one `.ics` file per
+    category in the expected subdirectory. *(Per-plugin e2e tests cover
+    category routing logic; the multi-category device-side fixture is
+    a manual exercise.)*
+  - Modify-on-device → re-sync → blob reflects the change. *(Manual.)*
+  - Delete-on-device → re-sync → blob removed (validates
+    `BlobBaselineStore` deletion-propagation). *(Manual; `tst_calendar_v2`
+    and siblings cover the same flow against `MockBlobBackend`.)*
+  - Conflict (modify both sides between syncs) →
+    `PalmConflictHandler` resolves per policy. *(Per-plugin e2e tests
+    cover this against `MockBlobBackend`.)*
 
 ### Regression guards
 
 - Every sub-phase runs `ctest` and must hold green.
 - Upstream sub-phases (E.1, E.2) additionally run PlanStan ctest and must
   hold its baseline.
-- End-to-end smoke test runs in E.17 (manual) and E.18 (automated).
+- End-to-end smoke test runs in E.17 (manual). E.18's automated harness
+  was cancelled; the e2e ctests carry the regression load.
 
 ---
 

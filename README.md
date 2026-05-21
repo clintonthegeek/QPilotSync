@@ -283,7 +283,7 @@ Detailed documentation is available in the `docs/` directory. These files may no
 | [PROJECT_VISION.md](docs/PROJECT_VISION.md) | Project goals and philosophy |
 | [ARCHITECTURE_2026.md](docs/ARCHITECTURE_2026.md) | Current technical architecture |
 | [SYNC_ENGINE_ARCHITECTURE.md](docs/SYNC_ENGINE_ARCHITECTURE.md) | Sync engine design |
-| [CONDUIT_PLUGIN_DESIGN.md](docs/CONDUIT_PLUGIN_DESIGN.md) | Conduit plugin system |
+| [LIBKALBURATOR.md](docs/LIBKALBURATOR.md) | Pointer into the libkalburator integration |
 | [DATA_LOSS_HANDLING.md](docs/DATA_LOSS_HANDLING.md) | Data loss prevention |
 | [FIELD_MAPPING.md](docs/FIELD_MAPPING.md) | Palm to iCalendar/vCard field mapping |
 
