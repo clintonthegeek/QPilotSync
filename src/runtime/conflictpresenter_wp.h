@@ -3,7 +3,7 @@
 
 #include <iconflictpresenter.h>
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 // Phase D placeholder — counts refresh calls. Phase F wires the real
 // conflict review widget.
@@ -21,6 +21,6 @@ private:
     int m_refreshCount = 0;
 };
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime
 
 #endif

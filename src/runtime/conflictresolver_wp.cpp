@@ -1,6 +1,6 @@
 #include "conflictresolver_wp.h"
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 Kalburator::Sync::ConflictResolution ConflictResolver_WP::resolveConflict(
     const Kalburator::Sync::ConflictInfo &conflict,
@@ -12,4 +12,4 @@ Kalburator::Sync::ConflictResolution ConflictResolver_WP::resolveConflict(
     return Kalburator::Sync::ConflictResolution::SourceWins;
 }
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime

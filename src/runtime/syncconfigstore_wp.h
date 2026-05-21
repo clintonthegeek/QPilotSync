@@ -12,7 +12,7 @@
 
 class QSettings;
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 class SyncConfigStore_WP : public Kalburator::Sync::ISyncConfigStore
 {
@@ -46,6 +46,6 @@ private:
     int m_saveCount = 0;
 };
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime
 
 #endif

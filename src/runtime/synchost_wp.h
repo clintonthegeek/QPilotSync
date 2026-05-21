@@ -10,7 +10,7 @@ namespace Kalburator::Sync {
 class SyncBackend;
 }
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 class SyncConfigStore_WP;
 
@@ -43,6 +43,6 @@ private:
     int m_recordChangedCount = 0;
 };
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime
 
 #endif

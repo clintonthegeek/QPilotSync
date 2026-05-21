@@ -2,7 +2,7 @@
 
 #include "syncconfigstore_wp.h"
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 SyncHost_WP::SyncHost_WP(SyncConfigStore_WP *configStore)
     : m_configStore(configStore)
@@ -43,4 +43,4 @@ void SyncHost_WP::recordChanged(const QString &mappingId,
     ++m_recordChangedCount;
 }
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime

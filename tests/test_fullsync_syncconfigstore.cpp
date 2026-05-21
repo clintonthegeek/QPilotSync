@@ -6,7 +6,7 @@
 
 #include "syncconfigstore_wp.h"
 
-using WildPalms::FullSync::SyncConfigStore_WP;
+using WildPalms::Runtime::SyncConfigStore_WP;
 using Kalburator::Sync::LogicalCalendar;
 using Kalburator::Sync::SyncMapping;
 using Kalburator::Sync::SyncMode;

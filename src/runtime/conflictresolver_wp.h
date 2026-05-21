@@ -4,7 +4,7 @@
 #include <iconflictresolver.h>
 #include <synctypes.h>
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 // Phase D placeholder — always returns SourceWins. Phase F replaces
 // this with the real WP conflict dialog.
@@ -24,6 +24,6 @@ private:
     int m_resolveCount = 0;
 };
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime
 
 #endif

@@ -14,7 +14,7 @@ constexpr auto kSyncMappingsKey       = "fullsync/syncMappings";
 
 } // namespace
 
-namespace WildPalms::FullSync {
+namespace WildPalms::Runtime {
 
 SyncConfigStore_WP::SyncConfigStore_WP(QSettings *settings)
     : m_settings(settings)
@@ -154,4 +154,4 @@ int SyncConfigStore_WP::saveCount() const
     return m_saveCount;
 }
 
-} // namespace WildPalms::FullSync
+} // namespace WildPalms::Runtime

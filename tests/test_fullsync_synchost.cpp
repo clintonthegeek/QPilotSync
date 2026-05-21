@@ -10,10 +10,10 @@
 #include "synchost_wp.h"
 #include "syncconfigstore_wp.h"
 
-using WildPalms::FullSync::ConflictPresenter_WP;
-using WildPalms::FullSync::ConflictResolver_WP;
-using WildPalms::FullSync::SyncConfigStore_WP;
-using WildPalms::FullSync::SyncHost_WP;
+using WildPalms::Runtime::ConflictPresenter_WP;
+using WildPalms::Runtime::ConflictResolver_WP;
+using WildPalms::Runtime::SyncConfigStore_WP;
+using WildPalms::Runtime::SyncHost_WP;
 using Kalburator::Sync::ConflictInfo;
 using Kalburator::Sync::ConflictResolution;
 using Kalburator::Sync::ISyncHost;
