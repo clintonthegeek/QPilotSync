@@ -46,14 +46,35 @@ find_package(KF6StatusNotifierItem REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)
 
-# libkalburator — shared calendar-sync substrate, consumed via a sibling
-# checkout at ~/dev/libkalburator. See docs/LIBKALBURATOR.md and
-# docs/plans/2026-04-20-libkalburator-integration.md.
-# Phase A: linked only by the smoke test; no WP source consumes it yet.
+# libkalburator — shared calendar-sync substrate. Fetched via FetchContent
+# from the published Codeberg repo, pinned to the engine-merger campaign-end
+# tag. Pass -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR=/path/to/libkalburator to
+# override with a local checkout (development convenience).
+#
+# See docs/LIBKALBURATOR.md and docs/plans/2026-04-20-libkalburator-integration.md
+# for historical context.
 set(KALBURATOR_HAVE_ORG_IO OFF CACHE BOOL "" FORCE)
 # Phase L.8: allow KALBURATOR_HAVE_AKONADI to be set by the caller; default OFF
 option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" OFF)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../libkalburator libkalburator EXCLUDE_FROM_ALL)
+
+set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
+    "Optional path to a local libkalburator checkout (override FetchContent)")
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v0.52-phase-p-merge-ready" CACHE STRING
+    "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
+
+if(WILDPALMS_LIBKALBURATOR_SOURCE_DIR)
+    message(STATUS "libkalburator: using local source at ${WILDPALMS_LIBKALBURATOR_SOURCE_DIR}")
+    add_subdirectory(${WILDPALMS_LIBKALBURATOR_SOURCE_DIR} libkalburator EXCLUDE_FROM_ALL)
+else()
+    message(STATUS "libkalburator: fetching ${WILDPALMS_LIBKALBURATOR_GIT_TAG} from Codeberg")
+    include(FetchContent)
+    FetchContent_Declare(libkalburator
+        GIT_REPOSITORY https://codeberg.org/clintonthegeek/libkalburator.git
+        GIT_TAG        ${WILDPALMS_LIBKALBURATOR_GIT_TAG}
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(libkalburator)
+endif()
 
 # Build pilot-link first
 add_subdirectory(lib)
