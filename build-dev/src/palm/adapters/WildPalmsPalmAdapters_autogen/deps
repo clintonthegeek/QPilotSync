@@ -1,9 +1,0 @@
-WildPalmsPalmAdapters_autogen/timestamp: \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/CMakeLists.txt \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/palmcontactsadapter.cpp \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/palmcontactsadapter.h \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/palmmemosadapter.cpp \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/palmmemosadapter.h \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/palmtodosadapter.cpp \
-	/home/clinton/dev/refactor-engine-merger/WildPalms/src/palm/adapters/palmtodosadapter.h \
-	/usr/bin/cmake

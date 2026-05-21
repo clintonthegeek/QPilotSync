@@ -1,6 +1,0 @@
-libpisock_la-threadsafe.lo: \
- /home/clinton/dev/refactor-engine-merger/WildPalms/pilot-link/libpisock/threadsafe.c \
- /usr/include/stdc-predef.h \
- /home/clinton/dev/refactor-engine-merger/WildPalms/pilot-link/include/pi-threadsafe.h
-/usr/include/stdc-predef.h:
-/home/clinton/dev/refactor-engine-merger/WildPalms/pilot-link/include/pi-threadsafe.h:

@@ -1,7 +1,9 @@
 # Build directories
 build/
 build-appimage/
+build-dev/
 cmake-build-*/
+Testing/
 pilot-link-install/
 
 # AppImage build tools (downloaded automatically)

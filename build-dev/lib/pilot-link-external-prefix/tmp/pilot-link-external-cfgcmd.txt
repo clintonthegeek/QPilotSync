@@ -1,1 +1,0 @@
-cmd='/home/clinton/dev/refactor-engine-merger/WildPalms/scripts/configure-pilot-link.sh;/home/clinton/dev/refactor-engine-merger/WildPalms/pilot-link;/home/clinton/dev/refactor-engine-merger/WildPalms/pilot-link-git;/home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/pilot-link-build;/home/clinton/dev/refactor-engine-merger/WildPalms/build-dev/pilot-link-install'
