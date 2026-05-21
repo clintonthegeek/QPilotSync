@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Migrate WP's ~12 `QSyncCore::*` consumers onto libkalburator's `Kalburator::Conflict::*` and `Kalburator::Storage::*`; relocate `ConnectionBehavior` fully to `PalmBackendConfig`; collapse the include-guard-collision bridge (`conflictdialogbridge` + `palmruntimebridgeinstall`); delete `src/sync/qsynccore/`.
+**Goal:** Migrate WP's 12 `QSyncCore::*` *conflict-type* consumers onto libkalburator's `Kalburator::Conflict::*`; relocate `ConnectionBehavior` fully to `PalmBackendConfig`; collapse the include-guard-collision bridge (`conflictdialogbridge` + `palmruntimebridgeinstall`); delete `src/sync/qsynccore/` (the conflict types after migration, plus the unused JSON `BaselineStore` / `IdMappingStore` / synccommon types as dead-code).
 
-**Architecture:** WP types are byte-identical to upstream (the bridge proves this via memcpy). Migration is namespace renames + bridge deletion, not a semantic migration. Implementation order is dependency-driven: extend the handler with new optional config param (build-safe), then rename all consumers, then collapse the bridge (which can't include both namespaces simultaneously due to guard collision), then delete the WP qsynccore directory. Mid-implementation builds will fail between Task 4 and Task 7 — this is expected; verification happens at Task 9.
+**Architecture:** Conflict types are byte-identical to upstream (the bridge proves this via memcpy). The qsynccore stores and `synccommon.h` value types are *dead code* — zero consumers in WP since the SQLite-backed `Kalburator::Storage::*` stores and the relocated `Sync::*` types in `src/core/synctypes.h` superseded them. So the work splits into: (1) sed-rename the 9 conflict types in 12 consumer files, (2) extend the handler with an optional `PalmBackendConfig*`, (3) collapse the bridge, (4) delete the whole qsynccore directory. Mid-implementation builds will fail between Task 4 and Task 6 (the bridge can't include both type namespaces); final verification at Task 7.
 
 **Tech Stack:** C++/Qt6, CMake, libkalburator (consumed unchanged), pilot-link.
 
@@ -200,9 +200,9 @@ If the settings dialog currently calls something like `policy.connectionBehavior
 
 ---
 
-## Task 4: Rename `QSyncCore::` → `Kalburator::Conflict::` / `Kalburator::Storage::` in non-bridge consumers
+## Task 4: Rename `QSyncCore::` (conflict types only) → `Kalburator::Conflict::` in non-bridge consumers
 
-Mass-rename across 10 files (everything EXCEPT `conflictdialogbridge.{cpp,h}` and `palmruntimebridgeinstall.cpp`, which die wholesale in Task 7).
+Mass-rename across 9 files (everything EXCEPT `conflictdialogbridge.{cpp,h}` and `palmruntimebridgeinstall.cpp`, which die wholesale in Task 5). `src/sync/syncstate.{cpp,h}` is *not* in this list — it already uses `Kalburator::Storage::*` for its stores and has no `QSyncCore::*` references.
 
 **Files:**
 - Modify: `src/app/conflictdialog.h`
@@ -212,19 +212,33 @@ Mass-rename across 10 files (everything EXCEPT `conflictdialogbridge.{cpp,h}` an
 - Modify: `src/app/conflict/kalburatorinteractiveconflicthandler.cpp`
 - Modify: `src/plugins/contacts/contactsconflicthandler.h`
 - Modify: `src/plugins/todos/todoconflicthandler.h`
-- Modify: `src/sync/syncstate.h`
-- Modify: `src/sync/syncstate.cpp`
 - Modify: `src/widgets/dialogs/conflictreviewdialog.h`
 - Modify: `src/widgets/dialogs/conflictreviewdialog.cpp`
 - Modify: `tests/runtime/tst_palm_runtime_conflict_handler.cpp`
 
-- [ ] **Step 1: Sed namespace rename**
+- [ ] **Step 0: Sanity-check the file list**
+
+Before running sed, confirm these are exactly the files that reference any `QSyncCore::` symbol (excluding the bridge files and the qsynccore dir itself):
+
+```bash
+cd /home/clinton/dev/WildPalms && grep -rln "QSyncCore::" --include="*.cpp" --include="*.h" src/ tests/ 2>/dev/null \
+    | grep -v build | grep -v archived \
+    | grep -v "src/sync/qsynccore/" \
+    | grep -v "src/app/conflict/conflictdialogbridge" \
+    | grep -v "src/app/conflict/palmruntimebridgeinstall" \
+    | sort -u
+```
+
+Expected output: the 10 files listed above (some plugin handlers may live in `.h` only). If the set differs, adjust the `FILES` variable below.
+
+- [ ] **Step 1: Sed namespace rename (conflict types only)**
 
 Run (from repo root `/home/clinton/dev/WildPalms`):
 ```bash
-FILES="src/app/conflictdialog.h src/app/conflictdialog.cpp src/app/conflictreviewwidget.h src/app/conflictreviewwidget.cpp src/app/conflict/kalburatorinteractiveconflicthandler.cpp src/plugins/contacts/contactsconflicthandler.h src/plugins/todos/todoconflicthandler.h src/sync/syncstate.h src/sync/syncstate.cpp src/widgets/dialogs/conflictreviewdialog.h src/widgets/dialogs/conflictreviewdialog.cpp tests/runtime/tst_palm_runtime_conflict_handler.cpp"
+FILES="src/app/conflictdialog.h src/app/conflictdialog.cpp src/app/conflictreviewwidget.h src/app/conflictreviewwidget.cpp src/app/conflict/kalburatorinteractiveconflicthandler.cpp src/plugins/contacts/contactsconflicthandler.h src/plugins/todos/todoconflicthandler.h src/widgets/dialogs/conflictreviewdialog.h src/widgets/dialogs/conflictreviewdialog.cpp tests/runtime/tst_palm_runtime_conflict_handler.cpp"
 
-# Conflict types live in Kalburator::Conflict
+# Only the conflict types move. Stores/synccommon types in qsynccore are
+# dead code with zero consumers — they die with the directory in Task 6.
 sed -i 's/QSyncCore::ConflictRecord/Kalburator::Conflict::ConflictRecord/g' $FILES
 sed -i 's/QSyncCore::RecordSnapshot/Kalburator::Conflict::RecordSnapshot/g' $FILES
 sed -i 's/QSyncCore::ConflictPolicy/Kalburator::Conflict::ConflictPolicy/g' $FILES
@@ -235,19 +249,11 @@ sed -i 's/QSyncCore::AutoResolveStrategy/Kalburator::Conflict::AutoResolveStrate
 sed -i 's/QSyncCore::PromptStrategy/Kalburator::Conflict::PromptStrategy/g' $FILES
 sed -i 's/QSyncCore::FallbackBehavior/Kalburator::Conflict::FallbackBehavior/g' $FILES
 
-# Stores live in Kalburator::Storage (note: casing change IdMapping → IDMapping)
-sed -i 's/QSyncCore::BaselineStore/Kalburator::Storage::BaselineStore/g' $FILES
-sed -i 's/QSyncCore::IdMappingStore/Kalburator::Storage::IDMappingStore/g' $FILES
-sed -i 's/QSyncCore::IdMapping\b/Kalburator::Storage::IDMapping/g' $FILES
-
-# Unqualified casing fix (struct/class refs after the namespace rename leaves
-# any `IdMapping`/`IdMappingStore` without a `QSyncCore::` qualifier untouched).
-sed -i 's/\bIdMappingStore\b/IDMappingStore/g' $FILES
-sed -i 's/\bIdMapping\b/IDMapping/g' $FILES
-
 # `using namespace QSyncCore;` (e.g. conflictdialog.cpp:16) → libkalburator namespace
 sed -i 's|^using namespace QSyncCore;|using namespace Kalburator::Conflict;|g' $FILES
 ```
+
+After this step, `grep -rn 'QSyncCore::' $FILES` should return zero hits (all conflict symbols are renamed; nothing else from qsynccore is referenced in these files).
 
 - [ ] **Step 2: Update `#include` directives in the renamed files**
 
@@ -428,7 +434,13 @@ Expected: compile failures, but ideally fewer than after Task 4. Remaining failu
 
 ## Task 6: Delete `src/sync/qsynccore/` + trim `src/CMakeLists.txt`
 
-Now the WP-local copies go. After this step the include-guard collision is gone and Task 5's direct dialog include in the handler compiles cleanly.
+Now the WP-local copies go. After Task 4's conflict-type rename, nothing in `src/` or `tests/` references any qsynccore symbol. The directory contains:
+
+- Conflict types (`conflictrecord.{h,cpp}`, `conflictpolicy.{h,cpp}`, `conflictstore.{h,cpp}`) — superseded by upstream `Kalburator::Conflict::*` (now in use by the renamed consumers).
+- Store types (`baselinestore.{h,cpp}` JSON / `idmappingstore.{h,cpp}` JSON) — **dead code with zero constructors**. `Kalburator::Storage::*` (SQLite) is what WP actually uses, via `syncstate.cpp` + `palmruntime.cpp`.
+- `synccommon.h` value types (`IdMapping`, `SyncStats`, `SyncResult`, `DataLossWarning`, `RecordId`) — **dead code, zero consumers**. Already relocated to `src/core/synctypes.h` (namespace `Sync`) by E.16.
+
+Deletion is risk-free. After this step the include-guard collision is gone and Task 5's direct dialog include in the handler compiles cleanly.
 
 **Files:**
 - Delete: `src/sync/qsynccore/` (entire directory, 8 files)
@@ -539,10 +551,6 @@ test ! -f src/app/conflict/palmruntimebridgeinstall.cpp && echo "(b3) PASS: inst
 # (c) no QSyncCore:: references in tracked files
 test $(git grep -l "QSyncCore::" -- 'src/**' 'tests/**' 2>/dev/null | wc -l) -eq 0 \
     && echo "(c) PASS: no QSyncCore:: references in tracked code"
-
-# (d) no IdMappingStore (lowercase) references — should all be IDMappingStore
-test $(git grep -l "IdMappingStore" -- 'src/**' 'tests/**' 2>/dev/null | wc -l) -eq 0 \
-    && echo "(d) PASS: IdMappingStore casing migration complete"
 ```
 
 Each line should print PASS. If any FAILs (no output for a line), fix it before proceeding.
@@ -625,7 +633,6 @@ Expected output should show:
 - `M src/app/conflict/kalburatorinteractiveconflicthandler.{h,cpp}` (param add + sed)
 - `M src/plugins/contacts/contactsconflicthandler.h`
 - `M src/plugins/todos/todoconflicthandler.h`
-- `M src/sync/syncstate.{h,cpp}`
 - `M src/widgets/dialogs/conflictreviewdialog.{h,cpp}`
 - `M src/CMakeLists.txt`
 - `M src/kf6/kf6mainwindow.cpp` (bridge call sites inlined)

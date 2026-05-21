@@ -1,6 +1,8 @@
 # Conflict-handler port — design
 
-**Status:** approved 2026-05-21.
+**Status:** approved 2026-05-21; revised 2026-05-21 after deeper
+investigation showed the qsynccore stores are dead code, not live
+consumers needing migration.
 **Parent:** `docs/superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md` (E.16 deferral (a)).
 **Plan:** to be written next.
 
@@ -8,8 +10,8 @@
 
 Finish the QSyncCore → libkalburator conflict-system migration so
 `src/sync/qsynccore/` can be deleted. Migrate the ~12 WP consumers
-that still use `QSyncCore::*` types onto `Kalburator::Conflict::*` and
-`Kalburator::Storage::*`; relocate `ConnectionBehavior` fully to
+that still use `QSyncCore::*` *conflict* types onto
+`Kalburator::Conflict::*`; relocate `ConnectionBehavior` fully to
 `PalmBackendConfig`; collapse the include-guard-collision bridge
 (`conflictdialogbridge`, `palmruntimebridgeinstall`) that exists only
 to keep the two duplicate type families apart.
@@ -19,24 +21,60 @@ bridge is gone, and the WP-side conflict surface is one set of types,
 one handler implementation, one home for the Palm-specific session
 policy.
 
+### What is *not* a "migration" (despite the original framing)
+
+After investigation: the qsynccore directory mixes live conflict types
+with dead store/synccommon types. Specifically:
+
+- **Live (needs migration):** `ConflictRecord`, `RecordSnapshot`,
+  `ConflictPolicy`, `ConflictStore`, `ConflictHandler`,
+  `ConflictDecision`, `AutoResolveStrategy`, `PromptStrategy`,
+  `FallbackBehavior`. All 12 consumer files use one or more of these.
+- **Dead code (delete only, no migration):**
+  `WildPalms::Sync::BaselineStore` (`baselinestore.{h,cpp}` — JSON
+  hash store) and `QSyncCore::IdMappingStore` (`idmappingstore.{h,cpp}`
+  — JSON store). **Zero constructors anywhere in WP.** WP is already
+  fully on the SQLite-backed `Kalburator::Storage::BaselineStore` and
+  `Kalburator::Storage::IDMappingStore` via `src/sync/syncstate.cpp`
+  and `src/runtime/palmruntime.cpp`.
+- **Already migrated (delete only):** `IdMapping`, `SyncStats`,
+  `SyncResult`, `DataLossWarning`, `RecordId` in `synccommon.h`.
+  E.16's `src/core/synctypes.h` (namespace `Sync`) already owns these;
+  the qsynccore copies have zero remaining consumers.
+
+The original spec listed a `QSyncCore::BaselineStore` →
+`Kalburator::Storage::BaselineStore` sed and an `IdMappingStore` →
+`IDMappingStore` casing fix. Both are now removed: there's nothing to
+rename because nothing references the dead symbols.
+
+The two store designs are not interchangeable: WP's JSON
+`BaselineStore` stores hashes only; `Kalburator::Storage::BaselineStore`
+is SQLite-backed and stores full canonical records per mapping. A
+naïve sed between them would have been incorrect. Deleting the unused
+JSON copies as dead code is correct.
+
 ## Decision summary
 
 - **Scope: broad audit (option A.broad in brainstorm).** Includes the
-  type migration, the `ConnectionBehavior` relocation, the
-  `IdMappingStore` → `IDMappingStore` casing fix, and the bridge
-  collapse. All in one port; the conflict-system surface shrinks net.
+  conflict-type migration, the `ConnectionBehavior` relocation, the
+  bridge collapse, and dead-code cleanup of the unused
+  qsynccore stores/synccommon types. The conflict-system surface
+  shrinks net.
 - **Mechanic: big-bang in one commit (option A).** One landing does
-  the whole migration atomically. WP types are byte-identical to
-  upstream (the bridge proves this via `memcpy`), so the transition is
-  a naming change plus the bridge deletion, not a semantic migration.
-  The 74-ctest suite is the safety net. If a hunk causes unexpected
-  trouble in implementation we can split into 2–3 commits in the same
-  session, but the design target is one commit.
-- **`src/sync/syncstate.{cpp,h}` stays in place.** It's still live
-  code (mapping persistence) and is independent of the qsynccore
-  delete. Migrating its `QSyncCore::IdMapping` usage to
-  `Kalburator::Storage::IDMapping` is part of this port; relocating
-  the files is not.
+  the whole migration atomically. Conflict types are byte-identical to
+  upstream (the bridge proves this via `memcpy`), so the conflict-type
+  transition is a naming change. The store/synccommon files are
+  unused — deletion is risk-free. The 74-ctest suite is the safety
+  net. If a hunk causes unexpected trouble in implementation we can
+  split into 2–3 commits in the same session, but the design target is
+  one commit.
+- **`src/sync/syncstate.{cpp,h}` stays in place and stays untouched
+  by this port.** It already composes
+  `Kalburator::Storage::IDMappingStore` and `Kalburator::Storage::BaselineStore`
+  (the SQLite-backed stores). It does *not* reference `QSyncCore::*`
+  types — earlier rumours of an `IdMapping` migration there were
+  wrong; the symbols are dead in qsynccore and live (uppercase ID) in
+  `synctypes.h`.
 - **Zero libkalburator changes.** This port consumes the existing
   upstream surface (`Kalburator::Conflict::*`, `Kalburator::Storage::*`)
   and modifies only WP-local code. PlanStan is unaffected by
@@ -127,23 +165,28 @@ Apply across the 11 src consumer files + 1 test file:
 | `QSyncCore::AutoResolveStrategy`  | `Kalburator::Conflict::AutoResolveStrategy`|
 | `QSyncCore::PromptStrategy`       | `Kalburator::Conflict::PromptStrategy` |
 | `QSyncCore::FallbackBehavior`     | `Kalburator::Conflict::FallbackBehavior`|
-| `QSyncCore::BaselineStore`        | `Kalburator::Storage::BaselineStore`   |
-| `QSyncCore::IdMappingStore`       | `Kalburator::Storage::IDMappingStore`  |
-| `QSyncCore::IdMapping`            | `Kalburator::Storage::IDMapping`       |
-| `namespace QSyncCore { ... }`     | (remove forward decls; replace with `namespace Kalburator::Conflict` / `Storage` as appropriate) |
-| `#include "sync/qsynccore/...h"`  | (remove; upstream header is reachable via existing include paths) |
+| `namespace QSyncCore { ... }`     | (remove forward decls; replace with `namespace Kalburator::Conflict`) |
+| `using namespace QSyncCore;`      | `using namespace Kalburator::Conflict;` |
+| `#include "sync/qsynccore/...h"`  | (remove; upstream `conflictrecord.h` / `conflictpolicy.h` / `conflictstore.h` are reachable via existing include paths — same headers the bridge already includes) |
 
-The 12 consumer files are:
+Store-type renames are intentionally absent: the qsynccore stores
+(`BaselineStore`, `IdMappingStore`) are dead code. They live or die
+with the directory delete in Step 5, no consumer is touched.
+
+The 12 consumer files (all use only the conflict types above):
 
 - `src/app/conflict/conflictdialogbridge.{cpp,h}` — deleted entirely in Step 4
-- `src/app/conflictdialog.h`
+- `src/app/conflictdialog.{h,cpp}`
 - `src/app/conflict/kalburatorinteractiveconflicthandler.cpp`
 - `src/app/conflictreviewwidget.h`
 - `src/plugins/contacts/contactsconflicthandler.h`
 - `src/plugins/todos/todoconflicthandler.h`
-- `src/sync/syncstate.{cpp,h}`
 - `src/widgets/dialogs/conflictreviewdialog.{cpp,h}`
 - `tests/runtime/tst_palm_runtime_conflict_handler.cpp`
+
+Note: `src/sync/syncstate.{cpp,h}` was previously listed here in error
+— it already uses `Kalburator::Storage::*` for its stores and has no
+`QSyncCore::*` references to rename.
 
 ### Step 2 — `ConflictPolicy::connectionBehavior` references
 
@@ -206,18 +249,13 @@ The exact home of the install logic (a method on PalmRuntime vs free function in
 
 Update `src/CMakeLists.txt` to drop these from the source list (currently lines 43–52).
 
-### Step 6 — `syncstate.{cpp,h}`
+### Step 6 — `syncstate.{cpp,h}` left untouched
 
-`src/sync/syncstate.{cpp,h}` keeps its existing filenames and location, but its internal type references switch from `QSyncCore::IdMapping` to `Kalburator::Storage::IDMapping`. After this port, `src/sync/` contains only `syncstate.{cpp,h}` (plus `syncbackend.h`, which is a different concern).
-
-### Step 7 — `IdMappingStore` → `IDMappingStore` casing
-
-Upstream uses `IDMappingStore` (uppercase D); WP uses `IdMappingStore`. One additional sed across the same file set:
-
-- `IdMappingStore` → `IDMappingStore`
-- `IdMapping` (the struct in `synccommon.h`) → `IDMapping`
-
-This is the only code-level change beyond the namespace renames.
+`src/sync/syncstate.{cpp,h}` keeps its existing filenames, location, and
+contents. It already uses `Kalburator::Storage::*` for its stores and
+references no `QSyncCore::*` types. After this port, `src/sync/`
+contains `syncstate.{cpp,h}` and `syncbackend.h` (the latter is a
+separate concern, out of scope).
 
 ## `ConnectionBehavior` relocation in detail
 
@@ -269,8 +307,8 @@ The bridge exists *only* because both WP's `src/sync/qsynccore/` and libkalburat
 
 ### During implementation (per-step checks)
 
-- After Step 1 (namespace renames + casing fix): build must still succeed; WP ctest 74/74. The qsynccore/ directory still exists at this point; consumers just stopped using it.
-- After Step 4 (bridge deleted, dialog rewired, palmruntimebridgeinstall folded in): build must still succeed; WP ctest 74/74. Specifically re-run the conflict-related tests: `tst_palm_runtime_conflict_handler`, `tst_contactsconflicthandler`, `tst_calendarconflicthandler`, `tst_todoconflicthandler`.
+- After Step 1 (namespace renames in the 12 consumer files): WP ctest 74/74 expected to still pass; the qsynccore/ directory still exists and is unused by consumers.
+- After Step 4 (bridge deleted, dialog rewired, palmruntimebridgeinstall folded in): build must still succeed; WP ctest 74/74. Specifically re-run the conflict-related tests: `tst_palm_runtime_conflict_handler`, `tst_contactsconflicthandler`, `tst_calendarconflicthandler` (if it exists), `tst_todoconflicthandler`.
 - After Step 5 (`src/sync/qsynccore/` deleted + CMakeLists trimmed): build must still succeed; WP ctest 74/74.
 
 ### Final acceptance
@@ -288,7 +326,7 @@ spirit of the coordination policy.
 
 ### Risk-bounded fallback
 
-If any of (a) the `IdMappingStore` → `IDMappingStore` casing migration,
+If any of (a) the conflict-type sed,
 (b) the `ConnectionBehavior` wiring through `PalmBackendConfig`, or
 (c) the bridge collapse causes test failures we can't immediately diagnose,
 revert the offending hunk and split it into a follow-up commit. Approach A is
@@ -318,9 +356,6 @@ same session is still cleaner than per-consumer drip-feed.
 - `git ls-files src/app/conflict/palmruntimebridgeinstall.cpp` returns empty.
 - `grep -r 'QSyncCore::' src/ tests/` returns no matches (in tracked files,
   ignoring docs/archived/).
-- `grep -r 'IdMappingStore\|IdMapping\b' src/ tests/` returns no matches in
-  type-name contexts (the renames are complete; only `IDMappingStore` /
-  `IDMapping` should appear).
 - WP ctest 74/74. PlanStan ctest unchanged.
 - Phase-E spec's E.16 row deferral (a) marked ✅ in the row text.
 - Integration plan's E.16 paragraph reflects "src/sync/qsynccore/ deleted;
