@@ -7,6 +7,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 
+#include "../wildpalms_qtest_main.h"
 #include "fakecaldavserver.h"
 
 #include "runtime/palmruntime.h"
@@ -334,5 +335,5 @@ void TstRuntimeCalDavE2E::memory_calendar_observable_during_sync()
     QVERIFY(future.resultAt(0).success);
 }
 
-QTEST_GUILESS_MAIN(TstRuntimeCalDavE2E)
+WILDPALMS_QTEST_GUILESS_MAIN(TstRuntimeCalDavE2E)
 #include "tst_runtime_caldav_e2e.moc"

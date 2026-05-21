@@ -8,6 +8,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 
+#include "../wildpalms_qtest_main.h"
 #include "fakecarddavserver.h"
 
 #include "runtime/palmruntime.h"
@@ -204,5 +205,5 @@ void TstRuntimeCardDavE2E::carddav_to_palm_propagates()
     QVERIFY(!palmBlob->recordsIn(kPalmConId).isEmpty());
 }
 
-QTEST_GUILESS_MAIN(TstRuntimeCardDavE2E)
+WILDPALMS_QTEST_GUILESS_MAIN(TstRuntimeCardDavE2E)
 #include "tst_runtime_carddav_e2e.moc"

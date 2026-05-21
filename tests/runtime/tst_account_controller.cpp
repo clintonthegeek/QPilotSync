@@ -6,6 +6,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
+#include "../wildpalms_qtest_main.h"
+
 #include "runtime/accountcontroller.h"
 #include "runtime/palmruntime.h"
 #include "profile.h"
@@ -287,5 +289,5 @@ void TstAccountController::appendMappings_writes_and_persists()
     QCOMPARE(profile.syncMappingsJson().size(), 1);
 }
 
-QTEST_MAIN(TstAccountController)
+WILDPALMS_QTEST_MAIN(TstAccountController)
 #include "tst_account_controller.moc"
