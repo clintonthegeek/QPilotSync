@@ -1,802 +1,199 @@
 # Sync Engine Architecture
 
-A modular, extensible sync pipeline designed for:
-- 2-way sync (Palm ↔ Local files) now
-- 3-way sync (Palm ↔ Local ↔ Cloud) later
-- PlanStanLite backend compatibility
-- Third-party conduit plugins (Plucker, Documents2Go, etc.)
+**Status:** post-merger reality (2026-05-21).
+**Supersedes:** the pre-Phase-E `SyncSession` / `Conduit` model. That model is gone; the body of this document describes what actually runs today.
+
+WildPalms does not own a sync engine. The engine is `Kalburator::Engine::SyncEngine`, lives in libkalburator, and is shared with PlanStan. This document describes how the engine drives a sync end to end, what the contracts at each seam are, and what WildPalms-specific glue makes a Palm device look like an ordinary `SyncBackend` to it.
+
+For the plugin contract see `docs/PLUGIN_ABI.md`. For the application-level overview see `docs/ARCHITECTURE_2026.md`.
 
 ---
 
-## Conceptual Layers
+## The mental model in one paragraph
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    APPLICATION LAYER                            │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
-│  │ QPilotSync UI │  │ PlanStanLite  │  │ CLI Tools         │   │
-│  │ (standalone)  │  │ (integration) │  │ (scripts/cron)    │   │
-│  └───────┬───────┘  └───────┬───────┘  └─────────┬─────────┘   │
-└──────────┼──────────────────┼────────────────────┼─────────────┘
-           │                  │                    │
-           ▼                  ▼                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    BACKEND LAYER                                │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              SyncBackend (PlanStanLite interface)        │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │   │
-│  │  │ PalmBackend  │  │ LocalBackend │  │ CalDAVBackend│   │   │
-│  │  │              │  │ (.ics/.vcf)  │  │ (future)     │   │   │
-│  │  └──────┬───────┘  └──────────────┘  └──────────────┘   │   │
-│  └─────────┼───────────────────────────────────────────────┘   │
-└────────────┼───────────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    SYNC SESSION LAYER                           │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    SyncSession                           │   │
-│  │  - Orchestrates sync operations                          │   │
-│  │  - Manages conduit execution order                       │   │
-│  │  - Handles errors and rollback                           │   │
-│  │  - Reports progress                                      │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    CONDUIT LAYER                                │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
-│  │ Calendar   │ │ Contacts   │ │ Memos      │ │ ToDos      │   │
-│  │ Conduit    │ │ Conduit    │ │ Conduit    │ │ Conduit    │   │
-│  └─────┬──────┘ └─────┬──────┘ └─────┬──────┘ └─────┬──────┘   │
-│        │              │              │              │           │
-│  ┌─────┴──────────────┴──────────────┴──────────────┴─────┐    │
-│  │                  Plugin Conduits                        │    │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐              │    │
-│  │  │ Plucker  │  │ Docs2Go  │  │ Custom   │  ...         │    │
-│  │  │ Conduit  │  │ Conduit  │  │ Conduit  │              │    │
-│  │  └──────────┘  └──────────┘  └──────────┘              │    │
-│  └────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    MAPPER LAYER                                 │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
-│  │ Calendar   │ │ Contact    │ │ Memo       │ │ ToDo       │   │
-│  │ Mapper     │ │ Mapper     │ │ Mapper     │ │ Mapper     │   │
-│  │ Palm↔iCal  │ │ Palm↔vCard │ │ Palm↔MD    │ │ Palm↔iCal  │   │
-│  └────────────┘ └────────────┘ └────────────┘ └────────────┘   │
-│                                                                 │
-│  Returns MapperResult<T> with data + warnings                   │
-└─────────────────────────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    STORAGE LAYER                                │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    StorageManager                        │   │
-│  │                                                          │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │   │
-│  │  │ LocalStore   │  │ BaselineStore│  │ IdMapper     │   │   │
-│  │  │ (working     │  │ (last sync   │  │ (Palm↔UID    │   │   │
-│  │  │  copy)       │  │  state)      │  │  mappings)   │   │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────┘   │   │
-│  │                                                          │   │
-│  │  ┌──────────────────────────────────────────────────┐   │   │
-│  │  │              GitStateManager                      │   │   │
-│  │  │  - Commits after each sync                        │   │   │
-│  │  │  - Enables history/rollback                       │   │   │
-│  │  │  - Provides 3-way merge baseline                  │   │   │
-│  │  └──────────────────────────────────────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    DEVICE LAYER                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    KPilotLink                            │   │
-│  │  ┌──────────────────┐  ┌──────────────────┐             │   │
-│  │  │ KPilotDeviceLink │  │ KPilotLocalLink  │             │   │
-│  │  │ (real hardware)  │  │ (test/mock)      │             │   │
-│  │  └────────┬─────────┘  └──────────────────┘             │   │
-│  └───────────┼─────────────────────────────────────────────┘   │
-└──────────────┼─────────────────────────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    PILOT-LINK LIBRARY                           │
-│  - DLP protocol                                                 │
-│  - USB/Serial I/O                                               │
-│  - Pack/Unpack functions                                        │
-└─────────────────────────────────────────────────────────────────┘
-```
+A **mapping** wires two **backends** together. Each backend is a `Kalburator::Sync::SyncBackend` — an abstract handle to a record collection that supports `loadRecords()`, `pushItems()`, `updateItem()`, and `deleteRecord()`. The engine takes a mapping, asks both sides for their records, consults a per-mapping **baseline** to figure out what changed since the last sync, applies an optional **conflict policy** when both sides changed the same record, and writes the merged result back to both backends — updating the baseline as it goes. The engine does not know that one side is a Palm device any more than it knows that the other side might be a CalDAV server: both sides are just `SyncBackend`s.
 
 ---
 
-## Core Interfaces
-
-### 1. SyncBackend (PlanStanLite Compatibility)
-
-This is the interface PlanStanLite uses for backends. Our `PalmBackend` implements this.
+## The engine's surface (libkalburator)
 
 ```cpp
-class SyncBackend : public QObject {
-    Q_OBJECT
+namespace Kalburator::Engine {
+
+class SyncEngine {
 public:
-    virtual QString backendId() const = 0;
-    virtual QString displayName() const = 0;
-    virtual bool isOnline() const = 0;
+    // Run sync for a single mapping. ExecutionOverride lets the caller
+    // pin direction (mirror A→B, mirror B→A) or behaviour (force-first-sync).
+    QFuture<Kalburator::Sync::SyncResult>
+        runSyncFuture(const QString &mappingId,
+                      const Kalburator::Sync::ExecutionOverride &ov = {});
 
-    // Collection discovery
-    virtual QList<CollectionInfo> availableCollections() = 0;
-
-    // Item operations
-    virtual void loadItems(const QString &collectionId) = 0;
-    virtual void storeItem(const QString &collectionId,
-                          const PimItem &item) = 0;
-    virtual void deleteItem(const QString &collectionId,
-                           const QString &itemUid) = 0;
-
-    // Sync
-    virtual void startSync(const QString &collectionId,
-                          const SyncPlan &plan) = 0;
-
-signals:
-    void itemLoaded(const QString &collectionId, const PimItem &item);
-    void syncProgress(const QString &message, int percentage);
-    void syncCompleted(const SyncReport &report);
-    void error(const QString &message);
+    void onCancelObserved();   // called by a QFutureWatcher::canceled
 };
 
-// Palm implementation
-class PalmBackend : public SyncBackend {
+} // namespace Kalburator::Engine
+```
+
+`runSyncFuture` returns a `QFuture` whose continuation fires when the sync finishes (or is cancelled). The future resolves to a `SyncResult` containing per-side stats (`created`, `updated`, `deleted`, `unchanged`) and a success flag.
+
+The engine internally dispatches to one of two paths:
+
+- **Blob path** — `BlobSyncEngine::twoWayWithBaseline`. The hot path for "regular" sync. Both sides are `IBlobBackend`s; the engine compares record blobs against the baseline and decides per record whether to write.
+- **First-sync / mirror path** — `dispatchFirstSync` or the mirror overrides. No baseline; one side is treated as authoritative.
+
+WildPalms always uses the blob path for HotSync / FullSync / CopyPalmToPC / CopyPCToPalm (FullSync clears the baseline first to force first-sync semantics; the mirror modes set `ExecutionOverride::Direction`). Backup and Restore bypass the engine entirely — they are raw device byte transfers.
+
+---
+
+## What a `SyncBackend` must do
+
+```cpp
+namespace Kalburator::Sync {
+
+class SyncBackend {
 public:
-    // Collections map to Palm databases
-    // "palm:DatebookDB" → Calendar
-    // "palm:AddressDB" → Contacts
-    // "palm:MemoDB" → Memos
-    // "palm:ToDoDB" → Tasks
+    virtual ~SyncBackend() = default;
 
-    QList<CollectionInfo> availableCollections() override {
-        return {
-            {"palm:DatebookDB", "Palm Calendar", CollectionType::Calendar},
-            {"palm:AddressDB", "Palm Contacts", CollectionType::Contacts},
-            {"palm:MemoDB", "Palm Memos", CollectionType::Notes},
-            {"palm:ToDoDB", "Palm Tasks", CollectionType::Tasks}
-        };
-    }
+    virtual QList<CollectionInfo> availableCollections() const = 0;
+    virtual Shape::Shape shapeFor(const QString &collectionId) const = 0;
 
-private:
-    KPilotLink *m_link;
-    QMap<QString, Conduit*> m_conduits;
-    StorageManager *m_storage;
+    virtual QFuture<LoadResult> loadRecords(const QString &collectionId) = 0;
+
+    virtual QFuture<PushResult> pushItems(const QString &collectionId,
+                                          const QList<BackendRecord> &items,
+                                          const TranscodingPlan &plan) = 0;
+    virtual QFuture<UpdateResult> updateItem(const QString &collectionId,
+                                             const BackendRecord &item,
+                                             const TranscodingPlan &plan) = 0;
+    virtual QFuture<DeleteResult> deleteRecord(const QString &collectionId,
+                                                const QString &recordId) = 0;
 };
+
+} // namespace Kalburator::Sync
 ```
 
-### 2. Conduit Interface
+The exact signature lives in libkalburator's `src/sync/syncbackend.h`. The key thing for WildPalms is that **`PalmBackend` is just an implementation of this interface** — once it returns blobs that the engine knows how to compare, the engine treats it identically to a CalDAV backend or a local file backend.
 
-Conduits are the workhorses - they know how to sync a specific database type.
+`PalmBackend` (`src/palm/sync/palmbackend.{h,cpp}`) wraps an `IPalmDatabaseAccess`. Each Palm database is exposed as one `CollectionInfo`; `loadRecords()` translates `dlp_ReadRecordByIndex` results into `BackendRecord`s. As of E.16's deferral (c), `loadPalmRecords` caches its result per DB across the lifetime of a sync, so multi-collection plugins (Calendar, ToDo) don't re-read the same Palm DB N times.
 
-```cpp
-class Conduit : public QObject {
-    Q_OBJECT
-public:
-    // Identity
-    virtual QString conduitId() const = 0;        // "calendar"
-    virtual QString displayName() const = 0;      // "Calendar Sync"
-    virtual QStringList palmDatabaseNames() const = 0; // {"DatebookDB"} — per-database iteration
-    virtual QString localFileExtension() const = 0; // ".ics"
-
-    // Capabilities
-    virtual bool supportsRead() const { return true; }
-    virtual bool supportsWrite() const { return true; }
-    virtual bool supportsCategories() const { return true; }
-
-    // Configuration
-    virtual QWidget* createConfigWidget(QWidget *parent) { return nullptr; }
-    virtual void loadConfig(const QJsonObject &config) {}
-    virtual QJsonObject saveConfig() const { return {}; }
-
-    // The main sync entry point
-    virtual SyncResult sync(SyncContext *context) = 0;
-
-signals:
-    void progress(const QString &message, int percent);
-    void recordProcessed(const QString &recordId, RecordAction action);
-    void conflictDetected(const SyncConflict &conflict);
-    void warning(const DataLossWarning &warning);
-};
-
-// Context passed to conduit during sync
-struct SyncContext {
-    KPilotLink *deviceLink;       // Palm device connection
-    LocalStore *localStore;       // Working copy storage
-    BaselineStore *baselineStore; // Last sync state
-    IdMapper *idMapper;           // Palm ID ↔ UID mappings
-    CategoryMapper *categories;   // Category name ↔ index
-    SyncMode mode;                // HotSync, Backup, etc.
-    SyncPolicy policy;            // Conflict resolution rules
-    MappingPolicy mappingPolicy;  // Data loss handling rules
-};
-
-enum class SyncMode {
-    HotSync,        // Bidirectional merge (default)
-    FastSync,       // Only sync modified records
-    PalmOverwrite,  // Palm → Local (destructive)
-    LocalOverwrite, // Local → Palm (destructive)
-    Backup,         // Palm → Local (no Palm writes)
-    Restore         // Local → Palm (no merge)
-};
-```
-
-### 3. Storage Manager
-
-Manages the local file storage with git integration.
-
-```cpp
-class StorageManager : public QObject {
-    Q_OBJECT
-public:
-    StorageManager(const QString &userPath);
-
-    // Store access
-    LocalStore* localStore(const QString &conduitId);
-    BaselineStore* baselineStore(const QString &conduitId);
-    IdMapper* idMapper(const QString &conduitId);
-
-    // Git operations
-    void beginSync();                    // Commit current state, create checkpoint
-    void commitSync(const QString &msg); // Commit after successful sync
-    void rollbackSync();                 // Revert to checkpoint on failure
-
-    // History
-    QList<SyncHistoryEntry> history(int limit = 50);
-    void revertToSync(const QString &commitId);
-
-private:
-    QString m_userPath;
-    GitStateManager *m_git;
-    QMap<QString, LocalStore*> m_localStores;
-    QMap<QString, BaselineStore*> m_baselineStores;
-    QMap<QString, IdMapper*> m_idMappers;
-};
-```
-
-### 4. Sync Session
-
-Orchestrates a complete sync operation.
-
-```cpp
-class SyncSession : public QObject {
-    Q_OBJECT
-public:
-    SyncSession(KPilotLink *link, StorageManager *storage);
-
-    void addConduit(Conduit *conduit);
-    void setMode(SyncMode mode);
-    void setPolicy(SyncPolicy policy);
-
-    // Run the sync
-    void start();
-    void cancel();
-
-signals:
-    void started();
-    void conduitStarted(const QString &conduitId);
-    void conduitFinished(const QString &conduitId, const SyncResult &result);
-    void progress(const QString &message, int overallPercent);
-    void conflictNeedsResolution(const SyncConflict &conflict);
-    void finished(const SyncSessionReport &report);
-    void error(const QString &message);
-
-public slots:
-    void resolveConflict(const QString &conflictId, ConflictResolution resolution);
-
-private:
-    void runNextConduit();
-    void onConduitFinished(const SyncResult &result);
-
-    KPilotLink *m_link;
-    StorageManager *m_storage;
-    QList<Conduit*> m_conduits;
-    int m_currentConduit;
-    SyncMode m_mode;
-    SyncPolicy m_policy;
-};
-```
+The `Shape` returned by `shapeFor(collectionId)` tells the engine what *kind* of record this collection holds (calendar, contacts, memo, todo, blob, ...). Mismatched shapes across a mapping abort the sync with `dispatchSync` returning "cross-domain mappings not supported". The shape system lives in libkalburator and is registered by the stock plugins (see `Kalburator::registerStockPlugins`).
 
 ---
 
-## Directory Structure
+## The two storage layers in WildPalms
 
-```
-~/.qpilotsync/
-├── config.json                     # Global configuration
-├── users/
-│   └── {username}/                 # Per-Palm-user directory
-│       ├── .git/                   # Git repository for this user
-│       ├── device_info.json        # Palm device metadata
-│       │
-│       ├── local/                  # Working copy (editable)
-│       │   ├── calendar/
-│       │   │   ├── meeting.ics
-│       │   │   └── birthday.ics
-│       │   ├── contacts/
-│       │   │   ├── john_smith.vcf
-│       │   │   └── jane_doe.vcf
-│       │   ├── memos/
-│       │   │   └── shopping_list.md
-│       │   └── todos/
-│       │       └── buy_groceries.ics
-│       │
-│       ├── baseline/               # Last sync snapshot
-│       │   ├── calendar/
-│       │   ├── contacts/
-│       │   ├── memos/
-│       │   └── todos/
-│       │
-│       ├── palm_cache/             # Raw Palm database cache
-│       │   ├── DatebookDB.pdb
-│       │   ├── AddressDB.pdb
-│       │   ├── MemoDB.pdb
-│       │   └── ToDoDB.pdb
-│       │
-│       └── mappings/               # ID mapping tables
-│           ├── calendar.json
-│           ├── contacts.json
-│           ├── memos.json
-│           └── todos.json
-│
-└── plugins/                        # Third-party conduit plugins
-    ├── plucker-conduit.so
-    └── docs2go-conduit.so
-```
+The engine reads and writes two stores during a sync. **Both are present in WildPalms, for different reasons:**
+
+### 1. `Kalburator::Storage::BaselineStore` (SQLite) — primary
+
+Location: `<profile>/.state/baselines.sqlite`, table `blob_baselines_v3`, primary key `(mapping_id, record_id)`.
+
+Populated and consulted by `BlobSyncEngine::twoWayWithBaseline` on every record. This is the engine's authoritative record of "what did each side look like the last time they were in sync?" — used to detect mid-sync changes and to drive conflict detection.
+
+A `FullSync` clears all rows for a mapping (`clearMappingV3(mapping.id)`) before kicking off the engine, which makes the engine behave as if it has never seen these records before. That is the only difference between FullSync and HotSync at the engine layer.
+
+### 2. WildPalms-local JSON `BaselineStore` + `IDMappingStore` — legacy, narrow purpose
+
+Location: `<profile>/.state/<username>/<plugin>/{mappings.json, baseline.json}`. Code lives in `src/sync/journal/` under namespace `WildPalms::Sync`. Header guard prefix `WILDPALMS_JOURNAL_*`.
+
+This is **not** the engine baseline. It is used by `SyncState::pendingConflictCount()` (and a handful of related read paths in `KF6MainWindow`) to surface "you have N deferred conflicts to review" in the UI for legacy per-conduit conflict tracking. The hot sync path does not touch these files.
+
+The duplication exists because the deferred-conflict counter predates Phase E and the JSON file format is part of the user's on-disk profile. Migrating it to SQLite is a future cleanup; until then, both stores live side by side. See the conflict-handler port plan (`docs/superpowers/plans/2026-05-21-conflict-handler-port.md`) for the migration that put them in their current shape.
 
 ---
 
-## Sync Flow
+## Conflict handling
 
-### Phase 1: Preparation
+The engine emits a `conflictDetected` signal whenever both sides changed the same record between syncs (relative to the baseline). The signal carries a `Kalburator::Conflict::ConflictRecord` describing the source side, the target side, and the baseline state.
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ 1. PREPARATION                                                  │
-├────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────┐                                           │
-│  │ Connect Device  │ ← KPilotDeviceLink.openConnection()       │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Read User Info  │ ← Identify Palm user                      │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Begin Sync      │ ← dlp_OpenConduit(), lock device          │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Git Checkpoint  │ ← Commit current local state              │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Load Conduits   │ ← Based on config + discovered DBs        │
-│  └─────────────────┘                                           │
-│                                                                 │
-└────────────────────────────────────────────────────────────────┘
-```
+WildPalms's GUI handler is `KalburatorInteractiveConflictHandler` (`src/app/conflict/`). On a conflict it constructs a modal `ConflictDialog` (`src/app/conflictdialog.{h,cpp}`) on the GUI thread and pauses the engine's worker thread on a `QEventLoop` until the user decides. The dialog returns a `ConflictDecision`; the handler forwards that into the engine via libkalburator's keep-alive callback channel. `KF6MainWindow::onPalmConflictHandlerKeepAlive()` keeps the device alive while the user thinks (the tickle worker would otherwise drop the connection).
 
-### Phase 2: Per-Conduit Sync
+Per-plugin conflict **overlays** (e.g. `CalendarConflictHandler`, `ContactsConflictHandler`) extend the base behaviour with domain-specific merge offerings — "merge both sides", "take A's title but B's attendee list", etc. They are constructed by their owning plugin's `createConflictHandler()` factory and chained in front of the application-level handler.
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ 2. PER-CONDUIT SYNC (repeated for each conduit)                │
-├────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────┐                                           │
-│  │ Open Palm DB    │ ← dlp_OpenDB(dbName, read-write)          │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Read Categories │ ← Parse AppInfo block                     │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    GATHER STATE                          │   │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐            │   │
-│  │  │Palm State │  │Local State│  │Baseline   │            │   │
-│  │  │(device)   │  │(files)    │  │(last sync)│            │   │
-│  │  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘            │   │
-│  └────────┼──────────────┼──────────────┼──────────────────┘   │
-│           │              │              │                       │
-│           └──────────────┼──────────────┘                       │
-│                          ▼                                      │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                 COMPUTE CHANGES                          │   │
-│  │                                                          │   │
-│  │  For each record ID in (Palm ∪ Local ∪ Baseline):       │   │
-│  │                                                          │   │
-│  │  ┌─────────────────────────────────────────────────┐    │   │
-│  │  │ inPalm  │ inLocal │ inBase │ Action              │    │   │
-│  │  ├─────────┼─────────┼────────┼─────────────────────┤    │   │
-│  │  │   ✓     │    ✓    │   ✓    │ Check modifications │    │   │
-│  │  │   ✓     │    ✓    │   ✗    │ Created both → CONF │    │   │
-│  │  │   ✓     │    ✗    │   ✓    │ Local deleted       │    │   │
-│  │  │   ✗     │    ✓    │   ✓    │ Palm deleted        │    │   │
-│  │  │   ✓     │    ✗    │   ✗    │ Palm created        │    │   │
-│  │  │   ✗     │    ✓    │   ✗    │ Local created       │    │   │
-│  │  │   ✗     │    ✗    │   ✓    │ Both deleted        │    │   │
-│  │  └─────────────────────────────────────────────────┘    │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                          ▼                                      │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                 RESOLVE CONFLICTS                        │   │
-│  │                                                          │   │
-│  │  For each conflict:                                      │   │
-│  │    - Apply policy (auto-resolve if configured)           │   │
-│  │    - Or emit signal for UI to prompt user                │   │
-│  │    - Options: KeepPalm, KeepLocal, KeepBoth, Skip        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                          ▼                                      │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                 APPLY CHANGES                            │   │
-│  │                                                          │   │
-│  │  ┌────────────────────┐  ┌────────────────────┐         │   │
-│  │  │ Apply to Palm      │  │ Apply to Local     │         │   │
-│  │  │ - writeRecord()    │  │ - Write .ics/.vcf  │         │   │
-│  │  │ - deleteRecord()   │  │ - Delete files     │         │   │
-│  │  └────────────────────┘  └────────────────────┘         │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                          ▼                                      │
-│  ┌─────────────────┐                                           │
-│  │ Close Palm DB   │                                           │
-│  └─────────────────┘                                           │
-│                                                                 │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### Phase 3: Finalization
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│ 3. FINALIZATION                                                 │
-├────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────┐                                           │
-│  │ Update Baseline │ ← Copy local → baseline                   │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Update ID Maps  │ ← Save new Palm↔UID mappings              │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Git Commit      │ ← "Sync 2026-01-07 15:30"                 │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ End Sync        │ ← dlp_EndOfSync(), unlock device          │
-│  └────────┬────────┘                                           │
-│           ▼                                                     │
-│  ┌─────────────────┐                                           │
-│  │ Generate Report │ ← Summary of all changes                  │
-│  └─────────────────┘                                           │
-│                                                                 │
-└────────────────────────────────────────────────────────────────┘
-```
+The `AskUser` conflict policy is the only one that emits the signal; other policies (`SourceWins`, `TargetWins`, `Newest`, `Defer`) resolve silently inside the engine.
 
 ---
 
-## Per-Database Conduit Iteration
-
-Multi-database conduits (conduits that claim multiple Palm databases via
-`palmDatabaseNames()`) are synced using a per-database iteration pattern.
-
-### Flow
-
-When `syncConduit()` is called for a multi-database conduit:
-
-1. Read the conduit's `palmDatabaseNames()` — array order is sync order
-2. For each entry, expand globs against the Palm's cached database list
-3. For each resolved database name, call `sync(context)` with:
-   - `context->palmDatabase` = the specific database name
-   - `context->state` = per-database SyncState (keyed by `conduitId/databaseName`)
-   - `context->collectionId` = `conduitId/databaseName`
-   - `context->activeDatabases` = full list of resolved databases
+## End-to-end: what happens when the user clicks HotSync
 
 ```
-syncConduit("shadowplan")
-  → sync(context)  // context.palmDatabase = "ShadTags"
-  → sync(context)  // context.palmDatabase = "ShadViews"
-  → sync(context)  // context.palmDatabase = "ShadFilters"
-  → sync(context)  // context.palmDatabase = "ShadCat"
-  → sync(context)  // context.palmDatabase = "ShadP-Personal"
-  → sync(context)  // context.palmDatabase = "ShadP-Work"
+KF6MainWindow::onHotSync()
+    └─ PalmRuntime::hotSync()                         (GUI thread)
+         ├─ emit runStarted("HotSync")
+         ├─ for each enabled mapping m:
+         │     enqueue ids.append(m.id)
+         ├─ PalmDeviceAccess::pauseTickle()           (link thread)
+         ├─ futures = []
+         ├─ for each id in ids:
+         │     futures += m_engine->runSyncFuture(id) (engine worker thread)
+         ├─ install QFutureWatcher<void> for cancellation
+         └─ on all futures finished:
+              ├─ aggregate per-plugin stats from each SyncResult
+              ├─ PalmDeviceAccess::resumeTickle()
+              └─ emit runFinished(PalmRunResult)
+
+Inside SyncEngine::runSyncFuture(mappingId):
+    └─ Engine looks up the mapping in its registry → (source, target).
+    └─ For both source and target:
+         backend = m_registry->backendInstance(<id>)
+         loadRecords(collection) → QFuture<LoadResult>
+    └─ Await both loads.
+    └─ For each record id seen on either side:
+         baseline = baselineStore.lookup(mapping, recordId)
+         decide action (create / update / delete / conflict / unchanged)
+         if conflict and policy == AskUser:
+             emit conflictDetected → KalburatorInteractiveConflictHandler
+             (worker thread blocks on QEventLoop until user clicks)
+    └─ Apply writes via pushItems / updateItem / deleteRecord.
+    └─ Update baseline rows.
+    └─ Return SyncResult to the original QFuture.
 ```
 
-### Database List Discovery
+The hot path is asynchronous all the way through. The GUI thread never blocks; the link thread is paused only when the engine is about to issue DLP calls; the engine worker thread blocks only when the user is reviewing a conflict.
 
-`KPilotDeviceLink::listDatabases()` is called once at the start of
-`syncAll()`/`syncAllOrdered()`, before the conduit loop. The result is
-cached as `m_palmDatabaseList` for the duration of the sync session.
-
-### Glob Expansion
-
-Database claims containing `*` or `?` are expanded against the cached
-database list using `QRegularExpression::wildcardToRegularExpression()`.
-Literal names are checked for membership. Databases not found on the
-device are skipped with a log message.
-
-### Per-Database SyncState
-
-`stateForConduit(conduitId, databaseName)` uses a composite key
-`conduitId/databaseName`. This creates isolated state directories:
-
-```
-baseDir/userName/memos/MemoDB/       — single-database conduit
-baseDir/userName/shadowplan/ShadTags/  — multi-database conduit
-baseDir/userName/shadowplan/ShadP-Personal/
-```
-
-### Error Handling
-
-Per-database failures are logged and the engine continues with remaining
-databases. Cancellation (user-initiated) stops immediately.
-
-### Record Conversion Methods
-
-Three methods carry a `const SyncContext*` parameter:
-- `recordsEqual(PilotRecord*, BackendRecord*, const SyncContext*)`
-- `palmRecordDescription(PilotRecord*, const SyncContext*)`
-- `findMatch(PilotRecord*, const QList<BackendRecord*>&, const SyncContext*)`
-
-Multi-database conduits use `context->palmDatabase` to dispatch to the
-correct codec. Single-database conduits ignore the parameter.
+`copyPalmToPC` / `copyPCToPalm` follow the same shape but set `ExecutionOverride::Direction = MirrorAToB` (or `MirrorBToA`), which the engine treats as "the source is authoritative, write whatever it says".
 
 ---
 
-## ID Mapping
+## Cancellation
 
-A critical piece for bidirectional sync. Palm uses 32-bit integer record IDs assigned by the device. External formats use string UIDs (usually UUIDs).
+The contract:
 
-```cpp
-class IdMapper {
-public:
-    struct Mapping {
-        int palmRecordId;
-        QString externalUid;
-        QDateTime created;
-        QDateTime lastSynced;
-    };
+1. Caller invokes `QFuture::cancel()` on the future returned by `PalmRuntime::hotSync()` (or any other sync mode).
+2. The future watcher relays `canceled` into `SyncEngine::onCancelObserved`.
+3. The engine sets an atomic flag observed by `SyncEngineWorker`. Any nested `QEventLoop::exec` (the conflict-pause loop, the various `await<Op>` helpers) wakes via the cancellation channel.
+4. In-flight backend operations complete; the engine returns a `SyncResult` with `success == false` and `errorMessage == "cancelled"`.
 
-    // Lookup
-    std::optional<QString> externalUid(int palmRecordId);
-    std::optional<int> palmRecordId(const QString &externalUid);
+`SyncEngine::runSyncFuture` is safe to call again after a cancellation; the engine resets its state at the start of each call.
 
-    // Registration
-    void registerMapping(int palmId, const QString &externalUid);
-    void removeByPalmId(int palmId);
-    void removeByExternalUid(const QString &externalUid);
+Two related Qt6 quirks documented in upstream FINDINGS:
 
-    // Bulk operations
-    QList<Mapping> allMappings();
-    void clear();
+- `QFuture::waitForFinished()` does **not** spin the test event loop. Use `QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 30000)`.
+- `QFuture::results()` returns an empty list after `cancel()`. Read results via `future.resultAt(0)` if you need them.
 
-    // Persistence
-    void save(const QString &path);
-    void load(const QString &path);
-};
-```
-
-**ID Mapping JSON:**
-```json
-{
-  "conduit": "calendar",
-  "mappings": [
-    {
-      "palm_id": 12345678,
-      "external_uid": "palm-datebook-12345678",
-      "created": "2026-01-05T10:00:00Z",
-      "last_synced": "2026-01-07T15:30:00Z"
-    }
-  ]
-}
-```
+The `kSyncTimeoutMs` constant inside libkalburator is bumped to 30 s (was 5 s) to absorb real-device sync times.
 
 ---
 
-## Conduit Plugin System
+## Test seams
 
-For third-party conduits (Plucker, Documents2Go, etc.):
+WildPalms tests do not exercise the engine via a real device. They use the same harness shape as libkalburator's calendar-layer integration tests:
 
-```cpp
-// Plugin interface
-class ConduitPlugin {
-public:
-    virtual ~ConduitPlugin() = default;
+- **Source side:** the plugin's own `*BlobBackend` constructed with a `MockPalmDatabaseAccess` (`src/palm/sync/mockpalmdatabaseaccess.{h,cpp}`) seeded with `PalmRecord`s.
+- **Target side:** `Kalburator::Sinks::MockBlobBackend` (in libkalburator), which keeps records in memory and accepts any shape.
+- **Baseline:** an in-memory `BlobBaselineStore` constructed against `:memory:` SQLite.
+- **Engine:** real `Kalburator::Engine::SyncEngine` against the two backends and the in-memory baseline.
 
-    // Plugin metadata
-    virtual QString pluginId() const = 0;
-    virtual QString pluginName() const = 0;
-    virtual QString pluginVersion() const = 0;
-    virtual QString pluginAuthor() const = 0;
-    virtual QIcon pluginIcon() const = 0;
+Per-plugin e2e tests live under `tests/plugins/<plugin>/tst_<plugin>_v2.cpp` and follow this pattern. Tests that need a `MainWindow` use `WILDPALMS_QTEST_MAIN` / `WILDPALMS_QTEST_GUILESS_MAIN` to avoid the `__cxa_finalize` exit crash.
 
-    // Factory
-    virtual Conduit* createConduit() = 0;
-
-    // Plugin lifecycle
-    virtual void initialize() {}
-    virtual void shutdown() {}
-};
-
-#define QPILOTSYNC_CONDUIT_PLUGIN_IID "org.qpilotsync.ConduitPlugin/1.0"
-Q_DECLARE_INTERFACE(ConduitPlugin, QPILOTSYNC_CONDUIT_PLUGIN_IID)
-```
-
-**Example plugin implementation:**
-```cpp
-class PluckerConduitPlugin : public QObject, public ConduitPlugin {
-    Q_OBJECT
-    Q_PLUGIN_METADATA(IID QPILOTSYNC_CONDUIT_PLUGIN_IID)
-    Q_INTERFACES(ConduitPlugin)
-
-public:
-    QString pluginId() const override { return "plucker"; }
-    QString pluginName() const override { return "Plucker E-Book Sync"; }
-    QString pluginVersion() const override { return "1.0.0"; }
-    QString pluginAuthor() const override { return "Community"; }
-
-    Conduit* createConduit() override {
-        return new PluckerConduit();
-    }
-};
-```
+There is no automated integration suite against a POSE64 emulator — Phase E.18 cancelled that ambition because POSE64's DLP timing is too unstable. Real-device verification is manual, against a Palm m505 or similar hardware.
 
 ---
 
-## Conflict Resolution
+## See also
 
-```cpp
-struct SyncConflict {
-    QString recordId;
-    QString palmUid;
-    QString externalUid;
-
-    QByteArray palmVersion;       // Binary Palm data
-    QByteArray localVersion;      // Binary Palm data
-    QByteArray baselineVersion;   // Binary Palm data (if 3-way)
-
-    QString palmSummary;          // Human-readable Palm version
-    QString localSummary;         // Human-readable local version
-    QDateTime palmModified;
-    QDateTime localModified;
-
-    enum Type {
-        ModifiedBoth,     // Both sides changed
-        CreatedBoth,      // New on both sides (different content)
-        DeletedVsModified // One deleted, other modified
-    } type;
-};
-
-enum class ConflictResolution {
-    KeepPalm,         // Use Palm version, overwrite local
-    KeepLocal,        // Use local version, overwrite Palm
-    KeepBoth,         // Create duplicate records
-    Merge,            // Attempt field-level merge (if supported)
-    Skip              // Don't sync this record
-};
-
-struct SyncPolicy {
-    // Default resolution when not prompting user
-    ConflictResolution defaultResolution = ConflictResolution::KeepBoth;
-
-    // When to prompt user
-    bool promptOnModifiedBoth = true;
-    bool promptOnCreatedBoth = true;
-    bool promptOnDeletedVsModified = true;
-
-    // Global overrides
-    bool alwaysPreferPalm = false;
-    bool alwaysPreferLocal = false;
-};
-```
-
----
-
-## PlanStanLite Integration Path
-
-To use `PalmBackend` in PlanStanLite:
-
-1. **Shared Library**: Build `libqpilotcore.so` with all non-UI sync code
-2. **Backend Registration**: Register `PalmBackend` as a backend type
-3. **Collection Mapping**: Map Palm databases to PlanStanLite collections
-4. **Event Translation**: Use existing mappers (iCal ↔ Palm)
-
-```cpp
-// In PlanStanLite
-void registerPalmBackend() {
-    BackendFactory::registerBackend("palm", []() {
-        return new PalmBackend();
-    });
-}
-
-// Configuration
-{
-  "backends": [
-    {
-      "type": "palm",
-      "id": "palm-pilot-clinton",
-      "device": "/dev/ttyUSB0",
-      "collections": [
-        {"palm_db": "DatebookDB", "as": "calendar"},
-        {"palm_db": "ToDoDB", "as": "tasks"}
-      ]
-    }
-  ]
-}
-```
-
----
-
-## Future Extensions
-
-### Cloud Integration (Phase 4+)
-
-```
-                    ┌──────────────┐
-                    │ CalDAV       │
-                    │ Backend      │
-                    └──────┬───────┘
-                           │
-┌──────────────┐    ┌──────┴───────┐    ┌──────────────┐
-│ Palm         │◄──►│ Sync Engine  │◄──►│ Local        │
-│ Backend      │    │ (3-way merge)│    │ Backend      │
-└──────────────┘    └──────┬───────┘    └──────────────┘
-                           │
-                    ┌──────┴───────┐
-                    │ Google Cal   │
-                    │ Backend      │
-                    └──────────────┘
-```
-
-The architecture supports adding more backends. The sync engine becomes a hub that can merge changes from multiple sources.
-
-### Real-Time Sync (if hardware permits)
-
-Some later Palm devices support network sync. Could add:
-- WebDAV-like sync server
-- Bluetooth background sync
-- WiFi sync for Palm TX, etc.
-
----
-
-## Summary
-
-| Component | Responsibility |
-|-----------|---------------|
-| **SyncBackend** | PlanStanLite-compatible interface |
-| **PalmBackend** | Wraps conduits, exposes Palm as backend |
-| **SyncSession** | Orchestrates full sync operation |
-| **Conduit** | Syncs one database type (pluggable) |
-| **Mapper** | Converts Palm ↔ standard formats |
-| **StorageManager** | Manages local/baseline/git storage |
-| **IdMapper** | Palm record ID ↔ external UID |
-| **KPilotLink** | Device communication abstraction |
-
-This architecture provides:
-- **Modularity**: Each conduit is independent
-- **Extensibility**: Plugin system for third-party conduits
-- **Testability**: Mock device link for CI/CD
-- **Compatibility**: SyncBackend interface for PlanStanLite
-- **Reliability**: Git-backed state for rollback/history
-- **Scalability**: Ready for 3-way sync with cloud backends
-
----
-
-**Document Version**: 1.0
-**Last Updated**: 2026-01-07
-**Status**: Design (Pre-Implementation)
+- libkalburator's `src/engine/syncengine.{h,cpp}` and `src/blob/blobsyncengine.{h,cpp}` for the engine implementation.
+- libkalburator's `docs/phase0/04l-phase-d0-test-harness-design.md` for the engine-level test harness, including the QTRY / `resultAt` gotchas.
+- `docs/PLUGIN_ABI.md` for what plugins must provide to participate in a sync.
+- `docs/ARCHITECTURE_2026.md` for the surrounding application architecture (PalmRuntime, runtime layer, GUI).
+- `docs/DATA_LOSS_HANDLING.md` for first-sync and conflict invariants the engine respects.

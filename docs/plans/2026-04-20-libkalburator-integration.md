@@ -2,13 +2,12 @@
 
 **Date:** 2026-04-20 (drafted), 2026-04-21 (revised after upstream
 Phase C.6 and again after Phase B4)
-**Status:** Phases A, B, B2, C, D **done**. Phase E is **in progress**
-— the spec's sub-phases E.0/E.1/E.2 landed 2026-04-21 (E.1 = upstream
-Phase B3, E.2 = upstream Phase B4), and WP-side sub-phases E.3+ are
-next. See `../superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md`
-for the detailed sub-phase list. Phase F is narrower than originally
-scoped here because the Client/Full-Sync-Mode collapse landed in the
-Phase-E spec (decision #3) rather than F.
+**Status:** Phases A, B, B2, C, D, **E** all **done** (as of 2026-05-21).
+E.19 (docs supersession) landed 2026-05-21, closing the Phase E loop.
+Phase F (Full Sync Mode UX polish + profile-creation wizard) is the
+next active phase; not yet started.
+See `../superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md`
+for the Phase E sub-phase status table.
 **Design doc:** `2026-04-20-libkalburator-integration-design.md`
 (with 2026-04-21 reconciliation section).
 **Pointer:** `../LIBKALBURATOR.md`
@@ -23,41 +22,28 @@ Phase-E spec (decision #3) rather than F.
 | B2 | Upstream: implement the blob layer (`IBlobBackend`, `BlobSyncEngine`, `LocalBlobBackend`, `MockBlobBackend`) | libkalburator | ✅ **Done** 2026-04-21. Tagged `v0.6-phase-b2-blob-layer` at `9cae6ff`. Minimum-viable engine (mirror + twoWayNaive); baseline / conflict / upper-layer wiring catalogued as deferred in `~/dev/libkalburator/docs/phase0/04h-blob-layer-design.md`. | A |
 | C | Upstream: layered directory split + `Kalburator::Sync::*` namespace | libkalburator | ✅ **Done upstream** as Phases C.2a + C.2b + C.3, tagged `v0.5-phase-c` on 2026-04-21. | B |
 | D | WP implements host interfaces (`ICalendarHost`, `ICalendarCollection`, `ISyncConfigStore`) | WP | ✅ **Done** 2026-04-21 (commit `ff40d0f`). | A |
-| E | WP refactors `PalmBackend` onto `IBlobBackend`; ships `PalmCalendarBackend` adapter; rewrites WP plugin ABI; collapses Client/Full-Sync Modes into unified runtime | both | **Largely landed.** E.0–E.15b ✅ done 2026-04-21..2026-04-26. E.16 🟡 partial 2026-04-28 (SyncRunner ships, six Tools-menu modes work on real device; `src/sync/` dead code retained pending conflict-handler rebind). E.17 mostly subsumed by the engine-merger campaign that merged to main 2026-05-21. **E.18 cancelled** — POSE64 timing issues make emulator-driven integration testing infeasible; real-device manual smoke and the existing per-plugin e2e ctests are the replacement. E.19 (docs supersession) pending; partial archive done 2026-05-21. See `../superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md`. | B2, D |
+| E | WP refactors `PalmBackend` onto `IBlobBackend`; ships `PalmCalendarBackend` adapter; rewrites WP plugin ABI; collapses Client/Full-Sync Modes into unified runtime | both | ✅ **Done 2026-05-21.** E.0–E.15b landed 2026-04-21..2026-04-26. E.16 landed (partial 2026-04-28; deferrals (a)(b)(c)(e) closed 2026-05-21 via the conflict-handler port + WebCalendar deletion + per-DB cache + namespace rename; only (d) — LocalBlobBackend cross-id-mapping — remains as a libkalburator follow-up). E.17 subsumed by the engine-merger campaign merged to main 2026-05-21. E.18 ❌ cancelled (POSE64 timing infeasible). E.19 landed 2026-05-21 (`docs/PLUGIN_ABI.md` written; `docs/ARCHITECTURE_2026.md` + `docs/SYNC_ENGINE_ARCHITECTURE.md` + `docs/LIBKALBURATOR.md` refreshed; legacy docs archived). See `../superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md`. | B2, D |
 | F | Full Sync Mode UI polish + profile-creation wizard (the mode collapse itself landed in E.16 per Phase-E spec decision #3) | WP | **Not started.** | E |
 | G | Joint v1.0 declaration (libkalburator) | both | **Not started.** | F |
 
-**Status reconciliation (2026-05-21, post engine-merger merge):**
+**Status reconciliation (2026-05-21, post Phase E close):**
 
-- Phases A, B, B2, C, D are **all done**.
-- Phase E is **largely landed.** All sub-phases E.0 through E.15b are
-  shipped (2026-04-21..2026-04-26). E.16 (Client / Full Sync Mode
-  collapse) landed *partially* on 2026-04-28 — SyncRunner ships and
-  drives the six Tools-menu sync modes on a real device, but `src/sync/`
-  + `ConduitManager` + the `IConduit` family remain on disk as dead
-  code, blocked on `InteractiveConflictHandler` being rebound from
-  WP-internal `QSyncCore` to `Kalburator::Sync::QSyncCore::ConflictHandler`.
-  The other E.16 deferrals (WebCalendar cross-thread parenting bug;
-  multi-collection plugin per-DB re-read perf; `LocalBlobBackend`
-  cross-id-space mapping; `WildPalms::FullSync` → `WildPalms::Runtime`
-  namespace rename) are tracked in the Phase-E spec's E.16 row.
-- Most of the original E.17 scope (app-layer call-site migration) was
-  rolled into the `refactor/engine-merger` campaign (libkalburator
-  phases J/K/L/M, merged to WP main on 2026-05-21). The bits that
-  remain are small and tracked in the Phase-E spec.
-- **E.18 cancelled.** The original plan was integration tests driven
-  by POSE64 emulator. POSE64's DLP timing is unstable enough that
-  building a reliable harness on top of it is not feasible at this
-  time. Coverage is provided by (a) the per-plugin e2e tests already
-  in the WP ctest suite, and (b) periodic manual smoke runs against
-  real Palm hardware. If a viable emulator harness appears later, this
-  decision can be revisited.
-- E.19 (docs supersession) is partially done. The legacy conduit / SDK
-  guides + obsolete TODO docs were moved to `docs/archived/` on
-  2026-05-21; `docs/PLUGIN_ABI.md` and the `ARCHITECTURE_2026.md`
-  refresh are still TODO.
-- Phase F's scope is unchanged from the original revision: UX polish
-  and the profile-creation wizard. Not started.
+- Phases A, B, B2, C, D, **E** are all done. E closed 2026-05-21 with
+  E.19's three-pass docs supersession (legacy archive + engine-merger
+  artifact extraction + new `PLUGIN_ABI.md` / refreshed
+  `ARCHITECTURE_2026.md` / `SYNC_ENGINE_ARCHITECTURE.md` /
+  `LIBKALBURATOR.md`).
+- E.16's deferrals (a) conflict-handler port, (b) WebCalendar deletion,
+  (c) per-DB cache, (e) namespace rename all landed 2026-05-21.
+  Deferral (d) — suspected `LocalBlobBackend` cross-id-mapping bug —
+  is now tracked upstream in libkalburator at
+  `~/dev/libkalburator/docs/2026-05-21-localblobbackend-cross-id-mapping.md`
+  and is a follow-up coordinated with PlanStan, not blocking Phase F.
+- E.18 ❌ cancelled. POSE64 emulator timing is too unstable for an
+  automated integration harness. Coverage is the per-plugin e2e
+  ctests + periodic manual smoke against real Palm hardware.
+- Phase F (Full Sync Mode UX polish + profile-creation wizard +
+  real `IConflictPresenter`) is the next active phase. Not started.
 - Phase G (joint v1.0 cut) depends on Phase F and on PlanStan's own
   readiness against the same libkalburator pin. Not started.
 

@@ -1,159 +1,79 @@
-# libkalburator — status & coordination
+# libkalburator — consumption story
 
-**Date:** 2026-04-21 (updated)
-**Upstream repo:** `~/dev/libkalburator/` (local-only git, not yet
-published to a public forge)
-**Upstream tag:** `v0.5-phase-c` (2026-04-21) — first named release.
-**Target (CMake):** `Kalburator::Sync` (alias for `kalburator` static
-lib), and `Kalburator::Types` for the headers-only shared vocabulary.
-**License (planned):** LGPL-3.0-only — compatible with Wild Palms'
-GPLv3.
+**Date:** 2026-05-21 (post-merger).
+**Upstream repo:** [`codeberg.org/clintonthegeek/libkalburator`](https://codeberg.org/clintonthegeek/libkalburator) — public.
+**Currently pinned tag:** `v0.52-phase-p-merge-ready` (consumed via `FetchContent`; see `CMakeLists.txt`).
+**License:** LGPL-3.0-only — compatible with WildPalms' GPLv3.
+**CMake targets:** `Kalburator::Sync` (the engine + storage + sinks + plugin host), `Kalburator::Types` (shared vocabulary headers).
 
 ## What it is
 
-Qt6 / KF6-based calendar synchronization library extracted from
-PlanStan. Multi-backend two-way sync across CalDAV, local iCal,
-org-mode, Akonadi, DecSync, web subscriptions, Holidays; conflict
-detection with persistent deferred-resolution workflow; crash-recovery
-journaling; lossy-format transcoding preservation (RRULE +
-X-property).
+A Qt6 / KF6 sync engine + provider/backend framework, extracted from PlanStan. WildPalms and PlanStan share it. The engine drives two-way sync between any pair of `SyncBackend`s (Palm device, local files, CalDAV, CardDAV, Akonadi, web feeds, Org); the conflict pipeline, baseline storage, ID-mapping store, plugin host, and provider lifecycle all live upstream.
 
-Wild Palms' **Full Sync Mode** is designed around consuming this
-library so that WP becomes a first-class multi-backend calendar
-application, not merely a Palm-device sync tool. See
-`PROJECT_VISION.md` and
-`plans/2026-04-20-libkalburator-integration-design.md`.
+WildPalms does not own a sync engine. See `docs/SYNC_ENGINE_ARCHITECTURE.md` for what the engine does; see `docs/PLUGIN_ABI.md` for how WildPalms's plugins plug into it.
 
-## Current upstream state (2026-04-21)
+## How WildPalms consumes it
 
-**Source of truth:** `~/dev/libkalburator/docs/phase0/README.md` is
-the living index. Consult it first. Summary below is a pointer, not a
-replacement.
+`CMakeLists.txt` uses `FetchContent` to pull libkalburator pinned to the tag above. The first configure of an empty build directory downloads the source under `build-fetchcontent/_deps/libkalburator-src/` and builds it as a subproject. The dev override — pointing CMake at a sibling `~/dev/libkalburator/` worktree — is optional and useful only when actively iterating on the library; it is no longer the required layout.
 
-libkalburator has landed through **Phase C.6** (`v0.5-phase-c` tagged
-on `main` 2026-04-21). The library is in the shape the Phase 0
-design called for. Concretely:
+Default build dir: `build-fetchcontent/`. The previous flat-layout convention (sibling `../libkalburator/` checkout, building into `build-dev/`) is **no longer required**, though it still works. The `.clangd` pointer file is the one place where a stale `build-dev/` reference will bite — keep it in sync with the directory you actually configure into.
 
-- **Namespaced.** Everything lives under `Kalburator::Sync::*` (and
-  `Kalburator::Sync::QSyncCore::*` for the WP-originated conflict
-  framework files, to resolve `ConflictResolution` / `SyncStats` /
-  `SyncResult` collisions with `src/types/synctypes.h`).
-- **Directory-layered.** Source lives under
-  `src/{types,calendar,conflict,transcoding,journal,discovery,blob}/`
-  per `~/dev/libkalburator/docs/phase0/05-repo-strategy.md`.
-- **WP's `qsynccore/` is upstream.** The entire conflict framework
-  (`baselinestore`, `conflictstore`, `conflictpolicy`,
-  `conflictrecord`, `synccommon`, plus `conflicthandlerregistry`
-  added in C.1) has been merged into libkalburator. PlanStan consumes
-  it; WP still carries its own copy under `src/sync/qsynccore/`
-  pending Phase E.
-- **Two CMake targets.** `Kalburator::Types` (shared vocabulary,
-  minimal deps) and `Kalburator::Sync` (full sync engine). No
-  `KALBURATOR_PROVIDE_TYPES` flag — types are always built into
-  `kalburator-types`.
-- **IDMappingStore is SQLite** (`src/journal/idmappingstore.{h,cpp}`),
-  in the top-level `Kalburator::Sync` namespace. It is the sole
-  owner of the `sync_id_mappings` table (SyncStore's identity-mapping
-  API was dissolved in C.5). The store extends Audit-2's WP fields
-  (`last_synced`, `source_category`, `target_categories`, `archived`)
-  plus `recurrenceId`. Shares the `.planstan-sync.db` database with
-  SyncStore via idempotent `ALTER TABLE ADD COLUMN`.
+Build flags WildPalms toggles:
 
-**What is NOT yet upstream, relevant to Wild Palms:**
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `KALBURATOR_HAVE_ORG_IO` | `OFF` | WildPalms does not ship Org-mode I/O. Leave off. |
+| `KALBURATOR_HAVE_AKONADI` | `OFF` | Optional. Turn on if you want Akonadi-backed remote accounts. |
 
-- **Blob layer.** `src/blob/` exists as an empty placeholder. The
-  Phase 0 architecture (`04-merged-interface-sketch.md`) calls for
-  a lower-layer `IBlobBackend` + `BlobSyncEngine` + `LocalBlobBackend`
-  + `MockBlobBackend` under the calendar-typed upper layer. The
-  calendar upper layer is complete; **the blob lower layer is not
-  built.** This is the single largest remaining piece of the merged
-  architecture, and WP's `PalmBackend` is the natural forcing function
-  for its design. See the integration plan's Phase B2 below.
-- **Contacts / memos backends.** Explicitly deferred past Phase 4
-  per `~/dev/libkalburator/docs/phase0/00-open-questions.md` §6. WP's
-  contacts and memos stay WP-internal for the foreseeable future.
-  Library is calendar-only.
-- **Tests inside libkalburator.** Deferred — PlanStan's test suite is
-  the only regression guard today. Adding tests in libkalburator
-  itself is expected to land alongside WP adoption, since WP exercises
-  paths PlanStan doesn't.
-- **Install target / `KalburatorConfig.cmake`.** Deferred. Both
-  PlanStan and WP consume libkalburator via `add_subdirectory` so this
-  doesn't block integration.
+CMake targets WildPalms links against:
 
-## When to read which doc
+- `Kalburator::Sync` — the main library. Always linked.
+- `Kalburator::Types` — header-only shared vocabulary (`SyncResult`, `SyncMapping`, `CollectionInfo`, `Shape`, etc.). Inherited transitively from `Kalburator::Sync`.
 
-| You want to… | Read |
-|---|---|
-| Understand the vision & why we're doing this | `PROJECT_VISION.md` + `plans/2026-04-20-libkalburator-integration-design.md` |
-| Execute the integration | `plans/2026-04-20-libkalburator-integration.md` |
-| Phase E design (the active phase) | `superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md` |
-| See the library's current surface | `~/dev/libkalburator/src/*/` — the directory layout is stable. `~/dev/libkalburator/docs/phase0/04-merged-interface-sketch.md` is still the design sketch but some surfaces are narrower than sketched (see `04a-followups.md`). |
-| See upstream status + unfinished work | `~/dev/libkalburator/docs/phase0/README.md` — this is the living index, updated with each phase landing. |
-| Understand repo / license / CMake consumption plan | `~/dev/libkalburator/docs/phase0/05-repo-strategy.md` |
-| See the phase-by-phase design rationale | `~/dev/libkalburator/docs/phase0/04[b-g]-phase-c*-design.md` |
+WildPalms's plugin libraries (`wildpalms_calendar_v2`, etc.) link `Kalburator::Sync` and also need `target_include_directories(<lib> BEFORE PRIVATE $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>)` to ensure libkalburator's `Sync::` namespace headers take precedence over any residual local `::Sync` headers — see the per-plugin `CMakeLists.txt` for the canonical pattern.
+
+## What we use from it
+
+| Subsystem | Header location upstream | Used in WildPalms by |
+| --- | --- | --- |
+| `Plugin` + `PluginManager` | `src/plugin/plugin.h`, `src/plugin/pluginmanager.h` | `PalmRuntime::registerPalmPlugins()` |
+| `SyncEngine` (+ `BlobSyncEngine`) | `src/engine/syncengine.h` | `PalmRuntime::hotSync/fullSync/copyPalmToPC/copyPCToPalm` |
+| `BackendRegistry` + `SyncBackend` | `src/sync/backendregistry.h`, `src/sync/syncbackend.h` | `PalmBackend`, every plugin's `*BlobBackend`, `AccountController` |
+| `BaselineStore` (SQLite, `blob_baselines_v3`) | `src/storage/baselinestore.h` | `PalmRuntime` — the engine's primary baseline |
+| `IDMappingStore` (SQLite, `sync_id_mappings`) | `src/journal/idmappingstore.h` | reused indirectly through the engine; WildPalms also has a legacy JSON `IDMappingStore` in `src/sync/journal/` for `SyncState::pendingConflictCount` |
+| `ConflictHandler` API | `src/conflict/conflicthandler.h` | `KalburatorInteractiveConflictHandler` + per-plugin overlays |
+| `Sinks::RawFilesBackend` | `src/sinks/rawfilesbackend.h` | default PC-side sink for auto-generated mappings |
+| `Sinks::MockBlobBackend` | `src/sinks/mockblobbackend.h` | per-plugin e2e tests |
+| Provider framework | `src/plugin/*providerplugin.h` | `AccountController` for CalDAV / CardDAV / Akonadi |
+| Stock plugins (domain definitions) | `src/plugin/stock_plugins.{h,cpp}` | `PalmRuntime::registerPalmPlugins()` calls `Kalburator::registerStockPlugins()` |
+
+## What is not (yet) upstream that we'd like
+
+- **Domain definitions for additional Palm-only kinds.** If WildPalms ever wants to sync, say, ExpenseDB or NotePadDB, those domains have to be added to libkalburator's stock plugins (or registered as WildPalms-private domains). Currently only `blob`, `calendar`, `contacts`, `memo`, `todo` are defined.
+- **A blob baseline test that exercises `LocalBlobBackend` with a non-Mock target.** Tracked at `~/dev/libkalburator/docs/2026-05-21-localblobbackend-cross-id-mapping.md` — a suspected duplicate-on-second-sync bug raised by WildPalms's E.16 deferral (d). WildPalms-side investigation is paused until PlanStan has a chance to weigh in.
+- **A WebCalendar provider.** The WP-side WebCalendar plugin was deleted in 2026-05-21 because of a cross-thread parenting bug; its only upstream contribution was `Kalburator::Sync::IcsFeedFetcher`, which stays in the library and is still useful to PlanStan and to a future WP redesign.
 
 ## Coordination protocol
 
-libkalburator is maintained by the same person working on PlanStan
-and Wild Palms. During Wild Palms integration:
+libkalburator is maintained by the same author as WildPalms and PlanStan. The current discipline (post engine-merger):
 
-1. **Interface gaps or bugs found** in libkalburator → fix upstream
-   in `~/dev/libkalburator/` first, then pick up from the WP side.
-   Do **not** monkey-patch around the library inside Wild Palms — the
-   whole point is shared code.
-2. **Upstream API changes requested by WP** → land them upstream with
-   a clear commit message (phase-tag convention: `Phase 4.X: …`),
-   and add a note to `~/dev/libkalburator/docs/phase0/04a-followups.md`
-   (or a new Phase-4 doc) with `[WP-driven]` provenance so future
-   maintainers understand the motivation.
-3. **ODR hazard window is closed.** Previous revisions of this doc
-   warned against modifying shared types in either tree because three
-   copies (PlanStan, libkalburator, future-WP) coexisted. That window
-   closed in libkalburator's Phase C.2a: PlanStan's duplicate shared
-   types were deleted, and `Kalburator::Types` is now the single
-   source. Modify shared types normally in `~/dev/libkalburator/src/types/`;
-   PlanStan and WP both pick up changes on the next build.
-4. **Option 2 / single-source-of-truth is already done.** Previous
-   revisions sequenced "(Later) PlanStan executes option 2" as a
-   pending step. It landed in C.2a. There is no longer a pre-WP
-   PlanStan readiness gate. WP can start Phase A today.
+1. **Bugs found upstream while working in WildPalms:** fix in `~/dev/libkalburator/`, push to Codeberg with a descriptive commit message, then bump the WP pin and rebuild. Do not monkey-patch around the library inside WildPalms — the whole point is shared code.
+2. **WP-driven API changes:** land upstream with a commit message that explains the WildPalms motivation; include a libkalburator ctest demonstrating the new contract; update PlanStan's pretest baseline if needed. WildPalms picks up the change on the next pin bump.
+3. **Pretest discipline:** every libkalburator change must pass PlanStan's ctest baseline before landing. PlanStan is the regression guard; WildPalms is the second consumer. See `docs/archived/engine-merger-2026/README.md` for the campaign history that established this.
+4. **Cross-repo notes:** when a WildPalms-driven concern is not yet a bug-with-a-fix (e.g. the LocalBlobBackend cross-id-mapping suspicion), drop a dated note into `~/dev/libkalburator/docs/` so PlanStan devs can read it. Commit it to libkalburator's `main`. WildPalms-side issues that don't ever leak into the library stay in `docs/superpowers/specs/` here.
 
-## Sequencing (revised 2026-04-21)
+## When to look where
 
-The original integration design (2026-04-20) sequenced WP work
-against libkalburator Phase 3b and assumed upstream would still do
-"Phase 4: namespace migration, layered split, merge qsynccore"
-afterwards. In practice:
-
-- Upstream Phases C.1–C.6 landed between 2026-04-20 and 2026-04-21,
-  carrying the namespace migration (C.2b), the layered split (C.3),
-  the qsynccore merge (C.1 + C.4 + C.5), and the SQLite IDMappingStore
-  (C.4). What the integration plan calls **WP Phase B and the
-  non-blob-layer portion of WP Phase C are already complete upstream.**
-- The remaining **upstream work for WP adoption** is the blob layer
-  (`IBlobBackend` + `BlobSyncEngine` + `LocalBlobBackend` + MockBackend),
-  plus library-side tests, plus an eventual `KalburatorConfig.cmake`
-  install target. These are the expected contents of the upstream
-  **Phase 4** (Wild Palms adoption) per
-  `~/dev/libkalburator/docs/phase0/README.md`. That phase has no
-  design doc yet; it will be opened when WP integration concretely
-  needs each piece.
-- The **remaining WP-side work** is unchanged: vendor libkalburator
-  (Phase A), implement host interfaces (Phase D), refactor `PalmBackend`
-  onto `IBlobBackend` (Phase E, gated on the upstream blob layer),
-  ship Full Sync Mode UI (Phase F), joint v1.0 (Phase G).
-
-See `plans/2026-04-20-libkalburator-integration.md` for the phase
-status and the detailed checklists.
+| You want to… | Read |
+| --- | --- |
+| Understand the engine internals | `~/dev/libkalburator/docs/phase0/` — the upstream phase docs, top-down index in `README.md`. |
+| See an unfinished WP-driven concern | `~/dev/libkalburator/docs/2026-*.md` — dated notes with WP provenance. |
+| Understand the WP-side consumption surface | This file + `docs/SYNC_ENGINE_ARCHITECTURE.md` + `docs/PLUGIN_ABI.md`. |
+| Bump the pinned version | Edit `CMakeLists.txt`'s `FetchContent_Declare(... GIT_TAG …)`, reconfigure, run ctest. If WP tests fail and PlanStan's don't, the regression is WP-specific — file it upstream. |
+| Run against an unreleased libkalburator | Override `FETCHCONTENT_SOURCE_DIR_LIBKALBURATOR=<path>` on the CMake command line, or use the dev sibling-layout override block in `CMakeLists.txt`. |
 
 ## Build prerequisites
 
-Match PlanStan's current pin: Qt6 6.8+, KF6 (CalendarCore, DAV, KIO,
-Holidays). Optional KPim6 AkonadiCore. CMake 3.19+. C++20.
+Qt 6.5+, KF6 (CoreAddons, I18n, KIO, CalendarCore, Contacts, DAV, XmlGui, WidgetsAddons, Holidays). CMake 3.16+. C++20.
 
-Wild Palms already depends on Qt6 and KF6CalendarCore — no new
-platform deps of consequence. libkalburator's optional subsystems are
-controlled via cache variables: `KALBURATOR_HAVE_ORG_IO` (leave OFF
-for WP — WP doesn't ship org-io), `KALBURATOR_HAVE_AKONADI` (WP can
-opt in when Akonadi support is ready).
+The Akonadi optional subsystem requires `KPim6::AkonadiCore` + Extra-CMake-Modules ECM module path (`ECM` package); on Arch / Manjaro this means installing `extra-cmake-modules` and `kpim6` packages. WildPalms's `CMakeLists.txt` does the dependency dance only when `KALBURATOR_HAVE_AKONADI=ON`.
