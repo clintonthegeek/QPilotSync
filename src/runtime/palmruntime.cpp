@@ -35,7 +35,6 @@
 #include "plugins/contacts/contactsbackendplugin.h"
 #include "plugins/memo/memobackendplugin.h"
 #include "plugins/todos/todobackendplugin.h"
-#include "plugins/webcalendar/webcalbackendplugin.h"
 
 #include <rawfilesbackend.h>
 #include <caldavbackendcontribution.h>
@@ -154,7 +153,6 @@ void PalmRuntime::registerPalmPlugins()
     using namespace WildPalms::ContactsPlugin;
     using namespace WildPalms::Memo;
     using namespace WildPalms::TodoPlugin;
-    using namespace WildPalms::WebcalPlugin;
 
     // Always create fresh plugin instances — each PalmRuntime owns its own
     // set so that createPalmBackend() and createConflictHandler() can hold
@@ -163,7 +161,6 @@ void PalmRuntime::registerPalmPlugins()
     auto con  = std::make_unique<ContactsBackendPlugin>();
     auto memo = std::make_unique<MemoPlugin>();
     auto todo = std::make_unique<TodoBackendPlugin>();
-    auto webc = std::make_unique<WebcalBackendPlugin>();
 
     // K.8b T6: loadInProcess registers the plugins into the process-wide
     // singletons (DomainRegistry, TransformationRegistry, BackendRegistry).
@@ -196,7 +193,6 @@ void PalmRuntime::registerPalmPlugins()
             { con.get(),  mkPalmManifest(QStringLiteral("wildpalms.contacts"),    QStringLiteral("contacts")) },
             { memo.get(), mkPalmManifest(QStringLiteral("wildpalms.memo"),        QStringLiteral("memo"))     },
             { todo.get(), mkPalmManifest(QStringLiteral("wildpalms.todo"),        QStringLiteral("todo"))     },
-            { webc.get(), mkPalmManifest(QStringLiteral("wildpalms.webcalendar"), QStringLiteral("calendar")) },
         };
 
         if (!m_pluginManager->loadInProcess(items)) {
@@ -210,7 +206,6 @@ void PalmRuntime::registerPalmPlugins()
     m_palmPlugins.push_back(std::move(con));
     m_palmPlugins.push_back(std::move(memo));
     m_palmPlugins.push_back(std::move(todo));
-    m_palmPlugins.push_back(std::move(webc));
 }
 
 void PalmRuntime::connectDevice(const QStringList &devicePaths)
@@ -269,7 +264,6 @@ void PalmRuntime::finishConnect()
         using namespace WildPalms::ContactsPlugin;
         using namespace WildPalms::Memo;
         using namespace WildPalms::TodoPlugin;
-        using namespace WildPalms::WebcalPlugin;
 
         if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
             id = p->pluginId();
@@ -282,11 +276,6 @@ void PalmRuntime::finishConnect()
             ownedBackend = p->createPalmBackend(m_device.get());
         } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
             id = p->pluginId();
-            ownedBackend = p->createPalmBackend(m_device.get());
-        } else if (auto *p = dynamic_cast<WebcalBackendPlugin *>(plugin.get())) {
-            id = p->pluginId();
-            // K.8b T7: WebcalBlobBackend now inherits SyncBackend directly;
-            // no adapter needed.
             ownedBackend = p->createPalmBackend(m_device.get());
         }
 

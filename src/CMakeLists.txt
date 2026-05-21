@@ -169,7 +169,6 @@ target_link_libraries(WildPalmsCore
         wildpalms_contacts_static
         wildpalms_memo_static
         wildpalms_todos_static
-        wildpalms_webcalendar_static
 )
 
 target_include_directories(WildPalmsCore PUBLIC

@@ -340,7 +340,6 @@ target_link_libraries(tst_main_window_plugin_pages_populated
         wildpalms_contacts_static
         wildpalms_memo_static
         wildpalms_todos_static
-        wildpalms_webcalendar_static
 )
 add_test(NAME tst_main_window_plugin_pages_populated
     COMMAND tst_main_window_plugin_pages_populated)

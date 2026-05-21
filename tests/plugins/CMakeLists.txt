@@ -13,9 +13,8 @@ add_subdirectory(calendar)
 # Phase E.15a — Install action tests.
 add_subdirectory(install)
 
-# M4: memo/contacts/todos/webcal re-enabled; _v2 integration tests gated
+# M4: memo/contacts/todos re-enabled; _v2 integration tests gated
 # within each subdirectory pending M6 rewrite against new SyncEngine API.
 add_subdirectory(memo)
 add_subdirectory(todos)
 add_subdirectory(contacts)
-add_subdirectory(webcalendar)

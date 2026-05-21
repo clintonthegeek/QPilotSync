@@ -10,9 +10,6 @@
 [submodule "src/plugins/todos"]
 	path = src/plugins/todos
 	url = ../wildpalms-conduit-todos.git
-[submodule "src/plugins/webcalendar"]
-	path = src/plugins/webcalendar
-	url = ../wildpalms-conduit-webcalendar.git
 [submodule "src/plugins/plucker"]
 	path = src/plugins/plucker
 	url = ../wildpalms-conduit-plucker.git

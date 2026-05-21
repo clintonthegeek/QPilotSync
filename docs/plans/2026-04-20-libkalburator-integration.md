@@ -575,11 +575,12 @@ checkboxes here — update the spec.
       conflictreviewwidget, several plugin handlers). **Final delete of
       `src/sync/` + `ConduitManager` + `IConduit` family remains gated**
       on migrating those last consumers.
-  (b) WebCalendar cross-thread parenting bug — `WebcalBackendPlugin`
-      owns `QNetworkAccessManager` + `IcsFeedFetcher` on the GUI thread;
-      `WebcalBlobBackend::loadRecords` runs on the worker thread and
-      reaches across. Pending: pick a fix (backend-local QNAM, or
-      cross-thread invocation through the GUI) and reproduce.
+  (b) ✅ **Resolved by removal 2026-05-21.** Rather than fix the
+      cross-thread parenting bug, the WebCalendar plugin was deleted
+      outright (submodule + tests + PalmRuntime registration + Plucker
+      runAfter entry). The feature goes away; the bug becomes moot.
+      Re-add as a fresh plugin later if Web feed subscription is
+      wanted, using a thread-local fetcher pattern from day one.
   (c) ✅ **Done 2026-05-21.** Multi-collection per-DB re-read perf:
       `PalmBackend::loadPalmRecords` now caches per-database; mutators
       invalidate for their dbName. Cuts the 4× AddressDB / 4× ToDoDB

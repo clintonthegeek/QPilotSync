@@ -17,7 +17,6 @@
 #include "plugins/contacts/contactsbackendplugin.h"
 #include "plugins/memo/memobackendplugin.h"
 #include "plugins/todos/todobackendplugin.h"
-#include "plugins/webcalendar/webcalbackendplugin.h"
 
 class TstMainWindowPluginPagesPopulated : public QObject
 {
@@ -36,12 +35,11 @@ struct PluginEntry {
 
 void TstMainWindowPluginPagesPopulated::v2_plugins_with_main_view_create_non_null_widgets()
 {
-    // Instantiate the five static Palm backend plugins.
+    // Instantiate the four static Palm backend plugins.
     WildPalms::CalendarPlugin::CalendarBackendPlugin  cal;
     WildPalms::ContactsPlugin::ContactsBackendPlugin  con;
     WildPalms::Memo::MemoPlugin                       memo;
     WildPalms::TodoPlugin::TodoBackendPlugin           todo;
-    WildPalms::WebcalPlugin::WebcalBackendPlugin       webc;
 
     QWidget parent;
 
@@ -58,8 +56,6 @@ void TstMainWindowPluginPagesPopulated::v2_plugins_with_main_view_create_non_nul
         { QStringLiteral("todo"),        todo.hasMainView(),
           [&](QWidget *p){ return todo.createMainView(p); },
           [&](){ return todo.mainViewName(); } },
-        { QStringLiteral("webcalendar"), webc.hasMainView(),
-          nullptr, nullptr },
     };
 
     QStringList viewPluginIds;
