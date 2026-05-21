@@ -1,5 +1,5 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="wildpalms" version="3">
+<gui name="wildpalms" version="4">
     <MenuBar>
         <Menu name="file">
             <text>&amp;File</text>
@@ -9,6 +9,7 @@
             <Action name="file_close_profile"/>
             <Separator/>
             <Action name="file_profile_settings"/>
+            <Action name="file_configure_mappings"/>
             <Separator/>
             <Action name="file_quit"/>
         </Menu>

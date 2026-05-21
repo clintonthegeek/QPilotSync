@@ -166,7 +166,11 @@ public:
      * @param filePath Absolute path to the .pdb or .prc file
      * @return true on success
      */
-    bool installFile(const QString &filePath);
+    bool installFile(const QString &filePath) override;
+    bool retrieveDatabase(const QString &dbName, const QString &destPath) override;
+
+    void pauseTickle() override;
+    void resumeTickle() override;
 
     /**
      * @brief Check if a database exists on the Palm device
@@ -180,6 +184,8 @@ public:
 
 signals:
     void connectionComplete(bool success);
+    void ticklePauseRequested();
+    void tickleResumeRequested();
 
 private slots:
     void onConnectionEstablished(const HandshakeResult &result);

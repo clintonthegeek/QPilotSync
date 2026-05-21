@@ -7,8 +7,8 @@
 #include "palmbackendconfig.h"
 #include "palmconflicthandler.h"
 
-using Kalburator::Sync::QSyncCore::ConflictHandler;
-using Kalburator::Sync::QSyncCore::ConflictHandlerRegistry;
+using Kalburator::Conflict::ConflictHandler;
+using Kalburator::Conflict::ConflictHandlerRegistry;
 using WildPalms::PalmConflict::PalmBackendConfig;
 using WildPalms::PalmConflict::PalmConflictHandler;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;

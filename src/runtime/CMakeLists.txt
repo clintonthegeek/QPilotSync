@@ -1,16 +1,19 @@
 # WildPalmsRuntime — managers for the new WP plugin ABI (Phase E.8) plus
 # Full-Sync host-interface implementations (relocated from src/fullsync/
 # in E.15b). Houses BackendPluginManager + PluginActionManager + shared
-# metadata helpers + InstallSourceCollector + the SyncCoordinator-facing
+# metadata helpers + InstallSourceCollector + the SyncEngine-facing
 # WP host implementations consumed by libkalburator.
 
 find_package(KF6 REQUIRED COMPONENTS CoreAddons)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 add_library(WildPalmsRuntime STATIC
     pluginmetadatahelpers.h
     pluginmetadatahelpers.cpp
-    backendpluginmanager.h
-    backendpluginmanager.cpp
+    # K.8b T13: BackendPluginManager deleted (IBackendPluginV2 also gone;
+    # plugin discovery is now in-process via Kalburator::Plugin / PalmRuntime
+    # since K.8b T6). InstallSourceCollector::drainPluginBlobs that took a
+    # BackendPluginManager* is also commented out at the call site below.
     pluginactionmanager.h
     pluginactionmanager.cpp
     simpleactioncontext.h
@@ -21,8 +24,9 @@ add_library(WildPalmsRuntime STATIC
     installsourcecollector.cpp
     # Phase E.15b — Full-Sync host-interface implementations relocated
     # from src/fullsync/. WildPalmsFullSync no longer exists.
-    calendarcollection_wp.h
-    calendarcollection_wp.cpp
+    # K.8b T8: CalendarCollection_WP deleted (was ICalendarCollection shim
+    # for the eager-preload loop; no longer needed after K.7 + T0 removed
+    # the CalendarPluginWriter null-guard requirement).
     conflictpresenter_wp.h
     conflictpresenter_wp.cpp
     conflictresolver_wp.h
@@ -31,14 +35,18 @@ add_library(WildPalmsRuntime STATIC
     syncconfigstore_wp.cpp
     synchost_wp.h
     synchost_wp.cpp
-    # Phase E.16 — single orchestrator for the new ABI; replaces
-    # legacy Sync::SyncEngine driving IConduit derivatives.
-    syncrunner_wp.h
-    syncrunner_wp.cpp
     # Phase E.16 — pilot-link factory header (forward-decls only;
     # impl compiled into WildPalmsCore where the device-side
     # libraries can be linked without an AUTOMOC cycle).
     pilotlinkconnectionfactory.h
+)
+
+target_sources(WildPalmsRuntime PRIVATE
+    # M2 Task 2/3 — PalmDeviceAccess: IPalmDatabaseAccess wrapper that
+    # marshals all calls to a dedicated link thread via BlockingQueuedConnection.
+    # NOTE: compiled into PalmDeviceAccessLib (below) while syncrunner_wp.cpp
+    # is broken by Plan 1 (Task 12 re-merges these into WildPalmsRuntime once
+    # the syncrunner is rewritten).
 )
 
 target_include_directories(WildPalmsRuntime
@@ -69,3 +77,39 @@ target_link_libraries(WildPalmsRuntime
 )
 
 set_target_properties(WildPalmsRuntime PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# M2 Task 2/3 — Isolated build unit for PalmDeviceAccess so the test target
+# compiles while syncrunner_wp.cpp is still broken (Plan 1 breakage; Task 12
+# merges this back into WildPalmsRuntime once the syncrunner is rewritten).
+# M2 Task 5 — PalmRuntime skeleton + PalmRunResult type compiled here for the
+# same reason (WildPalmsRuntime is still broken by syncrunner_wp.cpp).
+add_library(PalmDeviceAccessLib STATIC
+    palmdeviceaccess.h
+    palmdeviceaccess.cpp
+    palmrunresult.h
+    palmruntime.h
+    palmruntime.cpp
+    accountcontroller.h
+    accountcontroller.cpp
+    palmtickle.h
+    palmtickle.cpp
+)
+target_include_directories(PalmDeviceAccessLib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+)
+target_link_libraries(PalmDeviceAccessLib
+    PUBLIC
+        Qt::Core
+        Qt::Concurrent  # M3 — QtConcurrent::run used by backup/restore
+        # M2 Task 5 — PalmRuntime's unique_ptr members (BackendRegistry,
+        # SyncEngine) require complete types at destruction; add Kalburator::Sync
+        # so the destructor compiles. Task 12 merges this lib back into
+        # WildPalmsRuntime which already links Kalburator::Sync.
+        Kalburator::Sync
+        # Phase Ic Task 3 — AccountController persists provider sidecar via
+        # KConfig/KConfigGroup.
+        KF6::ConfigCore
+)
+set_target_properties(PalmDeviceAccessLib PROPERTIES POSITION_INDEPENDENT_CODE ON)

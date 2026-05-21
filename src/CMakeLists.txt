@@ -7,8 +7,9 @@ add_library(WildPalmsCore SHARED
     # Plugin ABI interfaces (Q_OBJECT meta-object for ActionContext)
     core/ipluginaction.h
     core/ipluginaction.cpp
-    core/ibackendplugin.h
-    core/ibackendplugin.cpp
+    # K.8b T13: IBackendPlugin V1 (ibackendplugin.h/cpp) and V2
+    # (ibackendplugin_v2.h) deleted along with BackendPluginManager. The
+    # five Palm plugins migrated to Kalburator::Plugin in K.8b T1-T5.
 
     # Application UI
     app/logwidget.cpp
@@ -17,8 +18,8 @@ add_library(WildPalmsCore SHARED
     app/conflictdialog.h
     app/conflictreviewwidget.cpp
     app/conflictreviewwidget.h
-    app/interactiveconflicthandler.cpp
-    app/interactiveconflicthandler.h
+    # K.8b T13: Native InteractiveConflictHandler deleted; superseded by
+    # KalburatorInteractiveConflictHandler in src/app/conflict/.
 
     # Settings and dialogs
     settingsdialog.cpp
@@ -35,12 +36,6 @@ add_library(WildPalmsCore SHARED
     palm/kpilotdevicelink.h
     palm/categoryinfo.cpp
     palm/categoryinfo.h
-    palm/deviceworker.cpp
-    palm/deviceworker.h
-    palm/devicesession.cpp
-    palm/devicesession.h
-    palm/tickleworker.cpp
-    palm/tickleworker.h
     palm/palmdevicemonitor.cpp
     palm/palmdevicemonitor.h
 
@@ -61,23 +56,21 @@ add_library(WildPalmsCore SHARED
     core/synctypes.h
 
     # Sync engine (Phase 4)
+    # K.8b T13: SyncEngine + LocalFileBackend + SyncConduitBase (conduit.{h,cpp})
+    # deleted. SyncState retained — still used by kf6mainwindow.cpp (T14
+    # markers) and tests/test_syncstate.cpp. syncbackend.h kept until T14
+    # cleanup confirms no remaining consumers.
     sync/syncstate.cpp
     sync/syncstate.h
     sync/syncbackend.h
-    sync/conduit.cpp
-    sync/conduit.h
-    sync/syncengine.cpp
-    sync/syncengine.h
-    sync/localfilebackend.cpp
-    sync/localfilebackend.h
 
     # KF6 integration
     kf6/actionmanager.cpp
     kf6/actionmanager.h
     kf6/autosyncorchestrator.cpp
     kf6/autosyncorchestrator.h
-    kf6/conduitmanager.cpp
-    kf6/conduitmanager.h
+    # K.8b T13: ConduitManager deleted (plugin loop removed in T6; only
+    # kf6mainwindow had remaining references, now T14-marked).
     kf6/kf6mainwindow.cpp
     kf6/kf6mainwindow.h
     kf6/kf6settings.cpp
@@ -122,7 +115,7 @@ target_link_libraries(WildPalmsCore
         Qt::Widgets
         KF6::I18n
     PRIVATE
-        Kalburator::Sync
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         Qt::Network
         KF6::CalendarCore
         KF6::CoreAddons
@@ -136,16 +129,47 @@ target_link_libraries(WildPalmsCore
         bluetooth  # pilot-link transitive dep (Bluetooth HotSync)
         usb        # pilot-link transitive dep (USB HotSync)
         ${UDEV_LIBRARIES}
-        # Phase E.9 — new-ABI plugin manager used by KF6MainWindow.
-        # WildPalmsRuntime PUBLIC-links WildPalmsCore; linking it PRIVATE
-        # here embeds its static objects without creating a consumer
-        # cycle.
-        WildPalmsRuntime
         # Phase E.16 — pilot-link wrappers used by kf6mainwindow's
         # device-connect path. PalmDevice→Core is PRIVATE (demoted)
         # so the link is one-directional from Core's perspective.
         WildPalmsPalmDevice
         WildPalmsPalmSync
+        # M2 Task 11 — PalmRuntime lives in this static lib until Task 12
+        # merges it back into WildPalmsRuntime.
+        PalmDeviceAccessLib
+        # Phase E.9 — new-ABI plugin manager used by KF6MainWindow.
+        # WildPalmsRuntime PUBLIC-links WildPalmsCore; linking it PRIVATE
+        # here embeds its static objects without creating a consumer
+        # cycle.
+        # Phase J Task 7: PalmDeviceAccessLib must come BEFORE WildPalmsRuntime
+        # so that palmruntime.cpp.o's reference to CalendarCollection_WP
+        # is satisfied by WildPalmsRuntime when the linker processes the
+        # archives in order (single-pass rule).
+        WildPalmsRuntime
+        # M5a — libkalburator-side interactive ConflictHandler. Separate
+        # static lib to avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard
+        # collision between libkalburator's conflict/conflictpolicy.h and
+        # WildPalms' local sync/qsynccore/conflictpolicy.h.
+        WildPalmsAppConflict
+        # M5b — Mapping editor dialogs. Separate static lib so its TUs
+        # see libkalburator's synctypes.h (not WP-local core/synctypes.h).
+        WildPalmsAppMapping
+        # Phase Ic — AccountsPage + AddAccountDialog + MappingPromptDialog.
+        # SettingsDialog instantiates AccountsPage when AccountController +
+        # PalmRuntime are supplied; without this link the symbols are missing.
+        WildPalmsAppAccounts
+        # K.8b T6: five static Palm plugins loaded in-process by
+        # PalmRuntime::registerPalmPlugins(). Linked here into WildPalmsCore.so
+        # so that palmruntime.o (in PalmDeviceAccessLib, also PRIVATE here) can
+        # resolve plugin constructor symbols at the shared-lib link step.
+        # Note: WildPalmsCore was removed from the plugin statics' own
+        # target_link_libraries to break the CMake autogen cycle; symbols from
+        # WildPalmsCore that the plugins need are satisfied at this same link step.
+        wildpalms_calendar_static
+        wildpalms_contacts_static
+        wildpalms_memo_static
+        wildpalms_todos_static
+        wildpalms_webcalendar_static
 )
 
 target_include_directories(WildPalmsCore PUBLIC
@@ -190,18 +214,15 @@ install(TARGETS WildPalmsCore
 )
 
 # Install public SDK headers
+# K.8b T13: iconduit/isyncconduit/itoolconduit/ibackendplugin deleted.
 install(FILES
-    core/iconduit.h
-    core/isyncconduit.h
-    core/itoolconduit.h
     core/iplugin.h
-    core/ibackendplugin.h
     core/ipluginaction.h
     DESTINATION include/wildpalms/core
 )
 
+# K.8b T13: conduit.h (SyncConduitBase) deleted.
 install(FILES
-    sync/conduit.h
     sync/syncstate.h
     sync/syncbackend.h
     DESTINATION include/wildpalms/sync
@@ -262,6 +283,31 @@ add_subdirectory(palm/codecs)
 # Stateless typed wrappers over PalmBackend for WP-internal UI consumption
 # (Phase E.7 of libkalburator integration). Not on the plugin ABI.
 add_subdirectory(palm/adapters)
+
+# G.7 — SyncBackend implementations for Palm non-calendar databases.
+# Each wraps IPalmDatabaseAccess and is routed via dispatchBlobSync / blobBatchDiff.
+add_subdirectory(palm/contacts)
+add_subdirectory(palm/memo)
+add_subdirectory(palm/todo)
+add_subdirectory(palm/transformations)
+
+# Phase Ic — AccountsPage + AddAccountDialog + MappingPromptDialog.
+# Same pattern as WildPalmsAppConflict / WildPalmsAppMapping: separate lib so
+# libkalburator headers resolve to Kalburator::Sync (not WP-local Sync::).
+add_subdirectory(app/accounts)
+
+# M5a — libkalburator-side interactive ConflictHandler. Separate lib to
+# avoid the QSYNCCORE_CONFLICTPOLICY_H header-guard collision between
+# libkalburator's conflict/conflictpolicy.h and WildPalms' local
+# sync/qsynccore/conflictpolicy.h.
+add_subdirectory(app/conflict)
+
+# M5b — Mapping editor dialogs (MappingRowDialog, MappingEditorDialog).
+# Separate static lib for the same reason as WildPalmsAppConflict: avoids
+# having WildPalmsCore's PUBLIC src/core/ on the include path so that
+# `#include "synctypes.h"` resolves to libkalburator's Kalburator::Sync
+# header (not WP-local Sync:: namespace).
+add_subdirectory(app/mapping)
 
 # Plugin runtime — managers, simple action context, install source
 # collector, and (since E.15b) the Full-Sync host-interface

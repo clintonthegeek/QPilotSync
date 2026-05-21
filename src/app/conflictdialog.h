@@ -13,9 +13,14 @@
  */
 
 #include <QDialog>
+#include <functional>
 #include "sync/qsynccore/conflictrecord.h"
 #include "sync/qsynccore/conflictpolicy.h"
-#include "core/isyncconduit.h"
+// K.8b T13: core/isyncconduit.h deleted along with the V1 plugin ABI.
+// ConduitLookupFn lived in that header — redeclare a compatible stub here
+// returning void* (the dialog only used the lookup for type-aware HTML
+// rendering, which the new path will replace in T14).
+using ConduitLookupFn = std::function<const void *(const QString &conduitId)>;
 
 class QTextEdit;
 class QLabel;

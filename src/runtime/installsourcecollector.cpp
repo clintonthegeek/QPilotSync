@@ -5,10 +5,12 @@
 #include <QFileInfo>
 #include <QSet>
 
-#include <iblobbackend.h>
-
-#include "core/ibackendplugin.h"
-#include "runtime/backendpluginmanager.h"
+// K.8b T13: BackendPluginManager + IBackendPluginV2 deleted along with the
+// V2 plugin ABI. The plugin-blob drain path (drainPluginBlobs) was the only
+// consumer of those types here; T14 wires up the replacement (Kalburator::
+// Plugin's blob aggregation) once the new install action plugin lands.
+// Until then, collect() degrades gracefully when manager == nullptr (which
+// is now always the case at every call site).
 
 namespace WildPalms {
 
@@ -22,12 +24,9 @@ InstallSourceCollector::collect(const QString          &folderPath,
     r.files               = folderEntries;
     r.folderSourcedPaths  = folderSourcedPaths;
 
-    if (manager) {
-        r.tempDir = QSharedPointer<QTemporaryDir>::create();
-        if (r.tempDir->isValid()) {
-            r.files += drainPluginBlobs(manager, r.tempDir.data());
-        }
-    }
+    // K.8b T13: plugin-blob drain path disabled — BackendPluginManager gone.
+    // T14 reintroduces blob aggregation via Kalburator::Plugin.
+    Q_UNUSED(manager);
     return r;
 }
 
@@ -57,48 +56,8 @@ InstallSourceCollector::scanFolder(const QString &folderPath,
     return entries;
 }
 
-QList<InstallSourceCollector::FileEntry>
-InstallSourceCollector::drainPluginBlobs(BackendPluginManager *manager,
-                                            QTemporaryDir       *dir)
-{
-    QList<FileEntry> out;
-    if (!manager || !dir) return out;
-
-    for (auto *plugin : manager->plugins()) {
-        if (!plugin) continue;
-        auto backends = plugin->createBackends(nullptr, nullptr);
-        auto *blob = backends.blob;
-        if (!blob) continue;
-
-        for (const auto &col : blob->availableCollections()) {
-            const auto records = blob->loadRecords(col.id);
-            for (const auto &rec : records) {
-                if (!isInstallableType(rec.type)) continue;
-                if (rec.data.isEmpty()) continue;
-
-                const QString ext  = inferExtension(rec.type, rec.displayName);
-                const QString stem = rec.displayName.isEmpty()
-                                       ? rec.id.section(QChar(':'), -1)
-                                       : QFileInfo(rec.displayName).completeBaseName();
-                QString fileName = stem;
-                if (!fileName.endsWith(ext, Qt::CaseInsensitive)) fileName += ext;
-                const QString path = QDir(dir->path()).filePath(fileName);
-
-                QFile f(path);
-                if (!f.open(QIODevice::WriteOnly)) continue;
-                f.write(rec.data);
-                f.close();
-
-                FileEntry e;
-                e.path        = path;
-                e.displayName = rec.displayName.isEmpty() ? fileName : rec.displayName;
-                out.append(e);
-            }
-        }
-        delete blob;
-    }
-    return out;
-}
+// K.8b T13: drainPluginBlobs removed — V2 plugin ABI deleted. Replacement
+// lands in T14 via Kalburator::Plugin's blob aggregation API.
 
 bool InstallSourceCollector::isInstallableType(const QString &type)
 {

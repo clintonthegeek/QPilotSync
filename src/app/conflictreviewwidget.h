@@ -13,7 +13,10 @@
 #include <QWidget>
 #include "sync/qsynccore/conflictrecord.h"
 #include "sync/qsynccore/conflictstore.h"
-#include "core/isyncconduit.h"
+// K.8b T13: core/isyncconduit.h deleted; ConduitLookupFn now lives as a
+// void*-returning stub in conflictdialog.h. T14 replaces it with a
+// Kalburator::Plugin lookup.
+#include "conflictdialog.h"
 
 class QListWidget;
 class QListWidgetItem;

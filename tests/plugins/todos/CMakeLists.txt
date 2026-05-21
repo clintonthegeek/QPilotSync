@@ -22,6 +22,7 @@ target_link_libraries(tst_todoicstranscoder
         Qt::Core
 )
 add_test(NAME tst_todoicstranscoder COMMAND tst_todoicstranscoder)
+set_tests_properties(tst_todoicstranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 3: TodoBlobBackend ---
 add_executable(tst_todoblobbackend
@@ -44,6 +45,7 @@ target_link_libraries(tst_todoblobbackend
         Qt::Core
 )
 add_test(NAME tst_todoblobbackend COMMAND tst_todoblobbackend)
+set_tests_properties(tst_todoblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: TodoConflictHandler ---
 add_executable(tst_todoconflicthandler
@@ -65,6 +67,7 @@ target_link_libraries(tst_todoconflicthandler
         Qt::Core
 )
 add_test(NAME tst_todoconflicthandler COMMAND tst_todoconflicthandler)
+set_tests_properties(tst_todoconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 5: TodoBackendPlugin (in-process, no .so loading) ---
 add_executable(tst_todobackendplugin
@@ -80,6 +83,12 @@ target_include_directories(tst_todobackendplugin
         ${CMAKE_SOURCE_DIR}/src
         ${PILOT_LINK_INCLUDE_DIR}
 )
+# Prepend libkalburator's include dirs so "syncbackend.h" resolves to
+# Kalburator::Sync::SyncBackend (same resolution as the plugin target itself).
+target_include_directories(tst_todobackendplugin BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
 target_link_libraries(tst_todobackendplugin
     PRIVATE
         WildPalmsPalmCalendar    # CategoryMappingStore + parseCategoryAppInfo
@@ -87,6 +96,7 @@ target_link_libraries(tst_todobackendplugin
         WildPalmsPalmCodecs
         WildPalmsPalmSync
         WildPalmsCore
+        PalmDeviceAccessLib      # PalmDeviceAccess symbols
         Kalburator::Sync
         KF6::CoreAddons
         KF6::CalendarCore
@@ -97,40 +107,7 @@ target_link_libraries(tst_todobackendplugin
         ${PILOT_LINK_LIBRARIES}
 )
 add_test(NAME tst_todobackendplugin COMMAND tst_todobackendplugin)
+set_tests_properties(tst_todobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 6: tst_todo_v2 — end-to-end via BackendPluginManager ---
-# Loads the real wildpalms_todos_v2.so off the build tree, drives
-# BlobSyncEngine::twoWayWithBaseline against a MockBlobBackend target
-# across multiple ToDo category slots. Mirrors the calendar plugin's
-# tst_calendar_v2 plumbing.
-add_executable(tst_todo_v2
-    tst_todo_v2.cpp
-    ${TODOS_PLUGIN_SRC_DIR}/todoblobbackend.cpp
-    ${TODOS_PLUGIN_SRC_DIR}/todoicstranscoder.cpp
-)
-target_compile_definitions(tst_todo_v2
-    PRIVATE
-        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-)
-target_include_directories(tst_todo_v2
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${PILOT_LINK_INCLUDE_DIR}
-)
-target_link_libraries(tst_todo_v2
-    PRIVATE
-        WildPalmsRuntime          # BackendPluginManager
-        WildPalmsPalmCalendar     # CategoryMappingStore + AppInfo helper
-        WildPalmsPalmCodecs       # Todo POD + encodeTodo/decodeTodo
-        WildPalmsPalmSync         # PalmRecord, MockPalmDatabaseAccess, PalmBackend
-        WildPalmsCore
-        Kalburator::Sync
-        KF6::CoreAddons
-        KF6::CalendarCore
-        Qt::Test
-        Qt::Core
-        ${PILOT_LINK_LIBRARIES}
-)
-# Loads the plugin .so at runtime; ensure the plugin builds first.
-add_dependencies(tst_todo_v2 wildpalms_todos_v2)
-add_test(NAME tst_todo_v2 COMMAND tst_todo_v2)
+# K.8b T13: tst_todo_v2 deleted along with IBackendPluginV2 + SyncEngine
+# (replaced by the in-process PalmRuntime plugin path).

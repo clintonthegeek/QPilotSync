@@ -69,6 +69,7 @@ public:
         recordsDeletedSince(const QString &dbName,
                             const QDateTime &since) const override;
     bool supportsDeleteTracking() const override { return false; }
+    bool isConnected() const override;
 
     QByteArray readAppBlock(const QString &dbName) const override;
 

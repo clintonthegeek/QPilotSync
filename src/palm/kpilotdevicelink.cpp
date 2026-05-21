@@ -10,6 +10,7 @@
 #include <pi-debug.h>
 
 #include <QDebug>
+#include <QFile>
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <cstring>
@@ -326,8 +327,9 @@ void ConnectionWorker::doConnect()
             qDebug() << "[ConnectionWorker] ReadStorageInfo failed (non-fatal)";
         }
 
-        // NOTE: OpenConduit is NOT called here. It belongs exclusively in
-        // DeviceWorker::doSync() which handles it before each sync operation.
+        // NOTE: OpenConduit is NOT called here. It belongs in PalmRuntime's
+        // sync flow (hotSync/fullSync/etc.) which handles it before each
+        // sync operation.
 
         emit connectionEstablished(result);
         return;
@@ -674,6 +676,11 @@ int KPilotDeviceLink::openDatabase(const QString &dbName, bool readWrite)
     int result = dlp_OpenDB(m_socket, 0, mode, dbName.toUtf8().constData(), &dbHandle);
     if (result < 0) {
         qWarning() << "[KPilotDeviceLink] dlp_OpenDB() failed, result:" << result;
+        // Socket/protocol-level errors (≤ -200) mean the DLP session is
+        // unrecoverable.  Mark as disconnected so subsequent calls fast-fail
+        // instead of retrying hundreds of times.
+        if (result <= -200)
+            m_isConnected = false;
         setError(QString("Failed to open database: %1").arg(dbName));
         return -1;
     }
@@ -1216,6 +1223,57 @@ bool KPilotDeviceLink::installFile(const QString &filePath)
 
     qDebug() << "[DeviceLink] Installed successfully:" << dbInfo.name;
     return true;
+}
+
+bool KPilotDeviceLink::retrieveDatabase(const QString &dbName, const QString &destPath)
+{
+    if (!m_isConnected || m_socket < 0) {
+        qWarning() << "[DeviceLink] Cannot retrieve — not connected";
+        return false;
+    }
+    struct DBInfo info;
+    int rc = dlp_FindDBInfo(m_socket, 0, 0,
+                             dbName.toLocal8Bit().constData(),
+                             0, 0, &info);
+    if (rc < 0) {
+        qWarning() << "[DeviceLink] dlp_FindDBInfo failed for" << dbName << "rc:" << rc;
+        return false;
+    }
+    // Skip databases the OS has marked as non-transferable.
+    if (info.flags & dlpDBFlagCopyPrevention) {
+        qDebug() << "[DeviceLink] Skipping copy-prevented database:" << dbName;
+        return true;
+    }
+    // Skip streaming file databases (not real record DBs; pi_file_retrieve
+    // would fail on them).
+    if (info.flags & dlpDBFlagStream) {
+        qDebug() << "[DeviceLink] Skipping stream database:" << dbName;
+        return true;
+    }
+    pi_file_t *pf = pi_file_create(destPath.toLocal8Bit().constData(), &info);
+    if (!pf) {
+        qWarning() << "[DeviceLink] pi_file_create failed for" << destPath;
+        return false;
+    }
+    rc = pi_file_retrieve(pf, m_socket, 0, nullptr);
+    pi_file_close(pf);
+    if (rc < 0) {
+        qWarning() << "[DeviceLink] pi_file_retrieve failed for" << dbName << "rc:" << rc;
+        QFile::remove(destPath);
+        return false;
+    }
+    qDebug() << "[DeviceLink] Retrieved database:" << dbName << "->" << destPath;
+    return true;
+}
+
+void KPilotDeviceLink::pauseTickle()
+{
+    emit ticklePauseRequested();
+}
+
+void KPilotDeviceLink::resumeTickle()
+{
+    emit tickleResumeRequested();
 }
 
 bool KPilotDeviceLink::findDatabase(const QString &dbName)

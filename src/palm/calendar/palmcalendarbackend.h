@@ -2,6 +2,7 @@
 #define WILDPALMS_CALENDAR_PALMCALENDARBACKEND_H
 
 #include "syncbackend.h"
+#include "transcodingplan.h"
 
 namespace WildPalms::PalmSync {
 class IPalmDatabaseAccess;
@@ -26,9 +27,8 @@ class CategoryMappingStore;
  * Caller retains ownership; both must outlive the backend.
  *
  * Scope (Phase E.6): loadCalendars, fetchItems, pushItems, deleteItems
- * fully implemented. Legacy pure-virtual APIs (loadItems, storeItems,
- * updateItem, removeItem, storeCalendars, startSync) get minimal
- * scaffolding to satisfy the abstract interface; Calendar CRUD at the
+ * fully implemented. Legacy scaffolding (storeCalendars, startSync,
+ * removeItem) satisfies the abstract interface; Calendar CRUD at the
  * sub-calendar level returns false (Palm slots are implicit).
  */
 class PalmCalendarBackend : public Kalburator::Sync::SyncBackend
@@ -50,36 +50,36 @@ public:
 
     // ========== Identity ==========
     QString backendType() const override;
-    Kalburator::Sync::DataDomain dataDomain() const override;
+    QList<Kalburator::Shape::Shape> nativeShapes() const override;
 
     // ========== Discovery ==========
     void loadCalendars(const QString &collectionId) override;
 
     // ========== Legacy pure-virtual scaffolding (Task 6) ==========
-    void loadItems(KCalendarCore::MemoryCalendar *cal,
-                   bool suppressSignals = false) override;
     void storeCalendars(
         const QString &collectionId,
         const QList<KCalendarCore::MemoryCalendar *> &calendars) override;
-    void storeItems(KCalendarCore::MemoryCalendar *cal,
-                    const QList<KCalendarCore::Incidence::Ptr> &items) override;
-    void updateItem(KCalendarCore::MemoryCalendar *cal,
-                    const KCalendarCore::Incidence::Ptr &item,
-                    const QString &icalData) override;
     void startSync(
         const QString &collectionId,
         KCalendarCore::MemoryCalendar *calendar,
         const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
         const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
-        const QMap<QString, QString> &stagedDeletions) override;
+        const QMap<QString, QString> &stagedDeletions,
+        const Kalburator::Sync::TranscodingPlan &plan) override;
     void removeItem(const QString &calId, const QString &itemUid) override;
+
+    // ========== Blob-level disconnect guard (Layer B) ==========
+    bool loadRecordsOrError(const QString &collectionId,
+                            QList<Kalburator::Sync::BackendRecord> &records,
+                            QString &error) override;
 
     // ========== Operation-based API (Task 5) ==========
     Kalburator::Sync::FetchOperation *fetchItems(
         const QString &calendarId) override;
     Kalburator::Sync::PushOperation *pushItems(
         const QString &calendarId,
-        const QList<KCalendarCore::Incidence::Ptr> &items) override;
+        const QList<KCalendarCore::Incidence::Ptr> &items,
+        const Kalburator::Sync::TranscodingPlan &plan) override;
     Kalburator::Sync::DeleteOperation *deleteItems(
         const QString &calendarId, const QStringList &uids) override;
 

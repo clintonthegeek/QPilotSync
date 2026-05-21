@@ -1,16 +1,12 @@
 #include "palmcalendarbackend.h"
 
 #include <QRegularExpression>
-#include <QTimeZone>
-
 #include "syncoperation.h"
 
 #include "categorymappingstore.h"
-#include "datadomain.h"
 #include "ipalmdatabaseaccess.h"
 
 #include <KCalendarCore/Event>
-#include <KCalendarCore/ICalFormat>
 #include <KCalendarCore/MemoryCalendar>
 
 #include "datebookcodec.h"
@@ -18,11 +14,12 @@
 
 namespace WildPalms::PalmCalendar {
 
-using Kalburator::Sync::DataDomain;
+using Kalburator::Sync::BackendRecord;
 using Kalburator::Sync::DeleteOperation;
 using Kalburator::Sync::FetchOperation;
 using Kalburator::Sync::PushOperation;
 using Kalburator::Sync::SyncOperation;
+using Kalburator::Sync::TranscodingPlan;
 using WildPalms::PalmSync::IPalmDatabaseAccess;
 
 PalmCalendarBackend::PalmCalendarBackend(IPalmDatabaseAccess *device,
@@ -41,9 +38,11 @@ QString PalmCalendarBackend::backendType() const
     return QStringLiteral("palm-calendar");
 }
 
-DataDomain PalmCalendarBackend::dataDomain() const
+QList<Kalburator::Shape::Shape> PalmCalendarBackend::nativeShapes() const
 {
-    return DataDomain::Calendar;
+    return { Kalburator::Shape::Shape{
+        Kalburator::Shape::DomainId{QStringLiteral("calendar")},
+        Kalburator::Shape::EncodingId{QStringLiteral("palm-datebook")} } };
 }
 
 void PalmCalendarBackend::loadCalendars(const QString &collectionId)
@@ -87,30 +86,6 @@ QString PalmCalendarBackend::calendarIdForSlot(int slot)
         .arg(slot);
 }
 
-void PalmCalendarBackend::loadItems(KCalendarCore::MemoryCalendar *cal,
-                                     bool suppressSignals)
-{
-    if (!cal || !m_device) {
-        return;
-    }
-
-    // Legacy API has no calendarId context — we load all DatebookDB
-    // records into the given MemoryCalendar regardless of slot.
-    // Callers preferring slot routing use fetchItems(calendarId).
-    const auto records = m_device->readAllRecords(QLatin1String(DatabaseName));
-    for (const auto &rec : records) {
-        const auto decoded = DatebookCodec::decode(rec);
-        if (!decoded.isValid()) continue;
-        cal->addIncidence(decoded.event);
-        if (!suppressSignals) {
-            emit itemLoaded(cal, decoded.event, QString{});
-        }
-    }
-    if (!suppressSignals) {
-        emit calendarLoaded(cal);
-    }
-}
-
 void PalmCalendarBackend::storeCalendars(
     const QString &, const QList<KCalendarCore::MemoryCalendar *> &)
 {
@@ -118,57 +93,17 @@ void PalmCalendarBackend::storeCalendars(
     // category editor). No storage action at this level.
 }
 
-void PalmCalendarBackend::storeItems(
-    KCalendarCore::MemoryCalendar *,
-    const QList<KCalendarCore::Incidence::Ptr> &items)
-{
-    // Legacy API lacks calendarId, so we route to Unfiled (slot 0) —
-    // callers needing slot control use pushItems(calendarId, items).
-    if (items.isEmpty()) return;
-    auto *op = pushItems(QStringLiteral("palm:calendar/0"), items);
-    if (op) op->deleteLater();
-}
-
-void PalmCalendarBackend::updateItem(
-    KCalendarCore::MemoryCalendar *, const KCalendarCore::Incidence::Ptr &item,
-    const QString &icalData)
-{
-    if (!item) return;
-
-    KCalendarCore::Incidence::Ptr effective = item;
-    if (!icalData.isEmpty()) {
-        // Parse icalData and take the first event if present.
-        KCalendarCore::ICalFormat fmt;
-        auto tempCal = KCalendarCore::MemoryCalendar::Ptr::create(
-            QTimeZone::UTC);
-        if (fmt.fromString(tempCal, icalData)) {
-            const auto events = tempCal->events();
-            if (!events.isEmpty()) {
-                effective = events.first().staticCast<KCalendarCore::Incidence>();
-            }
-        }
-    }
-
-    // Route to whichever slot the event carries, or 0.
-    int slot = 0;
-    const auto slotStr = effective->customProperty(
-        "KCalendarCore",
-        QByteArray(DatebookCodec::CategorySlotProperty));
-    if (!slotStr.isEmpty()) {
-        bool ok = false;
-        const int parsed = slotStr.toInt(&ok);
-        if (ok && parsed >= 0 && parsed <= 15) slot = parsed;
-    }
-    auto *op = pushItems(calendarIdForSlot(slot), { effective });
-    if (op) op->deleteLater();
-}
-
 void PalmCalendarBackend::startSync(
-    const QString &, KCalendarCore::MemoryCalendar *,
+    const QString &collectionId,
+    KCalendarCore::MemoryCalendar *calendar,
     const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
     const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
-    const QMap<QString, QString> &stagedDeletions)
+    const QMap<QString, QString> &stagedDeletions,
+    const Kalburator::Sync::TranscodingPlan &plan)
 {
+    Q_UNUSED(collectionId);
+    Q_UNUSED(calendar);
+    Q_UNUSED(plan);
     // Route by each incidence's X-WP-PALM-CATEGORY-SLOT property,
     // else 0.
     auto slotForIncidence = [](const KCalendarCore::Incidence::Ptr &inc) {
@@ -189,7 +124,7 @@ void PalmCalendarBackend::startSync(
     for (const auto &inc : stagedCreations) bySlot[slotForIncidence(inc)].append(inc);
     for (const auto &inc : stagedUpdates)   bySlot[slotForIncidence(inc)].append(inc);
     for (auto it = bySlot.constBegin(); it != bySlot.constEnd(); ++it) {
-        auto *op = pushItems(calendarIdForSlot(it.key()), it.value());
+        auto *op = pushItems(calendarIdForSlot(it.key()), it.value(), TranscodingPlan{});
         if (op) op->deleteLater();
     }
 
@@ -211,6 +146,30 @@ void PalmCalendarBackend::removeItem(const QString &calId,
     auto *op = deleteItems(calId, QStringList{ itemUid });
     if (op) op->deleteLater();
     emit itemRemoved(calId, itemUid);
+}
+
+// ========== Blob-level disconnect guard (Layer B) ==========
+bool PalmCalendarBackend::loadRecordsOrError(const QString &collectionId,
+                                              QList<BackendRecord> &records,
+                                              QString &error)
+{
+    records.clear();
+    error.clear();
+
+    if (collectionId != QLatin1String(CollectionId)) {
+        error = QStringLiteral("unknown collection: %1").arg(collectionId);
+        return false;
+    }
+    if (!m_device) {
+        error = QStringLiteral("backend not ready (no device)");
+        return false;
+    }
+    if (!m_device->isConnected()) {
+        error = QStringLiteral("Palm link not connected before reading %1")
+                  .arg(QLatin1String(DatabaseName));
+        return false;
+    }
+    return true;
 }
 
 // ========== Operation API (Task 5) ==========
@@ -235,8 +194,24 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
 
     op->setState(SyncOperation::Running);
 
+    if (!m_device->isConnected()) {
+        const auto err = QStringLiteral("Palm link not connected before reading %1")
+                           .arg(QLatin1String(DatabaseName));
+        op->fail(err);
+        emit fetchFinished(calendarId, false, err);
+        return op;
+    }
+
     const auto records = m_device->readAllRecords(QLatin1String(DatabaseName));
     emit fetchStarted(calendarId, records.size());
+
+    if (!m_device->isConnected()) {
+        const auto err = QStringLiteral("Palm link lost while reading %1")
+                           .arg(QLatin1String(DatabaseName));
+        op->fail(err);
+        emit fetchFinished(calendarId, false, err);
+        return op;
+    }
 
     QList<KCalendarCore::Incidence::Ptr> items;
     for (const auto &rec : records) {
@@ -259,22 +234,20 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
 
 PushOperation *PalmCalendarBackend::pushItems(
     const QString &calendarId,
-    const QList<KCalendarCore::Incidence::Ptr> &items)
+    const QList<KCalendarCore::Incidence::Ptr> &items,
+    const TranscodingPlan &plan)
 {
+    Q_UNUSED(plan);
     auto *op = new PushOperation(calendarId, items, this);
 
     const int slot = slotFromCalendarId(calendarId);
     if (slot < 0) {
-        const auto err = QStringLiteral("invalid calendar id: %1").arg(calendarId);
-        op->fail(err);
-        emit writeFinished(calendarId, false, err);
+        op->fail(QStringLiteral("invalid calendar id: %1").arg(calendarId));
         return op;
     }
 
     if (!m_device) {
-        const auto err = QStringLiteral("no device");
-        op->fail(err);
-        emit writeFinished(calendarId, false, err);
+        op->fail(QStringLiteral("no device"));
         return op;
     }
 
@@ -322,7 +295,6 @@ PushOperation *PalmCalendarBackend::pushItems(
     }
 
     op->complete();
-    emit writeFinished(calendarId, true);
     return op;
 }
 

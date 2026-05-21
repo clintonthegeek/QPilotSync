@@ -19,14 +19,457 @@ function(add_wildpalms_runtime_test TEST_NAME)
 endfunction()
 
 add_wildpalms_runtime_test(tst_pluginmetadatahelpers tst_pluginmetadatahelpers.cpp)
-add_wildpalms_runtime_test(tst_backendpluginmanager tst_backendpluginmanager.cpp)
+# K.8b T13: tst_backendpluginmanager + tst_plugin_factory_roundtrip deleted
+# along with BackendPluginManager + IBackendPluginV2.
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
-add_wildpalms_runtime_test(tst_plugin_factory_roundtrip tst_plugin_factory_roundtrip.cpp)
-add_wildpalms_runtime_test(tst_syncrunner tst_syncrunner.cpp)
-target_link_libraries(tst_syncrunner PRIVATE Kalburator::Sync)
-# Force the dummy .so files to be built before running this test.
-add_dependencies(tst_plugin_factory_roundtrip
-    dummy_backend
-    dummy_action
+# tst_palm_device_access links PalmDeviceAccessLib directly (kept after
+# the M5c deletion of SyncRunner_wp because PalmDeviceAccessLib has the
+# same include paths and Qt::Core linkage that this test needs).
+add_executable(tst_palm_device_access tst_palm_device_access.cpp)
+target_link_libraries(tst_palm_device_access
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        # palmruntime.cpp instantiates PilotLinkPalmDatabaseAccess; pull in
+        # WildPalmsPalmDevice and its transitive pisock deps to resolve it.
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_device_access COMMAND tst_palm_device_access)
+set_tests_properties(tst_palm_device_access PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+# K.8b T13: tst_plugin_factory_roundtrip deleted, so the dependency on
+# dummy_backend/dummy_action is gone too (dummy_backend itself deleted).
+add_executable(tst_palm_runtime_hotsync tst_palm_runtime_hotsync.cpp)
+target_link_libraries(tst_palm_runtime_hotsync
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        # Without WHOLE_ARCHIVE the linker drops the registrars as
+        # unreferenced TUs and dispatchSync errors with "no edge path".
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        # palmruntime.cpp directly instantiates PilotLinkPalmDatabaseAccess
+        # (WildPalmsPalmDevice) on connectDevice(); link in the device lib and
+        # its transitive pisock deps so the symbol resolves at link time.
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_hotsync COMMAND tst_palm_runtime_hotsync)
+set_tests_properties(tst_palm_runtime_hotsync PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# K.8b T16: PalmRuntime::cancelSync() — mid-sync cancel restoration
+add_executable(tst_palm_runtime_cancel_sync tst_palm_runtime_cancel_sync.cpp)
+target_link_libraries(tst_palm_runtime_cancel_sync
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_cancel_sync COMMAND tst_palm_runtime_cancel_sync)
+set_tests_properties(tst_palm_runtime_cancel_sync PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5a Task 2: KalburatorInteractiveConflictHandler unit test
+add_executable(tst_kalburator_interactive_conflict_handler
+    tst_kalburator_interactive_conflict_handler.cpp
+)
+target_link_libraries(tst_kalburator_interactive_conflict_handler
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Concurrent
+        WildPalmsAppConflict
+        Kalburator::Sync
+        # WildPalmsCore provides ConflictDialog (referenced by conflictdialogbridge.cpp).
+        # The bridge's exec() is never called in tests (the hook short-circuits first),
+        # but the linker still requires the symbol to be resolved.
+        WildPalmsCore
+)
+add_test(NAME tst_kalburator_interactive_conflict_handler
+    COMMAND tst_kalburator_interactive_conflict_handler
+)
+set_tests_properties(tst_kalburator_interactive_conflict_handler PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5a Tasks 7-8: PalmRuntime::setConflictHandler
+add_executable(tst_palm_runtime_conflict_handler
+    tst_palm_runtime_conflict_handler.cpp)
+target_link_libraries(tst_palm_runtime_conflict_handler
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_conflict_handler
+    COMMAND tst_palm_runtime_conflict_handler)
+set_tests_properties(tst_palm_runtime_conflict_handler PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5b Task 1: PalmRuntime::isRunning()
+add_executable(tst_palm_runtime_is_running tst_palm_runtime_is_running.cpp)
+target_link_libraries(tst_palm_runtime_is_running
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_is_running
+    COMMAND tst_palm_runtime_is_running)
+set_tests_properties(tst_palm_runtime_is_running PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5b Task 2: PalmRuntime::reloadMappings(QJsonArray)
+add_executable(tst_palm_runtime_reload_mappings
+    tst_palm_runtime_reload_mappings.cpp)
+target_link_libraries(tst_palm_runtime_reload_mappings
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_reload_mappings
+    COMMAND tst_palm_runtime_reload_mappings)
+set_tests_properties(tst_palm_runtime_reload_mappings PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5b Task 3: defaults guard — connectDevice skips defaults if mappings present
+add_executable(tst_palm_runtime_default_mappings_only_when_empty
+    tst_palm_runtime_default_mappings_only_when_empty.cpp)
+target_link_libraries(tst_palm_runtime_default_mappings_only_when_empty
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_default_mappings_only_when_empty
+    COMMAND tst_palm_runtime_default_mappings_only_when_empty)
+set_tests_properties(tst_palm_runtime_default_mappings_only_when_empty PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase Ic Task 3: AccountController smoke + integration tests.
+add_executable(tst_account_controller tst_account_controller.cpp)
+target_link_libraries(tst_account_controller
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_account_controller COMMAND tst_account_controller)
+set_tests_properties(tst_account_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# L.9: per-provider enable/disable + fan-out to mappings
+add_executable(tst_provider_enable_fanout tst_provider_enable_fanout.cpp)
+target_link_libraries(tst_provider_enable_fanout
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_provider_enable_fanout COMMAND tst_provider_enable_fanout)
+set_tests_properties(tst_provider_enable_fanout PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# L.10: per-mapping enable toggle persistence
+add_executable(tst_mapping_enable_persists tst_mapping_enable_persists.cpp)
+target_link_libraries(tst_mapping_enable_persists
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_mapping_enable_persists COMMAND tst_mapping_enable_persists)
+set_tests_properties(tst_mapping_enable_persists PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase Ic Task 11: AccountsPage widget tests.
+add_executable(tst_accounts_page tst_accounts_page.cpp)
+target_link_libraries(tst_accounts_page
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        WildPalmsPalmDevice
+        WildPalmsCore
+        WildPalmsAppAccounts
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_accounts_page COMMAND tst_accounts_page)
+set_tests_properties(tst_accounts_page PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5b Task 4: MappingRowDialog — modal editor for one SyncMapping
+add_executable(tst_mapping_row_dialog tst_mapping_row_dialog.cpp)
+target_link_libraries(tst_mapping_row_dialog
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        Kalburator::Sync
+        WildPalmsAppMapping
+)
+add_test(NAME tst_mapping_row_dialog COMMAND tst_mapping_row_dialog)
+set_tests_properties(tst_mapping_row_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5b Task 5: MappingEditorDialog — list/add/edit/delete + JSON round-trip
+add_executable(tst_mapping_editor_dialog tst_mapping_editor_dialog.cpp)
+target_link_libraries(tst_mapping_editor_dialog
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        Kalburator::Sync
+        WildPalmsAppMapping
+)
+add_test(NAME tst_mapping_editor_dialog COMMAND tst_mapping_editor_dialog)
+set_tests_properties(tst_mapping_editor_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M5c Task 2: smoke test — KF6MainWindow per-plugin KPageWidget wiring.
+# Loads real WildPalms plugins via BackendPluginManager (same path
+# KF6MainWindow uses) and asserts every plugin claiming hasMainView()=true
+# returns a non-null QWidget from createMainView() — the contract that
+# onBackendPluginLoaded depends on.
+# K.8b T6: rewritten — plugins are now STATIC in WildPalmsCore; no longer
+# discovered via KPluginFactory.  CMAKE_BINARY_DIR define and KF6::CoreAddons
+# dep removed; plugin headers live under ${WP_SRC}/plugins/.
+add_executable(tst_main_window_plugin_pages_populated
+    tst_main_window_plugin_pages_populated.cpp)
+target_link_libraries(tst_main_window_plugin_pages_populated
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        WildPalmsCore
+        WildPalmsRuntime
+        wildpalms_calendar_static
+        wildpalms_contacts_static
+        wildpalms_memo_static
+        wildpalms_todos_static
+        wildpalms_webcalendar_static
+)
+add_test(NAME tst_main_window_plugin_pages_populated
+    COMMAND tst_main_window_plugin_pages_populated)
+set_tests_properties(tst_main_window_plugin_pages_populated PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
+add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
+target_link_libraries(tst_palm_runtime_modes
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_modes COMMAND tst_palm_runtime_modes)
+set_tests_properties(tst_palm_runtime_modes PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# M6b Task 3: PalmDeviceAccess connect lifecycle test
+# Uses MockKPilotDeviceLink (subclass) injected via
+# PalmDeviceAccess::setLinkFactoryForTest to drive
+# onConnectionEstablished/onConnectionFailed without real hardware.
+add_executable(tst_palm_device_access_connect
+    tst_palm_device_access_connect.cpp
+    mockkpilotdevicelink.cpp
+)
+target_link_libraries(tst_palm_device_access_connect
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_device_access_connect COMMAND tst_palm_device_access_connect)
+set_tests_properties(tst_palm_device_access_connect PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase J Task 9: CalDAV E2E integration test.
+# Includes the libkalburator FakeCalDavServer source directly.
+add_executable(tst_runtime_caldav_e2e
+    tst_runtime_caldav_e2e.cpp
+    ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync/fakecaldavserver.cpp
+)
+target_include_directories(tst_runtime_caldav_e2e
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync
+)
+target_link_libraries(tst_runtime_caldav_e2e
+    PRIVATE
+        Qt::Core
+        Qt::Network
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_runtime_caldav_e2e COMMAND tst_runtime_caldav_e2e)
+set_tests_properties(tst_runtime_caldav_e2e PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase J Task 11: CardDAV E2E integration test (contacts equivalent of caldav).
+# Includes the libkalburator FakeCardDavServer source directly.
+add_executable(tst_runtime_carddav_e2e
+    tst_runtime_carddav_e2e.cpp
+    ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync/fakecarddavserver.cpp
+)
+target_include_directories(tst_runtime_carddav_e2e
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync
+)
+target_link_libraries(tst_runtime_carddav_e2e
+    PRIVATE
+        Qt::Core
+        Qt::Network
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_runtime_carddav_e2e COMMAND tst_runtime_carddav_e2e)
+set_tests_properties(tst_runtime_carddav_e2e PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase J Task 10: PalmRuntime stress test — 10 hotSync iterations, no leak.
+add_executable(tst_runtime_stress tst_runtime_stress.cpp)
+target_link_libraries(tst_runtime_stress
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_runtime_stress COMMAND tst_runtime_stress)
+set_tests_properties(tst_runtime_stress PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )

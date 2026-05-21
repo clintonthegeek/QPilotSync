@@ -18,7 +18,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find Qt6
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Widgets Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Widgets Network Concurrent)
 qt_standard_project_setup()
 
 # KDE Extra CMake Modules — provides KDE_INSTALL_PLUGINDIR etc.
@@ -51,7 +51,8 @@ pkg_check_modules(UDEV REQUIRED libudev)
 # docs/plans/2026-04-20-libkalburator-integration.md.
 # Phase A: linked only by the smoke test; no WP source consumes it yet.
 set(KALBURATOR_HAVE_ORG_IO OFF CACHE BOOL "" FORCE)
-set(KALBURATOR_HAVE_AKONADI OFF CACHE BOOL "" FORCE)
+# Phase L.8: allow KALBURATOR_HAVE_AKONADI to be set by the caller; default OFF
+option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" OFF)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../libkalburator libkalburator EXCLUDE_FROM_ALL)
 
 # Build pilot-link first
@@ -62,6 +63,7 @@ add_subdirectory(src)
 
 # Testing support
 option(BUILD_TESTS "Build the test suite" ON)
+
 if(BUILD_TESTS)
     enable_testing()
     find_package(Qt6 REQUIRED COMPONENTS Test)
@@ -89,6 +91,7 @@ target_link_libraries(wildpalms
         KF6::Notifications
         KF6::StatusNotifierItem
         WildPalmsCore
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
 )
 
 # Install target

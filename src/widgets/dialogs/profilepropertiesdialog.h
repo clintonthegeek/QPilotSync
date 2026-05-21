@@ -10,6 +10,9 @@ class QLabel;
 class QLineEdit;
 class QSpinBox;
 class Profile;
+// K.8b T13: ConduitManager deleted. The "Conduits" page in this dialog
+// is now stubbed out by T14 alongside the rest of KF6MainWindow's
+// ConduitManager-driven flow.
 class ConduitManager;
 
 /**

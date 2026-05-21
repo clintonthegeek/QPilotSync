@@ -67,6 +67,15 @@ void ActionManager::setupFileActions()
     QAction *profileSettings = new QAction(i18n("Profile Settings..."), this);
     connect(profileSettings, &QAction::triggered, this, &ActionManager::profileSettingsRequested);
     m_actionCollection->addAction(QStringLiteral("file_profile_settings"), profileSettings);
+
+    // Configure Mappings (M5b Task 6)
+    QAction *configureMappings = new QAction(
+        QIcon::fromTheme(QStringLiteral("configure")),
+        i18n("Configure Mappings..."), this);
+    connect(configureMappings, &QAction::triggered,
+            this, &ActionManager::configureMappingsRequested);
+    m_actionCollection->addAction(QStringLiteral("file_configure_mappings"),
+                                  configureMappings);
 }
 
 void ActionManager::setupDeviceActions()
@@ -255,7 +264,10 @@ void ActionManager::updateProfileState(bool hasProfile)
     closeProfileAction()->setEnabled(hasProfile);
     profileSettingsAction()->setEnabled(hasProfile);
     installFilesAction()->setEnabled(hasProfile);
-    showConflictsAction()->setEnabled(hasProfile);
+    // showConflictsAction is permanently disabled: onShowConflicts() was removed
+    // when m_conflictStore was dropped in T13/T14.  Keep the action in the menu
+    // (for a future reimplementation) but never let it fire.
+    showConflictsAction()->setEnabled(false);
 }
 
 void ActionManager::updateConflictCount(int count)

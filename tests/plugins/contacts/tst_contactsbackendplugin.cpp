@@ -5,15 +5,14 @@
 #include <pi-appinfo.h>
 
 #include "plugins/contacts/contactsbackendplugin.h"
-#include "plugins/contacts/contactsblobbackend.h"
+#include "plugins/contacts/palmcontactsbackend.h"
 #include "plugins/contacts/contactsconflicthandler.h"
 
 #include "palm/calendar/categorymappingstore.h"
-#include "palm/palmdeviceconnection.h"
-#include "palm/sync/palmbackend.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
+#include "runtime/palmdeviceaccess.h"
 
-#include "core/ibackendplugin.h"
+// K.8b T13: core/ibackendplugin_v2.h deleted along with the V2 plugin ABI.
 
 // Complete-type includes for libkalburator pointers (delete on a forward
 // decl is UB; ConflictHandler is needed for dynamic_cast).
@@ -21,10 +20,20 @@
 #include "conflictpolicy.h"
 #include "conflictrecord.h"
 
+// K.7: registry assertions for constructor-time domain extension
+// registration. ContactsDomainPlugin removed; use registerStockPlugins.
+#include "domainregistry.h"
+#include "domainoperationsregistry.h"
+#include "transformationregistry.h"
+#include "backendregistry.h"
+#include "pluginmanager.h"
+#include "stock_plugins.h"
+
 using WildPalms::ContactsPlugin::ContactsBackendPlugin;
-using WildPalms::ContactsPlugin::ContactsBlobBackend;
+using WildPalms::ContactsPlugin::PalmContactsBackend;
 using WildPalms::ContactsPlugin::ContactsConflictHandler;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
+using WildPalms::Runtime::PalmDeviceAccess;
 
 namespace {
 
@@ -59,6 +68,7 @@ class TestContactsBackendPlugin : public QObject
 {
     Q_OBJECT
 private slots:
+    void cleanup();
     void pluginIdentity();
     void createBackends_returnsBlobOnly();
     void createBackends_populatesCategoryStoreFromAppInfo();
@@ -66,7 +76,23 @@ private slots:
     void createConflictHandler_returnsContactsConflictHandler();
     void enrichConflictSnapshot_extractsFnFromVcard();
     void formatConflictRecordHtml_includesTitleAndPre();
+    void constructorRegistersPalmShape();
 };
+
+void TestContactsBackendPlugin::cleanup()
+{
+    // The plugin constructor mutates the process-wide TransformationRegistry.
+    // Reset all four registries between slots so re-seeding via
+    // registerStockPlugins succeeds (no CanonicalConflict / DoubleBinding
+    // from prior slot). K.7: ContactsDomainPlugin removed;
+    // registerStockPlugins() is the canonical re-seed path.
+    Kalburator::Shape::TransformationRegistry::instance().clear();
+    Kalburator::Shape::DomainRegistry::instance().clear();
+    Kalburator::Shape::DomainOperationsRegistry::instance().clear();
+    Kalburator::Sync::BackendRegistry::instance().clear();
+    Kalburator::PluginManager pm;
+    Kalburator::registerStockPlugins(pm);
+}
 
 void TestContactsBackendPlugin::pluginIdentity()
 {
@@ -81,15 +107,12 @@ void TestContactsBackendPlugin::pluginIdentity()
 
 void TestContactsBackendPlugin::createBackends_returnsBlobOnly()
 {
-    MockPalmDatabaseAccess device;
-    PalmDeviceConnection conn(&device);
+    auto mock = std::make_unique<MockPalmDatabaseAccess>();
+    PalmDeviceAccess dev(std::move(mock));
 
     ContactsBackendPlugin p;
-    auto provided = p.createBackends(/*host=*/nullptr, &conn);
-    QVERIFY(provided.blob != nullptr);
-    QVERIFY(provided.calendar == nullptr);
-
-    delete provided.blob;
+    auto blobPtr = p.createPalmBackend(&dev);
+    QVERIFY(blobPtr != nullptr);
 }
 
 void TestContactsBackendPlugin::createBackends_populatesCategoryStoreFromAppInfo()
@@ -102,21 +125,18 @@ void TestContactsBackendPlugin::createBackends_populatesCategoryStoreFromAppInfo
     names[1] = QStringLiteral("Family");
     names[5] = QStringLiteral("Customers");
 
-    MockPalmDatabaseAccess device;
-    device.setAppBlock(QStringLiteral("AddressDB"), buildAddressDbAppInfo(names));
-
-    PalmDeviceConnection conn(&device);
+    auto mock = std::make_unique<MockPalmDatabaseAccess>();
+    mock->setAppBlock(QStringLiteral("AddressDB"), buildAddressDbAppInfo(names));
+    PalmDeviceAccess dev(std::move(mock));
 
     ContactsBackendPlugin p;
-    auto provided = p.createBackends(/*host=*/nullptr, &conn);
-    QVERIFY(provided.blob != nullptr);
+    auto blobPtr = p.createPalmBackend(&dev);
+    QVERIFY(blobPtr != nullptr);
 
-    auto *blob = qobject_cast<ContactsBlobBackend *>(provided.blob);
+    auto *blob = static_cast<PalmContactsBackend *>(blobPtr.get());
     QVERIFY(blob);
     auto cols = blob->availableCollections();
     QCOMPARE(cols.size(), 3);  // Unfiled (slot 0) + Family (slot 1) + Customers (slot 5)
-
-    delete provided.blob;
 }
 
 void TestContactsBackendPlugin::createConflictHandler_requiresPriorCreateBackends()
@@ -128,12 +148,12 @@ void TestContactsBackendPlugin::createConflictHandler_requiresPriorCreateBackend
 
 void TestContactsBackendPlugin::createConflictHandler_returnsContactsConflictHandler()
 {
-    MockPalmDatabaseAccess device;
-    PalmDeviceConnection conn(&device);
+    auto mock = std::make_unique<MockPalmDatabaseAccess>();
+    PalmDeviceAccess dev(std::move(mock));
 
     ContactsBackendPlugin p;
-    auto provided = p.createBackends(nullptr, &conn);   // primes m_device
-    delete provided.blob;
+    auto blobPtr = p.createPalmBackend(&dev);   // primes m_device
+    Q_UNUSED(blobPtr)
 
     auto *handler = p.createConflictHandler();
     QVERIFY(handler != nullptr);
@@ -144,7 +164,7 @@ void TestContactsBackendPlugin::createConflictHandler_returnsContactsConflictHan
 void TestContactsBackendPlugin::enrichConflictSnapshot_extractsFnFromVcard()
 {
     ContactsBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral(
         "BEGIN:VCARD\r\n"
         "VERSION:4.0\r\n"
@@ -162,13 +182,29 @@ void TestContactsBackendPlugin::enrichConflictSnapshot_extractsFnFromVcard()
 void TestContactsBackendPlugin::formatConflictRecordHtml_includesTitleAndPre()
 {
     ContactsBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral("BEGIN:VCARD\nFN:Jane Doe\nEND:VCARD\n");
     snap.metadata[QStringLiteral("title")] = QStringLiteral("Jane Doe");
 
     const QString html = p.formatConflictRecordHtml(snap);
     QVERIFY(html.contains(QStringLiteral("<h3>Jane Doe</h3>")));
     QVERIFY(html.contains(QStringLiteral("<pre>")));
+}
+
+void TestContactsBackendPlugin::constructorRegistersPalmShape()
+{
+    // The previous slot's cleanup() left both registries seeded via
+    // registerStockPlugins() (which registers vcard4 via ContactsPlugin).
+    // Constructing a ContactsBackendPlugin must additionally register the
+    // palm peer shape and palm <-> vcard4 edges.
+    auto& reg = Kalburator::Shape::TransformationRegistry::instance();
+
+    ContactsBackendPlugin plugin;
+
+    const Kalburator::Shape::Shape palm{
+        Kalburator::Shape::DomainId{"contacts"},
+        Kalburator::Shape::EncodingId{"palm"} };
+    QVERIFY(reg.catalogueFor(palm) != nullptr);
 }
 
 QTEST_MAIN(TestContactsBackendPlugin)

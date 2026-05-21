@@ -13,6 +13,8 @@ function(add_wildpalms_test TEST_NAME)
             Qt::Test
             Qt::Widgets
             KF6::CalendarCore
+            KF6::ConfigCore
+            Kalburator::Sync
             WildPalmsCore
             pisock
             bluetooth
@@ -62,35 +64,62 @@ add_wildpalms_test(test_conflict
     test_conflict.cpp
 )
 
-add_wildpalms_test(test_localfilebackend
-    test_localfilebackend.cpp
-)
-
-add_wildpalms_test(test_syncengine
-    test_syncengine.cpp
-)
+# K.8b T13: test_localfilebackend / test_syncengine deleted along with
+# LocalFileBackend + SyncEngine. test_multidatabase (further down) likewise.
 
 add_wildpalms_test(test_profile
     test_profile.cpp
 )
 
-add_wildpalms_test(test_multidatabase test_multidatabase.cpp)
-
-# ============================================================
-# Unit Tests - Plucker Config
-# ============================================================
-
-add_executable(test_pluckerconfig
-    test_pluckerconfig.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerconfig.cpp
-    ${CMAKE_SOURCE_DIR}/src/plugins/plucker/pluckerchannel.cpp
+# K.8b T9/T10: Profile accounts subgroup + sidecar migration.
+# Needs Kalburator::Sync and KF6::ConfigCore directly because profile.h
+# includes backendconfiguration.h and the include path / KConfig dep is
+# not propagated through WildPalmsCore (which links both PRIVATELY).
+add_executable(test_profile_accounts test_profile_accounts.cpp)
+target_link_libraries(test_profile_accounts
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Kalburator::Sync
+        KF6::ConfigCore
+        WildPalmsCore
 )
-target_link_libraries(test_pluckerconfig PRIVATE Qt::Core Qt::Test)
-target_include_directories(test_pluckerconfig PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_test(NAME test_pluckerconfig COMMAND test_pluckerconfig)
-set_tests_properties(test_pluckerconfig PROPERTIES
+add_test(NAME test_profile_accounts COMMAND test_profile_accounts)
+set_tests_properties(test_profile_accounts PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+add_executable(test_profile_sidecar_migration test_profile_sidecar_migration.cpp)
+target_link_libraries(test_profile_sidecar_migration
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Kalburator::Sync
+        KF6::ConfigCore
+        WildPalmsCore
+)
+add_test(NAME test_profile_sidecar_migration COMMAND test_profile_sidecar_migration)
+set_tests_properties(test_profile_sidecar_migration PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+# Phase L Task 0.A: AutoSyncOrchestrator unregistered-device confirmation path
+add_wildpalms_test(test_autosyncorchestrator_unregistered
+    test_autosyncorchestrator_unregistered.cpp
+)
+set_tests_properties(test_autosyncorchestrator_unregistered PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${CMAKE_BINARY_DIR}/test-home-autosync;XDG_CONFIG_HOME=${CMAKE_BINARY_DIR}/test-xdg-autosync"
+)
+
+# Phase L Task 0.B: KF6Settings DeviceRegistry → DeviceSerials migration
+add_wildpalms_test(test_kf6settings_registry_migration
+    test_kf6settings_registry_migration.cpp
+)
+set_tests_properties(test_kf6settings_registry_migration PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${CMAKE_BINARY_DIR}/test-home-kf6mig;XDG_CONFIG_HOME=${CMAKE_BINARY_DIR}/test-xdg-kf6mig"
+)
+
+# K.8b T13: test_multidatabase deleted along with SyncEngine + SyncConduitBase.
 
 # ============================================================
 # Helper for runtime-only tests (Phase D originally; consolidated under
@@ -114,7 +143,6 @@ function(add_runtime_test TEST_NAME)
     )
 endfunction()
 
-add_runtime_test(test_fullsync_calendarcollection test_fullsync_calendarcollection.cpp)
 add_runtime_test(test_fullsync_syncconfigstore    test_fullsync_syncconfigstore.cpp)
 add_runtime_test(test_fullsync_synchost           test_fullsync_synchost.cpp)
 
@@ -148,24 +176,8 @@ add_subdirectory(palmcalendar)
 
 add_subdirectory(palmadapters)
 
-# ============================================================
-# Smoke Test - libkalburator linkage (Phase A)
-# ============================================================
-# Deliberately does NOT go through add_wildpalms_test(); the smoke test
-# links only Kalburator::Sync to isolate library linkage from WP-side
-# deps (WildPalmsCore, pisock, etc.).
-
-add_executable(test_libkalburator_smoke test_libkalburator_smoke.cpp)
-target_link_libraries(test_libkalburator_smoke
-    PRIVATE
-        Qt::Core
-        Qt::Test
-        Kalburator::Sync
-)
-add_test(NAME test_libkalburator_smoke COMMAND test_libkalburator_smoke)
-set_tests_properties(test_libkalburator_smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-)
+# K.8b T18: Smoke test deleted — libkalburator owns its own contract testing.
+# Consumer smoke tests are anti-patterns.
 
 # ============================================================
 # Test Data Directory
@@ -183,3 +195,28 @@ add_subdirectory(core)
 
 # Phase E.9 — concrete PalmDeviceConnection aggregator.
 add_subdirectory(palm)
+
+# ============================================================
+# M.12 — AddAccountDialog baseline (pre-migration smoke test)
+# ============================================================
+# WildPalmsAppAccounts is a separate static lib (not in WildPalmsCore)
+# so we can't use the add_wildpalms_test() helper here.
+add_executable(test_addaccountdialog_baseline
+    test_addaccountdialog_baseline.cpp
+)
+target_link_libraries(test_addaccountdialog_baseline
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        Kalburator::Sync
+        # WildPalmsCore (SHARED) absorbs WildPalmsAppAccounts + PalmDeviceAccessLib
+        # + pisock/bluetooth/usb transitive symbols via WHOLE_ARCHIVE; this is
+        # the same approach all add_wildpalms_test() targets use.
+        WildPalmsCore
+        WildPalmsAppAccounts
+)
+add_test(NAME test_addaccountdialog_baseline COMMAND test_addaccountdialog_baseline)
+set_tests_properties(test_addaccountdialog_baseline PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

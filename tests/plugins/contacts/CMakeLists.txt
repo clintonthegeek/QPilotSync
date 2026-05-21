@@ -24,15 +24,19 @@ target_link_libraries(tst_contactsvcardtranscoder
         Qt::Core
 )
 add_test(NAME tst_contactsvcardtranscoder COMMAND tst_contactsvcardtranscoder)
+set_tests_properties(tst_contactsvcardtranscoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 2: ContactsBlobBackend ---
+# --- Task 2: PalmContactsBackend (migrated from ContactsBlobBackend, Phase J) ---
 add_executable(tst_contactsblobbackend
     tst_contactsblobbackend.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
 )
 target_include_directories(tst_contactsblobbackend
     PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_contactsblobbackend BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
 )
 target_link_libraries(tst_contactsblobbackend
     PRIVATE
@@ -46,6 +50,7 @@ target_link_libraries(tst_contactsblobbackend
         Qt::Core
 )
 add_test(NAME tst_contactsblobbackend COMMAND tst_contactsblobbackend)
+set_tests_properties(tst_contactsblobbackend PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 3: ContactsConflictHandler ---
 add_executable(tst_contactsconflicthandler
@@ -67,19 +72,28 @@ target_link_libraries(tst_contactsconflicthandler
         Qt::Core
 )
 add_test(NAME tst_contactsconflicthandler COMMAND tst_contactsconflicthandler)
+set_tests_properties(tst_contactsconflicthandler PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # --- Task 4: ContactsBackendPlugin (in-process, no .so loading) ---
 add_executable(tst_contactsbackendplugin
     tst_contactsbackendplugin.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsbackendplugin.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsconflicthandler.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
 )
 target_include_directories(tst_contactsbackendplugin
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${PILOT_LINK_INCLUDE_DIR}
+)
+# Prepend libkalburator's include dirs so "syncbackend.h" resolves to
+# Kalburator::Sync::SyncBackend (same resolution as the plugin target itself).
+target_include_directories(tst_contactsbackendplugin BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
 )
 target_link_libraries(tst_contactsbackendplugin
     PRIVATE
@@ -88,6 +102,7 @@ target_link_libraries(tst_contactsbackendplugin
         WildPalmsPalmCodecs
         WildPalmsPalmSync
         WildPalmsCore
+        PalmDeviceAccessLib      # PalmDeviceAccess symbols
         Kalburator::Sync
         KF6::CoreAddons
         KF6::Contacts
@@ -98,38 +113,32 @@ target_link_libraries(tst_contactsbackendplugin
         ${PILOT_LINK_LIBRARIES}
 )
 add_test(NAME tst_contactsbackendplugin COMMAND tst_contactsbackendplugin)
+set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-# --- Task 5: tst_contacts_v2 — end-to-end via BackendPluginManager ---
-# Loads the real wildpalms_contacts_v2.so off the build tree, drives
-# BlobSyncEngine::twoWayWithBaseline against a MockBlobBackend target
-# across multiple AddressDB category slots. Mirrors tst_todo_v2.
-add_executable(tst_contacts_v2
-    tst_contacts_v2.cpp
-    ${CONTACTS_PLUGIN_SRC_DIR}/contactsblobbackend.cpp
+# K.8b T13: tst_contacts_v2 + tst_contacts_palm_engine_sync deleted along
+# with IBackendPluginV2 + SyncEngine. Contract is covered end-to-end via
+# tst_palm_runtime_* (in-process Kalburator::Plugin path).
+
+# --- Phase Ia Task 14: ContactsDomainExtension (path A registration) ---
+add_executable(tst_contactsdomainextension
+    tst_contactsdomainextension.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
 )
-target_compile_definitions(tst_contacts_v2
-    PRIVATE
-        CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR}"
-)
-target_include_directories(tst_contacts_v2
+target_include_directories(tst_contactsdomainextension
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src
-        ${PILOT_LINK_INCLUDE_DIR}
+        ${CONTACTS_PLUGIN_SRC_DIR}
 )
-target_link_libraries(tst_contacts_v2
+target_link_libraries(tst_contactsdomainextension
     PRIVATE
-        WildPalmsRuntime          # BackendPluginManager
-        WildPalmsPalmCalendar     # CategoryMappingStore + AppInfo helper
-        WildPalmsPalmCodecs       # Contact POD + encodeContact/decodeContact
-        WildPalmsPalmSync         # PalmRecord, MockPalmDatabaseAccess, PalmBackend
-        WildPalmsCore
-        Kalburator::Sync
-        KF6::CoreAddons
+        WildPalmsPalmCodecs   # encodeContact / decodeContact / Contact
+        WildPalmsPalmSync     # PalmRecord
+        Kalburator::Sync      # TransformationRegistry / DomainRegistry / Shape
         KF6::Contacts
         Qt::Test
         Qt::Core
-        ${PILOT_LINK_LIBRARIES}
 )
-add_dependencies(tst_contacts_v2 wildpalms_contacts_v2)
-add_test(NAME tst_contacts_v2 COMMAND tst_contacts_v2)
+add_test(NAME tst_contactsdomainextension COMMAND tst_contactsdomainextension)
+set_tests_properties(tst_contactsdomainextension PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

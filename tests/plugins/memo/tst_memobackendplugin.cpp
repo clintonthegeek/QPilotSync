@@ -3,21 +3,22 @@
 
 #include "plugins/memo/memobackendplugin.h"
 #include "plugins/memo/memoblobbackend.h"
-#include "palm/palmdeviceconnection.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "palm/codecs/memocodec.h"
+#include "runtime/palmdeviceaccess.h"
 
-#include "conflictrecord.h"   // Kalburator::Sync::QSyncCore::RecordSnapshot
+#include "iblobbackend.h"
+#include "conflictrecord.h"   // Kalburator::Conflict::RecordSnapshot
 
-using WildPalms::Memo::MemoBackendPlugin;
+using WildPalms::Memo::MemoPlugin;
 using WildPalms::Memo::MemoBlobBackend;
+using WildPalms::Runtime::PalmDeviceAccess;
 
 class TestMemoBackendPlugin : public QObject {
     Q_OBJECT
 private slots:
     void metadataStatics();
-    void claimsMemoDB();
-    void createBackendsReturnsMemoBlobBackendOverPalmBackend();
+    void createPalmBackendReturnsMemoBlobBackend();
     void viewHooksReportMemoSurface();
     void conflictHtmlRendersMemoTitleAndBody();
     void enrichSnapshotDecodesPalmBytesOnSourceSide();
@@ -25,7 +26,7 @@ private slots:
 
 void TestMemoBackendPlugin::metadataStatics()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     QCOMPARE(p.pluginId(), QStringLiteral("memo"));
     QCOMPARE(p.displayName(), QStringLiteral("Memos"));
     QCOMPARE(p.description(),
@@ -33,30 +34,20 @@ void TestMemoBackendPlugin::metadataStatics()
     QCOMPARE(p.version(), QStringLiteral("2.0"));
 }
 
-void TestMemoBackendPlugin::claimsMemoDB()
+void TestMemoBackendPlugin::createPalmBackendReturnsMemoBlobBackend()
 {
-    MemoBackendPlugin p;
-    QCOMPARE(p.claimedDatabases(), QStringList{QStringLiteral("MemoDB")});
-}
+    MemoPlugin p;
+    auto mock = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
+    PalmDeviceAccess dev(std::move(mock));
 
-void TestMemoBackendPlugin::createBackendsReturnsMemoBlobBackendOverPalmBackend()
-{
-    WildPalms::PalmSync::MockPalmDatabaseAccess dev;
-    PalmDeviceConnection conn(&dev);
-    MemoBackendPlugin p;
-
-    auto backends = p.createBackends(nullptr, &conn);
-    QVERIFY(backends.blob != nullptr);
-    QCOMPARE(backends.blob->backendId(), QStringLiteral("palm-memo"));
-    QCOMPARE(backends.calendar, static_cast<Kalburator::Sync::SyncBackend *>(nullptr));
-
-    // Clean up: the plugin returns a raw pointer without parenting.
-    delete backends.blob;
+    auto backend = p.createPalmBackend(&dev);
+    QVERIFY(backend != nullptr);
+    QCOMPARE(backend->backendId(), QStringLiteral("palm-memo"));
 }
 
 void TestMemoBackendPlugin::viewHooksReportMemoSurface()
 {
-    MemoBackendPlugin p;
+    MemoPlugin p;
     QCOMPARE(p.hasMainView(), true);
     QCOMPARE(p.mainViewName(), QStringLiteral("Memos"));
 
@@ -68,8 +59,8 @@ void TestMemoBackendPlugin::viewHooksReportMemoSurface()
 
 void TestMemoBackendPlugin::conflictHtmlRendersMemoTitleAndBody()
 {
-    MemoBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    MemoPlugin p;
+    Kalburator::Conflict::RecordSnapshot snap;
     snap.content = QByteArrayLiteral("Grocery list\n- milk\n- eggs");
     snap.metadata[QStringLiteral("title")] = QStringLiteral("Grocery list");
     snap.contentType = QStringLiteral("text/plain");
@@ -81,8 +72,8 @@ void TestMemoBackendPlugin::conflictHtmlRendersMemoTitleAndBody()
 
 void TestMemoBackendPlugin::enrichSnapshotDecodesPalmBytesOnSourceSide()
 {
-    MemoBackendPlugin p;
-    Kalburator::Sync::QSyncCore::RecordSnapshot snap;
+    MemoPlugin p;
+    Kalburator::Conflict::RecordSnapshot snap;
     const auto palm = WildPalms::PalmCodecs::encodeMemo(
         {QStringLiteral("Shopping list\nfirst line extends"), false});
     snap.content = palm;

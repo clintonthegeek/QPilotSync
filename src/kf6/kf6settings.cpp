@@ -13,6 +13,7 @@ KF6Settings& KF6Settings::instance()
 KF6Settings::KF6Settings()
     : m_config(KSharedConfig::openConfig(QStringLiteral("wildpalmsrc")))
 {
+    migrateLegacyDeviceRegistry();
 }
 
 // ========== Helper Methods ==========
@@ -20,11 +21,6 @@ KF6Settings::KF6Settings()
 KConfigGroup KF6Settings::profilesGroup() const
 {
     return m_config->group(QStringLiteral("Profiles"));
-}
-
-KConfigGroup KF6Settings::deviceRegistryGroup() const
-{
-    return m_config->group(QStringLiteral("DeviceRegistry"));
 }
 
 KConfigGroup KF6Settings::exportGroup() const
@@ -55,6 +51,41 @@ KConfigGroup KF6Settings::systemTrayGroup() const
 KConfigGroup KF6Settings::deviceSerialsGroup() const
 {
     return KConfigGroup(m_config, QStringLiteral("DeviceSerials"));
+}
+
+void KF6Settings::migrateLegacyDeviceRegistry()
+{
+    // Phase L Task 0.B: legacy "DeviceRegistry" group keyed on
+    // DeviceFingerprint::registryKey() ("userId:userName:serial") is
+    // collapsed into the simpler serial-keyed "DeviceSerials" group.
+    KConfigGroup legacy(m_config, QStringLiteral("DeviceRegistry"));
+    QStringList legacyKeys = legacy.keyList();
+    if (legacyKeys.isEmpty()) {
+        return;
+    }
+
+    KConfigGroup serials = deviceSerialsGroup();
+    for (const QString &key : legacyKeys) {
+        // Parse the serial out of the trailing segment after the second ':'.
+        int firstColon = key.indexOf(QLatin1Char(':'));
+        if (firstColon < 0) continue;
+        int secondColon = key.indexOf(QLatin1Char(':'), firstColon + 1);
+        if (secondColon < 0) continue;
+        QString serial = key.mid(secondColon + 1);
+        if (serial.isEmpty()) continue;
+
+        QString profilePath = legacy.readEntry(key, QString());
+        if (profilePath.isEmpty()) continue;
+
+        // Don't clobber an existing newer serial entry.
+        if (serials.readEntry(serial, QString()).isEmpty()) {
+            serials.writeEntry(serial, profilePath);
+        }
+    }
+
+    // Wipe legacy group entirely so subsequent ctors are no-ops.
+    legacy.deleteGroup();
+    m_config->sync();
 }
 
 // ========== Profile Settings ==========
@@ -107,73 +138,6 @@ void KF6Settings::removeRecentProfile(const QString &path)
 void KF6Settings::clearRecentProfiles()
 {
     profilesGroup().writeEntry("Recent", QStringList());
-}
-
-// ========== Device Registry ==========
-
-void KF6Settings::registerDevice(const DeviceFingerprint &fingerprint, const QString &profilePath)
-{
-    if (fingerprint.isEmpty() || profilePath.isEmpty()) return;
-
-    QString key = fingerprint.registryKey();
-    deviceRegistryGroup().writeEntry(key, QDir::cleanPath(profilePath));
-}
-
-void KF6Settings::unregisterDevice(const DeviceFingerprint &fingerprint)
-{
-    if (fingerprint.isEmpty()) return;
-
-    QString key = fingerprint.registryKey();
-    deviceRegistryGroup().deleteEntry(key);
-}
-
-QString KF6Settings::findProfileForDevice(const DeviceFingerprint &fingerprint)
-{
-    if (fingerprint.isEmpty()) return QString();
-
-    // First try exact match
-    QString key = fingerprint.registryKey();
-    QString result = deviceRegistryGroup().readEntry(key, QString());
-    if (!result.isEmpty()) {
-        return result;
-    }
-
-    // If we have a userId, try to find by userId alone (in case username changed)
-    if (fingerprint.userId != 0) {
-        KConfigGroup group = deviceRegistryGroup();
-        QStringList keys = group.keyList();
-
-        for (const QString &regKey : keys) {
-            DeviceFingerprint regFp = DeviceFingerprint::fromRegistryKey(regKey);
-            if (regFp.userId == fingerprint.userId) {
-                return group.readEntry(regKey, QString());
-            }
-        }
-    }
-
-    return QString();
-}
-
-QMap<QString, QString> KF6Settings::deviceRegistry()
-{
-    QMap<QString, QString> registry;
-
-    KConfigGroup group = deviceRegistryGroup();
-    QStringList keys = group.keyList();
-    for (const QString &key : keys) {
-        registry[key] = group.readEntry(key, QString());
-    }
-
-    return registry;
-}
-
-void KF6Settings::clearDeviceRegistry()
-{
-    KConfigGroup group = deviceRegistryGroup();
-    QStringList keys = group.keyList();
-    for (const QString &key : keys) {
-        group.deleteEntry(key);
-    }
 }
 
 // ========== Export Settings ==========

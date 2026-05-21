@@ -1,36 +1,30 @@
-// Phase D unit test — SyncHost_WP and the conflict stubs.
+// G.9.a unit test — SyncHost_WP narrowed interface.
 
 #include <QtTest/QtTest>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTimeZone>
 
-#include <KCalendarCore/Event>
-#include <KCalendarCore/MemoryCalendar>
-
-#include "calendarcollection_wp.h"
 #include "conflictpresenter_wp.h"
 #include "conflictresolver_wp.h"
 #include "synchost_wp.h"
 #include "syncconfigstore_wp.h"
 
-using WildPalms::FullSync::CalendarCollection_WP;
 using WildPalms::FullSync::ConflictPresenter_WP;
 using WildPalms::FullSync::ConflictResolver_WP;
 using WildPalms::FullSync::SyncConfigStore_WP;
 using WildPalms::FullSync::SyncHost_WP;
 using Kalburator::Sync::ConflictInfo;
 using Kalburator::Sync::ConflictResolution;
+using Kalburator::Sync::ISyncHost;
 
 class TestFullSyncSyncHost : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void collectionAndConfigStoreAreExposed();
-    void incidenceSourceAndRegistryAreNullForPhaseD();
-    void applyIncidenceCountersTick();
-    void unloadAndRegenerateMappingsCount();
+    void configStoreIsExposed();
+    void recordChangedCounterTicks();
     void backendRegistrationLookup();
     void conflictResolverAutoAccepts();
     void conflictPresenterCountsRefreshes();
@@ -39,68 +33,38 @@ private:
     QTemporaryDir m_tempDir;
 };
 
-void TestFullSyncSyncHost::collectionAndConfigStoreAreExposed()
+void TestFullSyncSyncHost::configStoreIsExposed()
 {
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
     QSettings settings(m_tempDir.path() + QLatin1String("/a.ini"), QSettings::IniFormat);
     SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    SyncHost_WP host(&store);
 
-    QCOMPARE(host.collection(), static_cast<Kalburator::Sync::ICalendarCollection*>(&coll));
     QCOMPARE(host.configStore(), static_cast<Kalburator::Sync::ISyncConfigStore*>(&store));
 }
 
-void TestFullSyncSyncHost::incidenceSourceAndRegistryAreNullForPhaseD()
+void TestFullSyncSyncHost::recordChangedCounterTicks()
 {
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
     QSettings settings(m_tempDir.path() + QLatin1String("/b.ini"), QSettings::IniFormat);
     SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    SyncHost_WP host(&store);
 
-    QVERIFY(host.incidenceSource() == nullptr);
-    QVERIFY(host.incidenceRegistry() == nullptr);
-}
+    QCOMPARE(host.recordChangedCount(), 0);
 
-void TestFullSyncSyncHost::applyIncidenceCountersTick()
-{
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
-    QSettings settings(m_tempDir.path() + QLatin1String("/c.ini"), QSettings::IniFormat);
-    SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    host.recordChanged(QStringLiteral("mapping-1"), QStringLiteral("uid-1"), ISyncHost::ChangeKind::Created);
+    QCOMPARE(host.recordChangedCount(), 1);
 
-    KCalendarCore::Incidence::Ptr inc(new KCalendarCore::Event);
-    inc->setUid(QStringLiteral("uid-1"));
+    host.recordChanged(QStringLiteral("mapping-1"), QStringLiteral("uid-1"), ISyncHost::ChangeKind::Updated);
+    QCOMPARE(host.recordChangedCount(), 2);
 
-    QCOMPARE(host.applyAdditionCount(), 0);
-    QVERIFY(host.applyIncidenceAddition(QStringLiteral("cal-1"), inc));
-    QCOMPARE(host.applyAdditionCount(), 1);
-
-    QVERIFY(host.applyIncidenceUpdate(QStringLiteral("cal-1"), inc));
-    QCOMPARE(host.applyUpdateCount(), 1);
-
-    QVERIFY(host.applyIncidenceRemoval(QStringLiteral("cal-1"), QStringLiteral("uid-1")));
-    QCOMPARE(host.applyRemovalCount(), 1);
-}
-
-void TestFullSyncSyncHost::unloadAndRegenerateMappingsCount()
-{
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
-    QSettings settings(m_tempDir.path() + QLatin1String("/d.ini"), QSettings::IniFormat);
-    SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
-
-    host.unloadCalendar(QStringLiteral("cal-1"));
-    host.generateSyncMappingsFromLogicalCalendars();
-    QCOMPARE(host.unloadCount(), 1);
-    QCOMPARE(host.regenerateMappingsCount(), 1);
+    host.recordChanged(QStringLiteral("mapping-1"), QStringLiteral("uid-1"), ISyncHost::ChangeKind::Deleted);
+    QCOMPARE(host.recordChangedCount(), 3);
 }
 
 void TestFullSyncSyncHost::backendRegistrationLookup()
 {
-    CalendarCollection_WP coll(QStringLiteral("profile-A"));
-    QSettings settings(m_tempDir.path() + QLatin1String("/e.ini"), QSettings::IniFormat);
+    QSettings settings(m_tempDir.path() + QLatin1String("/c.ini"), QSettings::IniFormat);
     SyncConfigStore_WP store(&settings);
-    SyncHost_WP host(&coll, &store);
+    SyncHost_WP host(&store);
 
     QVERIFY(host.backendById(QStringLiteral("palm")) == nullptr);
     QVERIFY(host.backends().isEmpty());

@@ -5,6 +5,7 @@
 #include <optional>
 
 #include <QList>
+#include <QObject>
 
 #include "iblobbackend.h"
 #include "palmrecord.h"
@@ -26,7 +27,7 @@ class IPalmDatabaseAccess;
  * Does not own the IPalmDatabaseAccess; caller is responsible for
  * keeping it alive for the backend's lifetime.
  */
-class PalmBackend : public Kalburator::Sync::IBlobBackend {
+class PalmBackend : public QObject, public Kalburator::Sync::IBlobBackend {
     Q_OBJECT
 public:
     explicit PalmBackend(IPalmDatabaseAccess *device,
@@ -94,6 +95,13 @@ public:
     /// plugins (CalendarBackendPlugin) to populate per-database
     /// CategoryMappingStore at session start.
     QByteArray readAppBlock(const QString &dbName) const;
+
+Q_SIGNALS:
+    void recordCreated(const QString &recordId);
+    void recordUpdated(const QString &recordId);
+    void recordDeleted(const QString &recordId);
+    void errorOccurred(const QString &error);
+    void progressUpdated(int current, int total, const QString &message);
 
 private:
     IPalmDatabaseAccess *m_device = nullptr;

@@ -346,12 +346,6 @@ This roadmap outlines the incremental development plan for Wild Palms, broken in
 - [ ] Keyboard shortcuts
 - [ ] Polish visual design
 
-#### 5.5 Multiple Device Support
-- [ ] Device profiles
-- [ ] Switch between devices
-- [ ] Separate backups per device
-- [ ] Separate ID mappings per device
-
 #### 5.6 Utilities
 - [ ] Database viewer (browse Palm DBs)
 - [ ] Category editor

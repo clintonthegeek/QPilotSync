@@ -1,7 +1,6 @@
 #include "kf6mainwindow.h"
 #include "kf6settings.h"
 #include "actionmanager.h"
-#include "conduitmanager.h"
 #include "autosyncorchestrator.h"
 
 #include "../app/logwidget.h"
@@ -10,24 +9,22 @@
 
 #include "../wildpalms_version.h"
 #include "../palm/kpilotdevicelink.h"
-#include "../palm/devicesession.h"
 #include "../palm/pilotrecord.h"
 #include "../palm/categoryinfo.h"
 #include "../profile.h"
 
-#include "../core/iconduit.h"
-#include "../runtime/syncrunner_wp.h"
-#include "../core/ibackendplugin.h"
-#include "../runtime/backendpluginmanager.h"
-#include "../sync/syncengine.h"
-#include "../core/synctypes.h"
-#include "../sync/conduit.h"
-#include "../sync/localfilebackend.h"
-#include "../sync/qsynccore/conflictstore.h"
+#include "../runtime/accountcontroller.h"
+#include "../runtime/palmruntime.h"
+#include "../runtime/palmrunresult.h"
 #include "../sync/syncstate.h"
-#include "../app/interactiveconflicthandler.h"
-#include "../widgets/dialogs/conflictreviewdialog.h"
 
+#include "../plugins/calendar/calendarbackendplugin.h"
+#include "../plugins/memo/memobackendplugin.h"
+#include "../plugins/todos/todobackendplugin.h"
+// contactsbackendplugin.h and webcalbackendplugin.h are intentionally omitted:
+// those plugins have hasMainView()=false and never appear in the cast loop below.
+#include "../app/conflict/conflictdialogbridge.h"
+#include "../app/mapping/mappingeditordialog.h"
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
 #include "../widgets/dialogs/profilepropertiesdialog.h"
@@ -60,6 +57,7 @@
 #include <QDialogButtonBox>
 #include <QDialog>
 #include <QDebug>
+#include <QFutureWatcher>
 #include <cstring>
 
 #include <KActionCollection>
@@ -80,35 +78,18 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     , m_dashboardWidget(nullptr)
     // Action manager
     , m_actionManager(nullptr)
-    // Device connection
-    , m_session(nullptr)
-    , m_deviceLink(nullptr)
-    // Sync engine and conduits
-    , m_syncEngine(nullptr)
     , m_syncPath()
     // Last used connection settings
     , m_lastUsedDevicePath()
     , m_lastUsedBaudRate()
     // Device listening mode (m_devicePollTimer and m_listeningForDevice have in-class initializers)
     , m_listeningDevicePath()
-    // Current async operation
-    , m_pendingSyncOperationName()
-    // Profile
-    , m_currentProfile(nullptr)
-    // Conflict review
-    , m_conflictStore(nullptr)
 {
     setObjectName(QStringLiteral("KF6MainWindow"));
 
     // Setup UI
     setupUI();
     setupActions();
-
-    // Initialize sync engine
-    initializeSyncEngine();
-
-    // Initialize conduit manager (discovers and loads conduit plugins)
-    initializeConduits();
 
     // Auto-detection
     m_deviceMonitor = new PalmDeviceMonitor(this);
@@ -126,6 +107,8 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
             this, [this](const QString &path, const QString &userName) {
                 m_logWidget->logInfo(i18n("Created profile for %1 at %2", userName, path));
             });
+    connect(m_autoSync, &AutoSyncOrchestrator::unregisteredDeviceDetected,
+            this, &KF6MainWindow::onUnregisteredDeviceDetected);
     connect(m_autoSync, &AutoSyncOrchestrator::error,
             m_logWidget, &LogWidget::logError);
     connect(m_autoSync, &AutoSyncOrchestrator::statusChanged,
@@ -195,15 +178,6 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
 KF6MainWindow::~KF6MainWindow()
 {
-    // Disconnect conduit manager signals. Its destructor emits
-    // conduitUnloading() for each plugin, which would try to call our
-    // onConduitUnloading() slot. By disconnecting here, the signal fires
-    // harmlessly into the void when deleteChildren() eventually destroys
-    // the manager (after all base-class destructors have run cleanly).
-    if (m_conduitManager) {
-        disconnect(m_conduitManager, nullptr, this, nullptr);
-    }
-
     // Stop udev monitor
     if (m_deviceMonitor) {
         m_deviceMonitor->stop();
@@ -214,33 +188,12 @@ KF6MainWindow::~KF6MainWindow()
         m_devicePollTimer->stop();
     }
 
-    m_deviceLink = nullptr;
-
     // Disconnect device if connected (don't delete - let Qt handle it)
-    if (m_session && m_session->isConnected()) {
-        m_session->disconnectDevice();
+    if (m_palmRuntime && m_palmRuntime->isDeviceConnected()) {
+        m_palmRuntime->disconnectDevice();
     }
 
-    // Clear sync engine's device link reference
-    if (m_syncEngine) {
-        m_syncEngine->setDeviceLink(nullptr);
-    }
-
-    // Delete non-parented objects only
-    // m_session and m_syncEngine are QObject children - Qt will delete them
-
-    // Safety check: verify m_currentProfile is a valid heap pointer
-    // before deleting. This guards against memory corruption that could
-    // cause the pointer to hold an invalid value (like 'this').
-    if (m_currentProfile != nullptr) {
-        if (reinterpret_cast<void*>(m_currentProfile) == reinterpret_cast<void*>(this)) {
-            qWarning() << "[KF6MainWindow] BUG: m_currentProfile points to 'this' - "
-                       << "memory corruption detected, skipping delete";
-        } else {
-            delete m_currentProfile;
-        }
-    }
-    m_currentProfile = nullptr;
+    // m_currentProfile is std::unique_ptr — RAII handles deletion.
 }
 
 void KF6MainWindow::closeEvent(QCloseEvent *event)
@@ -267,14 +220,12 @@ void KF6MainWindow::setupUI()
 
 void KF6MainWindow::createCentralLayout()
 {
-    // Status header strip (120 px, sits between toolbar and conduit pages)
+    // Status header strip (120 px, sits between toolbar and plugin pages)
     m_dashboardWidget = new DashboardWidget(this);
 
-    // Conduit page area with icon sidebar
+    // Plugin page area with icon sidebar
     m_pageWidget = new KPageWidget(this);
     m_pageWidget->setFaceType(KPageWidget::List);
-    // Conduit pages are added dynamically by onConduitLoaded()
-
     // Stack: dashboard header on top, page widget below
     auto *central = new QWidget(this);
     auto *vbox = new QVBoxLayout(central);
@@ -309,6 +260,8 @@ void KF6MainWindow::setupConnections()
             this, &KF6MainWindow::onCloseProfile);
     connect(m_actionManager, &ActionManager::profileSettingsRequested,
             this, &KF6MainWindow::onProfileSettings);
+    connect(m_actionManager, &ActionManager::configureMappingsRequested,
+            this, &KF6MainWindow::onConfigureMappings);
     connect(m_actionManager, &ActionManager::settingsRequested,
             this, &KF6MainWindow::onSettings);
 
@@ -346,8 +299,6 @@ void KF6MainWindow::setupConnections()
 
     connect(m_actionManager, &ActionManager::clearLogRequested,
             this, &KF6MainWindow::onClearLog);
-    connect(m_actionManager, &ActionManager::showConflictsRequested,
-            this, &KF6MainWindow::onShowConflicts);
 
     // Log dock toggle - sync the action checkmark with dock visibility
     connect(m_actionManager->toggleLogPanelAction(), &QAction::toggled,
@@ -371,11 +322,11 @@ void KF6MainWindow::saveWindowState()
     settings.setWindowState(saveState());
     settings.setLogPanelVisible(m_logDock->isVisible());
 
-    // Save current conduit page index
+    // Save current plugin page index
     int pageIndex = 0;
     KPageWidgetItem *current = m_pageWidget->currentPage();
     int idx = 0;
-    for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+    for (auto it = m_palmPluginPages.constBegin(); it != m_palmPluginPages.constEnd(); ++it) {
         if (it.value() == current) {
             pageIndex = idx;
             break;
@@ -407,11 +358,11 @@ void KF6MainWindow::restoreWindowState()
     m_logDock->setVisible(logVisible);
     m_actionManager->toggleLogPanelAction()->setChecked(logVisible);
 
-    // Restore current conduit page
+    // Restore current plugin page
     int pageIndex = settings.currentTabIndex();
-    if (!m_conduitPages.isEmpty()) {
+    if (!m_palmPluginPages.isEmpty()) {
         int idx = 0;
-        for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+        for (auto it = m_palmPluginPages.constBegin(); it != m_palmPluginPages.constEnd(); ++it) {
             if (idx == pageIndex) {
                 m_pageWidget->setCurrentPage(it.value());
                 break;
@@ -438,7 +389,7 @@ void KF6MainWindow::onPageChanged(KPageWidgetItem *current, KPageWidgetItem *pre
 {
     Q_UNUSED(previous)
     Q_UNUSED(current)
-    // Conduit views handle their own data loading via loadFromPath()
+    // Plugin views handle their own data loading via loadFromPath()
     // when a profile is loaded. Lazy per-tab refresh can be added later
     // as an optimization.
 }
@@ -446,7 +397,7 @@ void KF6MainWindow::onPageChanged(KPageWidgetItem *current, KPageWidgetItem *pre
 void KF6MainWindow::updateMenuState(bool connected)
 {
     // Also consider connected if the orchestrator has an active session
-    if (!connected && m_session && m_session->isConnected()) {
+    if (!connected && m_palmRuntime && m_palmRuntime->isDeviceConnected()) {
         connected = true;
     }
     bool hasProfile = m_currentProfile != nullptr;
@@ -487,254 +438,27 @@ void KF6MainWindow::updateProfileMenuState()
     }
 }
 
-// ========== Sync Engine ==========
-
-void KF6MainWindow::initializeSyncEngine()
-{
-    m_syncEngine = new Sync::SyncEngine(this);
-
-    // Conduits are no longer hard-coded here. They are loaded
-    // dynamically by ConduitManager via initializeConduits() and
-    // registered with SyncEngine in onConduitLoaded().
-
-    // Connect sync engine signals
-    connect(m_syncEngine, &Sync::SyncEngine::logMessage,
-            m_logWidget, &LogWidget::logInfo);
-    connect(m_syncEngine, &Sync::SyncEngine::errorOccurred,
-            m_logWidget, &LogWidget::logError);
-    connect(m_syncEngine, &Sync::SyncEngine::syncStarted,
-            this, &KF6MainWindow::onSyncStarted);
-    connect(m_syncEngine, &Sync::SyncEngine::syncFinished,
-            this, &KF6MainWindow::onSyncFinished);
-    connect(m_syncEngine, &Sync::SyncEngine::progressUpdated,
-            this, &KF6MainWindow::onSyncProgress);
-}
-
-void KF6MainWindow::initializeConduits()
-{
-    m_conduitManager = new ConduitManager(this);
-
-    // Discover available conduit plugins from the plugin directory.
-    // Until conduits are migrated to .so plugins (Phase 3), this will
-    // find nothing -- the app starts with just the Dashboard page.
-    m_conduitManager->discoverConduits();
-
-    connect(m_conduitManager, &ConduitManager::conduitLoaded,
-            this, &KF6MainWindow::onConduitLoaded);
-    connect(m_conduitManager, &ConduitManager::conduitUnloading,
-            this, &KF6MainWindow::onConduitUnloading);
-
-    // Load ALL discovered conduits (profile controls which ones participate in sync)
-    for (const auto &info : m_conduitManager->conduitList()) {
-        QString conduitId = info.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
-        if (conduitId.isEmpty()) {
-            conduitId = info.metaData.pluginId();
-        }
-        m_conduitManager->loadConduit(conduitId);
-    }
-
-    // Phase E.9 — new-ABI plugins discovered from wildpalms/plugins/.
-    // Runs alongside ConduitManager until E.16. Host/device/coordinator
-    // are nullptr here; runtime wiring (which owns the real
-    // PalmDeviceConnection) lands in E.15/E.17.
-    m_backendPluginManager = new WildPalms::BackendPluginManager(
-        /*host=*/nullptr, /*device=*/nullptr, /*coordinator=*/nullptr, this);
-    m_backendPluginManager->discoverPlugins();
-
-    connect(m_backendPluginManager, &WildPalms::BackendPluginManager::pluginLoaded,
-            this, &KF6MainWindow::onBackendPluginLoaded);
-    connect(m_backendPluginManager, &WildPalms::BackendPluginManager::pluginUnloading,
-            this, &KF6MainWindow::onBackendPluginUnloading);
-
-    for (const auto &info : m_backendPluginManager->catalogue()) {
-        if (info.defaultEnabled) {
-            m_backendPluginManager->loadPlugin(info.metaData.pluginId());
-        }
-    }
-
-    // Phase E.16 — orchestrator that drives BlobSyncEngine for each
-    // loaded IBackendPlugin in response to Tools-menu actions. syncPath
-    // + stateDir get rebound when a profile is loaded; host/device
-    // come from the profile's PalmDeviceConnection wiring (E.17 owns
-    // the deeper integration). Constructed empty here so the menu
-    // wiring can dispatch even before a profile is open — the runner
-    // will short-circuit with an error if syncPath is empty.
-    m_syncRunner = new WildPalms::Runtime::SyncRunner(
-        m_backendPluginManager,
-        /*device=*/nullptr,
-        /*host=*/nullptr,
-        /*syncPath=*/QString(),
-        /*stateDir=*/QString(),
-        this);
-}
-
-void KF6MainWindow::onConduitLoaded(IConduit *conduit)
-{
-    // Create a view page if the conduit provides one
-    if (conduit->hasView()) {
-        QWidget *view = conduit->createView(this);
-        auto *page = new KPageWidgetItem(view, conduit->viewName());
-        page->setIcon(conduit->viewIcon());
-        page->setHeaderVisible(false);
-        m_pageWidget->addPage(page);
-        m_conduitPages[conduit->conduitId()] = page;
-    }
-
-    // Merge XMLGUI contributions if the conduit provides them
-    KXMLGUIClient *guiClient = conduit->createGUIClient();
-    if (guiClient) {
-        insertChildClient(guiClient);
-        m_conduitGUIClients[conduit->conduitId()] = guiClient;
-    }
-
-    // Register with the sync engine so it participates in sync operations
-    m_syncEngine->registerConduit(conduit);
-
-    // Pass ordering hints from plugin metadata to the sync engine
-    // (SyncConduitBase reads these itself, but other conduit types need explicit hints)
-    KPluginMetaData md = m_conduitManager->conduitMetaData(conduit->conduitId());
-    if (md.isValid()) {
-        QStringList runBefore, runAfter;
-        const QJsonObject raw = md.rawData();
-        const QJsonValue beforeVal = raw.value(QStringLiteral("X-WildPalms-RunBefore"));
-        if (beforeVal.isArray()) {
-            for (const QJsonValue &v : beforeVal.toArray())
-                if (!v.toString().isEmpty()) runBefore << v.toString();
-        }
-        const QJsonValue afterVal = raw.value(QStringLiteral("X-WildPalms-RunAfter"));
-        if (afterVal.isArray()) {
-            for (const QJsonValue &v : afterVal.toArray())
-                if (!v.toString().isEmpty()) runAfter << v.toString();
-        }
-        if (!runBefore.isEmpty() || !runAfter.isEmpty()) {
-            m_syncEngine->setConduitOrdering(conduit->conduitId(), runBefore, runAfter);
-        }
-    }
-
-    qDebug() << "[KF6MainWindow] Conduit loaded:" << conduit->conduitId()
-             << "(" << conduit->displayName() << ")";
-}
-
-void KF6MainWindow::onConduitUnloading(IConduit *conduit)
-{
-    const QString id = conduit->conduitId();
-
-    // Remove the view page
-    if (m_conduitPages.contains(id)) {
-        m_pageWidget->removePage(m_conduitPages.take(id));
-    }
-
-    // Remove XMLGUI client
-    if (m_conduitGUIClients.contains(id)) {
-        removeChildClient(m_conduitGUIClients.take(id));
-    }
-
-    // Unregister from sync engine
-    m_syncEngine->unregisterConduit(id);
-
-    qDebug() << "[KF6MainWindow] Conduit unloading:" << id;
-}
-
-// Phase E.9 — new-ABI plugin view loop. Mirrors onConduitLoaded for
-// plugins that opt in to `hasMainView()`. Sync-engine registration is
-// deliberately absent here; the new-ABI sync path comes online in
-// E.15/E.17 once the runtime owns the PalmDeviceConnection.
-void KF6MainWindow::onBackendPluginLoaded(WildPalms::IBackendPlugin *plugin)
-{
-    if (!plugin || !plugin->hasMainView()) return;
-
-    QWidget *view = plugin->createMainView(this);
-    if (!view) return;
-    auto *page = new KPageWidgetItem(view, plugin->mainViewName());
-    page->setIcon(plugin->mainViewIcon());
-    page->setHeaderVisible(false);
-    m_pageWidget->addPage(page);
-    m_backendPluginPages[plugin->pluginId()] = page;
-
-    qDebug() << "[KF6MainWindow] Backend plugin loaded:" << plugin->pluginId()
-             << "(" << plugin->mainViewName() << ")";
-}
-
-void KF6MainWindow::onBackendPluginUnloading(WildPalms::IBackendPlugin *plugin)
-{
-    if (!plugin) return;
-    if (auto *page = m_backendPluginPages.take(plugin->pluginId())) {
-        m_pageWidget->removePage(page);
-        page->deleteLater();
-    }
-    qDebug() << "[KF6MainWindow] Backend plugin unloading:" << plugin->pluginId();
-}
-
-void KF6MainWindow::showSyncResult(const Sync::SyncResult &result, const QString &operationName)
-{
-    int errorCount = result.palmStats.errors + result.pcStats.errors;
-
-    QString summary = i18n("%1 Complete!\n\n"
-                           "Palm: %2\n"
-                           "PC: %3\n"
-                           "Errors: %4",
-                           operationName,
-                           result.palmStats.summary(),
-                           result.pcStats.summary(),
-                           errorCount);
-
-    // Send KNotification
-    KNotification *notification = new KNotification(
-        result.success ? QStringLiteral("syncComplete") : QStringLiteral("syncError"),
-        KNotification::CloseOnTimeout, this);
-    notification->setTitle(operationName);
-    notification->setText(result.success ? i18n("Sync completed successfully") :
-                                           i18n("Sync completed with errors"));
-    notification->setIconName(result.success ? QStringLiteral("dialog-ok") :
-                                               QStringLiteral("dialog-error"));
-    notification->sendEvent();
-
-    if (result.success && errorCount == 0) {
-        QMessageBox::information(this, operationName + i18n(" Complete"), summary);
-    } else {
-        if (!result.errorMessage.isEmpty()) {
-            summary += QStringLiteral("\n\nError: ") + result.errorMessage;
-        }
-        for (const auto &warning : result.warnings) {
-            if (warning.severity == Sync::WarningSeverity::Error) {
-                summary += QStringLiteral("\n - ") + warning.message;
-            }
-        }
-        QMessageBox::warning(this, operationName + i18n(" Complete"), summary);
-    }
-
-    m_logWidget->logInfo(i18n("=== %1 Complete: %2 records, %3 errors ===",
-                              operationName,
-                              result.palmStats.total() + result.pcStats.total(),
-                              errorCount));
-
-    // Record last sync time on successful sync
-    if (result.success && m_currentProfile) {
-        m_currentProfile->setLastSyncTime(result.endTime);
-        m_currentProfile->save();
-    }
-
-    // Update dashboard after sync
-    m_dashboardWidget->updateStatus(m_currentProfile,
-                                    m_session && m_session->isConnected());
-}
 
 // ========== Profile Management ==========
 
 void KF6MainWindow::loadProfile(const QString &path)
 {
-    if (m_currentProfile) {
-        m_currentProfile->save();
-        delete m_currentProfile;
-        m_currentProfile = nullptr;
+    // AccountController borrows the old profile + runtime; it
+    // must be reset BEFORE the old Profile is deleted and the old
+    // PalmRuntime is replaced.
+    if (m_accountController) {
+        m_accountController.reset();
     }
 
-    m_currentProfile = new Profile(path);
+    if (m_currentProfile) {
+        m_currentProfile->save();
+    }
+
+    m_currentProfile = std::make_unique<Profile>(path);
 
     if (!m_currentProfile->isValid()) {
         m_logWidget->logError(i18n("Invalid profile path: %1", path));
-        delete m_currentProfile;
-        m_currentProfile = nullptr;
+        m_currentProfile.reset();
         updateWindowTitle();
         updateProfileMenuState();
         return;
@@ -757,81 +481,69 @@ void KF6MainWindow::loadProfile(const QString &path)
 
     m_syncPath = path;
 
-    // Configure sync engine
-    m_syncEngine->setStateDirectory(m_currentProfile->stateDirectoryPath());
+    // (Re)create PalmRuntime for the new profile path.
+    m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
+        m_currentProfile->stateDirectoryPath(), this);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runStarted,
+            this, &KF6MainWindow::onPalmRunStarted);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
+            this, &KF6MainWindow::onPalmRunFinished);
 
-    // Phase E.16 — keep the SyncRunner's bind state aligned with the
-    // active profile so Tools-menu actions targeting the new ABI write
-    // baselines + per-plugin local stores under the right paths.
-    if (m_syncRunner) {
-        m_syncRunner->setSyncPath(m_syncPath);
-        m_syncRunner->setStateDir(m_currentProfile->stateDirectoryPath());
+    // Phase Ic: AccountController borrows registry + profile + runtime.
+    m_accountController = std::make_unique<WildPalms::Runtime::AccountController>(
+        m_currentProfile->syncFolderPath(),
+        &m_palmRuntime->backendRegistry(),
+        m_currentProfile.get(),
+        m_palmRuntime.get(),
+        this);
+
+    // M5a — construct and install the libkalburator-side conflict handler.
+    // Recreate per profile so it points at the new engine.
+    // Direct construction is isolated in palmruntimebridgeinstall.cpp to avoid
+    // the include-guard collision between WP-local and libkalburator QSyncCore
+    // headers (both share the same guard names QSYNCCORE_CONFLICTPOLICY_H etc).
+    ConflictDialogBridge::destroyHandler(m_palmConflictHandler);
+    m_palmConflictHandler = nullptr;  // clear dangling pointer before recreating
+    m_palmConflictHandler = ConflictDialogBridge::createAndInstall(
+        m_palmRuntime.get(),
+        this,     // parentWidget for the dialog
+        this);    // QObject parent for lifetime management
+
+    // Tickle the device link while the dialog is open (matches legacy handler).
+    ConflictDialogBridge::connectKeepAlive(
+        m_palmConflictHandler,
+        [this]() { onPalmConflictHandlerKeepAlive(); });
+
+    // Wire Palm plugin pages synchronously now that PalmRuntime has loaded plugins.
+    for (auto *page : m_palmPluginPages.values()) {
+        m_pageWidget->removePage(page);
     }
-    m_syncEngine->setConflictAutoResolve(m_currentProfile->conflictAutoResolve());
-    m_syncEngine->setConflictFallback(m_currentProfile->conflictFallback());
-    m_syncEngine->setConflictPromptStrategy(m_currentProfile->conflictPromptStrategy());
-    m_syncEngine->setConflictConnectionBehavior(m_currentProfile->conflictConnectionBehavior());
-    m_syncEngine->setConflictTimeoutSeconds(m_currentProfile->conflictTimeoutSeconds());
+    m_palmPluginPages.clear();
 
-    // Set up interactive conflict handler
-    delete m_interactiveConflictHandler;
-    if (!m_conflictStore) {
-        m_conflictStore = new QSyncCore::ConflictStore(this);
-    }
-    m_interactiveConflictHandler = new InteractiveConflictHandler(
-        m_conflictStore, this, this);
-    m_syncEngine->setConflictHandler(m_interactiveConflictHandler);
+    // Helper: add a plugin page for plugins that have a main view
+    auto addViewPage = [this](auto *concrete) {
+        if (!concrete || !concrete->hasMainView()) return;
+        QWidget *view = concrete->createMainView(this);
+        if (!view) return;
+        auto *page = new KPageWidgetItem(view, concrete->mainViewName());
+        page->setIcon(concrete->mainViewIcon());
+        page->setHeaderVisible(false);
+        m_pageWidget->addPage(page);
+        m_palmPluginPages.insert(concrete->pluginId(), page);
+    };
 
-    // Set up conduit lookup for rich conflict display
-    m_interactiveConflictHandler->setConduitLookup(
-        [this](const QString &conduitId) -> const ISyncConduit* {
-            if (!m_conduitManager) return nullptr;
-            IConduit *c = m_conduitManager->conduit(conduitId);
-            return dynamic_cast<const ISyncConduit*>(c);
-        });
-
-    // Connect keepAlive signal to device session tickle
-    connect(m_interactiveConflictHandler, &InteractiveConflictHandler::keepAliveRequested,
-            this, [this]() {
-        if (m_session) {
-            m_session->resumeTickle();
-        }
-    });
-
-    Sync::LocalFileBackend *backend = new Sync::LocalFileBackend(m_syncPath);
-    m_syncEngine->setBackend(backend);
-
-    // Apply profile's conduit enabled settings
-    for (const QString &conduitId : m_syncEngine->registeredConduits()) {
-        if (m_conduitManager && m_conduitManager->hasDatabaseClaims(conduitId)) {
-            // Sync conduit: enabled if it's the active handler for any of its claimed databases
-            QStringList activeDBs = m_conduitManager->activeDatabasesForConduit(conduitId, m_currentProfile);
-            m_syncEngine->setConduitEnabled(conduitId, !activeDBs.isEmpty());
-        } else {
-            // Standalone conduit: use simple enable/disable toggle
-            m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
-        }
-
-        QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
-        if (!conduitSettings.isEmpty()) {
-            auto *conduit = dynamic_cast<Sync::SyncConduitBase*>(m_syncEngine->conduit(conduitId));
-            if (conduit) {
-                conduit->loadSettings(conduitSettings);
-            }
-        }
+    for (const auto &plugin : m_palmRuntime->palmPlugins()) {
+        if (auto *p = dynamic_cast<WildPalms::CalendarPlugin::CalendarBackendPlugin *>(plugin.get()))
+            addViewPage(p);
+        else if (auto *p = dynamic_cast<WildPalms::Memo::MemoPlugin *>(plugin.get()))
+            addViewPage(p);
+        else if (auto *p = dynamic_cast<WildPalms::TodoPlugin::TodoBackendPlugin *>(plugin.get()))
+            addViewPage(p);
+        // Contacts and WebCal plugins have no main view; see include block above.
     }
 
-    // Set up database reference resolver for @ sigil in dependency ordering
-    if (m_conduitManager && m_currentProfile) {
-        m_syncEngine->setDatabaseResolver([this](const QString &dbName) -> QString {
-            return m_conduitManager->activeConduitForDatabase(dbName, m_currentProfile);
-        });
-    }
-
-    // Apply connection mode to session
-    if (m_session) {
-        m_session->setConnectionMode(m_currentProfile->connectionMode());
-    }
+    // Connection mode (USB serial vs network) is now encoded in the
+    // devicePaths passed to PalmRuntime::connectDevice().
 
     // Add to recent profiles
     KF6Settings::instance().addRecentProfile(path);
@@ -844,17 +556,17 @@ void KF6MainWindow::loadProfile(const QString &path)
 
     KF6Settings::instance().sync();
 
-    // Tell conduit views to load data from the profile's sync folder
-    for (auto it = m_conduitPages.constBegin(); it != m_conduitPages.constEnd(); ++it) {
+    // Tell plugin views to load data from the profile's sync folder
+    for (auto it = m_palmPluginPages.constBegin(); it != m_palmPluginPages.constEnd(); ++it) {
         QWidget *view = it.value()->widget();
         QMetaObject::invokeMethod(view, "loadFromPath", Q_ARG(QString, m_syncPath));
     }
 
     // Update UI — check for active connection (manual or auto-sync)
-    bool connected = m_session && m_session->isConnected();
+    bool connected = m_palmRuntime && m_palmRuntime->isDeviceConnected();
     updateWindowTitle();
     updateMenuState(connected);
-    m_dashboardWidget->updateStatus(m_currentProfile, connected);
+    m_dashboardWidget->updateStatus(m_currentProfile.get(), connected);
 
     m_logWidget->logInfo(i18n("Loaded profile: %1", m_currentProfile->name()));
     m_logWidget->logInfo(i18n("Sync folder: %1", m_syncPath));
@@ -862,11 +574,15 @@ void KF6MainWindow::loadProfile(const QString &path)
 
 void KF6MainWindow::closeProfile()
 {
+    // AccountController teardown precedes Profile teardown.
+    if (m_accountController) {
+        m_accountController.reset();
+    }
+
     if (m_currentProfile) {
         m_currentProfile->save();
-        delete m_currentProfile;
-        m_currentProfile = nullptr;
     }
+    m_currentProfile.reset();
 
     m_syncPath.clear();
 
@@ -977,6 +693,8 @@ void KF6MainWindow::startListening(const QString &devicePath)
 
     m_devicePollTimer->start(500);
 
+    // cancelConnectionAction now dispatches to cancelSync() when isRunning()
+    // (K.8b T16) or cancelConnect() during the connection handshake.
     m_actionManager->cancelConnectionAction()->setEnabled(true);
     updateMenuState(false);
 }
@@ -1027,59 +745,40 @@ void KF6MainWindow::startConnectionMultiPort(const QStringList &devicePaths)
         return;
     }
 
-    // Clean up existing session
-    if (m_session) {
-        m_session->disconnectDevice();
-        m_session->deleteLater();
-        m_session = nullptr;
-        m_deviceLink = nullptr;
+    if (!m_palmRuntime) {
+        m_logWidget->logError(i18n("Cannot connect: PalmRuntime not initialized"));
+        return;
     }
 
-    m_session = new DeviceSession(this);
+    // Wire signals (Qt::UniqueConnection prevents duplicate wiring on
+    // repeated connect attempts to the same PalmRuntime instance).
+    // NOTE: Qt::UniqueConnection requires PMF slots; with lambdas it
+    // returns an invalid connection and silently fails to wire.
+    connect(m_palmRuntime.get(),
+            &WildPalms::Runtime::PalmRuntime::connectionStarted,
+            this, &KF6MainWindow::onConnectionStarted,
+            Qt::UniqueConnection);
 
-    if (m_currentProfile) {
-        m_session->setConnectionMode(m_currentProfile->connectionMode());
-    }
+    connect(m_palmRuntime.get(),
+            &WildPalms::Runtime::PalmRuntime::connectionComplete,
+            this, &KF6MainWindow::onConnectionComplete,
+            Qt::UniqueConnection);
 
-    // Wire all session signals
-    connect(m_session, &DeviceSession::connectionComplete,
-            this, &KF6MainWindow::onConnectionComplete);
-    connect(m_session, &DeviceSession::deviceReady,
-            this, &KF6MainWindow::onDeviceReady);
-    connect(m_session, &DeviceSession::logMessage,
-            m_logWidget, &LogWidget::logInfo);
-    connect(m_session, &DeviceSession::errorOccurred,
-            m_logWidget, &LogWidget::logError);
-    connect(m_session, &DeviceSession::progressUpdated,
-            this, &KF6MainWindow::onSyncProgress);
-    connect(m_session, &DeviceSession::palmScreenMessage,
-            this, &KF6MainWindow::onSessionPalmScreen);
-    connect(m_session, &DeviceSession::syncFinished,
-            this, [this](bool success, const QString &summary) {
-                Q_UNUSED(summary);
-                statusBar()->showMessage(success ? i18n("Sync complete") : i18n("Sync failed"));
-            });
-    connect(m_session, &DeviceSession::syncResultReady,
-            this, &KF6MainWindow::onAsyncSyncResult);
-    connect(m_session, &DeviceSession::disconnected,
-            this, [this]() {
-                m_deviceLink = nullptr;
-                updateMenuState(false);
-                statusBar()->showMessage(i18n("Disconnected"));
+    connect(m_palmRuntime.get(),
+            &WildPalms::Runtime::PalmRuntime::readyForSync,
+            this, &KF6MainWindow::onReadyForSync, Qt::UniqueConnection);
 
-                // Send notification
-                KNotification *notification = new KNotification(
-                    QStringLiteral("deviceDisconnected"), KNotification::CloseOnTimeout, this);
-                notification->setTitle(i18n("Device Disconnected"));
-                notification->setText(i18n("Palm device has been disconnected"));
-                notification->setIconName(QStringLiteral("network-disconnect"));
-                notification->sendEvent();
-            });
-    connect(m_session, &DeviceSession::readyForSync,
-            this, &KF6MainWindow::onReadyForSync);
+    connect(m_palmRuntime.get(),
+            &WildPalms::Runtime::PalmRuntime::deviceDisconnected,
+            this, &KF6MainWindow::onDeviceDisconnected,
+            Qt::UniqueConnection);
+
+    connect(m_palmRuntime.get(),
+            &WildPalms::Runtime::PalmRuntime::logMessage,
+            m_logWidget, &LogWidget::logInfo, Qt::UniqueConnection);
 
     m_logWidget->logInfo(i18n("Connecting to %1...", devicePaths.join(QStringLiteral(", "))));
-    m_session->connectDevice(devicePaths);
+    m_palmRuntime->connectDevice(devicePaths);
 
     updateMenuState(false);
     if (m_actionManager) {
@@ -1092,12 +791,30 @@ void KF6MainWindow::startConnection(const QString &devicePath)
     startConnectionMultiPort(QStringList{devicePath});
 }
 
-void KF6MainWindow::onConnectionComplete(bool success)
+void KF6MainWindow::onConnectionStarted()
+{
+    statusBar()->showMessage(i18n("Connecting…"));
+}
+
+void KF6MainWindow::onDeviceDisconnected()
+{
+    updateMenuState(false);
+    statusBar()->showMessage(i18n("Disconnected"));
+
+    KNotification *notification = new KNotification(
+        QStringLiteral("deviceDisconnected"), KNotification::CloseOnTimeout, this);
+    notification->setTitle(i18n("Device Disconnected"));
+    notification->setText(i18n("Palm device has been disconnected"));
+    notification->setIconName(QStringLiteral("network-disconnect"));
+    notification->sendEvent();
+}
+
+void KF6MainWindow::onConnectionComplete(bool success, const QString &error)
 {
     m_actionManager->cancelConnectionAction()->setEnabled(false);
 
     if (!success) {
-        m_logWidget->logError(i18n("Connection failed or was cancelled"));
+        m_logWidget->logError(i18n("Connection failed: %1", error));
         statusBar()->showMessage(i18n("Connection failed"));
         updateMenuState(false);
         return;
@@ -1113,48 +830,51 @@ void KF6MainWindow::onConnectionComplete(bool success)
     notification->setIconName(QStringLiteral("network-connect"));
     notification->sendEvent();
 
-    m_deviceLink = m_session->deviceLink();
-
-    // Phase E.16 — hand the live KPilotLink to the SyncRunner so it
-    // can build (and own) the PalmDeviceConnection that
-    // IBackendPlugin::createBackends() needs. The construction logic
-    // lives in WildPalmsRuntime so this header can stay free of the
-    // pilot-link wrapper types.
-    if (m_syncRunner) {
-        m_syncRunner->setKPilotLink(m_deviceLink, this);
+    KPilotDeviceLink *deviceLink = m_palmRuntime ? m_palmRuntime->deviceLink() : nullptr;
+    if (!deviceLink) {
+        m_logWidget->logError(i18n("Connected but no device link available"));
+        updateMenuState(false);
+        return;
     }
 
     // Use handshake data (captured during connection on the worker thread —
     // no DLP calls on the main thread while tickle may be running)
-    if (m_deviceLink->handshakeUserInfoValid()) {
-        QString userName = m_deviceLink->handshakeUserName();
-        quint32 userId = m_deviceLink->handshakeUserId();
+    if (deviceLink->handshakeUserInfoValid()) {
+        QString userName = deviceLink->handshakeUserName();
+        quint32 userId = deviceLink->handshakeUserId();
 
         m_logWidget->logInfo(i18n("User: %1 (ID: %2)", userName, userId));
 
         DeviceFingerprint connectedDevice;
         connectedDevice.userId = userId;
         connectedDevice.userName = userName;
-        if (m_deviceLink->handshakeSysInfoValid()) {
-            connectedDevice.romVersion = m_deviceLink->handshakeRomVersion();
-            connectedDevice.productId = m_deviceLink->handshakeProductId();
+        if (deviceLink->handshakeSysInfoValid()) {
+            connectedDevice.romVersion = deviceLink->handshakeRomVersion();
+            connectedDevice.productId = deviceLink->handshakeProductId();
         }
-        if (m_deviceLink->handshakeStorageInfoValid()) {
-            connectedDevice.modelName = m_deviceLink->handshakeCardName();
-            connectedDevice.manufacturer = m_deviceLink->handshakeManufacturer();
-            connectedDevice.romSize = m_deviceLink->handshakeRomSize();
-            connectedDevice.ramSize = m_deviceLink->handshakeRamSize();
-            connectedDevice.ramFree = m_deviceLink->handshakeRamFree();
+        if (deviceLink->handshakeStorageInfoValid()) {
+            connectedDevice.modelName = deviceLink->handshakeCardName();
+            connectedDevice.manufacturer = deviceLink->handshakeManufacturer();
+            connectedDevice.romSize = deviceLink->handshakeRomSize();
+            connectedDevice.ramSize = deviceLink->handshakeRamSize();
+            connectedDevice.ramFree = deviceLink->handshakeRamFree();
         }
 
         if (m_currentProfile) {
             if (!handleDeviceFingerprint(connectedDevice)) {
-                m_deviceLink->closeConnection();
+                deviceLink->closeConnection();
                 updateMenuState(false);
                 return;
             }
         } else {
-            QString knownProfile = KF6Settings::instance().findProfileForDevice(connectedDevice);
+            // Phase L Task 0.B: look up by USB serial only (fingerprint
+            // registry removed). In direct-USB connections the serial may
+            // be absent; findProfileBySerial returns "" if serial is empty.
+            QString knownProfile;
+            if (!connectedDevice.usbSerialNumber.isEmpty()) {
+                knownProfile = KF6Settings::instance().findProfileBySerial(
+                    connectedDevice.usbSerialNumber);
+            }
             if (!knownProfile.isEmpty()) {
                 int ret = QMessageBox::question(this, i18n("Known Device"),
                     i18n("This device (%1) is registered with profile:\n%2\n\nLoad that profile?",
@@ -1183,7 +903,7 @@ void KF6MainWindow::onConnectionComplete(bool success)
                 strncpy(user.username, newUserName.toLatin1().constData(), sizeof(user.username) - 1);
                 user.userID = static_cast<unsigned long>(QDateTime::currentSecsSinceEpoch());
 
-                if (m_deviceLink->writeUserInfo(user)) {
+                if (deviceLink->writeUserInfo(user)) {
                     m_logWidget->logInfo(i18n("Device initialized: %1 (ID: %2)",
                                               newUserName, user.userID));
 
@@ -1191,16 +911,16 @@ void KF6MainWindow::onConnectionComplete(bool success)
                         DeviceFingerprint newFp;
                         newFp.userId = user.userID;
                         newFp.userName = newUserName;
-                        if (m_deviceLink->handshakeSysInfoValid()) {
-                            newFp.romVersion = m_deviceLink->handshakeRomVersion();
-                            newFp.productId = m_deviceLink->handshakeProductId();
+                        if (deviceLink->handshakeSysInfoValid()) {
+                            newFp.romVersion = deviceLink->handshakeRomVersion();
+                            newFp.productId = deviceLink->handshakeProductId();
                         }
-                        if (m_deviceLink->handshakeStorageInfoValid()) {
-                            newFp.modelName = m_deviceLink->handshakeCardName();
-                            newFp.manufacturer = m_deviceLink->handshakeManufacturer();
-                            newFp.romSize = m_deviceLink->handshakeRomSize();
-                            newFp.ramSize = m_deviceLink->handshakeRamSize();
-                            newFp.ramFree = m_deviceLink->handshakeRamFree();
+                        if (deviceLink->handshakeStorageInfoValid()) {
+                            newFp.modelName = deviceLink->handshakeCardName();
+                            newFp.manufacturer = deviceLink->handshakeManufacturer();
+                            newFp.romSize = deviceLink->handshakeRomSize();
+                            newFp.ramSize = deviceLink->handshakeRamSize();
+                            newFp.ramFree = deviceLink->handshakeRamFree();
                         }
                         registerDeviceWithCurrentProfile(newFp);
                     }
@@ -1214,30 +934,25 @@ void KF6MainWindow::onConnectionComplete(bool success)
     }
 
     // System info display (from handshake)
-    if (m_deviceLink->handshakeSysInfoValid()) {
+    if (deviceLink->handshakeSysInfoValid()) {
         m_logWidget->logInfo(i18n("Palm OS: %1.%2, Product ID: %3",
-                                  m_deviceLink->handshakeRomVersion() >> 16,
-                                  (m_deviceLink->handshakeRomVersion() >> 8) & 0xFF,
-                                  m_deviceLink->handshakeProductId()));
+                                  deviceLink->handshakeRomVersion() >> 16,
+                                  (deviceLink->handshakeRomVersion() >> 8) & 0xFF,
+                                  deviceLink->handshakeProductId()));
     }
 
     // Storage info display (from handshake)
-    if (m_deviceLink->handshakeStorageInfoValid()) {
-        QString ramTotal = DeviceFingerprint::formatMemorySize(m_deviceLink->handshakeRamSize());
-        QString ramFree = DeviceFingerprint::formatMemorySize(m_deviceLink->handshakeRamFree());
+    if (deviceLink->handshakeStorageInfoValid()) {
+        QString ramTotal = DeviceFingerprint::formatMemorySize(deviceLink->handshakeRamSize());
+        QString ramFree = DeviceFingerprint::formatMemorySize(deviceLink->handshakeRamFree());
         m_logWidget->logInfo(i18n("Device: %1 by %2, RAM: %3/%4",
-                                  m_deviceLink->handshakeCardName(),
-                                  m_deviceLink->handshakeManufacturer(),
+                                  deviceLink->handshakeCardName(),
+                                  deviceLink->handshakeManufacturer(),
                                   ramFree, ramTotal));
     }
 
-    m_syncEngine->setDeviceLink(m_deviceLink);
-    if (m_deviceLink->handshakeUserInfoValid()) {
-        m_syncEngine->setPalmUserName(m_deviceLink->handshakeUserName());
-    }
-
     updateMenuState(true);
-    m_dashboardWidget->updateStatus(m_currentProfile, true);
+    m_dashboardWidget->updateStatus(m_currentProfile.get(), true);
 }
 
 bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDevice)
@@ -1321,7 +1036,12 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
         m_logWidget->logWarning(i18n("User chose to continue with mismatched device"));
         return true;
     } else if (msgBox.clickedButton() == switchBtn) {
-        QString profilePath = KF6Settings::instance().findProfileForDevice(connectedDevice);
+        // Phase L Task 0.B: look up by USB serial only.
+        QString profilePath;
+        if (!connectedDevice.usbSerialNumber.isEmpty()) {
+            profilePath = KF6Settings::instance().findProfileBySerial(
+                connectedDevice.usbSerialNumber);
+        }
         if (!profilePath.isEmpty()) {
             m_logWidget->logInfo(i18n("Switching to profile: %1", profilePath));
             loadProfile(profilePath);
@@ -1345,7 +1065,11 @@ void KF6MainWindow::registerDeviceWithCurrentProfile(const DeviceFingerprint &fi
     m_currentProfile->setDeviceFingerprint(fingerprint);
     m_currentProfile->save();
 
-    KF6Settings::instance().registerDevice(fingerprint, m_currentProfile->syncFolderPath());
+    // Phase L Task 0.B: register by USB serial only.
+    if (!fingerprint.usbSerialNumber.isEmpty()) {
+        KF6Settings::instance().registerDeviceBySerial(
+            fingerprint.usbSerialNumber, m_currentProfile->syncFolderPath());
+    }
     KF6Settings::instance().sync();
 
     m_logWidget->logInfo(i18n("Device registered: %1", fingerprint.displayString()));
@@ -1353,23 +1077,17 @@ void KF6MainWindow::registerDeviceWithCurrentProfile(const DeviceFingerprint &fi
 
 void KF6MainWindow::onDisconnectDevice()
 {
-    if (m_session && m_session->isConnected()) {
+    if (m_palmRuntime && m_palmRuntime->isDeviceConnected()) {
         m_logWidget->logInfo(i18n("Disconnecting..."));
 
-        if (m_deviceLink && m_deviceLink->isConnected()) {
+        KPilotDeviceLink *deviceLink = m_palmRuntime->deviceLink();
+        if (deviceLink && deviceLink->isConnected()) {
             m_logWidget->logInfo(i18n("Ending sync session..."));
-            m_deviceLink->endSync();
+            deviceLink->endSync();
         }
 
-        m_session->disconnectDevice();
-
-        m_deviceLink = nullptr;
-
-        m_syncEngine->setDeviceLink(nullptr);
-
-        // Phase E.16 — tear down the SyncRunner-owned
-        // PalmDeviceConnection so it can't call into a stale link.
-        if (m_syncRunner) m_syncRunner->setKPilotLink(nullptr, nullptr);
+        // Tear down PalmRuntime's device.
+        m_palmRuntime->disconnectDevice();
 
         statusBar()->showMessage(i18n("Disconnected"));
         m_logWidget->logInfo(i18n("Disconnected from device"));
@@ -1384,9 +1102,16 @@ void KF6MainWindow::onCancelConnection()
         return;
     }
 
-    if (m_session) {
-        m_session->requestCancel();
-        m_logWidget->logInfo(i18n("Connection cancelled by user"));
+    if (m_palmRuntime) {
+        if (m_palmRuntime->isRunning()) {
+            // K.8b T16: mid-sync cancel — routes into SyncEngine::onCancelObserved
+            // via QFutureWatcher::cancel() propagation.
+            m_palmRuntime->cancelSync();
+            m_logWidget->logInfo(i18n("Sync cancelled by user"));
+        } else {
+            m_palmRuntime->cancelConnect();
+            m_logWidget->logInfo(i18n("Connection cancelled by user"));
+        }
     }
     m_actionManager->cancelConnectionAction()->setEnabled(false);
 }
@@ -1425,32 +1150,77 @@ void KF6MainWindow::onDeviceStatusChanged(int status)
 void KF6MainWindow::onAutoDeviceDetected(Profile *profile, const QStringList &ports)
 {
     // Guard: if we're already busy with a sync, ignore
-    if (m_session && m_session->isBusy()) {
+    if (m_palmRuntime && m_palmRuntime->isRunning()) {
         m_logWidget->logWarning(i18n("Device detected but sync already in progress — ignoring"));
         delete profile;
         return;
     }
 
-    // If an idle session exists, disconnect it first
-    if (m_session && m_session->isConnected()) {
+    // If an idle connection exists, disconnect it first
+    if (m_palmRuntime && m_palmRuntime->isDeviceConnected()) {
         m_logWidget->logInfo(i18n("Disconnecting previous session for new device"));
-        m_session->disconnectDevice();
-        m_session->deleteLater();
-        m_session = nullptr;
-        m_deviceLink = nullptr;
+        m_palmRuntime->disconnectDevice();
     }
 
     if (profile) {
-        // Known device — load profile and connect
-        QString profilePath = profile->syncFolderPath();
-        delete profile;  // loadProfile creates its own copy
-        loadProfile(profilePath);
+        // Device's USB serial is registered to a known profile. Respect
+        // the user's explicit choice: only auto-switch when no profile is
+        // currently open. If a different profile is open, log clearly and
+        // keep it — silently swapping out the user's selection meant
+        // tests against a fresh profile were actually running against the
+        // serial-registered one, with no visible warning.
+        if (!m_currentProfile) {
+            QString profilePath = profile->syncFolderPath();
+            delete profile;  // loadProfile creates its own copy
+            loadProfile(profilePath);
+        } else if (m_currentProfile->syncFolderPath() != profile->syncFolderPath()) {
+            m_logWidget->logWarning(i18n(
+                "Device is registered to profile '%1', but '%2' is currently open. "
+                "Using the open profile. Close it first if you want to switch.",
+                profile->name(), m_currentProfile->name()));
+            delete profile;
+        } else {
+            // Serial-matched profile is the one already open — nothing to do.
+            delete profile;
+        }
         startConnectionMultiPort(ports);
     } else {
         // Unknown device — connect first, then we'll read identity and create profile
         m_logWidget->logInfo(i18n("New Palm device detected — connecting to identify..."));
         startConnectionMultiPort(ports);
     }
+}
+
+void KF6MainWindow::onUnregisteredDeviceDetected(const QString &usbSerial,
+                                                  const QString &userName,
+                                                  quint32 userId)
+{
+    Q_UNUSED(userName)
+    Q_UNUSED(userId)
+
+    QString prompt = i18n("An unrecognised Palm device was detected.\n\n"
+                          "USB serial: %1\n\n"
+                          "Create a new profile for this device?",
+                          usbSerial.isEmpty() ? i18n("(unknown)") : usbSerial);
+
+    int ret = QMessageBox::question(this, i18n("New Palm Device"), prompt,
+                                    QMessageBox::Yes | QMessageBox::No,
+                                    QMessageBox::Yes);
+    if (ret != QMessageBox::Yes) {
+        if (m_logWidget) {
+            m_logWidget->logInfo(i18n("User declined to create profile for new device."));
+        }
+        return;
+    }
+
+    Profile *p = m_autoSync->createProfileForDevice(usbSerial, userName, userId);
+    if (!p) {
+        QMessageBox::warning(this, i18n("Profile Creation Failed"),
+                             i18n("Could not create a profile for this device."));
+        return;
+    }
+    // Hand off to the normal "device detected with profile" path.
+    Q_EMIT m_autoSync->deviceDetected(p, QStringList{ m_autoSync->currentUsbSerial() });
 }
 
 void KF6MainWindow::onDeviceReady(const QString &userName, const QString &deviceName)
@@ -1480,14 +1250,15 @@ void KF6MainWindow::onReadyForSync()
 
 void KF6MainWindow::onListDatabases()
 {
-    if (!m_deviceLink) {
+    KPilotDeviceLink *deviceLink = m_palmRuntime ? m_palmRuntime->deviceLink() : nullptr;
+    if (!deviceLink) {
         m_logWidget->logError(i18n("No device connected"));
         return;
     }
 
     m_logWidget->logInfo(i18n("=== Database List ==="));
 
-    QStringList databases = m_deviceLink->listDatabases();
+    QStringList databases = deviceLink->listDatabases();
 
     if (databases.isEmpty()) {
         m_logWidget->logWarning(i18n("No databases found (or device disconnected)"));
@@ -1522,25 +1293,27 @@ void KF6MainWindow::onListDatabases()
 
 int KF6MainWindow::countDatabaseRecords(const QString &dbName)
 {
-    if (!m_deviceLink) return 0;
+    KPilotDeviceLink *deviceLink = m_palmRuntime ? m_palmRuntime->deviceLink() : nullptr;
+    if (!deviceLink) return 0;
 
-    int dbHandle = m_deviceLink->openDatabase(dbName);
+    int dbHandle = deviceLink->openDatabase(dbName);
     if (dbHandle < 0) return 0;
 
-    QList<PilotRecord*> records = m_deviceLink->readAllRecords(dbHandle);
+    QList<PilotRecord*> records = deviceLink->readAllRecords(dbHandle);
     int count = records.size();
 
     for (PilotRecord *r : records) {
         delete r;
     }
 
-    m_deviceLink->closeDatabase(dbHandle);
+    deviceLink->closeDatabase(dbHandle);
     return count;
 }
 
 void KF6MainWindow::onSetUserInfo()
 {
-    if (!m_deviceLink) {
+    KPilotDeviceLink *deviceLink = m_palmRuntime ? m_palmRuntime->deviceLink() : nullptr;
+    if (!deviceLink) {
         m_logWidget->logError(i18n("No device connected"));
         return;
     }
@@ -1548,7 +1321,7 @@ void KF6MainWindow::onSetUserInfo()
     struct PilotUser user;
     memset(&user, 0, sizeof(user));
 
-    if (!m_deviceLink->readUserInfo(user)) {
+    if (!deviceLink->readUserInfo(user)) {
         m_logWidget->logError(i18n("Failed to read current user info"));
         return;
     }
@@ -1586,7 +1359,7 @@ void KF6MainWindow::onSetUserInfo()
 
     strncpy(user.username, newName.toLatin1().constData(), sizeof(user.username) - 1);
 
-    if (m_deviceLink->writeUserInfo(user)) {
+    if (deviceLink->writeUserInfo(user)) {
         m_logWidget->logInfo(i18n("User info updated: %1", newName));
         QMessageBox::information(this, i18n("Success"), i18n("User info updated successfully!"));
 
@@ -1604,18 +1377,19 @@ void KF6MainWindow::onSetUserInfo()
 
 void KF6MainWindow::onDeviceInfo()
 {
-    if (!m_deviceLink) {
+    KPilotDeviceLink *deviceLink = m_palmRuntime ? m_palmRuntime->deviceLink() : nullptr;
+    if (!deviceLink) {
         m_logWidget->logError(i18n("No device connected"));
         return;
     }
 
     struct PilotUser user;
     memset(&user, 0, sizeof(user));
-    m_deviceLink->readUserInfo(user);
+    deviceLink->readUserInfo(user);
 
     struct SysInfo sysInfo;
     memset(&sysInfo, 0, sizeof(sysInfo));
-    m_deviceLink->readSysInfo(sysInfo);
+    deviceLink->readSysInfo(sysInfo);
 
     QString osVersion = QStringLiteral("%1.%2.%3")
         .arg(sysInfo.romVersion >> 16)
@@ -1625,9 +1399,9 @@ void KF6MainWindow::onDeviceInfo()
     // Read storage info for live device details
     struct CardInfo cardInfo;
     memset(&cardInfo, 0, sizeof(cardInfo));
-    bool hasStorageInfo = m_deviceLink->readStorageInfo(0, cardInfo);
+    bool hasStorageInfo = deviceLink->readStorageInfo(0, cardInfo);
 
-    QStringList databases = m_deviceLink->listDatabases();
+    QStringList databases = deviceLink->listDatabases();
 
     QString info = QStringLiteral(
         "<h3>Device Information</h3>"
@@ -1711,32 +1485,8 @@ void KF6MainWindow::onProfileSettings()
         return;
     }
 
-    auto *dlg = new ProfilePropertiesDialog(m_currentProfile, m_conduitManager, this);
+    auto *dlg = new ProfilePropertiesDialog(m_currentProfile.get(), nullptr, this);
     connect(dlg, &ProfilePropertiesDialog::settingsChanged, this, [this]() {
-        // Re-apply conduit enabled settings to sync engine
-        for (const QString &conduitId : m_syncEngine->registeredConduits()) {
-            if (m_conduitManager && m_conduitManager->hasDatabaseClaims(conduitId)) {
-                // Sync conduit: enabled if it's the active handler for any of its claimed databases
-                QStringList activeDBs = m_conduitManager->activeDatabasesForConduit(conduitId, m_currentProfile);
-                m_syncEngine->setConduitEnabled(conduitId, !activeDBs.isEmpty());
-            } else {
-                // Standalone conduit: use simple enable/disable toggle
-                m_syncEngine->setConduitEnabled(conduitId, m_currentProfile->conduitEnabled(conduitId));
-            }
-
-            QJsonObject conduitSettings = m_currentProfile->conduitSettings(conduitId);
-            if (!conduitSettings.isEmpty()) {
-                auto *conduit = dynamic_cast<Sync::SyncConduitBase*>(m_syncEngine->conduit(conduitId));
-                if (conduit) {
-                    conduit->loadSettings(conduitSettings);
-                }
-            }
-        }
-
-        if (m_session) {
-            m_session->setConnectionMode(m_currentProfile->connectionMode());
-        }
-
         updateWindowTitle();
     });
     dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -1747,136 +1497,79 @@ void KF6MainWindow::onProfileSettings()
 
 void KF6MainWindow::onHotSync()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("HotSync: no Palm device connected"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    m_logWidget->logInfo(i18n("=== Starting HotSync ==="));
-    m_pendingSyncOperationName = i18n("HotSync");
-    m_session->requestSync(Sync::SyncMode::HotSync, m_syncRunner);
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->hotSync());
 }
 
 void KF6MainWindow::onFullSync()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("FullSync: no Palm device connected"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::question(this, i18n("Full Sync"),
-        i18n("Full Sync will compare all records on both sides.\n"
-             "This may take longer than HotSync.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Starting Full Sync ==="));
-    m_pendingSyncOperationName = i18n("Full Sync");
-    m_session->requestSync(Sync::SyncMode::FullSync, m_syncRunner);
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->fullSync());
 }
 
 void KF6MainWindow::onCopyPalmToPC()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("CopyPalmToPC: no Palm device connected"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::warning(this, i18n("Copy Palm → PC"),
-        i18n("This will overwrite PC data with Palm data.\n"
-             "Any changes on the PC will be lost.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Copying Palm → PC ==="));
-    m_pendingSyncOperationName = i18n("Copy Palm → PC");
-    m_session->requestSync(Sync::SyncMode::CopyPalmToPC, m_syncRunner);
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->copyPalmToPC());
 }
 
 void KF6MainWindow::onCopyPCToPalm()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("CopyPCToPalm: no Palm device connected"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::warning(this, i18n("Copy PC → Palm"),
-        i18n("This will overwrite Palm data with PC data.\n"
-             "Any changes on the Palm will be lost.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Copying PC → Palm ==="));
-    m_pendingSyncOperationName = i18n("Copy PC → Palm");
-    m_session->requestSync(Sync::SyncMode::CopyPCToPalm, m_syncRunner);
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->copyPCToPalm());
 }
 
 void KF6MainWindow::onBackup()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("Backup: no Palm device connected"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
-        return;
-    }
-
-    int ret = QMessageBox::question(this, i18n("Backup Palm → PC"),
-        i18n("This will backup all Palm data to your PC.\n"
-             "Existing backup files will be updated.\n"
-             "Old files not on Palm will be preserved.\n\nProceed?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Backing up Palm → PC ==="));
-    m_pendingSyncOperationName = i18n("Backup");
-    m_session->requestSync(Sync::SyncMode::Backup, m_syncRunner);
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->backup());
 }
 
 void KF6MainWindow::onRestore()
 {
-    if (!m_currentProfile) {
-        m_logWidget->logError(i18n("No profile loaded. Use File → Open Profile first."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logError(i18n("Restore: no Palm device connected"));
         return;
     }
-    if (!m_session || !m_session->isConnected()) {
-        m_logWidget->logError(i18n("No device connected"));
+    if (QMessageBox::question(this, i18n("Restore"),
+            i18n("Restore is destructive. All Palm records not in the backup WILL BE DELETED. Continue?"),
+            QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
         return;
     }
-
-    int ret = QMessageBox::warning(this, i18n("Restore PC → Palm"),
-        i18n("FULL RESTORE\n\n"
-             "This will completely overwrite your Palm with PC backup data.\n"
-             "Palm records not in the backup WILL BE DELETED.\n\n"
-             "Are you sure you want to restore?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (ret != QMessageBox::Yes) return;
-
-    m_logWidget->logInfo(i18n("=== Restoring PC → Palm ==="));
-    m_pendingSyncOperationName = i18n("Restore");
-    m_session->requestSync(Sync::SyncMode::Restore, m_syncRunner);
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->restore());
 }
 
 void KF6MainWindow::onChangeSyncFolder()
@@ -1947,51 +1640,79 @@ void KF6MainWindow::onInstallFiles()
     }
 }
 
-void KF6MainWindow::onSyncStarted()
+void KF6MainWindow::onPalmRunStarted(const QString &label)
 {
-    statusBar()->showMessage(i18n("Syncing..."));
-
-    if (m_interactiveConflictHandler) {
-        m_interactiveConflictHandler->onSyncStart();
-    }
-
-    KNotification *notification = new KNotification(QStringLiteral("syncStarted"), KNotification::CloseOnTimeout, this);
-    notification->setTitle(i18n("Sync Started"));
-    notification->setText(i18n("Synchronization has started"));
-    notification->setIconName(QStringLiteral("view-refresh"));
-    notification->sendEvent();
+    m_currentPalmRunLabel = label;
+    m_logWidget->logInfo(i18n("=== Starting %1 via PalmRuntime ===", label));
 }
 
-void KF6MainWindow::onSyncFinished(const Sync::SyncResult &result)
+void KF6MainWindow::onPalmConflictHandlerKeepAlive()
 {
-    if (m_interactiveConflictHandler) {
-        bool hadConflicts = (result.palmStats.conflicts + result.pcStats.conflicts) > 0;
-        bool allResolved = m_interactiveConflictHandler->conflictsDeferred() == 0;
-        m_interactiveConflictHandler->onSyncEnd(hadConflicts, allResolved);
+    // Refresh the tickle when the conflict dialog is open for a long time.
+    // The legacy code called m_session->resumeTickle(); now go through
+    // the device link which emits to PalmTickle's start() (idempotent).
+    if (m_palmRuntime && m_palmRuntime->deviceLink()) {
+        m_palmRuntime->deviceLink()->resumeTickle();
     }
-    statusBar()->showMessage(i18n("Sync complete"));
 }
 
-void KF6MainWindow::onSyncProgress(int current, int total, const QString &message)
+void KF6MainWindow::onConfigureMappings()
 {
-    statusBar()->showMessage(QStringLiteral("[%1/%2] %3").arg(current).arg(total).arg(message));
+    if (!m_currentProfile) {
+        QMessageBox::information(this, tr("Configure Mappings"),
+            tr("No profile loaded."));
+        return;
+    }
+    if (m_palmRuntime && m_palmRuntime->isRunning()) {
+        QMessageBox::information(this, tr("Configure Mappings"),
+            tr("A sync is currently in progress. Wait for it to finish "
+               "before editing mappings."));
+        return;
+    }
+
+    MappingEditorDialog dlg(this);
+    dlg.setMappings(m_currentProfile->syncMappingsJson());
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    const QJsonArray updated = dlg.mappings();
+    m_currentProfile->setSyncMappingsJson(updated);
+    m_currentProfile->save();
+
+    if (m_palmRuntime)
+        m_palmRuntime->reloadMappings(updated);
+}
+
+void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)
+{
+    const QString op = m_currentPalmRunLabel.isEmpty()
+                       ? i18n("Palm operation") : m_currentPalmRunLabel;
+    if (result.success) {
+        m_logWidget->logInfo(i18n("%1 completed successfully", op));
+        statusBar()->showMessage(i18n("%1 complete", op));
+    } else {
+        m_logWidget->logError(i18n("%1 finished with errors: %2",
+                                   op, result.errorMessage));
+        statusBar()->showMessage(i18n("%1 finished with errors", op));
+    }
+
+    // M6b Task 5 fix: honor ConnectionMode::DisconnectAfterSync.
+    // Pre-M6b this was driven by DeviceSession::setConnectionMode (since
+    // deleted in M6b Task 6). PalmRuntime doesn't model post-sync policy,
+    // so KF6MainWindow checks the profile and disconnects here.
+    if (m_currentProfile
+        && m_currentProfile->connectionMode() == ConnectionMode::DisconnectAfterSync
+        && m_palmRuntime
+        && m_palmRuntime->isDeviceConnected()) {
+        m_logWidget->logInfo(i18n("Auto-disconnecting per profile policy (DisconnectAfterSync)"));
+        m_palmRuntime->disconnectDevice();
+    }
 }
 
 void KF6MainWindow::onSessionPalmScreen(const QString &message)
 {
     m_logWidget->logInfo(i18n("[Palm Screen] %1", message));
-}
-
-void KF6MainWindow::onAsyncSyncResult(const Sync::SyncResult &result)
-{
-    QString operationName = m_pendingSyncOperationName;
-    m_pendingSyncOperationName.clear();
-
-    if (operationName.isEmpty()) {
-        operationName = i18n("Sync");
-    }
-
-    showSyncResult(result, operationName);
 }
 
 // ========== Misc ==========
@@ -2016,7 +1737,7 @@ void KF6MainWindow::onAbout()
 
 void KF6MainWindow::onSettings()
 {
-    SettingsDialog dialog(this);
+    SettingsDialog dialog(this, m_currentProfile.get());
     connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
         m_minimizeToTray = KF6Settings::instance().minimizeToTray();
     });
@@ -2029,90 +1750,6 @@ void KF6MainWindow::onClearLog()
         m_logWidget->clear();
         m_logWidget->logInfo(i18n("Log cleared"));
     }
-}
-
-void KF6MainWindow::onShowConflicts()
-{
-    if (!m_currentProfile) {
-        QMessageBox::information(this, i18n("No Profile"),
-            i18n("Please load a profile first to review conflicts."));
-        return;
-    }
-
-    // Create the consolidated conflict store if needed
-    if (!m_conflictStore) {
-        m_conflictStore = new QSyncCore::ConflictStore(this);
-    }
-    m_conflictStore->clear();
-
-    // Collect conflicts from all conduit sync states
-    QString userName = m_currentProfile->deviceFingerprint().userName;
-    QString statePath = m_currentProfile->stateDirectoryPath();
-    int totalConflicts = 0;
-
-    QStringList conduits = {QStringLiteral("memos"), QStringLiteral("contacts"),
-                            QStringLiteral("calendar"), QStringLiteral("todos")};
-    for (const QString &conduitId : conduits) {
-        Sync::SyncState state(userName, conduitId);
-        state.setStateDirectory(statePath);
-        state.load();
-
-        QList<QSyncCore::ConflictRecord> conduitConflicts = state.pendingConflicts();
-        for (const QSyncCore::ConflictRecord &conflict : conduitConflicts) {
-            m_conflictStore->addConflict(conflict);
-        }
-        totalConflicts += conduitConflicts.size();
-    }
-
-    if (totalConflicts == 0) {
-        m_logWidget->logInfo(i18n("No pending conflicts to review"));
-        QMessageBox::information(this, i18n("No Conflicts"),
-            i18n("There are no pending conflicts to review."));
-    } else {
-        m_logWidget->logInfo(i18n("Found %1 pending conflicts to review", totalConflicts));
-
-        auto conduitLookup = [this](const QString &conduitId) -> const ISyncConduit* {
-            if (!m_conduitManager) return nullptr;
-            IConduit *c = m_conduitManager->conduit(conduitId);
-            return dynamic_cast<const ISyncConduit*>(c);
-        };
-
-        ConflictReviewDialog dialog(m_conflictStore, conduitLookup, this);
-        connect(&dialog, &ConflictReviewDialog::applyResolutionsRequested,
-                this, &KF6MainWindow::onApplyConflictResolutions);
-        dialog.exec();
-    }
-}
-
-void KF6MainWindow::onApplyConflictResolutions()
-{
-    if (!m_conflictStore) return;
-
-    QList<QSyncCore::ConflictRecord> resolved = m_conflictStore->resolvedUnappliedConflicts();
-    if (resolved.isEmpty()) {
-        m_logWidget->logInfo(i18n("No resolved conflicts to apply"));
-        return;
-    }
-
-    // Write resolved conflicts back to each conduit's SyncState conflict store
-    QString userName = m_currentProfile ? m_currentProfile->deviceFingerprint().userName : QString();
-    QString statePath = m_currentProfile ? m_currentProfile->stateDirectoryPath() : QString();
-
-    int applied = 0;
-    for (const QSyncCore::ConflictRecord &conflict : resolved) {
-        Sync::SyncState state(userName, conflict.conduitId);
-        state.setStateDirectory(statePath);
-        state.load();
-
-        state.conflictStore()->resolveConflict(
-            conflict.conflictId, conflict.decision, conflict.resolvedBy);
-        state.save();
-        m_conflictStore->markApplied(conflict.conflictId);
-        applied++;
-    }
-
-    m_logWidget->logInfo(i18n("Applied %1 conflict resolution(s). "
-                              "Resolutions will take effect on next sync.", applied));
 }
 
 void KF6MainWindow::updateTrayState(const QString &status)

@@ -1,7 +1,8 @@
 #include "profilepropertiesdialog.h"
 
 #include "../../profile.h"
-#include "../../kf6/conduitmanager.h"
+// K.8b T13: ConduitManager deleted. The Conduits page is stubbed below
+// until T14 wires up a Kalburator::Plugin-driven equivalent.
 
 #include <KLocalizedString>
 #include <KPluginMetaData>
@@ -99,113 +100,17 @@ QWidget* ProfilePropertiesDialog::createDevicePage()
 
 QWidget* ProfilePropertiesDialog::createConduitsPage()
 {
+    // K.8b T13: ConduitManager + IConduit deleted. The conduit list /
+    // database-claim UI is stubbed out until T14 rebuilds it from
+    // Kalburator::Plugin metadata.
     auto *page = new QWidget;
     auto *outerLayout = new QVBoxLayout(page);
-
-    if (!m_conduitManager) {
-        outerLayout->addWidget(new QLabel(i18n("No conduit plugins found"), page));
-        outerLayout->addStretch();
-        return page;
-    }
-
-    const QList<ConduitManager::PluginInfo> plugins = m_conduitManager->conduitList();
-    if (plugins.isEmpty()) {
-        outerLayout->addWidget(new QLabel(i18n("No conduit plugins found"), page));
-        outerLayout->addStretch();
-        return page;
-    }
-
-    auto *scrollArea = new QScrollArea(page);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-
-    auto *inner = new QWidget;
-    auto *innerLayout = new QVBoxLayout(inner);
-
-    // === Database Handlers section ===
-    const QMap<QString, QStringList> claimMap = m_conduitManager->databaseClaimMap();
-
-    if (!claimMap.isEmpty()) {
-        auto *dbGroup = new QGroupBox(i18n("Database Handlers"), inner);
-        auto *dbLayout = new QFormLayout(dbGroup);
-
-        for (auto it = claimMap.constBegin(); it != claimMap.constEnd(); ++it) {
-            const QString &dbName = it.key();
-            const QStringList &claimants = it.value();
-
-            auto *combo = new QComboBox(dbGroup);
-
-            // Add "None" option if multiple claimants
-            if (claimants.size() > 1) {
-                combo->addItem(i18n("— Choose handler —"), QString());
-            }
-
-            for (const QString &conduitId : claimants) {
-                KPluginMetaData md = m_conduitManager->conduitMetaData(conduitId);
-                combo->addItem(md.name(), conduitId);
-            }
-
-            // Auto-select if only one claimant
-            if (claimants.size() == 1) {
-                combo->setCurrentIndex(0);
-            }
-
-            m_databaseHandlerCombos.insert(dbName, combo);
-
-            // Description label
-            auto *descLabel = new QLabel(dbGroup);
-            descLabel->setWordWrap(true);
-            descLabel->setStyleSheet(QStringLiteral("color: #666; font-size: 11px; margin-bottom: 8px;"));
-            m_claimDescriptionLabels.insert(dbName, descLabel);
-
-            // Update description when selection changes
-            connect(combo, &QComboBox::currentIndexChanged, this, [this, dbName, combo, descLabel]() {
-                QString conduitId = combo->currentData().toString();
-                if (conduitId.isEmpty()) {
-                    descLabel->clear();
-                } else {
-                    descLabel->setText(m_conduitManager->claimDescription(conduitId, dbName));
-                }
-            });
-
-            dbLayout->addRow(dbName, combo);
-            dbLayout->addRow(QString(), descLabel);
-        }
-
-        innerLayout->addWidget(dbGroup);
-    }
-
-    // === Standalone Conduits section ===
-    bool hasStandalone = false;
-    auto *standaloneGroup = new QGroupBox(i18n("Standalone Conduits"), inner);
-    auto *standaloneLayout = new QVBoxLayout(standaloneGroup);
-
-    for (const ConduitManager::PluginInfo &info : plugins) {
-        QString conduitId = info.metaData.value(QStringLiteral("X-WildPalms-ConduitId"));
-        if (conduitId.isEmpty()) {
-            conduitId = info.metaData.pluginId();
-        }
-        if (conduitId.isEmpty()) continue;
-
-        // Skip conduits with database claims
-        if (!info.databaseClaims.isEmpty()) continue;
-
-        hasStandalone = true;
-        auto *cb = new QCheckBox(info.metaData.name(), standaloneGroup);
-        standaloneLayout->addWidget(cb);
-        m_standaloneChecks.insert(conduitId, cb);
-    }
-
-    if (hasStandalone) {
-        innerLayout->addWidget(standaloneGroup);
-    } else {
-        delete standaloneGroup;
-    }
-
-    innerLayout->addStretch();
-    scrollArea->setWidget(inner);
-    outerLayout->addWidget(scrollArea);
-
+    outerLayout->addWidget(new QLabel(
+        i18n("Conduit configuration is being migrated to the new "
+             "Kalburator plugin system. Use the Accounts page for "
+             "per-account configuration."),
+        page));
+    outerLayout->addStretch();
     return page;
 }
 

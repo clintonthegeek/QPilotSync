@@ -3,9 +3,14 @@
 
 #include <QString>
 #include <QStringList>
+#include <QList>
 #include <QMap>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
+
+// K.8b T9: accounts subgroup — needs full type for QList<> member
+#include "backendconfiguration.h"
 
 /**
  * @brief Connection mode for Palm device
@@ -119,26 +124,6 @@ struct DeviceFingerprint
         return !modelName.isEmpty() || romVersion != 0 || ramSize != 0;
     }
 
-    // Create a unique key for registry lookups (format: userId:userName:serial)
-    QString registryKey() const {
-        return QString("%1:%2:%3").arg(userId).arg(userName, usbSerialNumber);
-    }
-
-    static DeviceFingerprint fromRegistryKey(const QString &key) {
-        DeviceFingerprint fp;
-        int firstColon = key.indexOf(':');
-        if (firstColon > 0) {
-            fp.userId = key.left(firstColon).toUInt();
-            int secondColon = key.indexOf(':', firstColon + 1);
-            if (secondColon > 0) {
-                fp.userName = key.mid(firstColon + 1, secondColon - firstColon - 1);
-                fp.usbSerialNumber = key.mid(secondColon + 1);
-            } else {
-                fp.userName = key.mid(firstColon + 1);
-            }
-        }
-        return fp;
-    }
 };
 
 /**
@@ -248,6 +233,21 @@ public:
     QJsonObject conduitSettings(const QString &conduitId) const;
     void setConduitSettings(const QString &conduitId, const QJsonObject &settings);
 
+    // ========== Sync Mappings (G.7 Task 54) ==========
+
+    // Raw JSON form of the SyncMapping list. Callers that need the parsed
+    // SyncMapping types (which require Kalburator headers) can use
+    // WildPalmsSyncMappingHelper::parseMappings(profile.syncMappingsJson()).
+    QJsonArray syncMappingsJson() const;
+    void setSyncMappingsJson(const QJsonArray &json);
+
+    // ========== Accounts (K.8b T9: replaces .wildpalms.providers sidecar) =========
+
+    QList<Kalburator::Sync::BackendConfiguration> accounts() const;
+    void saveAccount(const Kalburator::Sync::BackendConfiguration &cfg);
+    void removeAccount(const QString &id);
+    void setAccounts(const QList<Kalburator::Sync::BackendConfiguration> &list);
+
     // ========== Persistence ==========
 
     // Load settings from .wildpalms.conf in the sync folder
@@ -293,6 +293,10 @@ private:
     QMap<QString, bool> m_conduitEnabled;
     QMap<QString, QJsonObject> m_conduitSettings;
     QMap<QString, QString> m_databaseHandlers; ///< database name -> active conduit ID
+    QJsonArray m_syncMappingsJson;
+
+    // K.8b T9: accounts (replaces .wildpalms.providers sidecar)
+    QList<Kalburator::Sync::BackendConfiguration> m_accounts;
 
     // Default values
     static const QString DEFAULT_CONFLICT_POLICY;

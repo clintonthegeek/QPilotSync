@@ -339,15 +339,10 @@ void ConflictReviewWidget::displayConflict(const ConflictRecord &conflict)
             infoStr += QString(" | %1").arg(record.category);
         info->setText(infoStr);
 
-        // Try conduit formatter (rich HTML)
-        if (m_conduitLookup) {
-            const ISyncConduit *conduit = m_conduitLookup(conflict.conduitId);
-            if (conduit) {
-                text->setHtml(conduit->formatConflictRecordHtml(record));
-                text->setStyleSheet("");
-                return;
-            }
-        }
+        // K.8b T13: ISyncConduit + formatConflictRecordHtml deleted. The rich
+        // HTML formatter route is replaced in T14 by a Kalburator::Plugin
+        // ConflictHandler hook. Fall through to plain-text rendering.
+        Q_UNUSED(m_conduitLookup);
 
         // Generic fallback
         text->setPlainText(QString::fromUtf8(record.content));

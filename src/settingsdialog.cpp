@@ -2,17 +2,21 @@
 #include "kf6/kf6settings.h"
 #include "profile.h"
 
+#include <KConfigGroup>
 #include <KLocalizedString>
 #include <KPageWidgetItem>
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QFormLayout>
 #include <QGroupBox>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
 #include <QLabel>
+#include <QSpinBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QDir>
@@ -20,8 +24,9 @@
 #include <QFont>
 #include <QStandardPaths>
 
-SettingsDialog::SettingsDialog(QWidget *parent)
+SettingsDialog::SettingsDialog(QWidget *parent, Profile *profile)
     : KPageDialog(parent)
+    , m_profile(profile)
 {
     setWindowTitle(i18n("Configure Wild Palms"));
     setFaceType(KPageDialog::List);
@@ -40,6 +45,13 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     auto *devicesPage = new KPageWidgetItem(createDevicesPage(), i18n("Devices"));
     devicesPage->setIcon(QIcon::fromTheme(QStringLiteral("phone")));
     addPage(devicesPage);
+
+    // Sync page is only meaningful when a profile is supplied
+    if (m_profile) {
+        auto *syncPage = new KPageWidgetItem(createSyncPage(), i18n("Sync"));
+        syncPage->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+        addPage(syncPage);
+    }
 
     auto *advancedPage = new KPageWidgetItem(createAdvancedPage(), i18n("Advanced"));
     advancedPage->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
@@ -210,6 +222,151 @@ QWidget* SettingsDialog::createAdvancedPage()
     return page;
 }
 
+// ========== Sync Page ==========
+
+namespace {
+
+// Helper: populate combo with display/value pairs and select by data value
+struct ComboEntry { QString display; QString value; };
+
+void populateCombo(QComboBox *combo, const QList<ComboEntry> &entries)
+{
+    for (const auto &e : entries) {
+        combo->addItem(e.display, e.value);
+    }
+}
+
+void selectComboValue(QComboBox *combo, const QString &value)
+{
+    int idx = combo->findData(value);
+    if (idx < 0) {
+        // Unknown value: append it so the user can see what's stored
+        combo->addItem(value, value);
+        idx = combo->count() - 1;
+    }
+    combo->setCurrentIndex(idx);
+}
+
+QString comboValue(QComboBox *combo)
+{
+    return combo->currentData().toString();
+}
+
+} // namespace
+
+QWidget* SettingsDialog::createSyncPage()
+{
+    auto *page = new QWidget();
+    auto *outer = new QVBoxLayout(page);
+
+    auto *defaultsBox = new QGroupBox(i18n("Default conflict policy"), page);
+    auto *form = new QFormLayout(defaultsBox);
+
+    m_syncAutoResolveCombo = new QComboBox(defaultsBox);
+    populateCombo(m_syncAutoResolveCombo, {
+        { i18n("None (always prompt)"), QStringLiteral("none") },
+        { i18n("Palm wins"),             QStringLiteral("palm_wins") },
+        { i18n("PC wins"),               QStringLiteral("pc_wins") },
+        { i18n("Newer wins"),            QStringLiteral("newer_wins") },
+        { i18n("Older wins"),            QStringLiteral("older_wins") },
+        { i18n("Duplicate"),             QStringLiteral("duplicate") },
+    });
+    form->addRow(i18n("Auto-resolve:"), m_syncAutoResolveCombo);
+
+    m_syncFallbackCombo = new QComboBox(defaultsBox);
+    populateCombo(m_syncFallbackCombo, {
+        { i18n("Defer"),       QStringLiteral("defer") },
+        { i18n("Use default"), QStringLiteral("use_default") },
+        { i18n("Skip"),        QStringLiteral("skip") },
+    });
+    form->addRow(i18n("Fallback:"), m_syncFallbackCombo);
+
+    m_syncPromptCombo = new QComboBox(defaultsBox);
+    populateCombo(m_syncPromptCombo, {
+        { i18n("Always ask"),       QStringLiteral("always_ask") },
+        { i18n("First conflict only"), QStringLiteral("first_only") },
+        { i18n("Batch at end"),     QStringLiteral("batch_at_end") },
+    });
+    form->addRow(i18n("Prompt strategy:"), m_syncPromptCombo);
+
+    m_syncConnectionCombo = new QComboBox(defaultsBox);
+    populateCombo(m_syncConnectionCombo, {
+        { i18n("Keep alive"),            QStringLiteral("keep_alive") },
+        { i18n("Disconnect and defer"),  QStringLiteral("disconnect_and_defer") },
+        { i18n("Timeout and defer"),     QStringLiteral("timeout_and_defer") },
+    });
+    form->addRow(i18n("Connection behavior:"), m_syncConnectionCombo);
+
+    m_syncTimeoutSpin = new QSpinBox(defaultsBox);
+    m_syncTimeoutSpin->setRange(15, 300);
+    m_syncTimeoutSpin->setSuffix(i18n(" seconds"));
+    form->addRow(i18n("Conflict timeout:"), m_syncTimeoutSpin);
+
+    outer->addWidget(defaultsBox);
+
+    auto *conduitsBox = new QGroupBox(i18n("Enabled conduits"), page);
+    auto *conduitsLayout = new QVBoxLayout(conduitsBox);
+
+    auto *conduitsInfo = new QLabel(
+        i18n("Uncheck a conduit to skip it during sync. Disabled conduits "
+             "are hidden in the mapping editor."));
+    conduitsInfo->setWordWrap(true);
+    conduitsLayout->addWidget(conduitsInfo);
+
+    m_syncConduitList = new QListWidget(conduitsBox);
+    const QStringList conduitIds = { QStringLiteral("calendar"),
+                                     QStringLiteral("memo"),
+                                     QStringLiteral("contacts"),
+                                     QStringLiteral("todos"),
+                                     QStringLiteral("webcal") };
+    for (const QString &id : conduitIds) {
+        auto *item = new QListWidgetItem(id, m_syncConduitList);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);  // populated in loadSyncSettings()
+    }
+    conduitsLayout->addWidget(m_syncConduitList);
+    outer->addWidget(conduitsBox);
+
+    outer->addStretch();
+    return page;
+}
+
+void SettingsDialog::loadSyncSettings()
+{
+    if (!m_profile || !m_syncAutoResolveCombo) return;
+
+    selectComboValue(m_syncAutoResolveCombo, m_profile->conflictAutoResolve());
+    selectComboValue(m_syncFallbackCombo,    m_profile->conflictFallback());
+    selectComboValue(m_syncPromptCombo,      m_profile->conflictPromptStrategy());
+    selectComboValue(m_syncConnectionCombo,  m_profile->conflictConnectionBehavior());
+    m_syncTimeoutSpin->setValue(m_profile->conflictTimeoutSeconds());
+
+    for (int i = 0; i < m_syncConduitList->count(); ++i) {
+        auto *item = m_syncConduitList->item(i);
+        item->setCheckState(
+            m_profile->conduitEnabled(item->text()) ? Qt::Checked : Qt::Unchecked);
+    }
+}
+
+void SettingsDialog::saveSyncSettings()
+{
+    if (!m_profile || !m_syncAutoResolveCombo) return;
+
+    m_profile->setConflictAutoResolve(comboValue(m_syncAutoResolveCombo));
+    m_profile->setConflictFallback(comboValue(m_syncFallbackCombo));
+    m_profile->setConflictPromptStrategy(comboValue(m_syncPromptCombo));
+    m_profile->setConflictConnectionBehavior(comboValue(m_syncConnectionCombo));
+    m_profile->setConflictTimeoutSeconds(m_syncTimeoutSpin->value());
+
+    for (int i = 0; i < m_syncConduitList->count(); ++i) {
+        auto *item = m_syncConduitList->item(i);
+        m_profile->setConduitEnabled(item->text(),
+            item->checkState() == Qt::Checked);
+    }
+
+    m_profile->save();
+}
+
 // ========== Settings Load / Save ==========
 
 void SettingsDialog::loadSettings()
@@ -254,22 +411,23 @@ void SettingsDialog::loadSettings()
         m_recentProfilesList->addItem(item);
     }
 
-    // Device registry
+    // Registered devices (by USB serial \u2014 Phase L Task 0.B consolidated
+    // the previous fingerprint-keyed DeviceRegistry into DeviceSerials).
     m_deviceRegistryList->clear();
-    QMap<QString, QString> registry = s.deviceRegistry();
-    for (auto it = registry.begin(); it != registry.end(); ++it) {
-        DeviceFingerprint fp = DeviceFingerprint::fromRegistryKey(it.key());
-        QFileInfo profileInfo(it.value());
+    KConfigGroup serials = s.deviceSerialsGroup();
+    QStringList serialKeys = serials.keyList();
+    for (const QString &serial : serialKeys) {
+        QString profilePath = serials.readEntry(serial, QString());
+        if (profilePath.isEmpty()) continue;
+        QFileInfo profileInfo(profilePath);
 
         auto *item = new QListWidgetItem(
-            QStringLiteral("%1 \u2192 %2")
-                .arg(fp.displayString(), profileInfo.fileName()));
-        item->setToolTip(
-            i18n("Device: %1\nProfile: %2", fp.displayString(), it.value()));
+            QStringLiteral("%1 \u2192 %2").arg(serial, profileInfo.fileName()));
+        item->setToolTip(i18n("USB Serial: %1\nProfile: %2", serial, profilePath));
         m_deviceRegistryList->addItem(item);
     }
 
-    if (registry.isEmpty()) {
+    if (serialKeys.isEmpty()) {
         auto *item = new QListWidgetItem(i18n("(No devices registered yet)"));
         item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
         item->setForeground(Qt::gray);
@@ -279,6 +437,9 @@ void SettingsDialog::loadSettings()
     // Advanced
     m_minimizeToTrayCheck->setChecked(s.minimizeToTray());
     m_debugLoggingCheck->setChecked(s.debugLogging());
+
+    // Sync (per-profile; only present when m_profile is set)
+    loadSyncSettings();
 }
 
 void SettingsDialog::saveSettings()
@@ -287,6 +448,9 @@ void SettingsDialog::saveSettings()
     s.setMinimizeToTray(m_minimizeToTrayCheck->isChecked());
     s.setDebugLogging(m_debugLoggingCheck->isChecked());
     s.sync();
+
+    // Sync (per-profile; only present when m_profile is set)
+    saveSyncSettings();
 
     Q_EMIT settingsChanged();
 }
@@ -356,8 +520,14 @@ void SettingsDialog::onClearRecentProfiles()
 
 void SettingsDialog::onClearDeviceRegistry()
 {
-    KF6Settings::instance().clearDeviceRegistry();
-    KF6Settings::instance().sync();
+    // Phase L Task 0.B: DeviceRegistry removed; clear DeviceSerials instead.
+    KF6Settings &s = KF6Settings::instance();
+    KConfigGroup serials = s.deviceSerialsGroup();
+    const QStringList keys = serials.keyList();
+    for (const QString &key : keys) {
+        serials.deleteEntry(key);
+    }
+    s.sync();
     loadSettings();
 }
 

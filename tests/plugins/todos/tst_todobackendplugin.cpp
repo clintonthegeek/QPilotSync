@@ -9,14 +9,14 @@
 #include "plugins/todos/todoconflicthandler.h"
 
 #include "palm/calendar/categorymappingstore.h"
-#include "palm/palmdeviceconnection.h"
-#include "palm/sync/palmbackend.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
+#include "runtime/palmdeviceaccess.h"
 
-#include "core/ibackendplugin.h"
+// K.8b T13: core/ibackendplugin_v2.h deleted along with the V2 plugin ABI.
 
 // Complete-type includes for libkalburator pointers (delete on a forward
 // decl is UB; ConflictHandler is needed for dynamic_cast).
+#include "syncbackend.h"      // Kalburator::Sync::SyncBackend (calendar-typed)
 #include "iblobbackend.h"
 #include "conflictpolicy.h"
 
@@ -24,6 +24,7 @@ using WildPalms::TodoPlugin::TodoBackendPlugin;
 using WildPalms::TodoPlugin::TodoBlobBackend;
 using WildPalms::TodoPlugin::TodoConflictHandler;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
+using WildPalms::Runtime::PalmDeviceAccess;
 
 namespace {
 
@@ -84,33 +85,30 @@ void TestTodoBackendPlugin::claimedDatabasesIsToDoDB()
 
 void TestTodoBackendPlugin::createBackendsPopulatesCategoryStoreFromAppInfo()
 {
-    MockPalmDatabaseAccess device;
-    device.setAppBlock(QStringLiteral("ToDoDB"), buildAppInfoTwoSlots());
-
-    PalmDeviceConnection conn(&device);
+    auto mock = std::make_unique<MockPalmDatabaseAccess>();
+    mock->setAppBlock(QStringLiteral("ToDoDB"), buildAppInfoTwoSlots());
+    PalmDeviceAccess dev(std::move(mock));
 
     TodoBackendPlugin p;
-    auto provided = p.createBackends(/*host=*/nullptr, &conn);
-    QVERIFY(provided.blob != nullptr);
+    auto blobPtr = p.createPalmBackend(&dev);
+    QVERIFY(blobPtr != nullptr);
 
-    auto *blob = qobject_cast<TodoBlobBackend *>(provided.blob);
+    auto *blob = static_cast<TodoBlobBackend *>(blobPtr.get());
     QVERIFY(blob);
     auto cols = blob->availableCollections();
     QCOMPARE(cols.size(), 3);  // Unfiled + Personal + Business
     QCOMPARE(cols[1].name, QStringLiteral("Personal"));
     QCOMPARE(cols[2].name, QStringLiteral("Business"));
-
-    delete provided.blob;   // plugin manager owns in production
 }
 
 void TestTodoBackendPlugin::createConflictHandlerReturnsTodoHandler()
 {
-    MockPalmDatabaseAccess device;
-    PalmDeviceConnection conn(&device);
+    auto mock = std::make_unique<MockPalmDatabaseAccess>();
+    PalmDeviceAccess dev(std::move(mock));
 
     TodoBackendPlugin p;
-    auto provided = p.createBackends(nullptr, &conn);   // primes m_device
-    delete provided.blob;
+    auto blobPtr = p.createPalmBackend(&dev);   // primes m_device
+    Q_UNUSED(blobPtr)
 
     auto *handler = p.createConflictHandler();
     QVERIFY(handler != nullptr);

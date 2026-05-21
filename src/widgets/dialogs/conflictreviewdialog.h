@@ -10,7 +10,10 @@
  */
 
 #include <QDialog>
-#include "../../core/isyncconduit.h"
+// K.8b T13: core/isyncconduit.h deleted; ConduitLookupFn now lives in
+// app/conflictdialog.h (returning void* until T14 wires a Kalburator
+// plugin lookup).
+#include "../../app/conflictdialog.h"
 
 class ConflictReviewWidget;
 

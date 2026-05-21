@@ -38,7 +38,5 @@ add_palm_device_test(tst_pilotlinkpalmdatabaseaccess
     mockkpilotlink.cpp
 )
 
-add_palm_device_test(tst_palmdevice_roundtrip
-    tst_palmdevice_roundtrip.cpp
-    mockkpilotlink.cpp
-)
+# tst_palmdevice_roundtrip was deleted in M5c — its source used the
+# F1-facade APIs (BlobSyncResult / runBlobTwoWay) deleted in Plan 1.
