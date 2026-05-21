@@ -23,7 +23,7 @@
 #include "../plugins/todos/todobackendplugin.h"
 // contactsbackendplugin.h and webcalbackendplugin.h are intentionally omitted:
 // those plugins have hasMainView()=false and never appear in the cast loop below.
-#include "../app/conflict/conflictdialogbridge.h"
+#include "../app/conflict/kalburatorinteractiveconflicthandler.h"
 #include "../app/mapping/mappingeditordialog.h"
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
@@ -497,22 +497,23 @@ void KF6MainWindow::loadProfile(const QString &path)
         m_palmRuntime.get(),
         this);
 
-    // M5a — construct and install the libkalburator-side conflict handler.
-    // Recreate per profile so it points at the new engine.
-    // Direct construction is isolated in palmruntimebridgeinstall.cpp to avoid
-    // the include-guard collision between WP-local and libkalburator QSyncCore
-    // headers (both share the same guard names QSYNCCORE_CONFLICTPOLICY_H etc).
-    ConflictDialogBridge::destroyHandler(m_palmConflictHandler);
-    m_palmConflictHandler = nullptr;  // clear dangling pointer before recreating
-    m_palmConflictHandler = ConflictDialogBridge::createAndInstall(
-        m_palmRuntime.get(),
-        this,     // parentWidget for the dialog
-        this);    // QObject parent for lifetime management
+    // Construct and install the libkalburator-side conflict handler.
+    // Recreate per profile so it points at the new engine. Direct construction
+    // is now safe — src/sync/qsynccore/ is gone and the include-guard collision
+    // that previously required the conflictdialogbridge TU isolation no longer
+    // exists.
+    delete m_palmConflictHandler;
+    m_palmConflictHandler = nullptr;
+    auto *handler = new KalburatorInteractiveConflictHandler(
+        nullptr,   // ConflictStore — keep nullptr; M5b chore deferred
+        this,      // parentWidget for the dialog
+        this);     // QObject parent for lifetime management
+    m_palmRuntime->setConflictHandler(handler);
+    m_palmConflictHandler = handler;
 
     // Tickle the device link while the dialog is open (matches legacy handler).
-    ConflictDialogBridge::connectKeepAlive(
-        m_palmConflictHandler,
-        [this]() { onPalmConflictHandlerKeepAlive(); });
+    connect(handler, &KalburatorInteractiveConflictHandler::keepAliveRequested,
+            this, [this]() { onPalmConflictHandlerKeepAlive(); });
 
     // Wire Palm plugin pages synchronously now that PalmRuntime has loaded plugins.
     for (auto *page : m_palmPluginPages.values()) {

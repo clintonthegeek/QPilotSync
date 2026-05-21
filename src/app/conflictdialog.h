@@ -14,8 +14,10 @@
 
 #include <QDialog>
 #include <functional>
-#include "sync/qsynccore/conflictrecord.h"
-#include "sync/qsynccore/conflictpolicy.h"
+
+// Kalburator types used in this header
+#include "conflictrecord.h"
+#include "conflictpolicy.h"
 // K.8b T13: core/isyncconduit.h deleted along with the V1 plugin ABI.
 // ConduitLookupFn lived in that header — redeclare a compatible stub here
 // returning void* (the dialog only used the lookup for type-aware HTML
@@ -37,8 +39,8 @@ class ConflictDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit ConflictDialog(const QSyncCore::ConflictRecord &conflict,
-                            const QSyncCore::ConflictPolicy &policy,
+    explicit ConflictDialog(const Kalburator::Conflict::ConflictRecord &conflict,
+                            const Kalburator::Conflict::ConflictPolicy &policy,
                             ConduitLookupFn conduitLookup = nullptr,
                             QWidget *parent = nullptr);
     ~ConflictDialog() override;
@@ -46,7 +48,7 @@ public:
     /**
      * @brief Get the user's decision
      */
-    QSyncCore::ConflictDecision decision() const { return m_decision; }
+    Kalburator::Conflict::ConflictDecision decision() const { return m_decision; }
 
     /**
      * @brief Should this decision apply to all remaining conflicts?
@@ -56,7 +58,7 @@ public:
     /**
      * @brief Was the conflict deferred?
      */
-    bool wasDeferred() const { return m_decision == QSyncCore::ConflictDecision::Pending; }
+    bool wasDeferred() const { return m_decision == Kalburator::Conflict::ConflictDecision::Pending; }
 
 signals:
     /**
@@ -88,13 +90,13 @@ private:
      *
      * Override in subclasses for type-specific display.
      */
-    virtual void displayRecord(const QSyncCore::RecordSnapshot &record,
+    virtual void displayRecord(const Kalburator::Conflict::RecordSnapshot &record,
                                QTextEdit *textEdit,
                                QLabel *infoLabel);
 
-    QSyncCore::ConflictRecord m_conflict;
-    QSyncCore::ConflictPolicy m_policy;
-    QSyncCore::ConflictDecision m_decision;
+    Kalburator::Conflict::ConflictRecord m_conflict;
+    Kalburator::Conflict::ConflictPolicy m_policy;
+    Kalburator::Conflict::ConflictDecision m_decision;
     bool m_applyToAll;
     ConduitLookupFn m_conduitLookup;
 

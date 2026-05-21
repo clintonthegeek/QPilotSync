@@ -1,12 +1,12 @@
-#ifndef QSYNCCORE_SYNCCOMMON_H
-#define QSYNCCORE_SYNCCOMMON_H
+#ifndef WILDPALMS_JOURNAL_JOURNALCOMMON_H
+#define WILDPALMS_JOURNAL_JOURNALCOMMON_H
 
 /**
  * @file synccommon.h
  * @brief Common types for the QSyncCore shared sync library
  *
  * This header contains platform-agnostic types that can be shared
- * between Wild Palms, PlanStanLite, and other sync-enabled applications.
+ * between QPilotSync, PlanStanLite, and other sync-enabled applications.
  *
  * Design goals:
  *   - No dependency on specific device/backend implementations
@@ -18,7 +18,7 @@
 #include <QStringList>
 #include <QDateTime>
 
-namespace QSyncCore {
+namespace WildPalms::Sync {
 
 /**
  * @brief Unique identifier for a record in any sync store
@@ -34,7 +34,7 @@ using RecordId = QString;
  * Used to track correspondence between records in different stores
  * (e.g., Palm device ↔ local files, local files ↔ cloud service).
  */
-struct IdMapping
+struct IDMapping
 {
     RecordId sourceId;          ///< ID in the source store
     RecordId targetId;          ///< ID in the target store
@@ -130,6 +130,6 @@ struct DataLossWarning
     QString recommendation;
 };
 
-} // namespace QSyncCore
+} // namespace WildPalms::Sync
 
-#endif // QSYNCCORE_SYNCCOMMON_H
+#endif // WILDPALMS_JOURNAL_JOURNALCOMMON_H

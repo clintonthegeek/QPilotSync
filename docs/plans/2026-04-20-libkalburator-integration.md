@@ -566,15 +566,21 @@ checkboxes here — update the spec.
   / CopyPCToPalm / Backup / Restore). Real-device smoke: 621 records
   flowed Palm→PC on first HotSync against an m505. Status of deferrals
   (also tracked in the Phase-E spec's E.16 row):
-  (a) 🟡 `InteractiveConflictHandler` rebind to
-      `Kalburator::Conflict::ConflictHandler` — the new
-      `KalburatorInteractiveConflictHandler` (`src/app/conflict/`) is
-      already in place and derives from
-      `Kalburator::Conflict::ConflictHandler`, but `src/sync/qsynccore/`
-      is still consumed by ~12 sites (conflictdialogbridge,
-      conflictreviewwidget, several plugin handlers). **Final delete of
-      `src/sync/` + `ConduitManager` + `IConduit` family remains gated**
-      on migrating those last consumers.
+  (a) ✅ **Done 2026-05-21.** `KalburatorInteractiveConflictHandler`
+      derives from `Kalburator::Conflict::ConflictHandler`. All 12 WP
+      consumers (incl. plugin submodules) migrated from
+      `QSyncCore::*` to `Kalburator::Conflict::*`. The conflict-system
+      bridge (`conflictdialogbridge` + `palmruntimebridgeinstall`)
+      collapsed: ConflictDialog called directly from the handler;
+      KalburatorInteractiveConflictHandler instantiated directly from
+      kf6mainwindow. The qsynccore conflict types deleted from
+      `src/sync/qsynccore/`. The dead-but-needed JSON BaselineStore /
+      IDMappingStore (used by `SyncState::pendingConflictCount` for
+      legacy per-conduit conflict tracking, distinct from the SQLite
+      Kalburator::Storage stores used by the new sync engine) relocated
+      to `src/sync/journal/` under namespace `WildPalms::Sync`.
+      Original ConnectionBehavior consult-via-PalmBackendConfig feature
+      deferred (not required to land the migration).
   (b) ✅ **Resolved by removal 2026-05-21.** Rather than fix the
       cross-thread parenting bug, the WebCalendar plugin was deleted
       outright (submodule + tests + PalmRuntime registration + Plucker

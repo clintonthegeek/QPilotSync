@@ -13,7 +13,7 @@
 #include <QGroupBox>
 #include <QCloseEvent>
 
-using namespace QSyncCore;
+using namespace Kalburator::Conflict;
 
 ConflictDialog::ConflictDialog(const ConflictRecord &conflict,
                                const ConflictPolicy &policy,

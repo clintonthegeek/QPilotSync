@@ -15,16 +15,16 @@ SyncState::SyncState(const QString &userName,
     : QObject(parent)
     , m_userName(userName)
     , m_conduitId(conduitId)
-    , m_idMappings(new QSyncCore::IdMappingStore(this))
-    , m_baseline(new QSyncCore::BaselineStore(this))
-    , m_conflicts(new QSyncCore::ConflictStore(this))
+    , m_idMappings(new WildPalms::Sync::IDMappingStore(this))
+    , m_baseline(new WildPalms::Sync::BaselineStore(this))
+    , m_conflicts(new Kalburator::Conflict::ConflictStore(this))
 {
     // Forward change signals
-    connect(m_idMappings, &QSyncCore::IdMappingStore::mappingsChanged,
+    connect(m_idMappings, &WildPalms::Sync::IDMappingStore::mappingsChanged,
             this, &SyncState::stateChanged);
-    connect(m_baseline, &QSyncCore::BaselineStore::baselineChanged,
+    connect(m_baseline, &WildPalms::Sync::BaselineStore::baselineChanged,
             this, &SyncState::stateChanged);
-    connect(m_conflicts, &QSyncCore::ConflictStore::conflictsChanged,
+    connect(m_conflicts, &Kalburator::Conflict::ConflictStore::conflictsChanged,
             this, &SyncState::stateChanged);
 }
 
@@ -97,8 +97,8 @@ QStringList SyncState::allPCIds() const
 
 IDMapping SyncState::getMapping(const QString &palmId) const
 {
-    // Convert from QSyncCore::IdMapping to Sync::IDMapping
-    QSyncCore::IdMapping coreMapping = m_idMappings->getMapping(palmId);
+    // Convert from WildPalms::Sync::IDMapping to Sync::IDMapping
+    WildPalms::Sync::IDMapping coreMapping = m_idMappings->getMapping(palmId);
 
     IDMapping mapping;
     mapping.palmId = coreMapping.sourceId;
@@ -198,7 +198,7 @@ int SyncState::pendingConflictCount() const
     return m_conflicts->pendingCount();
 }
 
-QList<QSyncCore::ConflictRecord> SyncState::pendingConflicts() const
+QList<Kalburator::Conflict::ConflictRecord> SyncState::pendingConflicts() const
 {
     return m_conflicts->pendingConflicts();
 }
@@ -240,7 +240,7 @@ bool SyncState::load()
     m_lastSyncTime = QDateTime::fromString(root["lastSyncTime"].toString(), Qt::ISODate);
     m_lastSyncPC = root["lastSyncPC"].toString();
 
-    // Load mappings via IdMappingStore
+    // Load mappings via IDMappingStore
     // Need to convert from legacy format to new format
     QJsonArray mappingsArray = root["mappings"].toArray();
     if (!mappingsArray.isEmpty()) {
@@ -290,9 +290,9 @@ bool SyncState::save()
     root["conduitId"] = m_conduitId;
     root["lastSyncTime"] = m_lastSyncTime.toString(Qt::ISODate);
     root["lastSyncPC"] = m_lastSyncPC;
-    root["version"] = 2;  // Version 2 uses QSyncCore format
+    root["version"] = 2;  // Version 2 uses libkalburator format
 
-    // Save mappings - convert from QSyncCore format to legacy format for compatibility
+    // Save mappings - convert from libkalburator format to legacy format for compatibility
     QJsonArray coreArray = m_idMappings->toJson();
     QJsonArray legacyArray;
     for (const QJsonValue &val : coreArray) {

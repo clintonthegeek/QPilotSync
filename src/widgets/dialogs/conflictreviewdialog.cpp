@@ -6,7 +6,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-ConflictReviewDialog::ConflictReviewDialog(QSyncCore::ConflictStore *store,
+ConflictReviewDialog::ConflictReviewDialog(Kalburator::Conflict::ConflictStore *store,
                                              ConduitLookupFn conduitLookup,
                                              QWidget *parent)
     : QDialog(parent)

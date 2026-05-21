@@ -1,6 +1,6 @@
 #include "baselinestore.h"
 
-namespace QSyncCore {
+namespace WildPalms::Sync {
 
 BaselineStore::BaselineStore(QObject *parent)
     : QObject(parent)
@@ -75,4 +75,4 @@ void BaselineStore::clear()
     emit baselineChanged();
 }
 
-} // namespace QSyncCore
+} // namespace WildPalms::Sync

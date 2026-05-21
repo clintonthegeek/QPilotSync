@@ -1,5 +1,5 @@
-#ifndef QSYNCCORE_IDMAPPINGSTORE_H
-#define QSYNCCORE_IDMAPPINGSTORE_H
+#ifndef WILDPALMS_JOURNAL_IDMAPPINGSTORE_H
+#define WILDPALMS_JOURNAL_IDMAPPINGSTORE_H
 
 /**
  * @file idmappingstore.h
@@ -19,7 +19,7 @@
  *   - Suitable for extraction into QSyncCore shared library
  */
 
-#include "synccommon.h"
+#include "journalcommon.h"
 
 #include <QObject>
 #include <QMap>
@@ -27,7 +27,7 @@
 #include <QJsonArray>
 #include <functional>
 
-namespace QSyncCore {
+namespace WildPalms::Sync {
 
 /**
  * @brief Manages bidirectional ID mappings between two sync stores
@@ -35,13 +35,13 @@ namespace QSyncCore {
  * Provides O(1) lookup in both directions via dual hash maps.
  * Supports serialization to/from JSON for persistence.
  */
-class IdMappingStore : public QObject
+class IDMappingStore : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit IdMappingStore(QObject *parent = nullptr);
-    ~IdMappingStore() override = default;
+    explicit IDMappingStore(QObject *parent = nullptr);
+    ~IDMappingStore() override = default;
 
     // ========== Mapping Operations ==========
 
@@ -100,7 +100,7 @@ public:
     /**
      * @brief Get the full mapping entry for a source ID
      */
-    IdMapping getMapping(const RecordId &sourceId) const;
+    IDMapping getMapping(const RecordId &sourceId) const;
 
     /**
      * @brief Get total number of mappings
@@ -148,15 +148,15 @@ signals:
 
 private:
     // Primary storage: source ID → full mapping
-    QMap<RecordId, IdMapping> m_mappings;
+    QMap<RecordId, IDMapping> m_mappings;
 
     // Reverse lookup: target ID → source ID
     QMap<RecordId, RecordId> m_reverseMap;
 
-    QJsonObject mappingToJson(const IdMapping &mapping) const;
-    IdMapping mappingFromJson(const QJsonObject &json) const;
+    QJsonObject mappingToJson(const IDMapping &mapping) const;
+    IDMapping mappingFromJson(const QJsonObject &json) const;
 };
 
-} // namespace QSyncCore
+} // namespace WildPalms::Sync
 
-#endif // QSYNCCORE_IDMAPPINGSTORE_H
+#endif // WILDPALMS_JOURNAL_IDMAPPINGSTORE_H

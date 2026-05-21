@@ -7,14 +7,14 @@
 
 namespace KSync = Kalburator::Sync;
 
-class StubKalburatorHandler : public KSync::QSyncCore::ConflictHandler
+class StubKalburatorHandler : public Kalburator::Conflict::ConflictHandler
 {
 public:
-    KSync::QSyncCore::ConflictDecision handleConflict(
-        KSync::QSyncCore::ConflictRecord &,
-        const KSync::QSyncCore::ConflictPolicy &) override
+    Kalburator::Conflict::ConflictDecision handleConflict(
+        Kalburator::Conflict::ConflictRecord &,
+        const Kalburator::Conflict::ConflictPolicy &) override
     {
-        return KSync::QSyncCore::ConflictDecision::UseSource;
+        return Kalburator::Conflict::ConflictDecision::UseSource;
     }
 };
 

@@ -11,7 +11,7 @@
 #include <QGroupBox>
 #include <QMessageBox>
 
-using namespace QSyncCore;
+using namespace Kalburator::Conflict;
 
 ConflictReviewWidget::ConflictReviewWidget(ConflictStore *store, QWidget *parent)
     : QWidget(parent)

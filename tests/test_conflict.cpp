@@ -1,6 +1,6 @@
 /**
  * @file test_conflict.cpp
- * @brief Unit tests for QSyncCore conflict handling classes
+ * @brief Unit tests for Kalburator::Conflict types
  *
  * Tests ConflictRecord, ConflictStore, and ConflictPolicy classes.
  */
@@ -9,11 +9,11 @@
 #include <QDebug>
 #include <QSignalSpy>
 #include <QJsonDocument>
-#include "sync/qsynccore/conflictrecord.h"
-#include "sync/qsynccore/conflictstore.h"
-#include "sync/qsynccore/conflictpolicy.h"
+#include "conflictrecord.h"
+#include "conflictstore.h"
+#include "conflictpolicy.h"
 
-using namespace QSyncCore;
+using namespace Kalburator::Conflict;
 
 class TestConflict : public QObject
 {

@@ -2,14 +2,14 @@
 
 #include <QJsonObject>
 
-namespace QSyncCore {
+namespace WildPalms::Sync {
 
-IdMappingStore::IdMappingStore(QObject *parent)
+IDMappingStore::IDMappingStore(QObject *parent)
     : QObject(parent)
 {
 }
 
-void IdMappingStore::mapIds(const RecordId &sourceId, const RecordId &targetId)
+void IDMappingStore::mapIds(const RecordId &sourceId, const RecordId &targetId)
 {
     // Remove any existing mappings for these IDs to maintain 1:1
     if (m_mappings.contains(sourceId)) {
@@ -22,7 +22,7 @@ void IdMappingStore::mapIds(const RecordId &sourceId, const RecordId &targetId)
     }
 
     // Create new mapping
-    IdMapping mapping;
+    IDMapping mapping;
     mapping.sourceId = sourceId;
     mapping.targetId = targetId;
     mapping.lastSynced = QDateTime::currentDateTime();
@@ -33,7 +33,7 @@ void IdMappingStore::mapIds(const RecordId &sourceId, const RecordId &targetId)
     emit mappingsChanged();
 }
 
-bool IdMappingStore::removeBySource(const RecordId &sourceId)
+bool IDMappingStore::removeBySource(const RecordId &sourceId)
 {
     if (m_mappings.contains(sourceId)) {
         RecordId targetId = m_mappings[sourceId].targetId;
@@ -45,7 +45,7 @@ bool IdMappingStore::removeBySource(const RecordId &sourceId)
     return false;
 }
 
-bool IdMappingStore::removeByTarget(const RecordId &targetId)
+bool IDMappingStore::removeByTarget(const RecordId &targetId)
 {
     if (m_reverseMap.contains(targetId)) {
         RecordId sourceId = m_reverseMap[targetId];
@@ -57,7 +57,7 @@ bool IdMappingStore::removeByTarget(const RecordId &targetId)
     return false;
 }
 
-RecordId IdMappingStore::targetForSource(const RecordId &sourceId) const
+RecordId IDMappingStore::targetForSource(const RecordId &sourceId) const
 {
     if (m_mappings.contains(sourceId)) {
         return m_mappings[sourceId].targetId;
@@ -65,37 +65,37 @@ RecordId IdMappingStore::targetForSource(const RecordId &sourceId) const
     return RecordId();
 }
 
-RecordId IdMappingStore::sourceForTarget(const RecordId &targetId) const
+RecordId IDMappingStore::sourceForTarget(const RecordId &targetId) const
 {
     return m_reverseMap.value(targetId);
 }
 
-bool IdMappingStore::hasSourceMapping(const RecordId &sourceId) const
+bool IDMappingStore::hasSourceMapping(const RecordId &sourceId) const
 {
     return m_mappings.contains(sourceId);
 }
 
-bool IdMappingStore::hasTargetMapping(const RecordId &targetId) const
+bool IDMappingStore::hasTargetMapping(const RecordId &targetId) const
 {
     return m_reverseMap.contains(targetId);
 }
 
-QStringList IdMappingStore::allSourceIds() const
+QStringList IDMappingStore::allSourceIds() const
 {
     return m_mappings.keys();
 }
 
-QStringList IdMappingStore::allTargetIds() const
+QStringList IDMappingStore::allTargetIds() const
 {
     return m_reverseMap.keys();
 }
 
-IdMapping IdMappingStore::getMapping(const RecordId &sourceId) const
+IDMapping IDMappingStore::getMapping(const RecordId &sourceId) const
 {
     return m_mappings.value(sourceId);
 }
 
-void IdMappingStore::updateCategories(const RecordId &sourceId,
+void IDMappingStore::updateCategories(const RecordId &sourceId,
                                        const QString &sourceCategory,
                                        const QStringList &targetCategories)
 {
@@ -106,21 +106,21 @@ void IdMappingStore::updateCategories(const RecordId &sourceId,
     }
 }
 
-QJsonArray IdMappingStore::toJson() const
+QJsonArray IDMappingStore::toJson() const
 {
     QJsonArray array;
-    for (const IdMapping &mapping : m_mappings) {
+    for (const IDMapping &mapping : m_mappings) {
         array.append(mappingToJson(mapping));
     }
     return array;
 }
 
-int IdMappingStore::fromJson(const QJsonArray &array)
+int IDMappingStore::fromJson(const QJsonArray &array)
 {
     clear();
 
     for (const QJsonValue &val : array) {
-        IdMapping mapping = mappingFromJson(val.toObject());
+        IDMapping mapping = mappingFromJson(val.toObject());
         if (mapping.isValid()) {
             m_mappings[mapping.sourceId] = mapping;
             m_reverseMap[mapping.targetId] = mapping.sourceId;
@@ -130,14 +130,14 @@ int IdMappingStore::fromJson(const QJsonArray &array)
     return m_mappings.size();
 }
 
-void IdMappingStore::clear()
+void IDMappingStore::clear()
 {
     m_mappings.clear();
     m_reverseMap.clear();
     emit mappingsChanged();
 }
 
-QJsonObject IdMappingStore::mappingToJson(const IdMapping &mapping) const
+QJsonObject IDMappingStore::mappingToJson(const IDMapping &mapping) const
 {
     QJsonObject obj;
     obj["sourceId"] = mapping.sourceId;
@@ -149,9 +149,9 @@ QJsonObject IdMappingStore::mappingToJson(const IdMapping &mapping) const
     return obj;
 }
 
-IdMapping IdMappingStore::mappingFromJson(const QJsonObject &json) const
+IDMapping IDMappingStore::mappingFromJson(const QJsonObject &json) const
 {
-    IdMapping mapping;
+    IDMapping mapping;
     mapping.sourceId = json["sourceId"].toString();
     mapping.targetId = json["targetId"].toString();
     mapping.sourceCategory = json["sourceCategory"].toString();
@@ -166,4 +166,4 @@ IdMapping IdMappingStore::mappingFromJson(const QJsonObject &json) const
     return mapping;
 }
 
-} // namespace QSyncCore
+} // namespace WildPalms::Sync

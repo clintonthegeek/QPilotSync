@@ -17,7 +17,7 @@
 
 class ConflictReviewWidget;
 
-namespace QSyncCore {
+namespace Kalburator::Conflict {
 class ConflictStore;
 }
 
@@ -32,7 +32,7 @@ class ConflictReviewDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit ConflictReviewDialog(QSyncCore::ConflictStore *store,
+    explicit ConflictReviewDialog(Kalburator::Conflict::ConflictStore *store,
                                    ConduitLookupFn conduitLookup = nullptr,
                                    QWidget *parent = nullptr);
 

@@ -1,39 +1,24 @@
 # WildPalmsAppConflict — libkalburator-side interactive ConflictHandler.
 #
-# M5a: KalburatorInteractiveConflictHandler wraps the legacy
-# InteractiveConflictHandler UI surface but implements the
-# Kalburator::Sync::QSyncCore::ConflictHandler interface so that
-# PalmRuntime's embedded SyncEngine can use it directly.
+# Wraps the legacy InteractiveConflictHandler UI surface in a
+# Kalburator::Conflict::ConflictHandler implementation so that PalmRuntime's
+# embedded SyncEngine can use it directly.
 #
-# Lives in a separate static lib (not compiled into WildPalmsCore directly)
-# to avoid the header-guard collision between libkalburator's
-# conflict/conflictpolicy.h and WildPalms' local
-# sync/qsynccore/conflictpolicy.h, which share the include guard name
-# QSYNCCORE_CONFLICTPOLICY_H. Both must not appear in the same TU.
+# Note (2026-05-21): the conflictdialogbridge + palmruntimebridgeinstall TUs
+# were collapsed when src/sync/qsynccore/ was deleted. The include-guard
+# collision that required the bridge no longer exists; the handler TU includes
+# conflictdialog.h directly. This library now contains only the handler.
 
 add_library(WildPalmsAppConflict STATIC
     kalburatorinteractiveconflicthandler.h
     kalburatorinteractiveconflicthandler.cpp
-    # Bridge TU — includes conflictdialog.h (WP-local namespace) in isolation
-    # from the libkalburator headers in the handler TU.  The two TUs must NOT
-    # be merged, because both sets of headers share the same include-guard names
-    # (QSYNCCORE_CONFLICTRECORD_H, QSYNCCORE_CONFLICTPOLICY_H) and a single TU
-    # cannot include both without type-guard collisions.
-    conflictdialogbridge.h
-    conflictdialogbridge.cpp
-    # Factory/install bridge — libkalburator-only TU that creates the handler
-    # and installs it on PalmRuntime.  Must NOT include WP-local QSyncCore
-    # headers (same include-guard collision as above).
-    palmruntimebridgeinstall.cpp
 )
 
 target_include_directories(WildPalmsAppConflict
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     PRIVATE
-        # conflictdialogbridge.cpp includes "../conflictdialog.h" which in turn
-        # includes "sync/qsynccore/conflictrecord.h" etc.  Those are relative to
-        # WildPalmsCore's public include root (src/).
+        # The handler TU now includes "../conflictdialog.h" directly.
         # CMAKE_CURRENT_SOURCE_DIR is src/app/conflict; ../../ = src/
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
 )

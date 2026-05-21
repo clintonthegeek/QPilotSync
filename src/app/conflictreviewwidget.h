@@ -11,12 +11,13 @@
  */
 
 #include <QWidget>
-#include "sync/qsynccore/conflictrecord.h"
-#include "sync/qsynccore/conflictstore.h"
 // K.8b T13: core/isyncconduit.h deleted; ConduitLookupFn now lives as a
 // void*-returning stub in conflictdialog.h. T14 replaces it with a
 // Kalburator::Plugin lookup.
 #include "conflictdialog.h"
+
+// Kalburator types used in this header (ConflictStore)
+#include "conflictstore.h"
 
 class QListWidget;
 class QListWidgetItem;
@@ -35,7 +36,7 @@ class ConflictReviewWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ConflictReviewWidget(QSyncCore::ConflictStore *store,
+    explicit ConflictReviewWidget(Kalburator::Conflict::ConflictStore *store,
                                   QWidget *parent = nullptr);
     ~ConflictReviewWidget() override;
 
@@ -85,13 +86,13 @@ private slots:
 private:
     void setupUI();
     void updateConflictList();
-    void displayConflict(const QSyncCore::ConflictRecord &conflict);
+    void displayConflict(const Kalburator::Conflict::ConflictRecord &conflict);
     void updateButtons();
-    void resolveCurrentConflict(QSyncCore::ConflictDecision decision);
-    QString decisionToString(QSyncCore::ConflictDecision decision) const;
-    QIcon decisionToIcon(QSyncCore::ConflictDecision decision) const;
+    void resolveCurrentConflict(Kalburator::Conflict::ConflictDecision decision);
+    QString decisionToString(Kalburator::Conflict::ConflictDecision decision) const;
+    QIcon decisionToIcon(Kalburator::Conflict::ConflictDecision decision) const;
 
-    QSyncCore::ConflictStore *m_store;
+    Kalburator::Conflict::ConflictStore *m_store;
     ConduitLookupFn m_conduitLookup;
     QString m_currentConflictId;
 

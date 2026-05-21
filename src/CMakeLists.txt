@@ -39,21 +39,18 @@ add_library(WildPalmsCore SHARED
     palm/palmdevicemonitor.cpp
     palm/palmdevicemonitor.h
 
-    # QSyncCore - Shared sync library components (for future PlanStanLite integration)
-    sync/qsynccore/synccommon.h
-    sync/qsynccore/idmappingstore.cpp
-    sync/qsynccore/idmappingstore.h
-    sync/qsynccore/baselinestore.cpp
-    sync/qsynccore/baselinestore.h
-    sync/qsynccore/conflictrecord.cpp
-    sync/qsynccore/conflictrecord.h
-    sync/qsynccore/conflictstore.cpp
-    sync/qsynccore/conflictstore.h
-    sync/qsynccore/conflictpolicy.cpp
-    sync/qsynccore/conflictpolicy.h
-
     # Shared sync-related types (relocated from src/sync/ in E.16; survives the sync-tree deletion)
     core/synctypes.h
+
+    # JSON hash store for per-conduit pending-conflict tracking (legacy code
+    # path used by SyncState::pendingConflictCount). Lives alongside, not
+    # replacing, the SQLite-backed Kalburator::Storage::BaselineStore used by
+    # the new sync engine in palmruntime.cpp.
+    sync/journal/journalcommon.h
+    sync/journal/baselinestore.cpp
+    sync/journal/baselinestore.h
+    sync/journal/idmappingstore.cpp
+    sync/journal/idmappingstore.h
 
     # Sync engine (Phase 4)
     # K.8b T13: SyncEngine + LocalFileBackend + SyncConduitBase (conduit.{h,cpp})

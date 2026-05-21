@@ -1,5 +1,5 @@
-#ifndef QSYNCCORE_BASELINESTORE_H
-#define QSYNCCORE_BASELINESTORE_H
+#ifndef WILDPALMS_JOURNAL_BASELINESTORE_H
+#define WILDPALMS_JOURNAL_BASELINESTORE_H
 
 /**
  * @file baselinestore.h
@@ -21,13 +21,13 @@
  * Recommended: SHA-256 of normalized content (for text-based formats).
  */
 
-#include "synccommon.h"
+#include "journalcommon.h"
 
 #include <QObject>
 #include <QMap>
 #include <QJsonObject>
 
-namespace QSyncCore {
+namespace WildPalms::Sync {
 
 /**
  * @brief Stores content hashes for detecting changes between syncs
@@ -130,6 +130,6 @@ private:
     QMap<RecordId, QString> m_hashes;
 };
 
-} // namespace QSyncCore
+} // namespace WildPalms::Sync
 
-#endif // QSYNCCORE_BASELINESTORE_H
+#endif // WILDPALMS_JOURNAL_BASELINESTORE_H

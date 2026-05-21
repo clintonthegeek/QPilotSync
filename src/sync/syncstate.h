@@ -7,17 +7,23 @@
 #include <QMap>
 #include <QJsonObject>
 #include "../core/synctypes.h"
-#include "qsynccore/idmappingstore.h"
-#include "qsynccore/baselinestore.h"
-#include "qsynccore/conflictstore.h"
+#include "journal/idmappingstore.h"
+#include "journal/baselinestore.h"
+#include "conflictstore.h"   // Kalburator::Conflict::ConflictStore (libkalburator)
 
 namespace Sync {
 
 /**
  * @brief Manages sync state including ID mappings and baseline tracking
  *
- * This class composes QSyncCore components (IdMappingStore, BaselineStore)
+ * This class composes WildPalms::Sync components (IDMappingStore, BaselineStore)
  * with Wild Palms-specific persistence and metadata.
+ *
+ * Note: these are the JSON-backed stores in src/sync/journal/. They live
+ * alongside, not replacing, the SQLite-backed WildPalms::Sync::BaselineStore
+ * used by the new sync engine in palmruntime.cpp. The two serve different
+ * purposes (legacy per-conduit pending-conflict tracking vs. new
+ * BlobSyncEngine baseline).
  *
  * State is stored in:
  *   <stateBaseDir>/<username>/<conduit>/
@@ -25,7 +31,7 @@ namespace Sync {
  *     └── sync.log         - Audit log of sync operations
  *
  * The underlying ID mapping and baseline stores are from the shared
- * QSyncCore library, enabling future reuse in PlanStanLite.
+ * libkalburator library, enabling future reuse in PlanStanLite.
  */
 class SyncState : public QObject
 {
@@ -49,7 +55,7 @@ public:
     QString conduitId() const { return m_conduitId; }
 
     // ========== ID Mapping Operations ==========
-    // These delegate to the underlying IdMappingStore
+    // These delegate to the underlying IDMappingStore
 
     /**
      * @brief Create a mapping between Palm and PC records
@@ -212,24 +218,24 @@ public:
      *
      * Provides direct access for advanced use cases.
      */
-    QSyncCore::IdMappingStore* idMappingStore() { return m_idMappings; }
-    const QSyncCore::IdMappingStore* idMappingStore() const { return m_idMappings; }
+    WildPalms::Sync::IDMappingStore* idMappingStore() { return m_idMappings; }
+    const WildPalms::Sync::IDMappingStore* idMappingStore() const { return m_idMappings; }
 
     /**
      * @brief Get the underlying baseline store
      *
      * Provides direct access for advanced use cases.
      */
-    QSyncCore::BaselineStore* baselineStore() { return m_baseline; }
-    const QSyncCore::BaselineStore* baselineStore() const { return m_baseline; }
+    WildPalms::Sync::BaselineStore* baselineStore() { return m_baseline; }
+    const WildPalms::Sync::BaselineStore* baselineStore() const { return m_baseline; }
 
     /**
      * @brief Get the conflict store for deferred resolution
      *
      * Provides direct access for managing pending conflicts.
      */
-    QSyncCore::ConflictStore* conflictStore() { return m_conflicts; }
-    const QSyncCore::ConflictStore* conflictStore() const { return m_conflicts; }
+    Kalburator::Conflict::ConflictStore* conflictStore() { return m_conflicts; }
+    const Kalburator::Conflict::ConflictStore* conflictStore() const { return m_conflicts; }
 
     // ========== Conflict Operations ==========
 
@@ -246,7 +252,7 @@ public:
     /**
      * @brief Get all pending conflicts for this conduit
      */
-    QList<QSyncCore::ConflictRecord> pendingConflicts() const;
+    QList<Kalburator::Conflict::ConflictRecord> pendingConflicts() const;
 
     /**
      * @brief Clear all pending conflicts (after batch resolution)
@@ -262,10 +268,10 @@ private:
     QString m_conduitId;
     QString m_stateDir;
 
-    // Composed QSyncCore components
-    QSyncCore::IdMappingStore *m_idMappings;
-    QSyncCore::BaselineStore *m_baseline;
-    QSyncCore::ConflictStore *m_conflicts;
+    // Composed Kalburator::Storage components
+    WildPalms::Sync::IDMappingStore *m_idMappings;
+    WildPalms::Sync::BaselineStore *m_baseline;
+    Kalburator::Conflict::ConflictStore *m_conflicts;
 
     // Sync metadata
     QDateTime m_lastSyncTime;
