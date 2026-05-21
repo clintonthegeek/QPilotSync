@@ -44,6 +44,24 @@ private slots:
     void deletedSincePropagatesEncodedIds();
     void supportsDeleteTrackingFollowsDevice();
     void readAppBlockForwardsToDevice();
+
+    void loadPalmRecordsCachesAcrossCalls();
+    void cacheInvalidatedOnMutation();
+};
+
+/// MockPalmDatabaseAccess that counts readAllRecords() calls per database.
+/// Used by the caching tests below to assert PalmBackend doesn't hammer
+/// the device on repeat reads.
+class CountingMockPalmDatabaseAccess : public MockPalmDatabaseAccess
+{
+public:
+    mutable QHash<QString, int> readAllCounts;
+
+    QList<PalmRecord> readAllRecords(const QString &dbName) const override
+    {
+        ++readAllCounts[dbName];
+        return MockPalmDatabaseAccess::readAllRecords(dbName);
+    }
 };
 
 void TestPalmBackend::identity()
@@ -312,6 +330,78 @@ void TestPalmBackend::readAppBlockForwardsToDevice()
     const QByteArray bytes("\x10\x20mock-appinfo", 14);
     dev.setAppBlock(QStringLiteral("DatebookDB"), bytes);
     QCOMPARE(backend.readAppBlock(QStringLiteral("DatebookDB")), bytes);
+}
+
+void TestPalmBackend::loadPalmRecordsCachesAcrossCalls()
+{
+    // E.16 follow-up: when a plugin walks N virtual sub-collections that
+    // all sit behind the same Palm DB (e.g. contacts/0..3 → AddressDB),
+    // PalmBackend must read the device once, not N times.
+    CountingMockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("AddressDB"));
+    dev.createRecord(QStringLiteral("AddressDB"),
+                     makePalm(0, QByteArrayLiteral("alice")));
+    dev.createRecord(QStringLiteral("AddressDB"),
+                     makePalm(0, QByteArrayLiteral("bob")));
+
+    PalmBackend backend(&dev);
+
+    // Four reads (one per virtual contact slot) → one device read.
+    for (int i = 0; i < 4; ++i) {
+        const auto recs = backend.loadPalmRecords(QStringLiteral("AddressDB"));
+        QCOMPARE(recs.size(), 2);
+    }
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("AddressDB")), 1);
+
+    // The IBlobBackend loadRecords overload shares the same cache.
+    const auto blobRecs = backend.loadRecords(QStringLiteral("palm:address"));
+    QCOMPARE(blobRecs.size(), 2);
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("AddressDB")), 1);
+
+    // invalidateCache() forces a fresh read.
+    backend.invalidateCache(QStringLiteral("AddressDB"));
+    (void)backend.loadPalmRecords(QStringLiteral("AddressDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("AddressDB")), 2);
+}
+
+void TestPalmBackend::cacheInvalidatedOnMutation()
+{
+    // Each mutating call drops the cache for its database so the next
+    // read sees the new state.
+    CountingMockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+
+    PalmBackend backend(&dev);
+    (void)backend.loadPalmRecords(QStringLiteral("MemoDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("MemoDB")), 1);
+
+    // createPalmRecord — cache must drop.
+    const auto newId = backend.createPalmRecord(
+        QStringLiteral("MemoDB"),
+        makePalm(0, QByteArrayLiteral("first")));
+    QVERIFY(newId != 0);
+    (void)backend.loadPalmRecords(QStringLiteral("MemoDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("MemoDB")), 2);
+
+    // updatePalmRecord — cache must drop.
+    PalmRecord updated = makePalm(newId, QByteArrayLiteral("updated"));
+    QVERIFY(backend.updatePalmRecord(QStringLiteral("MemoDB"), updated));
+    (void)backend.loadPalmRecords(QStringLiteral("MemoDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("MemoDB")), 3);
+
+    // deletePalmRecord — cache must drop.
+    QVERIFY(backend.deletePalmRecord(QStringLiteral("MemoDB"), newId));
+    (void)backend.loadPalmRecords(QStringLiteral("MemoDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("MemoDB")), 4);
+
+    // Mutations on one DB must not invalidate other DBs.
+    dev.createDatabase(QStringLiteral("AddressDB"));
+    (void)backend.loadPalmRecords(QStringLiteral("AddressDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("AddressDB")), 1);
+    backend.createPalmRecord(QStringLiteral("MemoDB"),
+                             makePalm(0, QByteArrayLiteral("x")));
+    (void)backend.loadPalmRecords(QStringLiteral("AddressDB"));
+    QCOMPARE(dev.readAllCounts.value(QStringLiteral("AddressDB")), 1);
 }
 
 QTEST_MAIN(TestPalmBackend)

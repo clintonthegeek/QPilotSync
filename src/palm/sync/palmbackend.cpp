@@ -182,8 +182,12 @@ QList<Kalburator::Sync::BackendRecord> PalmBackend::loadRecords(
     if (!decodeCollectionId(collectionId, &dbName)) return {};
     if (!m_device) return {};
 
+    // Reuse the per-database cache so this overload doesn't fight the
+    // category-aware loadPalmRecords() for cache slots.
+    const auto records = loadPalmRecords(dbName);
     QList<Kalburator::Sync::BackendRecord> out;
-    for (const auto &pr : m_device->readAllRecords(dbName)) {
+    out.reserve(records.size());
+    for (const auto &pr : records) {
         out.append(palmToBackend(dbName, pr));
     }
     return out;
@@ -213,6 +217,7 @@ QString PalmBackend::createRecord(
     PalmRecord pr = backendToPalm(record);
     const auto newId = m_device->createRecord(dbName, pr);
     if (newId == 0) return {};
+    m_palmRecordsCache.remove(dbName);
     return encodeRecordId(dbName, newId);
 }
 
@@ -224,7 +229,9 @@ bool PalmBackend::updateRecord(const Kalburator::Sync::BackendRecord &record)
     if (!m_device) return false;
 
     PalmRecord pr = backendToPalm(record, numericId);
-    return m_device->updateRecord(dbName, pr);
+    const bool ok = m_device->updateRecord(dbName, pr);
+    if (ok) m_palmRecordsCache.remove(dbName);
+    return ok;
 }
 
 bool PalmBackend::deleteRecord(const QString &recordId)
@@ -233,7 +240,9 @@ bool PalmBackend::deleteRecord(const QString &recordId)
     std::uint32_t numericId = 0;
     if (!decodeRecordId(recordId, &dbName, &numericId)) return false;
     if (!m_device) return false;
-    return m_device->deleteRecord(dbName, numericId);
+    const bool ok = m_device->deleteRecord(dbName, numericId);
+    if (ok) m_palmRecordsCache.remove(dbName);
+    return ok;
 }
 
 QList<Kalburator::Sync::BackendRecord> PalmBackend::modifiedSince(
@@ -274,7 +283,11 @@ bool PalmBackend::supportsDeleteTracking() const
 QList<PalmRecord> PalmBackend::loadPalmRecords(const QString &dbName)
 {
     if (!m_device) return {};
-    return m_device->readAllRecords(dbName);
+    const auto it = m_palmRecordsCache.constFind(dbName);
+    if (it != m_palmRecordsCache.constEnd()) return it.value();
+    auto records = m_device->readAllRecords(dbName);
+    m_palmRecordsCache.insert(dbName, records);
+    return records;
 }
 
 std::optional<PalmRecord> PalmBackend::loadPalmRecord(const QString &dbName,
@@ -288,24 +301,36 @@ std::uint32_t PalmBackend::createPalmRecord(const QString &dbName,
                                              const PalmRecord &record)
 {
     if (!m_device) return 0;
-    return m_device->createRecord(dbName, record);
+    const auto newId = m_device->createRecord(dbName, record);
+    if (newId != 0) m_palmRecordsCache.remove(dbName);
+    return newId;
 }
 
 bool PalmBackend::updatePalmRecord(const QString &dbName, const PalmRecord &record)
 {
     if (!m_device) return false;
-    return m_device->updateRecord(dbName, record);
+    const bool ok = m_device->updateRecord(dbName, record);
+    if (ok) m_palmRecordsCache.remove(dbName);
+    return ok;
 }
 
 bool PalmBackend::deletePalmRecord(const QString &dbName, std::uint32_t recordId)
 {
     if (!m_device) return false;
-    return m_device->deleteRecord(dbName, recordId);
+    const bool ok = m_device->deleteRecord(dbName, recordId);
+    if (ok) m_palmRecordsCache.remove(dbName);
+    return ok;
 }
 
 QByteArray PalmBackend::readAppBlock(const QString &dbName) const
 {
     return m_device ? m_device->readAppBlock(dbName) : QByteArray();
+}
+
+void PalmBackend::invalidateCache(const QString &dbName)
+{
+    if (dbName.isEmpty()) m_palmRecordsCache.clear();
+    else                  m_palmRecordsCache.remove(dbName);
 }
 
 } // namespace WildPalms::PalmSync

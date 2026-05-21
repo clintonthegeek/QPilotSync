@@ -564,18 +564,32 @@ checkboxes here — update the spec.
 - 🟡 **E.16** — *Partial 2026-04-28.* SyncRunner orchestrates V2 plugins
   for all six Tools-menu sync modes (HotSync / FullSync / CopyPalmToPC
   / CopyPCToPalm / Backup / Restore). Real-device smoke: 621 records
-  flowed Palm→PC on first HotSync against an m505. Deferred (tracked in
-  the Phase-E spec's E.16 row):
-  (a) `InteractiveConflictHandler` rebind to
-      `Kalburator::Sync::QSyncCore::ConflictHandler` — **gates final
-      delete of `src/sync/` + `ConduitManager` + `IConduit` family**
-      (they still exist on disk as dead code);
-  (b) WebCalendar cross-thread parenting bug in `createBackends`;
-  (c) multi-collection plugins re-read the Palm DB once per collection
-      (perf);
-  (d) `LocalBlobBackend` cross-id-space mapping (likely duplicate-on-
-      second-sync, untested);
-  (e) `WildPalms::FullSync` → `WildPalms::Runtime` namespace rename.
+  flowed Palm→PC on first HotSync against an m505. Status of deferrals
+  (also tracked in the Phase-E spec's E.16 row):
+  (a) 🟡 `InteractiveConflictHandler` rebind to
+      `Kalburator::Conflict::ConflictHandler` — the new
+      `KalburatorInteractiveConflictHandler` (`src/app/conflict/`) is
+      already in place and derives from
+      `Kalburator::Conflict::ConflictHandler`, but `src/sync/qsynccore/`
+      is still consumed by ~12 sites (conflictdialogbridge,
+      conflictreviewwidget, several plugin handlers). **Final delete of
+      `src/sync/` + `ConduitManager` + `IConduit` family remains gated**
+      on migrating those last consumers.
+  (b) WebCalendar cross-thread parenting bug — `WebcalBackendPlugin`
+      owns `QNetworkAccessManager` + `IcsFeedFetcher` on the GUI thread;
+      `WebcalBlobBackend::loadRecords` runs on the worker thread and
+      reaches across. Pending: pick a fix (backend-local QNAM, or
+      cross-thread invocation through the GUI) and reproduce.
+  (c) ✅ **Done 2026-05-21.** Multi-collection per-DB re-read perf:
+      `PalmBackend::loadPalmRecords` now caches per-database; mutators
+      invalidate for their dbName. Cuts the 4× AddressDB / 4× ToDoDB
+      open+read pattern down to 1× per sync cycle. Regression covered
+      by `tst_palmbackend::loadPalmRecordsCachesAcrossCalls` and
+      `cacheInvalidatedOnMutation`.
+  (d) `LocalBlobBackend` cross-id-space mapping — likely duplicate-on-
+      second-sync, untested. Needs e2e against `LocalBlobBackend`.
+  (e) ✅ **Done 2026-05-21** (commit `f615926`).
+      `WildPalms::FullSync` → `WildPalms::Runtime` namespace rename.
 - 🟡 **E.17** — Mostly subsumed by the engine-merger campaign (phases
   J/K/L/M, merged 2026-05-21). Remaining straggler call-sites tracked
   inline in the Phase-E spec's E.17 row.

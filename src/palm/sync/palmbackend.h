@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 
+#include <QHash>
 #include <QList>
 #include <QObject>
 
@@ -96,6 +97,12 @@ public:
     /// CategoryMappingStore at session start.
     QByteArray readAppBlock(const QString &dbName) const;
 
+    /// Drop cached records for one database (or all if dbName is empty).
+    /// Mutators call this automatically for the affected dbName; callers
+    /// that bypass this backend to change device state should call it
+    /// manually so the next loadPalmRecords sees the truth.
+    void invalidateCache(const QString &dbName = QString());
+
 Q_SIGNALS:
     void recordCreated(const QString &recordId);
     void recordUpdated(const QString &recordId);
@@ -105,6 +112,12 @@ Q_SIGNALS:
 
 private:
     IPalmDatabaseAccess *m_device = nullptr;
+
+    // Per-database record cache. Mutating ops (create/update/delete) wipe
+    // the entry for their database. Cuts N×readAllRecords down to 1×
+    // when a plugin walks N virtual sub-collections (palm:contact/0..3,
+    // palm:todo/0..3) backed by the same Palm database.
+    mutable QHash<QString, QList<PalmRecord>> m_palmRecordsCache;
 };
 
 } // namespace WildPalms::PalmSync
