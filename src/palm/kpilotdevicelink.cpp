@@ -783,13 +783,23 @@ QList<PilotRecord*> KPilotDeviceLink::readAllRecords(int dbHandle)
                                           buffer, &id, &attr, &category);
 
         if (result < 0) {
-            if (index == 0) {
-                qWarning() << "[KPilotDeviceLink] Failed to read first record, possible disconnect";
-                setError("Failed to read records - device may be disconnected");
-                setStatus(PilotLinkError);
-                m_isConnected = false;
-            } else {
+            // dlp_ReadRecordByIndex returns PI_ERR_DLP_PALMOS with
+            // pi_palmos_error() == dlpErrNotFound to signal "no record at
+            // this index" — i.e. end of database. That is *also* the
+            // response at index 0 for an empty database, so we cannot
+            // use index == 0 as a disconnect heuristic (it would tear
+            // down the whole sync on the first empty Palm DB).
+            if (pi_palmos_error(m_socket) == dlpErrNotFound) {
                 qDebug() << "[KPilotDeviceLink] End of records at index:" << index;
+            } else {
+                qWarning() << "[KPilotDeviceLink] dlp_ReadRecordByIndex() failed at index" << index
+                           << "result:" << result
+                           << "pi_error:" << pi_error(m_socket)
+                           << "palmos_error:" << pi_palmos_error(m_socket);
+                setError("Failed to read records");
+                setStatus(PilotLinkError);
+                if (result <= -200)
+                    m_isConnected = false;
             }
             break;
         }
