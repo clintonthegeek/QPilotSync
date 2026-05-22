@@ -23,7 +23,7 @@ for the Phase E sub-phase status table.
 | C | Upstream: layered directory split + `Kalburator::Sync::*` namespace | libkalburator | ✅ **Done upstream** as Phases C.2a + C.2b + C.3, tagged `v0.5-phase-c` on 2026-04-21. | B |
 | D | WP implements host interfaces (`ICalendarHost`, `ICalendarCollection`, `ISyncConfigStore`) | WP | ✅ **Done** 2026-04-21 (commit `ff40d0f`). | A |
 | E | WP refactors `PalmBackend` onto `IBlobBackend`; ships `PalmCalendarBackend` adapter; rewrites WP plugin ABI; collapses Client/Full-Sync Modes into unified runtime | both | ✅ **Done 2026-05-21.** E.0–E.15b landed 2026-04-21..2026-04-26. E.16 landed (partial 2026-04-28; deferrals (a)(b)(c)(e) closed 2026-05-21 via the conflict-handler port + WebCalendar deletion + per-DB cache + namespace rename; only (d) — LocalBlobBackend cross-id-mapping — remains as a libkalburator follow-up). E.17 subsumed by the engine-merger campaign merged to main 2026-05-21. E.18 ❌ cancelled (POSE64 timing infeasible). E.19 landed 2026-05-21 (`docs/PLUGIN_ABI.md` written; `docs/ARCHITECTURE_2026.md` + `docs/SYNC_ENGINE_ARCHITECTURE.md` + `docs/LIBKALBURATOR.md` refreshed; legacy docs archived). See `../superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md`. | B2, D |
-| F | Full Sync Mode UI polish + profile-creation wizard (the mode collapse itself landed in E.16 per Phase-E spec decision #3) | WP | **In progress.** F.1a ✅ + F.1b ✅ done 2026-05-22. F.1c / F.2 / F.3 / F.4 pending. | E |
+| F | Full Sync Mode UI polish + profile-creation wizard (the mode collapse itself landed in E.16 per Phase-E spec decision #3) | WP | **In progress.** F.1a ✅ + F.1b ✅ + F.2 ✅ done 2026-05-22. F.1c / F.3 / F.4 pending. | E |
 | G | Joint v1.0 declaration (libkalburator) | both | **Not started.** | F |
 
 **Status reconciliation (2026-05-21, post Phase E close):**
@@ -50,8 +50,14 @@ for the Phase E sub-phase status table.
   in 16 commits (spec: `docs/superpowers/specs/2026-05-22-f1b-file-menu-design.md`,
   plan: `docs/superpowers/plans/2026-05-22-f1b-file-menu.md`).
   F.1c (the multi-page wizard) — next.
-- Phase F also covers F.2 (real `IConflictPresenter`), F.3
-  (calendar-binding UX polish), F.4 (Radicale E2E + user docs).
+- F.2 (real `IConflictPresenter` + the broader palm-sync-honesty
+  bug cluster) ✅ landed 2026-05-22 in five sub-project commit
+  series (A: hash stability, B: canonical deleteRecord, C: default
+  LWW policy, D: conflict-surfacing UI, E: mass-delete-guard E2E
+  verification). Spec: `docs/superpowers/specs/2026-05-22-palm-sync-honesty-design.md`.
+  Plans: `docs/superpowers/plans/2026-05-22-palm-sync-{A,B,C,D,E}-*.md`.
+- Phase F also covers F.3 (calendar-binding UX polish), F.4
+  (Radicale E2E + user docs).
 - Phase G (joint v1.0 cut) depends on Phase F and on PlanStan's own
   readiness against the same libkalburator pin. Not started.
 
