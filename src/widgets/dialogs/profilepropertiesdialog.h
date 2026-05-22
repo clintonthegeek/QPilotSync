@@ -26,6 +26,7 @@ public:
 
 Q_SIGNALS:
     void settingsChanged();
+    void renameRequested(QString id, QString newName);
 
 private Q_SLOTS:
     void onApply();
@@ -33,10 +34,14 @@ private Q_SLOTS:
 private:
     void loadSettings();
     void saveSettings();
+    QWidget* createGeneralPage();
     QWidget* createDevicePage();
     QWidget* createConflictPage();
 
     Profile *m_profile;
+
+    // General page (F.1b)
+    QLineEdit *m_nameEdit;
 
     // Device page
     QLineEdit *m_devicePathEdit;

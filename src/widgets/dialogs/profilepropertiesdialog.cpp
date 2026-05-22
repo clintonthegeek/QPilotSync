@@ -26,6 +26,11 @@ ProfilePropertiesDialog::ProfilePropertiesDialog(Profile *profile,
     setFaceType(KPageDialog::List);
     resize(500, 400);
 
+    // --- General page ---
+    QWidget *generalWidget = createGeneralPage();
+    KPageWidgetItem *generalPage = addPage(generalWidget, i18n("General"));
+    generalPage->setIcon(QIcon::fromTheme(QStringLiteral("user-identity")));
+
     // --- Device page ---
     QWidget *deviceWidget = createDevicePage();
     KPageWidgetItem *devicePage = addPage(deviceWidget, i18n("Device"));
@@ -44,6 +49,19 @@ ProfilePropertiesDialog::ProfilePropertiesDialog(Profile *profile,
 }
 
 // ========== Page Builders ==========
+
+QWidget *ProfilePropertiesDialog::createGeneralPage()
+{
+    auto *page = new QWidget;
+    auto *layout = new QFormLayout(page);
+
+    m_nameEdit = new QLineEdit(page);
+    m_nameEdit->setObjectName(QStringLiteral("profileName"));
+    m_nameEdit->setText(m_profile->name());
+    layout->addRow(i18n("Profile name:"), m_nameEdit);
+
+    return page;
+}
 
 QWidget* ProfilePropertiesDialog::createDevicePage()
 {
@@ -214,6 +232,11 @@ void ProfilePropertiesDialog::saveSettings()
 
 void ProfilePropertiesDialog::onApply()
 {
+    const QString trimmedName = m_nameEdit->text().trimmed();
+    if (!trimmedName.isEmpty() && trimmedName != m_profile->name()) {
+        emit renameRequested(m_profile->id(), trimmedName);
+    }
+
     saveSettings();
     emit settingsChanged();
 }
