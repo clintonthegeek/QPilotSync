@@ -25,6 +25,7 @@ class AutoSyncOrchestrator;
 namespace WildPalms::Runtime {
     class PalmRuntime;
     class AccountController;
+    class MassDeleteGuardPresenter;
     // ProfileRegistry is fully included above; no forward declaration needed.
 }
 
@@ -202,6 +203,10 @@ private:
 
     // F.1b: Switch ▸ / Forget ▸ menu controller
     std::unique_ptr<ProfileMenuController> m_profileMenuController;
+
+    // Mass-delete guard: constructed once, registered with PalmRuntime on
+    // every loadProfile call. Lifetime matches the window.
+    std::unique_ptr<WildPalms::Runtime::MassDeleteGuardPresenter> m_massDeleteGuard;
 
     QString m_syncPath;
 

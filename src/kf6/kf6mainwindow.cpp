@@ -17,6 +17,7 @@
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
 #include "../runtime/profileregistry.h"
+#include "../runtime/massdeleteguardpresenter.h"
 #include "../sync/syncstate.h"
 
 #include "../plugins/calendar/calendarbackendplugin.h"
@@ -107,6 +108,8 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     connect(m_profileMenuController.get(),
             &ProfileMenuController::forgetRequested,
             this, &KF6MainWindow::onForgetProfile);
+
+    m_massDeleteGuard = std::make_unique<WildPalms::Runtime::MassDeleteGuardPresenter>(this);
 
     // Auto-detection
     m_deviceMonitor = new PalmDeviceMonitor(this);
@@ -512,6 +515,7 @@ void KF6MainWindow::loadProfile(const QString &path)
     // and computes <root>/.state internally for the baselines DB.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
         m_currentProfile->syncFolderPath(), this);
+    m_palmRuntime->setMassDeleteGuard(m_massDeleteGuard.get());
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runStarted,
             this, &KF6MainWindow::onPalmRunStarted);
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,

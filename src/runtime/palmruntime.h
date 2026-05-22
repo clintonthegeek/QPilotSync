@@ -29,6 +29,7 @@ namespace Kalburator::Engine {
 
 namespace Kalburator::Conflict {
     class ConflictHandler;
+    class IMassDeleteGuard;
 }
 
 namespace Kalburator::Storage {
@@ -107,6 +108,11 @@ public:
     // (or call setConflictHandler(nullptr) before destroying the handler).
     void setConflictHandler(Kalburator::Conflict::ConflictHandler *handler);
     Kalburator::Conflict::ConflictHandler *conflictHandlerForTest() const;
+
+    /// Forward to the embedded SyncEngine. Non-owning; consumer must
+    /// outlive the runtime. nullptr clears. See libkalburator's
+    /// imassdeleteguard.h for threshold semantics.
+    void setMassDeleteGuard(Kalburator::Conflict::IMassDeleteGuard *guard);
 
     // Test seams
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);

@@ -20,6 +20,7 @@
 #include <isynchost.h>
 #include <baselinestore.h>
 #include <isyncconfigstore.h>
+#include <imassdeleteguard.h>
 #include "shape.h"
 // K.8b T13: ibackendplugin_v2.h include removed — V2 plugin ABI deleted.
 #include "palm/device/pilotlinkpalmdatabaseaccess.h"
@@ -421,6 +422,13 @@ void PalmRuntime::setConflictHandler(
     m_conflictHandler = handler;
     if (m_engine) {
         m_engine->conflictRegistry()->setDefaultHandler(handler);
+    }
+}
+
+void PalmRuntime::setMassDeleteGuard(Kalburator::Conflict::IMassDeleteGuard *guard)
+{
+    if (m_engine) {
+        m_engine->setMassDeleteGuard(guard);
     }
 }
 
