@@ -304,29 +304,6 @@ QWidget* SettingsDialog::createSyncPage()
 
     outer->addWidget(defaultsBox);
 
-    auto *conduitsBox = new QGroupBox(i18n("Enabled conduits"), page);
-    auto *conduitsLayout = new QVBoxLayout(conduitsBox);
-
-    auto *conduitsInfo = new QLabel(
-        i18n("Uncheck a conduit to skip it during sync. Disabled conduits "
-             "are hidden in the mapping editor."));
-    conduitsInfo->setWordWrap(true);
-    conduitsLayout->addWidget(conduitsInfo);
-
-    m_syncConduitList = new QListWidget(conduitsBox);
-    const QStringList conduitIds = { QStringLiteral("calendar"),
-                                     QStringLiteral("memo"),
-                                     QStringLiteral("contacts"),
-                                     QStringLiteral("todos"),
-                                     QStringLiteral("webcal") };
-    for (const QString &id : conduitIds) {
-        auto *item = new QListWidgetItem(id, m_syncConduitList);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Unchecked);  // populated in loadSyncSettings()
-    }
-    conduitsLayout->addWidget(m_syncConduitList);
-    outer->addWidget(conduitsBox);
-
     outer->addStretch();
     return page;
 }
@@ -340,12 +317,6 @@ void SettingsDialog::loadSyncSettings()
     selectComboValue(m_syncPromptCombo,      m_profile->conflictPromptStrategy());
     selectComboValue(m_syncConnectionCombo,  m_profile->conflictConnectionBehavior());
     m_syncTimeoutSpin->setValue(m_profile->conflictTimeoutSeconds());
-
-    for (int i = 0; i < m_syncConduitList->count(); ++i) {
-        auto *item = m_syncConduitList->item(i);
-        item->setCheckState(
-            m_profile->conduitEnabled(item->text()) ? Qt::Checked : Qt::Unchecked);
-    }
 }
 
 void SettingsDialog::saveSyncSettings()
@@ -357,12 +328,6 @@ void SettingsDialog::saveSyncSettings()
     m_profile->setConflictPromptStrategy(comboValue(m_syncPromptCombo));
     m_profile->setConflictConnectionBehavior(comboValue(m_syncConnectionCombo));
     m_profile->setConflictTimeoutSeconds(m_syncTimeoutSpin->value());
-
-    for (int i = 0; i < m_syncConduitList->count(); ++i) {
-        auto *item = m_syncConduitList->item(i);
-        m_profile->setConduitEnabled(item->text(),
-            item->checkState() == Qt::Checked);
-    }
 
     m_profile->save();
 }

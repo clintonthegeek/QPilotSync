@@ -1,11 +1,8 @@
 #include "profilepropertiesdialog.h"
 
 #include "../../profile.h"
-// K.8b T13: ConduitManager deleted. The Conduits page is stubbed below
-// until T14 wires up a Kalburator::Plugin-driven equivalent.
 
 #include <KLocalizedString>
-#include <KPluginMetaData>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -13,18 +10,15 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
-#include <QScrollArea>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
 // ========== Constructor ==========
 
 ProfilePropertiesDialog::ProfilePropertiesDialog(Profile *profile,
-                                                  ConduitManager *conduitManager,
                                                   QWidget *parent)
     : KPageDialog(parent)
     , m_profile(profile)
-    , m_conduitManager(conduitManager)
 {
     setWindowTitle(m_profile->name().isEmpty()
                        ? i18n("Profile Properties")
@@ -36,11 +30,6 @@ ProfilePropertiesDialog::ProfilePropertiesDialog(Profile *profile,
     QWidget *deviceWidget = createDevicePage();
     KPageWidgetItem *devicePage = addPage(deviceWidget, i18n("Device"));
     devicePage->setIcon(QIcon::fromTheme(QStringLiteral("drive-removable-media")));
-
-    // --- Conduits page ---
-    QWidget *conduitsWidget = createConduitsPage();
-    KPageWidgetItem *conduitsPage = addPage(conduitsWidget, i18n("Conduits"));
-    conduitsPage->setIcon(QIcon::fromTheme(QStringLiteral("preferences-plugin")));
 
     // --- Conflict page ---
     QWidget *conflictWidget = createConflictPage();
@@ -95,22 +84,6 @@ QWidget* ProfilePropertiesDialog::createDevicePage()
     m_defaultSyncTypeCombo->addItem(i18n("Full Sync"), QStringLiteral("fullsync"));
     layout->addRow(i18n("Default sync type:"), m_defaultSyncTypeCombo);
 
-    return page;
-}
-
-QWidget* ProfilePropertiesDialog::createConduitsPage()
-{
-    // K.8b T13: ConduitManager + IConduit deleted. The conduit list /
-    // database-claim UI is stubbed out until T14 rebuilds it from
-    // Kalburator::Plugin metadata.
-    auto *page = new QWidget;
-    auto *outerLayout = new QVBoxLayout(page);
-    outerLayout->addWidget(new QLabel(
-        i18n("Conduit configuration is being migrated to the new "
-             "Kalburator plugin system. Use the Accounts page for "
-             "per-account configuration."),
-        page));
-    outerLayout->addStretch();
     return page;
 }
 
@@ -193,32 +166,6 @@ void ProfilePropertiesDialog::loadSettings()
     int syncTypeIdx = m_defaultSyncTypeCombo->findData(m_profile->defaultSyncType());
     if (syncTypeIdx >= 0) m_defaultSyncTypeCombo->setCurrentIndex(syncTypeIdx);
 
-    // Database Handlers
-    for (auto it = m_databaseHandlerCombos.constBegin(); it != m_databaseHandlerCombos.constEnd(); ++it) {
-        const QString &dbName = it.key();
-        QComboBox *combo = it.value();
-        QString activeHandler = m_profile->activeDatabaseHandler(dbName);
-
-        if (activeHandler.isEmpty()) {
-            if (combo->count() == 1) {
-                combo->setCurrentIndex(0);
-            } else {
-                combo->setCurrentIndex(0);  // "Choose handler" placeholder
-            }
-        } else {
-            int idx = combo->findData(activeHandler);
-            if (idx >= 0) combo->setCurrentIndex(idx);
-        }
-
-        // Trigger description update
-        Q_EMIT combo->currentIndexChanged(combo->currentIndex());
-    }
-
-    // Standalone Conduits
-    for (auto it = m_standaloneChecks.constBegin(); it != m_standaloneChecks.constEnd(); ++it) {
-        it.value()->setChecked(m_profile->conduitEnabled(it.key()));
-    }
-
     // Conflict page
     int resolveIdx = m_autoResolveCombo->findData(m_profile->conflictAutoResolve());
     if (resolveIdx >= 0) m_autoResolveCombo->setCurrentIndex(resolveIdx);
@@ -247,18 +194,6 @@ void ProfilePropertiesDialog::saveSettings()
     m_profile->setAutoSyncOnConnect(m_autoSyncCheck->isChecked());
     m_profile->setDefaultSyncType(
         m_defaultSyncTypeCombo->currentData().toString());
-
-    // Database Handlers
-    for (auto it = m_databaseHandlerCombos.constBegin(); it != m_databaseHandlerCombos.constEnd(); ++it) {
-        const QString &dbName = it.key();
-        QString conduitId = it.value()->currentData().toString();
-        m_profile->setActiveDatabaseHandler(dbName, conduitId);
-    }
-
-    // Standalone Conduits
-    for (auto it = m_standaloneChecks.constBegin(); it != m_standaloneChecks.constEnd(); ++it) {
-        m_profile->setConduitEnabled(it.key(), it.value()->isChecked());
-    }
 
     // Conflict page
     m_profile->setConflictAutoResolve(

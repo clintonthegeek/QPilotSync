@@ -2,12 +2,10 @@
 #define PROFILE_H
 
 #include <QString>
-#include <QStringList>
 #include <QList>
 #include <QMap>
 #include <QDateTime>
 #include <QJsonArray>
-#include <QJsonObject>
 
 // K.8b T9: accounts subgroup — needs full type for QList<> member
 #include "backendconfiguration.h"
@@ -233,20 +231,6 @@ public:
     int conflictTimeoutSeconds() const;
     void setConflictTimeoutSeconds(int seconds);
 
-    // Database handler preferences (which conduit handles which database)
-    QString activeDatabaseHandler(const QString &dbName) const;
-    void setActiveDatabaseHandler(const QString &dbName, const QString &conduitId);
-    QMap<QString, QString> allDatabaseHandlers() const;
-
-    // Conduit enable/disable
-    bool conduitEnabled(const QString &conduitId) const;
-    void setConduitEnabled(const QString &conduitId, bool enabled);
-    QStringList enabledConduits() const;
-
-    // Conduit-specific settings
-    QJsonObject conduitSettings(const QString &conduitId) const;
-    void setConduitSettings(const QString &conduitId, const QJsonObject &settings);
-
     // ========== Sync Mappings (G.7 Task 54) ==========
 
     // Raw JSON form of the SyncMapping list. Callers that need the parsed
@@ -306,9 +290,6 @@ private:
     QString m_conflictPromptStrategy = "always_ask";
     QString m_conflictConnectionBehavior = "keep_alive";
     int m_conflictTimeoutSeconds = 60;
-    QMap<QString, bool> m_conduitEnabled;
-    QMap<QString, QJsonObject> m_conduitSettings;
-    QMap<QString, QString> m_databaseHandlers; ///< database name -> active conduit ID
     QJsonArray m_syncMappingsJson;
 
     // K.8b T9: accounts (replaces .wildpalms.providers sidecar)

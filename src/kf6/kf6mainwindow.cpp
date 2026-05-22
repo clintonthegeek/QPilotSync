@@ -1486,7 +1486,7 @@ void KF6MainWindow::onProfileSettings()
         return;
     }
 
-    auto *dlg = new ProfilePropertiesDialog(m_currentProfile.get(), nullptr, this);
+    auto *dlg = new ProfilePropertiesDialog(m_currentProfile.get(), this);
     connect(dlg, &ProfilePropertiesDialog::settingsChanged, this, [this]() {
         updateWindowTitle();
     });

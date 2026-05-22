@@ -18,12 +18,12 @@ class Profile;
  * Provides configuration for global (non-profile-specific) settings:
  *   - Profiles: Default profile, recent profiles list
  *   - Devices: View registered devices
- *   - Sync: Default conflict policies + per-conduit enable (per-profile)
+ *   - Sync: Default conflict policies (per-profile)
  *   - Advanced: System tray, debug options
  *
  * The Sync page is only populated when a Profile is supplied via the
- * constructor. Sync settings round-trip through Profile::conflict* and
- * Profile::conduitEnabled accessors and are saved via Profile::save().
+ * constructor. Sync settings round-trip through Profile::conflict* accessors
+ * and are saved via Profile::save().
  */
 class SettingsDialog : public KPageDialog
 {
@@ -79,7 +79,6 @@ private:
     QComboBox *m_syncPromptCombo = nullptr;
     QComboBox *m_syncConnectionCombo = nullptr;
     QSpinBox *m_syncTimeoutSpin = nullptr;
-    QListWidget *m_syncConduitList = nullptr;
 };
 
 #endif // SETTINGSDIALOG_H

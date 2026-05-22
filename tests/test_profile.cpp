@@ -53,11 +53,6 @@ private slots:
     void testDefaultSyncTypeDefault();
     void testSetDefaultSyncType();
 
-    // ========== Conduit Settings Tests ==========
-    void testConduitEnabledDefault();
-    void testSetConduitEnabled();
-    void testConduitSettings();
-
     // ========== Persistence Tests ==========
     void testInitialize();
     void testSaveAndLoad();
@@ -318,42 +313,6 @@ void TestProfile::testSetDefaultSyncType()
     QCOMPARE(profile.defaultSyncType(), QString("fullsync"));
 }
 
-// ========== Conduit Settings Tests ==========
-
-void TestProfile::testConduitEnabledDefault()
-{
-    Profile profile(m_tempDir->path());
-    // Default conduits should be enabled
-    QVERIFY(profile.conduitEnabled("memos"));
-    QVERIFY(profile.conduitEnabled("contacts"));
-}
-
-void TestProfile::testSetConduitEnabled()
-{
-    Profile profile(m_tempDir->path());
-
-    profile.setConduitEnabled("memos", false);
-    QVERIFY(!profile.conduitEnabled("memos"));
-
-    profile.setConduitEnabled("memos", true);
-    QVERIFY(profile.conduitEnabled("memos"));
-}
-
-void TestProfile::testConduitSettings()
-{
-    Profile profile(m_tempDir->path());
-
-    QJsonObject settings;
-    settings["option1"] = true;
-    settings["option2"] = "value";
-
-    profile.setConduitSettings("memos", settings);
-
-    QJsonObject retrieved = profile.conduitSettings("memos");
-    QCOMPARE(retrieved["option1"].toBool(), true);
-    QCOMPARE(retrieved["option2"].toString(), QString("value"));
-}
-
 // ========== Persistence Tests ==========
 
 void TestProfile::testInitialize()
@@ -376,7 +335,6 @@ void TestProfile::testSaveAndLoad()
         profile.setName("Test Profile");
         profile.setDevicePath("/dev/ttyUSB1");
         profile.setBaudRate("57600");
-        profile.setConduitEnabled("memos", false);
         profile.save();
     }
 
@@ -388,7 +346,6 @@ void TestProfile::testSaveAndLoad()
         QCOMPARE(profile.name(), QString("Test Profile"));
         QCOMPARE(profile.devicePath(), QString("/dev/ttyUSB1"));
         QCOMPARE(profile.baudRate(), QString("57600"));
-        QVERIFY(!profile.conduitEnabled("memos"));
     }
 }
 

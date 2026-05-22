@@ -221,58 +221,6 @@ void Profile::setConflictTimeoutSeconds(int seconds)
     m_conflictTimeoutSeconds = qBound(15, seconds, 300);
 }
 
-bool Profile::conduitEnabled(const QString &conduitId) const
-{
-    return m_conduitEnabled.value(conduitId, true);
-}
-
-void Profile::setConduitEnabled(const QString &conduitId, bool enabled)
-{
-    m_conduitEnabled[conduitId] = enabled;
-}
-
-QStringList Profile::enabledConduits() const
-{
-    QStringList enabled;
-    for (auto it = m_conduitEnabled.constBegin(); it != m_conduitEnabled.constEnd(); ++it) {
-        if (it.value()) {
-            enabled << it.key();
-        }
-    }
-    return enabled;
-}
-
-QJsonObject Profile::conduitSettings(const QString &conduitId) const
-{
-    return m_conduitSettings.value(conduitId);
-}
-
-void Profile::setConduitSettings(const QString &conduitId, const QJsonObject &settings)
-{
-    m_conduitSettings[conduitId] = settings;
-}
-
-// ========== Database Handler Preferences ==========
-
-QString Profile::activeDatabaseHandler(const QString &dbName) const
-{
-    return m_databaseHandlers.value(dbName);
-}
-
-void Profile::setActiveDatabaseHandler(const QString &dbName, const QString &conduitId)
-{
-    if (conduitId.isEmpty()) {
-        m_databaseHandlers.remove(dbName);
-    } else {
-        m_databaseHandlers[dbName] = conduitId;
-    }
-}
-
-QMap<QString, QString> Profile::allDatabaseHandlers() const
-{
-    return m_databaseHandlers;
-}
-
 bool Profile::load()
 {
     QString configPath = configFilePath();
@@ -324,36 +272,6 @@ bool Profile::load()
     m_conflictPromptStrategy = settings.value("sync/conflictPromptStrategy", "always_ask").toString();
     m_conflictConnectionBehavior = settings.value("sync/conflictConnectionBehavior", "keep_alive").toString();
     m_conflictTimeoutSeconds = settings.value("sync/conflictTimeoutSeconds", 60).toInt();
-
-    // Conduit settings (standalone conduits: enable/disable + per-conduit config)
-    settings.beginGroup(QStringLiteral("conduits"));
-    const QStringList conduitKeys = settings.childGroups();
-    for (const QString &conduit : conduitKeys) {
-        settings.beginGroup(conduit);
-        m_conduitEnabled[conduit] = settings.value(QStringLiteral("enabled"), true).toBool();
-
-        QString settingsStr = settings.value(QStringLiteral("settings")).toString();
-        if (!settingsStr.isEmpty()) {
-            QJsonDocument doc = QJsonDocument::fromJson(settingsStr.toUtf8());
-            if (!doc.isNull() && doc.isObject()) {
-                m_conduitSettings[conduit] = doc.object();
-            }
-        }
-        settings.endGroup();
-    }
-    settings.endGroup();
-
-    // Database handler preferences
-    m_databaseHandlers.clear();
-    settings.beginGroup(QStringLiteral("databaseHandlers"));
-    const QStringList dbKeys = settings.childKeys();
-    for (const QString &key : dbKeys) {
-        QString handler = settings.value(key).toString();
-        if (!handler.isEmpty()) {
-            m_databaseHandlers[key] = handler;
-        }
-    }
-    settings.endGroup();
 
     // G.7 Task 54: SyncMappings — load raw JSON
     {
@@ -539,25 +457,6 @@ bool Profile::save()
     settings.setValue("sync/conflictPromptStrategy", m_conflictPromptStrategy);
     settings.setValue("sync/conflictConnectionBehavior", m_conflictConnectionBehavior);
     settings.setValue("sync/conflictTimeoutSeconds", m_conflictTimeoutSeconds);
-
-    // Conduit settings
-    for (auto it = m_conduitEnabled.constBegin(); it != m_conduitEnabled.constEnd(); ++it) {
-        settings.setValue(QString("conduits/%1/enabled").arg(it.key()), it.value());
-    }
-    for (auto it = m_conduitSettings.constBegin(); it != m_conduitSettings.constEnd(); ++it) {
-        QJsonDocument doc(it.value());
-        settings.setValue(QString("conduits/%1/settings").arg(it.key()),
-                          QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-    }
-
-    // Database handler preferences
-    settings.beginGroup(QStringLiteral("databaseHandlers"));
-    // Clear existing keys first so removed handlers don't persist
-    settings.remove(QString());
-    for (auto it = m_databaseHandlers.constBegin(); it != m_databaseHandlers.constEnd(); ++it) {
-        settings.setValue(it.key(), it.value());
-    }
-    settings.endGroup();
 
     // G.7 Task 54: SyncMappings — stored as a JSON array
     if (!m_syncMappingsJson.isEmpty()) {
