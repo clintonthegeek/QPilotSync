@@ -17,6 +17,7 @@
 #include "syncbackend.h"
 #include "synctypes.h"
 #include "collectioninfo.h"
+#include "conflictrecord.h"
 #include <isynchost.h>
 #include <baselinestore.h>
 #include <isyncconfigstore.h>
@@ -448,6 +449,35 @@ Kalburator::Sync::SyncConflictStore *
 PalmRuntime::syncConflictStore() const
 {
     return m_engine ? m_engine->syncConflictStore() : nullptr;
+}
+
+Kalburator::Conflict::ConflictRecord
+PalmRuntime::toConflictRecord(const Kalburator::Sync::ConflictInfo &info)
+{
+    Kalburator::Conflict::ConflictRecord rec;
+    rec.conflictId  = info.conflictId.isEmpty()
+                      ? Kalburator::Conflict::ConflictRecord::generateId()
+                      : info.conflictId;
+    rec.conduitId     = info.mappingId;
+    rec.syncSessionId = info.mappingId;
+    rec.detectedAt    = info.detectedAt.isValid()
+                        ? info.detectedAt
+                        : QDateTime::currentDateTime();
+    rec.type        = Kalburator::Conflict::ConflictType::BothModified;
+
+    rec.source.id            = info.sourceId;
+    rec.source.description   = info.sourceDescription;
+    rec.source.content       = info.sourceIcalData.toUtf8();
+    rec.source.contentType   = QStringLiteral("text/calendar");
+    rec.source.lastModified  = info.sourceModified;
+
+    rec.target.id            = info.targetId;
+    rec.target.description   = info.targetDescription;
+    rec.target.content       = info.targetIcalData.toUtf8();
+    rec.target.contentType   = QStringLiteral("text/calendar");
+    rec.target.lastModified  = info.targetModified;
+
+    return rec;
 }
 
 QList<QString> PalmRuntime::enabledPluginIds() const {

@@ -41,6 +41,10 @@ namespace Kalburator::Sync {
     class SyncConflictStore;
 }
 
+namespace Kalburator::Conflict {
+    struct ConflictRecord;
+}
+
 namespace Kalburator::Shape {
     struct Shape;
 }
@@ -123,6 +127,15 @@ public:
     /// Used by the conflict UI to read deferred conflicts. May be
     /// nullptr if the engine wasn't given a store.
     Kalburator::Sync::SyncConflictStore *syncConflictStore() const;
+
+    /// Convert engine-side `Sync::ConflictInfo` into the UI-side
+    /// `Conflict::ConflictRecord` shape consumed by `ConflictReviewDialog`.
+    /// Lives here because WildPalmsCore (where the dialog is wired)
+    /// can't include the engine-side `synctypes.h` cleanly — a
+    /// WP-local `synctypes.h` in `src/core/` collides with the
+    /// libkalburator one (see `src/CMakeLists.txt` comment).
+    static Kalburator::Conflict::ConflictRecord toConflictRecord(
+        const Kalburator::Sync::ConflictInfo &info);
 
 
     // Test seams

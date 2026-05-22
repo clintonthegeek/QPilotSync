@@ -6,6 +6,7 @@
 #include "../wildpalms_qtest_main.h"
 
 #include <synctypes.h>
+#include <conflictstore.h>
 
 class TstKf6MainWindowConflictBadge : public QObject
 {
@@ -14,6 +15,7 @@ private slots:
     void badgeHiddenWhenZeroConflicts();
     void badgeShowsCountAfterConflictDetected();
     void badgeIncrementsAcrossMultipleSignals();
+    void detectedConflictAddedToUiConflictStore();
 };
 
 namespace {
@@ -51,6 +53,30 @@ void TstKf6MainWindowConflictBadge::badgeIncrementsAcrossMultipleSignals()
     win.runConflictDetectedForTest(makeInfo(QStringLiteral("m3")));
     QCOMPARE(win.pendingConflictCountForTest(), 3);
     QVERIFY(win.conflictBadgeForTest()->text().contains(QStringLiteral("3")));
+}
+
+void TstKf6MainWindowConflictBadge::detectedConflictAddedToUiConflictStore()
+{
+    KF6MainWindow win;
+
+    auto *store = win.conflictStoreForTest();
+    QVERIFY2(store != nullptr, "KF6MainWindow must own a UI ConflictStore "
+                                "wired to ConflictReviewDialog");
+    QCOMPARE(store->count(), 0);
+
+    Kalburator::Sync::ConflictInfo info = makeInfo(QStringLiteral("m1"));
+    info.sourceDescription = QStringLiteral("src");
+    info.targetDescription = QStringLiteral("tgt");
+    info.detectedAt        = QDateTime::currentDateTime();
+
+    win.runConflictDetectedForTest(info);
+
+    QCOMPARE(store->count(), 1);
+    QCOMPARE(store->pendingCount(), 1);
+
+    const auto pending = store->pendingConflicts();
+    QCOMPARE(pending.size(), 1);
+    QCOMPARE(pending.first().conduitId, QStringLiteral("m1"));
 }
 
 WILDPALMS_QTEST_MAIN(TstKf6MainWindowConflictBadge)

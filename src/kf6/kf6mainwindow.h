@@ -34,6 +34,10 @@ namespace Kalburator::Sync {
     struct ConflictInfo;
 }
 
+namespace Kalburator::Conflict {
+    class ConflictStore;
+}
+
 
 /**
  * @brief KDE Frameworks 6 native main window for Wild Palms
@@ -76,6 +80,9 @@ public:
     QPushButton *conflictBadgeForTest() const { return m_conflictBadge; }
     void runConflictDetectedForTest(const Kalburator::Sync::ConflictInfo &info) {
         onConflictDetected(info);
+    }
+    Kalburator::Conflict::ConflictStore *conflictStoreForTest() const {
+        return m_uiConflictStore.get();
     }
 
 protected:
@@ -230,6 +237,13 @@ private:
     // F.2 sub-project D — conflict badge
     int          m_pendingConflictCount = 0;
     QPushButton *m_conflictBadge = nullptr;
+
+    // UI-side ConflictStore. The engine writes to its own SQLite
+    // Sync::SyncConflictStore (a different type); we mirror each
+    // detected conflict into this in-memory store so
+    // ConflictReviewDialog has something to display when the badge
+    // is clicked. Owned by this window; lifetime spans the session.
+    std::unique_ptr<Kalburator::Conflict::ConflictStore> m_uiConflictStore;
 
     QString m_syncPath;
 

@@ -32,13 +32,20 @@ exposed four interlocking bugs:
    `finalSource` / `finalTarget` stay empty, both `applyBatch` calls
    are skipped, and the engine reports "completed" with no work
    applied and no user-visible signal.
-3. **Broken `deleteRecord` in calendar/memo plugins**: contacts and
-   todos call `m_palmBackend->deletePalmRecord("AddressDB", rid)` /
-   `("ToDoDB", rid)` with explicit canonical dbNames, so deletes
-   actually fire. Calendar and memo call `m_palmBackend->deleteRecord(recordId)`
-   which routes through `PalmBackend::decodeRecordId` that yields
-   non-canonical names ("CalendarDB", "TodoDB"…) the device rejects
-   → silent no-op. "Safe by accident" until someone fixes the decoder.
+3. **Asymmetric dbName round-trip in `decodeRecordId` — affects `ToDoDB` only**
+   (corrected post-landing 2026-05-22). `encodeCollectionId` lowercases the
+   bare dbName (`MemoDB`→`palm:memo`, `DatebookDB`→`palm:datebook`,
+   `AddressDB`→`palm:address`, `ToDoDB`→`palm:todo`). `decodeRecordId`
+   uppercases the first letter and appends `DB`, so `palm:todo` round-trips
+   to `TodoDB` — *not* `ToDoDB` — and the device rejects it. The other
+   three names round-trip cleanly. **Original spec claim that calendar
+   and memo were broken was wrong**: their `decodeRecordId` path
+   produces `DatebookDB` / `MemoDB`, which the device accepts. In
+   practice todos already used the explicit `deletePalmRecord("ToDoDB", rid)`
+   form, so the broken path was never exercised in production either.
+   The sub-project B work on calendar+memo was therefore a *consistency*
+   change (all four plugins now hardcode the canonical dbName at the
+   call site), not a correctness fix. See retrospective note in §11.
 4. **Mass-delete guard unreachable**: the guard sits inside
    `applyBatch`. While Bug 1 and Bug 2 are active, the engine never
    reaches `applyBatch` for the unchanged-records-vs-empty-target
@@ -208,14 +215,22 @@ transformation pipeline). Round-trip property unaffected.
 
 ### 4.2 Sub-project B — Canonical `deleteRecord`
 
-**Current state** (from `grep deleteRecord src/plugins/*/palm*backend.cpp`):
+**Current state** (corrected post-landing 2026-05-22 — see §1 Bug 3 retraction):
 
-| Plugin | Implementation | Works? |
-|--------|----------------|--------|
-| Contacts | `m_palmBackend->deletePalmRecord("AddressDB", rid)` | ✅ |
-| Todos    | `m_palmBackend->deletePalmRecord("ToDoDB", rid)` | ✅ |
-| Calendar | `m_palmBackend->deleteRecord(recordId)` → `decodeRecordId` → wrong dbName | ❌ silent no-op |
-| Memo     | `m_palmBackend->deleteRecord(recordId)` → same path | ❌ silent no-op |
+| Plugin | Implementation | Works? | Round-trip via `decodeRecordId` |
+|--------|----------------|--------|----------------------------------|
+| Contacts | `m_palmBackend->deletePalmRecord("AddressDB", rid)` | ✅ | `AddressDB` → `palm:address` → `AddressDB` ✅ |
+| Todos    | `m_palmBackend->deletePalmRecord("ToDoDB", rid)` | ✅ | `ToDoDB` → `palm:todo` → **`TodoDB`** ❌ (asymmetric) |
+| Calendar | (was) `m_palmBackend->deleteRecord(recordId)` → decoder yields `DatebookDB` | ✅ | `DatebookDB` → `palm:datebook` → `DatebookDB` ✅ |
+| Memo     | (was) `m_palmBackend->deleteRecord(recordId)` → decoder yields `MemoDB` | ✅ | `MemoDB` → `palm:memo` → `MemoDB` ✅ |
+
+**Original spec table claimed calendar/memo were ❌; this was wrong.**
+The only dbName that doesn't round-trip is `ToDoDB` (camelCase capital `D`
+becomes lowercase `d` on decode). Todos already used the explicit
+`deletePalmRecord("ToDoDB", rid)` call site, so even the one broken
+round-trip was never exercised in production. Sub-project B brought
+calendar+memo into line with the explicit-dbName pattern for
+**consistency**, not because they were destructive. See §11.
 
 **Fix:** rewrite `PalmCalendarBackend::deleteRecord` and
 `MemoBlobBackend::deleteRecord` to mirror the contacts/todo pattern:
@@ -576,3 +591,59 @@ WildPalms-only.
   + guard).
 - `PalmRecord`: `src/palm/sync/palmrecord.h`
 - `ConflictReviewDialog`: `src/widgets/dialogs/conflictreviewdialog.{h,cpp}`
+
+## 11. Retrospective (post-landing, 2026-05-22)
+
+### 11.1 Sub-project B overstated the bug
+
+The original spec characterized calendar and memo as having a broken
+`deleteRecord` that silently no-op'd against the device. Empirical
+inspection of the round-trip behaviour during landing (see
+`PalmBackend::encodeCollectionId` and `PalmBackend::decodeRecordId`)
+shows this was incorrect:
+
+- `DatebookDB` and `MemoDB` round-trip cleanly through encode/decode.
+  The pre-fix `deleteRecord(recordId)` path produced the canonical
+  dbName the device expects, and deletes did fire.
+- `AddressDB` also round-trips cleanly, which is why contacts'
+  hardcoded explicit form looked identical to the implicit form.
+- `ToDoDB` is the *only* dbName with an asymmetric round-trip
+  (`palm:todo` decodes to `TodoDB`, not `ToDoDB`). The device
+  rejects `TodoDB`. But todos already used the explicit
+  `deletePalmRecord("ToDoDB", rid)` form, so the broken decoder
+  path was never reachable in production.
+
+Net effect: the destruction observed in commit `a8f686f` was
+**not** attributable to the calendar/memo `deleteRecord` path.
+That bug pattern is a real latent fragility (anyone adding a new
+plugin whose dbName has internal capitalization would hit it), but
+the contacts destruction had a different cause — Bug 1 (hash
+instability) combined with the silent-defer site (Bug 2) plus the
+absence of the mass-delete guard.
+
+### 11.2 Why we still kept sub-project B
+
+The work was retained for two reasons:
+
+1. **Defense in depth**: hardcoding the canonical dbName at every
+   delete site eliminates any future regression risk from edits to
+   `decodeRecordId`. All four plugins now follow the same pattern.
+2. **Test coverage**: the canonical-dbName tests added in B
+   (`183a69a`, `4718ad4`) document the contract explicitly. Future
+   plugin authors can copy-paste the pattern with a passing test
+   already in place.
+
+Both are real value, but neither is the destructive-bug fix the
+spec originally claimed. Plans and PR descriptions referencing the
+"calendar/memo deleteRecord destruction" should be read in light of
+this correction.
+
+### 11.3 What's still unsolved
+
+The decoder's asymmetric round-trip for `ToDoDB` is left as-is, per
+the original §9 decision ("we don't fix the decoder"). The
+follow-up risk: a future plugin or refactor that calls
+`m_palmBackend->deleteRecord(recordId)` against a todo recordId
+will silently no-op. Plan B's `qWarning` in the decoder (when it
+produces a non-canonical name) remains the mitigation. No code
+change is recommended at this time.
