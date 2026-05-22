@@ -423,6 +423,27 @@ set_tests_properties(tst_kf6mainwindow_forget_profile PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1b T13: ProfilePropertiesDialog rename behavior — TDD red-phase tests.
+# Tests the future renameRequested signal, Name field, and onApply slot.
+add_executable(tst_profilepropertiesdialog_rename
+    tst_profilepropertiesdialog_rename.cpp)
+target_link_libraries(tst_profilepropertiesdialog_rename
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::I18n
+        KF6::ConfigCore
+        KF6::WidgetsAddons
+        Kalburator::Sync
+        WildPalmsCore
+)
+add_test(NAME tst_profilepropertiesdialog_rename
+         COMMAND tst_profilepropertiesdialog_rename)
+set_tests_properties(tst_profilepropertiesdialog_rename PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
