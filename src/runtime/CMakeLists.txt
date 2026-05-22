@@ -4,7 +4,7 @@
 # metadata helpers + InstallSourceCollector + the SyncEngine-facing
 # WP host implementations consumed by libkalburator.
 
-find_package(KF6 REQUIRED COMPONENTS CoreAddons Config)
+find_package(KF6 REQUIRED COMPONENTS CoreAddons Config I18n)
 find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 add_library(WildPalmsRuntime STATIC
@@ -38,6 +38,9 @@ add_library(WildPalmsRuntime STATIC
     # F.1a — App-level profile registry.
     profileregistry.h
     profileregistry.cpp
+    # T7 — QMessageBox-backed IMassDeleteGuard with worker-thread marshalling.
+    massdeleteguardpresenter.h
+    massdeleteguardpresenter.cpp
     # Phase E.16 — pilot-link factory header (forward-decls only;
     # impl compiled into WildPalmsCore where the device-side
     # libraries can be linked without an AUTOMOC cycle).
@@ -64,6 +67,7 @@ target_link_libraries(WildPalmsRuntime
         Qt::Widgets       # QIcon, QWidget in core headers (ibackendplugin.h)
         KF6::CoreAddons
         KF6::ConfigCore   # F.1a — KSharedConfig in profileregistry.cpp
+        KF6::I18n         # T7 — KLocalizedString in MassDeleteGuardPresenter
         # Phase E.15b — fullsync host impls implement Kalburator::Sync
         # interfaces with virtual methods; vtable emission requires an
         # actual link, not just an include path.
