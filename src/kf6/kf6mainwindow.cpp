@@ -1689,6 +1689,16 @@ void KF6MainWindow::onProfileSettings()
     connect(dlg, &ProfilePropertiesDialog::settingsChanged, this, [this]() {
         updateWindowTitle();
     });
+    connect(dlg, &ProfilePropertiesDialog::renameRequested,
+            this, [this](const QString &id, const QString &newName) {
+        if (m_profileRegistry->rename(id, newName)) {
+            if (m_currentProfile && m_currentProfile->id() == id)
+                m_currentProfile->setName(newName);
+            updateWindowTitle();
+        } else {
+            m_logWidget->logError(i18n("Failed to rename profile"));
+        }
+    });
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
 }
