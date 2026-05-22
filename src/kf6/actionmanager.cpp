@@ -51,13 +51,6 @@ void ActionManager::setupFileActions()
     m_actionCollection->setDefaultShortcut(newProfile, QKeySequence::New);
     connect(newProfile, &QAction::triggered, this, &ActionManager::newProfileRequested);
 
-    // Open Profile
-    QAction *openProfile = new QAction(QIcon::fromTheme(QStringLiteral("document-open-folder")),
-                                        i18n("&Open Profile..."), this);
-    m_actionCollection->addAction(QStringLiteral("file_open_profile"), openProfile);
-    m_actionCollection->setDefaultShortcut(openProfile, QKeySequence::Open);
-    connect(openProfile, &QAction::triggered, this, &ActionManager::openProfileRequested);
-
     // Close Profile
     QAction *closeProfile = new QAction(i18n("Close Profile"), this);
     connect(closeProfile, &QAction::triggered, this, &ActionManager::closeProfileRequested);

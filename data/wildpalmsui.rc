@@ -4,7 +4,6 @@
         <Menu name="file">
             <text>&amp;File</text>
             <Action name="file_new_profile"/>
-            <Action name="file_open_profile"/>
             <Action name="file_recent_profiles"/>
             <Action name="file_close_profile"/>
             <Separator/>
@@ -76,7 +75,6 @@
     <ToolBar name="mainToolBar" noMerge="1">
         <text>Main Toolbar</text>
         <Action name="file_new_profile"/>
-        <Action name="file_open_profile"/>
         <Separator/>
         <Action name="device_connect"/>
         <Action name="device_disconnect"/>

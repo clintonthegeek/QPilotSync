@@ -254,8 +254,6 @@ void KF6MainWindow::setupConnections()
     // Connect action manager signals
     connect(m_actionManager, &ActionManager::newProfileRequested,
             this, &KF6MainWindow::onNewProfile);
-    connect(m_actionManager, &ActionManager::openProfileRequested,
-            this, &KF6MainWindow::onOpenProfile);
     connect(m_actionManager, &ActionManager::closeProfileRequested,
             this, &KF6MainWindow::onCloseProfile);
     connect(m_actionManager, &ActionManager::profileSettingsRequested,
@@ -1462,18 +1460,6 @@ void KF6MainWindow::onNewProfile()
     loadProfile(path);
 }
 
-void KF6MainWindow::onOpenProfile()
-{
-    QString path = QFileDialog::getExistingDirectory(this,
-        i18n("Open Profile Folder"),
-        QDir::homePath(),
-        QFileDialog::ShowDirsOnly);
-
-    if (path.isEmpty()) return;
-
-    loadProfile(path);
-}
-
 void KF6MainWindow::onCloseProfile()
 {
     closeProfile();
@@ -1575,7 +1561,14 @@ void KF6MainWindow::onRestore()
 
 void KF6MainWindow::onChangeSyncFolder()
 {
-    onOpenProfile();
+    QString path = QFileDialog::getExistingDirectory(this,
+        i18n("Select Profile Folder"),
+        QDir::homePath(),
+        QFileDialog::ShowDirsOnly);
+
+    if (path.isEmpty()) return;
+
+    loadProfile(path);
 }
 
 void KF6MainWindow::onOpenSyncFolder()

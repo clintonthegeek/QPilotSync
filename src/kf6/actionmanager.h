@@ -30,7 +30,6 @@ public:
 
     // ========== File Actions ==========
     QAction* newProfileAction() const { return action(QStringLiteral("file_new_profile")); }
-    QAction* openProfileAction() const { return action(QStringLiteral("file_open_profile")); }
     QAction* closeProfileAction() const { return action(QStringLiteral("file_close_profile")); }
     QAction* profileSettingsAction() const { return action(QStringLiteral("file_profile_settings")); }
     QAction* configureMappingsAction() const { return action(QStringLiteral("file_configure_mappings")); }
@@ -75,7 +74,6 @@ public:
 Q_SIGNALS:
     // File operations
     void newProfileRequested();
-    void openProfileRequested();
     void closeProfileRequested();
     void profileSettingsRequested();
     void configureMappingsRequested();

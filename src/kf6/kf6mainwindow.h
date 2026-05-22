@@ -72,7 +72,6 @@ private Q_SLOTS:
 
     // Profile management
     void onNewProfile();
-    void onOpenProfile();
     void onCloseProfile();
     void onProfileSettings();
 
