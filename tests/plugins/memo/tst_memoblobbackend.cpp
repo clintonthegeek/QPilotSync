@@ -1,5 +1,4 @@
 #include <QtTest/QtTest>
-#include <QCryptographicHash>
 
 #include "plugins/memo/memoblobbackend.h"
 #include "plugins/memo/memomarkdown.h"
@@ -76,9 +75,9 @@ void TestMemoBlobBackend::loadRecordsDecodesPalmToMarkdown()
     const QString md = QString::fromUtf8(records.first().data);
     QVERIFY(md.contains(QStringLiteral("hello\nworld")));
     QVERIFY(md.startsWith(QStringLiteral("---\n")));
-    QVERIFY(records.first().contentHash ==
-            QString::fromLatin1(QCryptographicHash::hash(
-                records.first().data, QCryptographicHash::Sha256).toHex()));
+    // contentHash should match the Palm record's hash, not the Markdown bytes
+    const auto palmRec = dev.readAllRecords("MemoDB").first();
+    QCOMPARE(records.first().contentHash, palmRec.contentHash());
 }
 
 // --- write path ---
