@@ -177,3 +177,6 @@ kdepim-4.3.4
 # Personal scripts and configs
 cl.sh
 kdesrc
+
+# Brainstorming companion artifacts
+.superpowers/
