@@ -423,6 +423,32 @@ set_tests_properties(tst_kf6mainwindow_forget_profile PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.2 Task 2: KF6MainWindow conflict badge — TDD red-phase failing tests.
+# Tests the future onConflictDetected slot, badge visibility, and count tracking.
+add_executable(tst_kf6mainwindow_conflict_badge
+    tst_kf6mainwindow_conflict_badge.cpp)
+target_link_libraries(tst_kf6mainwindow_conflict_badge
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::XmlGui
+        KF6::ConfigCore
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_kf6mainwindow_conflict_badge
+         COMMAND tst_kf6mainwindow_conflict_badge)
+set_tests_properties(tst_kf6mainwindow_conflict_badge PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1b T13: ProfilePropertiesDialog rename behavior — TDD red-phase tests.
 # Tests the future renameRequested signal, Name field, and onApply slot.
 add_executable(tst_profilepropertiesdialog_rename
