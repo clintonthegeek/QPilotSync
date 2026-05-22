@@ -64,6 +64,14 @@ protected:
     /// pre-set path (or empty for cancel).
     virtual QString showProfilePickerStopgap();
 
+    /// Test seam: pops the Forget confirm dialog. Production override
+    /// runs the real QDialog (see kf6mainwindow.cpp); tests override
+    /// to return preset values. Returns true if user clicked Forget;
+    /// outDeleteFiles is set to the checkbox state.
+    virtual bool confirmForgetProfile(
+        const WildPalms::Runtime::ProfileEntry &entry,
+        bool *outDeleteFiles);
+
 private Q_SLOTS:
     // Device connection
     void onConnectDevice();

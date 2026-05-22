@@ -1539,10 +1539,61 @@ void KF6MainWindow::onSwitchProfile(const QString &id)
     loadProfile(e.path);
 }
 
+bool KF6MainWindow::confirmForgetProfile(
+    const WildPalms::Runtime::ProfileEntry &entry,
+    bool *outDeleteFiles)
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(i18n("Forget Profile"));
+    auto *layout = new QVBoxLayout(&dlg);
+    layout->addWidget(new QLabel(
+        i18n("Remove profile \"%1\" from the registry?\n\n"
+             "Folder: %2", entry.name, entry.path), &dlg));
+    auto *deleteCheck = new QCheckBox(
+        i18n("Also delete files at the folder above"), &dlg);
+    deleteCheck->setChecked(false);
+    layout->addWidget(deleteCheck);
+    auto *box = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    box->button(QDialogButtonBox::Ok)->setText(i18n("Forget"));
+    connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    layout->addWidget(box);
+
+    const bool ok = (dlg.exec() == QDialog::Accepted);
+    if (outDeleteFiles) *outDeleteFiles = deleteCheck->isChecked();
+    return ok;
+}
+
 void KF6MainWindow::onForgetProfile(const QString &id)
 {
-    Q_UNUSED(id);
-    // Implementation in T9.
+    if (id.isEmpty()) return;
+    if (m_currentProfile && m_currentProfile->id() == id) {
+        m_logWidget->logError(i18n(
+            "Cannot forget the currently-loaded profile. "
+            "Close it first."));
+        return;
+    }
+    const auto e = m_profileRegistry->entry(id);
+    if (!e.isValid()) return;
+
+    bool wantDelete = false;
+    if (!confirmForgetProfile(e, &wantDelete)) return;
+
+    const QString pathCopy = e.path;
+    if (!m_profileRegistry->unregister(id)) {
+        m_logWidget->logError(i18n(
+            "Failed to remove profile from registry"));
+        return;
+    }
+    if (wantDelete) {
+        QDir d(pathCopy);
+        if (d.exists() && !d.removeRecursively()) {
+            QMessageBox::warning(this, i18n("Forget Profile"),
+                i18n("Removed from registry, but could not delete "
+                     "files at: %1", pathCopy));
+        }
+    }
 }
 
 // ========== F.1a: Profile registry helpers ==========
