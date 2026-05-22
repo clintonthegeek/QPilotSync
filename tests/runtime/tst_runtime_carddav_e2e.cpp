@@ -83,7 +83,9 @@ private slots:
     {
         // K.7: seed DomainRegistry with stock plugins so dispatchSync
         // finds domain definitions (ContactsPlugin, BlobPlugin, etc.).
-        Kalburator::PluginManager pm;
+        // Phase Q.1: PluginManager ctor now requires a BackendRegistry*.
+        Kalburator::Sync::BackendRegistry registry;
+        Kalburator::PluginManager pm(&registry);
         Kalburator::registerStockPlugins(pm);
     }
 

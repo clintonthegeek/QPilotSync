@@ -9,6 +9,7 @@
 #include "synctypes.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
+#include "backendregistry.h"
 // K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
 #include "../blobsyncbackendwrapper.h"
 
@@ -22,7 +23,9 @@ private slots:
     {
         // K.7: seed DomainRegistry with stock plugins so dispatchSync
         // finds the blob domain definition (BlobPlugin).
-        Kalburator::PluginManager pm;
+        // Phase Q.1: PluginManager ctor now requires a BackendRegistry*.
+        Kalburator::Sync::BackendRegistry registry;
+        Kalburator::PluginManager pm(&registry);
         Kalburator::registerStockPlugins(pm);
     }
 

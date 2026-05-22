@@ -171,7 +171,7 @@ void PalmRuntime::registerPalmPlugins()
     // the first instance remain valid for all subsequent instances.
     static bool s_globalRegistrationDone = false;
     if (!s_globalRegistrationDone) {
-        m_pluginManager = std::make_unique<Kalburator::PluginManager>();
+        m_pluginManager = std::make_unique<Kalburator::PluginManager>(m_registry.get());
 
         // Stock plugins own the DomainDefinitions (blob/calendar/contacts/
         // memo/todo). Without this, SyncEngine::dispatchSync() bails with

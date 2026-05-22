@@ -16,6 +16,7 @@
 #include "backendrecord.h"
 #include "synctypes.h"
 #include "pluginmanager.h"
+#include "backendregistry.h"
 #include "stock_plugins.h"
 #include "../blobsyncbackendwrapper.h"
 
@@ -28,7 +29,9 @@ private slots:
     void initTestCase()
     {
         // Seed DomainRegistry with stock plugins (same as tst_palm_runtime_hotsync).
-        Kalburator::PluginManager pm;
+        // Phase Q.1: PluginManager ctor now requires a BackendRegistry*.
+        Kalburator::Sync::BackendRegistry registry;
+        Kalburator::PluginManager pm(&registry);
         Kalburator::registerStockPlugins(pm);
     }
 

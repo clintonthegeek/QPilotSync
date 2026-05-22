@@ -89,8 +89,9 @@ void TestContactsBackendPlugin::cleanup()
     Kalburator::Shape::TransformationRegistry::instance().clear();
     Kalburator::Shape::DomainRegistry::instance().clear();
     Kalburator::Shape::DomainOperationsRegistry::instance().clear();
-    Kalburator::Sync::BackendRegistry::instance().clear();
-    Kalburator::PluginManager pm;
+    // Phase Q.1: BackendRegistry singleton removed; use a local registry.
+    Kalburator::Sync::BackendRegistry registry;
+    Kalburator::PluginManager pm(&registry);
     Kalburator::registerStockPlugins(pm);
 }
 
