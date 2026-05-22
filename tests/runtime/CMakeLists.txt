@@ -21,6 +21,7 @@ endfunction()
 add_wildpalms_runtime_test(tst_pluginmetadatahelpers tst_pluginmetadatahelpers.cpp)
 # K.8b T13: tst_backendpluginmanager + tst_plugin_factory_roundtrip deleted
 # along with BackendPluginManager + IBackendPluginV2.
+add_wildpalms_runtime_test(tst_profileregistry tst_profileregistry.cpp)
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
 # tst_palm_device_access links PalmDeviceAccessLib directly (kept after
