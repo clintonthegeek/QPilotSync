@@ -257,9 +257,6 @@ public:
     // Initialize a new profile (create directories and default config)
     bool initialize();
 
-    // Get the path to the profile config file
-    QString configFilePath() const;
-
     // Get the path to the state directory
     QString stateDirectoryPath() const;
 

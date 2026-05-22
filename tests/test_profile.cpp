@@ -56,6 +56,8 @@ private slots:
     // ========== Persistence Tests ==========
     void testInitialize();
     void testSaveAndLoad();
+    void testSaveCreatesThreeFiles();
+    void testRoundTripBasic();
 
     // ========== Validity Tests ==========
     void testIsValidWithValidPath();
@@ -191,11 +193,12 @@ void TestProfile::testSetSyncFolderPath()
 
 void TestProfile::testConfigFilePath()
 {
-    Profile profile(m_tempDir->path());
-    QString configPath = profile.configFilePath();
-
-    QVERIFY(configPath.contains(m_tempDir->path()));
-    QVERIFY(configPath.endsWith(".wildpalms.conf"));
+    // profile.conf is the primary config file in the sync folder.
+    // After initialize(), it must exist at <path>/profile.conf.
+    const QString profilePath = m_tempDir->path() + QStringLiteral("/cp-test");
+    Profile profile(profilePath);
+    QVERIFY(profile.initialize());
+    QVERIFY(QFile::exists(profilePath + QStringLiteral("/profile.conf")));
 }
 
 void TestProfile::testStateDirectoryPath()
@@ -347,6 +350,40 @@ void TestProfile::testSaveAndLoad()
         QCOMPARE(profile.devicePath(), QString("/dev/ttyUSB1"));
         QCOMPARE(profile.baudRate(), QString("57600"));
     }
+}
+
+void TestProfile::testSaveCreatesThreeFiles()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+
+    Profile p;
+    p.setSyncFolderPath(tmp.path() + QStringLiteral("/profile1"));
+    p.setName(QStringLiteral("Test"));
+    QVERIFY(p.save());
+
+    QVERIFY(QFile::exists(p.syncFolderPath() + QStringLiteral("/profile.conf")));
+    QVERIFY(QFile::exists(p.syncFolderPath() + QStringLiteral("/accounts.conf")));
+    QVERIFY(QFile::exists(p.syncFolderPath() + QStringLiteral("/mappings.conf")));
+}
+
+void TestProfile::testRoundTripBasic()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString dir = tmp.path() + QStringLiteral("/profile1");
+
+    Profile p;
+    p.setSyncFolderPath(dir);
+    p.setName(QStringLiteral("RoundTrip"));
+    p.setBaudRate(QStringLiteral("57600"));
+    QVERIFY(p.save());
+
+    Profile p2;
+    p2.setSyncFolderPath(dir);
+    QVERIFY(p2.load());
+    QCOMPARE(p2.name(), QStringLiteral("RoundTrip"));
+    QCOMPARE(p2.baudRate(), QStringLiteral("57600"));
 }
 
 // ========== Validity Tests ==========

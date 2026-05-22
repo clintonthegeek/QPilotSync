@@ -89,20 +89,6 @@ set_tests_properties(test_profile_accounts PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
-add_executable(test_profile_sidecar_migration test_profile_sidecar_migration.cpp)
-target_link_libraries(test_profile_sidecar_migration
-    PRIVATE
-        Qt::Core
-        Qt::Test
-        Kalburator::Sync
-        KF6::ConfigCore
-        WildPalmsCore
-)
-add_test(NAME test_profile_sidecar_migration COMMAND test_profile_sidecar_migration)
-set_tests_properties(test_profile_sidecar_migration PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-)
-
 # Phase L Task 0.A: AutoSyncOrchestrator unregistered-device confirmation path
 add_wildpalms_test(test_autosyncorchestrator_unregistered
     test_autosyncorchestrator_unregistered.cpp

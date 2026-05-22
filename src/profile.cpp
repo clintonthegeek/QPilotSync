@@ -9,9 +9,6 @@
 #include <QJsonDocument>
 #include <QDateTime>
 
-// K.8b T9/T10: accounts subgroup + sidecar migration
-#include <KConfig>
-#include <KConfigGroup>
 #include "backendconfiguration.h"
 
 const QString Profile::DEFAULT_CONFLICT_POLICY = "ask";
@@ -80,7 +77,9 @@ bool Profile::isValid() const
 
 bool Profile::exists() const
 {
-    return QFile::exists(configFilePath());
+    if (m_syncFolderPath.isEmpty())
+        return false;
+    return QFile::exists(m_syncFolderPath + QStringLiteral("/profile.conf"));
 }
 
 // ========== Device Settings ==========
@@ -224,127 +223,183 @@ void Profile::setConflictTimeoutSeconds(int seconds)
 
 bool Profile::load()
 {
-    QString configPath = configFilePath();
-    if (!QFile::exists(configPath)) {
+    if (m_syncFolderPath.isEmpty())
+        return false;
+    QDir dir(m_syncFolderPath);
+    if (!dir.exists())
+        return false;
+
+    if (!loadProfileConf())  return false;
+    if (!loadAccountsConf()) return false;
+    if (!loadMappingsConf()) return false;
+    return true;
+}
+
+bool Profile::loadProfileConf()
+{
+    const QString path = m_syncFolderPath + QStringLiteral("/profile.conf");
+    if (!QFile::exists(path))
+        return false;
+
+    QSettings s(path, QSettings::IniFormat);
+
+    m_schemaVersion = s.value(QStringLiteral("meta/schemaVersion"), 1).toInt();
+    if (m_schemaVersion != 1) {
+        qWarning() << "[Profile] unknown schemaVersion" << m_schemaVersion
+                   << "in" << path;
         return false;
     }
 
-    QSettings settings(configPath, QSettings::IniFormat);
+    m_id = s.value(QStringLiteral("profile/id")).toString();
+    if (m_id.isEmpty())
+        m_id = QFileInfo(m_syncFolderPath).fileName();
+    m_name = s.value(QStringLiteral("profile/name")).toString();
 
-    // Profile identity
-    m_name = settings.value("profile/name", QString()).toString();
+    m_devicePath = s.value(QStringLiteral("device/path"),
+                            DEFAULT_DEVICE_PATH).toString();
+    m_baudRate = s.value(QStringLiteral("device/baudRate"),
+                          DEFAULT_BAUD_RATE).toString();
 
-    // Device settings
-    m_devicePath = settings.value("device/path", DEFAULT_DEVICE_PATH).toString();
-    m_baudRate = settings.value("device/baudRate", DEFAULT_BAUD_RATE).toString();
-    m_deviceFingerprint.userId = settings.value("device/userId", 0).toUInt();
-    m_deviceFingerprint.userName = settings.value("device/userName", QString()).toString();
-    m_deviceFingerprint.usbSerialNumber = settings.value("device/usbSerialNumber", QString()).toString();
-    m_deviceFingerprint.modelName = settings.value("device/modelName", QString()).toString();
-    m_deviceFingerprint.manufacturer = settings.value("device/manufacturer", QString()).toString();
-    m_deviceFingerprint.romVersion = settings.value("device/romVersion", 0).toUInt();
-    m_deviceFingerprint.productId = settings.value("device/productId", QString()).toString();
-    m_deviceFingerprint.romSize = settings.value("device/romSize", 0).toULongLong();
-    m_deviceFingerprint.ramSize = settings.value("device/ramSize", 0).toULongLong();
-    m_deviceFingerprint.ramFree = settings.value("device/ramFree", 0).toULongLong();
+    const QString modeStr =
+        s.value(QStringLiteral("device/connectionMode"),
+                QStringLiteral("keepalive")).toString();
+    m_connectionMode = (modeStr == QStringLiteral("disconnect"))
+        ? ConnectionMode::DisconnectAfterSync
+        : ConnectionMode::KeepAlive;
 
-    // Connection mode (default to KeepAlive for development)
-    QString modeStr = settings.value("device/connectionMode", "keepalive").toString();
-    if (modeStr == "disconnect") {
-        m_connectionMode = ConnectionMode::DisconnectAfterSync;
-    } else {
-        m_connectionMode = ConnectionMode::KeepAlive;
+    m_autoSyncOnConnect = s.value(QStringLiteral("device/autoSyncOnConnect"),
+                                   false).toBool();
+    m_defaultSyncType   = s.value(QStringLiteral("device/defaultSyncType"),
+                                   QStringLiteral("hotsync")).toString();
+
+    m_deviceFingerprint.userId = s.value(
+        QStringLiteral("device/userId"), 0).toUInt();
+    m_deviceFingerprint.userName = s.value(
+        QStringLiteral("device/userName")).toString();
+    m_deviceFingerprint.usbSerialNumber = s.value(
+        QStringLiteral("device/usbSerialNumber")).toString();
+    m_deviceFingerprint.modelName = s.value(
+        QStringLiteral("device/modelName")).toString();
+    m_deviceFingerprint.manufacturer = s.value(
+        QStringLiteral("device/manufacturer")).toString();
+    m_deviceFingerprint.romVersion = s.value(
+        QStringLiteral("device/romVersion"), 0).toUInt();
+    m_deviceFingerprint.productId = s.value(
+        QStringLiteral("device/productId")).toString();
+    m_deviceFingerprint.romSize = s.value(
+        QStringLiteral("device/romSize"), 0).toULongLong();
+    m_deviceFingerprint.ramSize = s.value(
+        QStringLiteral("device/ramSize"), 0).toULongLong();
+    m_deviceFingerprint.ramFree = s.value(
+        QStringLiteral("device/ramFree"), 0).toULongLong();
+
+    const QString lastSyncStr = s.value(
+        QStringLiteral("sync/lastSyncTime")).toString();
+    m_lastSyncTime = lastSyncStr.isEmpty()
+        ? QDateTime()
+        : QDateTime::fromString(lastSyncStr, Qt::ISODate);
+
+    m_conflictPolicy = s.value(QStringLiteral("sync/conflictPolicy"),
+                                DEFAULT_CONFLICT_POLICY).toString();
+    m_conflictAutoResolve = s.value(
+        QStringLiteral("sync/conflictAutoResolve"),
+        QStringLiteral("none")).toString();
+    m_conflictFallback = s.value(
+        QStringLiteral("sync/conflictFallback"),
+        QStringLiteral("defer")).toString();
+    m_conflictPromptStrategy = s.value(
+        QStringLiteral("sync/conflictPromptStrategy"),
+        QStringLiteral("always_ask")).toString();
+    m_conflictConnectionBehavior = s.value(
+        QStringLiteral("sync/conflictConnectionBehavior"),
+        QStringLiteral("keep_alive")).toString();
+    m_conflictTimeoutSeconds = s.value(
+        QStringLiteral("sync/conflictTimeoutSeconds"), 60).toInt();
+
+    return true;
+}
+
+bool Profile::loadAccountsConf()
+{
+    m_accounts.clear();
+    const QString path = m_syncFolderPath + QStringLiteral("/accounts.conf");
+    if (!QFile::exists(path))
+        return true;   // empty accounts is valid.
+
+    QSettings s(path, QSettings::IniFormat);
+    const int v = s.value(QStringLiteral("meta/schemaVersion"), 1).toInt();
+    if (v != 1) {
+        qWarning() << "[Profile] unknown accounts schemaVersion" << v;
+        return false;
     }
 
-    // Auto-sync settings
-    m_autoSyncOnConnect = settings.value("device/autoSyncOnConnect", false).toBool();
-    m_defaultSyncType = settings.value("device/defaultSyncType", "hotsync").toString();
+    const QStringList groups = s.childGroups();
+    for (const QString &g : groups) {
+        if (!g.startsWith(QStringLiteral("account-"))) continue;
+        const QString id = g.mid(QStringLiteral("account-").size());
+        if (id.isEmpty()) continue;
 
-    // Sync metadata
-    QString lastSyncStr = settings.value("sync/lastSyncTime", QString()).toString();
-    if (!lastSyncStr.isEmpty()) {
-        m_lastSyncTime = QDateTime::fromString(lastSyncStr, Qt::ISODate);
-    }
+        Kalburator::Sync::BackendConfiguration bc;
+        bc.id          = id;
+        bc.type        = s.value(g + QStringLiteral("/type")).toString();
+        bc.displayName = s.value(g + QStringLiteral("/displayName")).toString();
+        bc.enabled     = s.value(g + QStringLiteral("/enabled"), true).toBool();
 
-    // Sync settings
-    m_conflictPolicy = settings.value("sync/conflictPolicy", DEFAULT_CONFLICT_POLICY).toString();
-    m_conflictAutoResolve = settings.value("sync/conflictAutoResolve", "none").toString();
-    m_conflictFallback = settings.value("sync/conflictFallback", "defer").toString();
-    m_conflictPromptStrategy = settings.value("sync/conflictPromptStrategy", "always_ask").toString();
-    m_conflictConnectionBehavior = settings.value("sync/conflictConnectionBehavior", "keep_alive").toString();
-    m_conflictTimeoutSeconds = settings.value("sync/conflictTimeoutSeconds", 60).toInt();
-
-    // G.7 Task 54: SyncMappings — load raw JSON
-    {
-        m_syncMappingsJson = QJsonArray{};
-        const QString jsonStr = settings.value(QStringLiteral("syncMappings/json")).toString();
-        if (!jsonStr.isEmpty()) {
-            const QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
-            if (doc.isArray())
-                m_syncMappingsJson = doc.array();
+        s.beginGroup(g + QStringLiteral("/params"));
+        const QStringList paramKeys = s.childKeys();
+        for (const QString &k : paramKeys) {
+            bc.connectionParams[k] = s.value(k);
         }
+        s.endGroup();
+
+        m_accounts.append(bc);
+    }
+    return true;
+}
+
+bool Profile::loadMappingsConf()
+{
+    m_syncMappingsJson = QJsonArray{};
+    const QString path = m_syncFolderPath + QStringLiteral("/mappings.conf");
+    if (!QFile::exists(path))
+        return true;   // empty mappings is valid.
+
+    QSettings s(path, QSettings::IniFormat);
+    const int v = s.value(QStringLiteral("meta/schemaVersion"), 1).toInt();
+    if (v != 1) {
+        qWarning() << "[Profile] unknown mappings schemaVersion" << v;
+        return false;
     }
 
-    // K.8b T9: Accounts subgroup
-    {
-        m_accounts.clear();
-        settings.beginGroup(QStringLiteral("accounts"));
-        const QStringList acctIds = settings.childGroups();
-        for (const QString &acctId : acctIds) {
-            settings.beginGroup(acctId);
-            Kalburator::Sync::BackendConfiguration bc;
-            bc.id = acctId;
-            bc.type = settings.value(QStringLiteral("type"), QString()).toString();
-            bc.displayName = settings.value(QStringLiteral("displayName"), QString()).toString();
-            bc.enabled = settings.value(QStringLiteral("enabled"), true).toBool();
-            const QString paramsStr = settings.value(QStringLiteral("params")).toString();
-            if (!paramsStr.isEmpty()) {
-                const QJsonDocument doc = QJsonDocument::fromJson(paramsStr.toUtf8());
-                if (doc.isObject()) {
-                    const QJsonObject obj = doc.object();
-                    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
-                        bc.connectionParams[it.key()] = it.value().toVariant();
-                    }
-                }
-            }
-            m_accounts.append(bc);
-            settings.endGroup();
-        }
-        settings.endGroup();
-    }
+    const QStringList groups = s.childGroups();
+    for (const QString &g : groups) {
+        if (!g.startsWith(QStringLiteral("mapping-"))) continue;
 
-    // K.8b T10: One-shot sidecar migration (added in T10)
-    // If accounts is empty AND old .wildpalms.providers sidecar exists, migrate it.
-    {
-        const QString sidecarPath = QDir(m_syncFolderPath).filePath(QStringLiteral(".wildpalms.providers"));
-        if (m_accounts.isEmpty() && QFile::exists(sidecarPath)) {
-            KConfig oldCfg(sidecarPath, KConfig::SimpleConfig);
-            KConfigGroup root = oldCfg.group(QStringLiteral("Providers"));
-            const QStringList subGroups = root.groupList();
-            for (const QString &id : subGroups) {
-                const KConfigGroup g = root.group(id);
-                Kalburator::Sync::BackendConfiguration bc;
-                bc.id = id;
-                bc.type = g.readEntry("kind", QString());
-                bc.displayName = g.readEntry("displayName", QString());
-                bc.enabled = true;
-                const QStringList keys = g.keyList();
-                for (const QString &k : keys) {
-                    if (k == QLatin1String("kind") || k == QLatin1String("displayName"))
-                        continue;
-                    bc.connectionParams[k] = g.readEntry(k, QString());
-                }
-                m_accounts.append(bc);
-            }
-            if (!m_accounts.isEmpty()) {
-                save(); // persist migrated accounts to .wildpalms.conf
-                const QString stamp = QDateTime::currentDateTimeUtc().toString(
-                    QStringLiteral("yyyyMMddTHHmmssZ"));
-                QFile::rename(sidecarPath, sidecarPath + QStringLiteral(".migrated.") + stamp);
+        QJsonObject obj;
+        s.beginGroup(g);
+        const QStringList keys = s.childKeys();
+        for (const QString &k : keys) {
+            const QVariant val = s.value(k);
+            if (val.typeId() == QMetaType::Bool) {
+                obj[k] = val.toBool();
+            } else if (val.typeId() == QMetaType::Int
+                       || val.typeId() == QMetaType::Double) {
+                obj[k] = val.toDouble();
+            } else {
+                // Strings may have been JSON-serialised objects/arrays
+                // for the embedded case; try to parse, fall back to plain
+                // string.
+                const QByteArray asUtf8 = val.toString().toUtf8();
+                const QJsonDocument doc = QJsonDocument::fromJson(asUtf8);
+                if (doc.isObject()) obj[k] = doc.object();
+                else if (doc.isArray()) obj[k] = doc.array();
+                else obj[k] = val.toString();
             }
         }
-    }
+        s.endGroup();
 
+        m_syncMappingsJson.append(obj);
+    }
     return true;
 }
 
@@ -550,14 +605,6 @@ bool Profile::initialize()
 
     // Save default settings
     return save();
-}
-
-QString Profile::configFilePath() const
-{
-    if (m_syncFolderPath.isEmpty()) {
-        return QString();
-    }
-    return QDir(m_syncFolderPath).filePath(".wildpalms.conf");
 }
 
 QString Profile::stateDirectoryPath() const
