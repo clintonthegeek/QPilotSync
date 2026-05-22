@@ -498,8 +498,12 @@ void KF6MainWindow::loadProfile(const QString &path)
     m_syncPath = path;
 
     // F.1a: bump last-active in the registry as soon as we know the profile is valid
-    if (m_profileRegistry && !m_currentProfile->id().isEmpty())
+    if (m_profileRegistry && !m_currentProfile->id().isEmpty()) {
         m_profileRegistry->setLastActive(m_currentProfile->id());
+        if (m_profileMenuController)
+            m_profileMenuController->setActiveProfileId(
+                m_currentProfile->id());
+    }
 
     // (Re)create PalmRuntime for the new profile path.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
@@ -604,6 +608,9 @@ void KF6MainWindow::closeProfile()
         m_currentProfile->save();
     }
     m_currentProfile.reset();
+
+    if (m_profileMenuController)
+        m_profileMenuController->setActiveProfileId(QString());
 
     m_syncPath.clear();
 
@@ -1515,8 +1522,21 @@ void KF6MainWindow::onImportProfile()
 
 void KF6MainWindow::onSwitchProfile(const QString &id)
 {
-    Q_UNUSED(id);
-    // Implementation in T8.
+    if (id.isEmpty()) return;
+    const auto e = m_profileRegistry->entry(id);
+    if (!e.isValid()) {
+        m_logWidget->logError(
+            i18n("Cannot switch: profile not found"));
+        return;
+    }
+    if (!QDir(e.path).exists()) {
+        QMessageBox::warning(this, i18n("Switch Profile"),
+            i18n("Profile directory no longer exists: %1\n"
+                 "Use File → Profile → Forget to remove it from "
+                 "the registry.", e.path));
+        return;
+    }
+    loadProfile(e.path);
 }
 
 void KF6MainWindow::onForgetProfile(const QString &id)
@@ -1589,6 +1609,17 @@ void KF6MainWindow::setProfileRegistryForTest(
     std::unique_ptr<WildPalms::Runtime::ProfileRegistry> reg)
 {
     m_profileRegistry = std::move(reg);
+    // Rebuild the menu controller so it holds a valid registry pointer.
+    m_profileMenuController = std::make_unique<ProfileMenuController>(
+        m_profileRegistry.get(),
+        actionCollection(),
+        this);
+    connect(m_profileMenuController.get(),
+            &ProfileMenuController::switchRequested,
+            this, &KF6MainWindow::onSwitchProfile);
+    connect(m_profileMenuController.get(),
+            &ProfileMenuController::forgetRequested,
+            this, &KF6MainWindow::onForgetProfile);
 }
 
 QString KF6MainWindow::runStartupForTest()
