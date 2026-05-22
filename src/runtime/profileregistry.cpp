@@ -1,5 +1,6 @@
 #include "profileregistry.h"
 
+#include <KConfigGroup>
 #include <QDir>
 #include <QRegularExpression>
 
@@ -94,12 +95,56 @@ void ProfileRegistry::setLastActive(const QString & /*id*/)
 
 void ProfileRegistry::load()
 {
-    // Implemented in Task 4.
+    m_cache.clear();
+    m_lastActiveId.clear();
+
+    const QStringList groups = m_config->groupList();
+    for (const QString &g : groups) {
+        if (!g.startsWith(QStringLiteral("profile-"))) continue;
+        const QString id = g.mid(QStringLiteral("profile-").size());
+        if (id.isEmpty()) continue;
+
+        KConfigGroup cg(m_config, g);
+        ProfileEntry e;
+        e.id         = id;
+        e.name       = cg.readEntry("name", QString());
+        e.path       = cg.readEntry("path", QString());
+        e.lastOpened = cg.readEntry("lastOpened", QDateTime());
+        m_cache.append(e);
+    }
+
+    KConfigGroup gen(m_config, QStringLiteral("General"));
+    m_lastActiveId = gen.readEntry("lastActiveProfileId", QString());
+
+    // Sort by lastOpened descending (most recent first).
+    std::sort(m_cache.begin(), m_cache.end(),
+              [](const ProfileEntry &a, const ProfileEntry &b) {
+                  return a.lastOpened > b.lastOpened;
+              });
 }
 
 void ProfileRegistry::save() const
 {
-    // Implemented in Task 4.
+    // Clear all profile-* groups first.
+    const QStringList groups = m_config->groupList();
+    for (const QString &g : groups) {
+        if (g.startsWith(QStringLiteral("profile-")))
+            m_config->deleteGroup(g);
+    }
+
+    // Re-write each cache entry.
+    for (const auto &e : m_cache) {
+        KConfigGroup cg(m_config, QStringLiteral("profile-") + e.id);
+        cg.writeEntry("name", e.name);
+        cg.writeEntry("path", e.path);
+        cg.writeEntry("lastOpened", e.lastOpened);
+    }
+
+    // [General]/lastActiveProfileId.
+    KConfigGroup gen(m_config, QStringLiteral("General"));
+    gen.writeEntry("lastActiveProfileId", m_lastActiveId);
+
+    m_config->sync();
 }
 
 } // namespace WildPalms::Runtime
