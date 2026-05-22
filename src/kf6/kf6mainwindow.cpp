@@ -16,6 +16,7 @@
 #include "../runtime/accountcontroller.h"
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
+#include "../runtime/profileregistry.h"
 #include "../sync/syncstate.h"
 
 #include "../plugins/calendar/calendarbackendplugin.h"
@@ -91,6 +92,9 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     setupUI();
     setupActions();
 
+    // F.1a: construct registry immediately after action manager is ready
+    m_profileRegistry = std::make_unique<WildPalms::Runtime::ProfileRegistry>(this);
+
     // Auto-detection
     m_deviceMonitor = new PalmDeviceMonitor(this);
     m_autoSync = new AutoSyncOrchestrator(this);
@@ -155,13 +159,8 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // Restore window state
     restoreWindowState();
 
-    // Load default profile if set
-    QString defaultProfile = KF6Settings::instance().defaultProfilePath();
-    if (!defaultProfile.isEmpty() && QDir(defaultProfile).exists()) {
-        loadProfile(defaultProfile);
-    } else {
-        m_logWidget->logInfo(i18n("No default profile set. Use File → New Profile to create one."));
-    }
+    // F.1a: registry-driven startup (replaces QSettings defaultProfilePath lookup)
+    resolveStartupProfile();
 
     // Initialize menu state
     updateMenuState(false);
@@ -478,6 +477,10 @@ void KF6MainWindow::loadProfile(const QString &path)
     }
 
     m_syncPath = path;
+
+    // F.1a: bump last-active in the registry as soon as we know the profile is valid
+    if (m_profileRegistry && !m_currentProfile->id().isEmpty())
+        m_profileRegistry->setLastActive(m_currentProfile->id());
 
     // (Re)create PalmRuntime for the new profile path.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
@@ -1450,19 +1453,96 @@ void KF6MainWindow::onDeviceInfo()
 
 void KF6MainWindow::onNewProfile()
 {
-    QString path = QFileDialog::getExistingDirectory(this,
-        i18n("Select Folder for New Profile"),
-        QDir::homePath(),
-        QFileDialog::ShowDirsOnly);
+    bool ok = false;
+    const QString name = QInputDialog::getText(this,
+        i18n("New Profile"),
+        i18n("Profile name:"),
+        QLineEdit::Normal, QString(), &ok);
+    if (!ok || name.trimmed().isEmpty()) return;
 
-    if (path.isEmpty()) return;
-
-    loadProfile(path);
+    const auto entry = m_profileRegistry->registerNew(name.trimmed());
+    if (!entry.isValid()) {
+        QMessageBox::critical(this, i18n("New Profile"),
+            i18n("Could not create profile."));
+        return;
+    }
+    loadProfile(entry.path);
 }
 
 void KF6MainWindow::onCloseProfile()
 {
     closeProfile();
+}
+
+// ========== F.1a: Profile registry helpers ==========
+
+QString KF6MainWindow::resolveStartupProfile()
+{
+    const QString lastId = m_profileRegistry->lastActiveId();
+    if (!lastId.isEmpty()) {
+        const auto e = m_profileRegistry->entry(lastId);
+        if (e.isValid() && QDir(e.path).exists()) {
+            loadProfile(e.path);
+            return e.path;
+        }
+    }
+    const QString picked = showProfilePickerStopgap();
+    if (!picked.isEmpty()) {
+        loadProfile(picked);
+        return picked;
+    }
+    return QString();
+}
+
+QString KF6MainWindow::showProfilePickerStopgap()
+{
+    const auto entries = m_profileRegistry->entries();
+
+    if (entries.isEmpty()) {
+        QMessageBox::information(this,
+            i18n("No Profile"),
+            i18n("No WildPalms profile has been created yet.\n"
+                 "Let's create one to get started."));
+
+        bool ok = false;
+        const QString name = QInputDialog::getText(this,
+            i18n("New Profile"),
+            i18n("Profile name:"),
+            QLineEdit::Normal, QString(), &ok);
+        if (!ok || name.trimmed().isEmpty()) return QString();
+
+        const auto e = m_profileRegistry->registerNew(name.trimmed());
+        if (!e.isValid()) {
+            QMessageBox::critical(this, i18n("New Profile"),
+                i18n("Could not create profile."));
+            return QString();
+        }
+        return e.path;
+    }
+
+    QStringList names;
+    for (const auto &e : entries) names << e.name;
+    bool ok = false;
+    const QString chosenName = QInputDialog::getItem(this,
+        i18n("Select Profile"),
+        i18n("Pick a profile:"),
+        names, 0, false, &ok);
+    if (!ok || chosenName.isEmpty()) return QString();
+
+    for (const auto &e : entries)
+        if (e.name == chosenName) return e.path;
+    return QString();
+}
+
+void KF6MainWindow::setProfileRegistryForTest(
+    std::unique_ptr<WildPalms::Runtime::ProfileRegistry> reg)
+{
+    m_profileRegistry = std::move(reg);
+}
+
+QString KF6MainWindow::runStartupForTest()
+{
+    return resolveStartupProfile();
 }
 
 void KF6MainWindow::onProfileSettings()
@@ -1561,14 +1641,8 @@ void KF6MainWindow::onRestore()
 
 void KF6MainWindow::onChangeSyncFolder()
 {
-    QString path = QFileDialog::getExistingDirectory(this,
-        i18n("Select Profile Folder"),
-        QDir::homePath(),
-        QFileDialog::ShowDirsOnly);
-
-    if (path.isEmpty()) return;
-
-    loadProfile(path);
+    const QString picked = showProfilePickerStopgap();
+    if (!picked.isEmpty()) loadProfile(picked);
 }
 
 void KF6MainWindow::onOpenSyncFolder()

@@ -5,6 +5,7 @@
 #include <QMap>
 #include <memory>
 #include "runtime/palmrunresult.h"
+#include "runtime/profileregistry.h"
 
 // Forward declarations
 class QTimer;
@@ -23,6 +24,7 @@ class AutoSyncOrchestrator;
 namespace WildPalms::Runtime {
     class PalmRuntime;
     class AccountController;
+    // ProfileRegistry is fully included above; no forward declaration needed.
 }
 
 
@@ -48,8 +50,18 @@ public:
     const QMap<QString, KPageWidgetItem *> &palmPluginPagesForTest() const
         { return m_palmPluginPages; }
 
+    // F.1a test seams (used by T15)
+    void setProfileRegistryForTest(
+        std::unique_ptr<WildPalms::Runtime::ProfileRegistry> reg);
+    QString runStartupForTest();
+
 protected:
     void closeEvent(QCloseEvent *event) override;
+
+    /// Test seam: F.1a stopgap profile-picker UI. Production override
+    /// shows a QMessageBox / QInputDialog; tests stub it to return a
+    /// pre-set path (or empty for cancel).
+    virtual QString showProfilePickerStopgap();
 
 private Q_SLOTS:
     // Device connection
@@ -128,6 +140,7 @@ private:
     // Profile management
     void loadProfile(const QString &path);
     void closeProfile();
+    QString resolveStartupProfile();
 
     // Device handling
     void startConnectionMultiPort(const QStringList &devicePaths);
@@ -162,6 +175,9 @@ private:
 
     // Action manager
     ActionManager *m_actionManager;
+
+    // F.1a: App-level profile registry
+    std::unique_ptr<WildPalms::Runtime::ProfileRegistry> m_profileRegistry;
 
     QString m_syncPath;
 
