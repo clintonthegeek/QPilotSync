@@ -221,6 +221,39 @@ void ProfileRegistry::setLastActive(const QString &id)
     emit entryUpdated(id);
 }
 
+bool ProfileRegistry::rename(const QString &id, const QString &newName)
+{
+    const QString trimmed = newName.trimmed();
+    if (id.isEmpty() || trimmed.isEmpty()) return false;
+
+    int idx = -1;
+    for (int i = 0; i < m_cache.size(); ++i) {
+        if (m_cache[i].id == id) { idx = i; break; }
+    }
+    if (idx < 0) return false;
+
+    const QString oldName = m_cache[idx].name;
+    m_cache[idx].name = trimmed;
+
+    const QString confPath =
+        m_cache[idx].path + QStringLiteral("/profile.conf");
+    {
+        QSettings s(confPath, QSettings::IniFormat);
+        s.beginGroup(QStringLiteral("profile"));
+        s.setValue(QStringLiteral("name"), trimmed);
+        s.endGroup();
+        s.sync();
+        if (s.status() != QSettings::NoError) {
+            m_cache[idx].name = oldName;
+            return false;
+        }
+    }
+
+    save();
+    emit entryUpdated(id);
+    return true;
+}
+
 void ProfileRegistry::load()
 {
     m_cache.clear();

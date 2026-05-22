@@ -56,6 +56,14 @@ public:
     bool         unregister(const QString &id);
     void         setLastActive(const QString &id);
 
+    /// Rename a registered profile. Updates both the registry
+    /// (wildpalmsrc) and the per-profile profile.conf's [profile]/name.
+    /// Trims newName; returns false if id is unknown, newName is empty
+    /// after trimming, or the profile.conf write fails (in-memory
+    /// cache is rolled back on disk failure). Emits entryUpdated(id)
+    /// on success.
+    bool rename(const QString &id, const QString &newName);
+
     QString defaultRoot() const;
     void    setDefaultRoot(const QString &root);
 
