@@ -435,3 +435,34 @@ The `MapperResult` pattern would work well in PlanStanLite's backend abstraction
 **Document Version**: 1.0
 **Last Updated**: 2026-01-07
 **Status**: Design Options (Pending Decision)
+
+---
+
+## 2026-05-22 — Mass-delete guard
+
+**Incident:** While fixing the F.1b rawfiles path mismatch (commit `a8f686f`),
+a follow-up instruction to `rm -rf <profile>/.state/rawfiles` caused the next
+HotSync to propagate 84 ghost-deletes against the Palm device. The baselines
+DB recorded 684 PC-side records that no longer had files on disk; the engine
+concluded the user deleted them on the PC side and asked the Palm to mirror.
+
+Only contacts actually deleted (84 records). Calendar (582) and memo were "safe"
+only because `PalmCalendarBackend::deleteRecord` and `PalmMemoBackend::deleteRecord`
+use a non-canonical dbName decode that the device rejects (silent no-op). Fixing
+those bugs would expand the blast radius.
+
+**Mitigation:** `Kalburator::Conflict::IMassDeleteGuard` in libkalburator
+(`v0.54-mass-delete-guard`). SyncEngine consults the registered guard before
+propagating bulk deletes when the per-mapping threshold (>10 absolute OR >25%
+of baseline) is exceeded. WildPalms's `MassDeleteGuardPresenter` pops a
+QMessageBox warning. If the user declines, the deletes are dropped for this
+round (baselines unchanged; next sync re-proposes the same deletes).
+
+**Follow-up:** The calendar/memo silent-delete bug remains. It must be fixed in
+a separate change set so the broken-by-accident safety net is removed in a
+controlled way (the guard now provides the real safety net).
+
+**References:**
+- Plan: `docs/superpowers/plans/2026-05-22-mass-delete-guard.md`
+- libkalburator: `src/engine/imassdeleteguard.h`, `src/engine/syncengine.cpp` (`applyBatch` lambda)
+- WildPalms: `src/runtime/massdeleteguardpresenter.{h,cpp}`
