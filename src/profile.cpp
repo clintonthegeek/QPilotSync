@@ -52,6 +52,21 @@ void Profile::setName(const QString &name)
     m_name = name;
 }
 
+QString Profile::id() const
+{
+    return m_id;
+}
+
+int Profile::schemaVersion() const
+{
+    return m_schemaVersion;
+}
+
+QString Profile::defaultPathForId(const QString &id)
+{
+    return QDir::homePath() + QStringLiteral("/.wildpalms/") + id;
+}
+
 bool Profile::isValid() const
 {
     if (m_syncFolderPath.isEmpty()) {

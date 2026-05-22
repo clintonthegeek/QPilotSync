@@ -66,6 +66,10 @@ private slots:
     void testIsValidWithValidPath();
     void testIsValidWithInvalidPath();
 
+    // ========== F.1a T8: id / defaultPathForId / schemaVersion ==========
+    void testDefaultPathForId();
+    void testIdFromBasename();
+
 private:
     QTemporaryDir *m_tempDir;
 };
@@ -400,6 +404,27 @@ void TestProfile::testIsValidWithInvalidPath()
 {
     Profile profile("/nonexistent/path/that/does/not/exist");
     QVERIFY(!profile.isValid());
+}
+
+// ========== F.1a T8: id / defaultPathForId / schemaVersion ==========
+
+void TestProfile::testDefaultPathForId()
+{
+    const QString p = Profile::defaultPathForId(QStringLiteral("profile5"));
+    QVERIFY(p.endsWith(QStringLiteral("/.wildpalms/profile5")));
+}
+
+void TestProfile::testIdFromBasename()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString dir = tmp.path() + QStringLiteral("/myprofile");
+    QVERIFY(QDir().mkpath(dir));
+
+    Profile p;
+    p.setSyncFolderPath(dir);
+    // Before load(), id is empty.
+    QCOMPARE(p.id(), QString());
 }
 
 QTEST_MAIN(TestProfile)

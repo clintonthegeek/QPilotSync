@@ -155,6 +155,20 @@ public:
     QString name() const;
     void setName(const QString &name);
 
+    /// Sticky profile id — matches the on-disk directory basename.
+    /// Populated by load() from profile.conf:[profile]/id; falls
+    /// back to the directory basename if the key is missing or load
+    /// hasn't been called.
+    QString id() const;
+
+    /// Default path for a fresh profile with the given id under
+    /// ~/.wildpalms/<id>. Static helper used by ProfileRegistry
+    /// and tests.
+    static QString defaultPathForId(const QString &id);
+
+    /// Schema version of the loaded profile.conf. 1 for F.1a.
+    int schemaVersion() const;
+
     // Check if profile is valid (folder exists and is writable)
     bool isValid() const;
 
@@ -271,6 +285,8 @@ public:
 private:
     QString m_syncFolderPath;
     QString m_name;
+    QString m_id;
+    int     m_schemaVersion = 1;
 
     // Device settings
     QString m_devicePath;
