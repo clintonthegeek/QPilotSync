@@ -2,7 +2,9 @@
 
 #include <KConfigGroup>
 #include <QDir>
+#include <QFileInfo>
 #include <QRegularExpression>
+#include <QSettings>
 
 namespace WildPalms::Runtime {
 
@@ -69,11 +71,58 @@ bool ProfileRegistry::isValidIdChars(const QString &id)
     return re.match(id).hasMatch();
 }
 
-ProfileEntry ProfileRegistry::registerNew(const QString & /*name*/,
-                                          const QString & /*customPath*/)
+ProfileEntry ProfileRegistry::registerNew(const QString &name,
+                                          const QString &customPath)
 {
-    // Implemented in Task 5.
-    return ProfileEntry{};
+    ProfileEntry e;
+    e.name       = name;
+    e.lastOpened = QDateTime::currentDateTimeUtc();
+
+    if (customPath.isEmpty()) {
+        e.id   = allocateNewId();
+        e.path = m_defaultRoot + QLatin1Char('/') + e.id;
+    } else {
+        const QString basename = QFileInfo(customPath).fileName();
+        if (!isValidIdChars(basename))
+            return ProfileEntry{};
+        // Reject if id is already registered.
+        for (const auto &existing : m_cache) {
+            if (existing.id == basename)
+                return ProfileEntry{};
+        }
+        e.id   = basename;
+        e.path = customPath;
+    }
+
+    // Create the directory.
+    QDir dir(e.path);
+    if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
+        return ProfileEntry{};
+
+    // Write stub profile.conf so the profile is immediately loadable
+    // by Profile::load(). Spec §11 open implementation point — picked
+    // option (a).
+    {
+        const QString confPath = e.path + QStringLiteral("/profile.conf");
+        QSettings s(confPath, QSettings::IniFormat);
+        s.setValue(QStringLiteral("meta/schemaVersion"), 1);
+        s.setValue(QStringLiteral("profile/id"), e.id);
+        s.setValue(QStringLiteral("profile/name"), e.name);
+        s.sync();
+        if (s.status() != QSettings::NoError)
+            return ProfileEntry{};
+    }
+
+    m_cache.append(e);
+    // Re-sort so newest is first.
+    std::sort(m_cache.begin(), m_cache.end(),
+              [](const ProfileEntry &a, const ProfileEntry &b) {
+                  return a.lastOpened > b.lastOpened;
+              });
+
+    save();
+    emit registryChanged();
+    return e;
 }
 
 ProfileEntry ProfileRegistry::registerExisting(const QString & /*path*/)
