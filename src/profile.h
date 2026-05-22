@@ -295,6 +295,16 @@ private:
     // K.8b T9: accounts (replaces .wildpalms.providers sidecar)
     QList<Kalburator::Sync::BackendConfiguration> m_accounts;
 
+    bool saveProfileConf() const;
+    bool saveAccountsConf() const;
+    bool saveMappingsConf() const;
+
+    bool loadProfileConf();
+    bool loadAccountsConf();
+    bool loadMappingsConf();
+
+    QString sanitizeKConfigGroupId(const QString &id) const;
+
     // Default values
     static const QString DEFAULT_CONFLICT_POLICY;
     static const QString DEFAULT_DEVICE_PATH;
