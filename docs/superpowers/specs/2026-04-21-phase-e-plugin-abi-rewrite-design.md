@@ -759,3 +759,10 @@ baseline" / "both different → treat as conflict"). Not blocking E.3+.
 - **Memory references:** `feedback_library_vs_backend_responsibility.md`,
   `feedback_planstan_pretest_for_upstream.md`,
   `project_palm_category_routing.md`.
+
+## Phase F follow-on
+
+Phase F began 2026-05-21. F.1a (profile persistence + app registry)
+landed 2026-05-22 in 17 commits. See:
+- `docs/superpowers/specs/2026-05-21-f1a-profile-registry-design.md`
+- `docs/superpowers/plans/2026-05-21-f1a-profile-registry.md`
