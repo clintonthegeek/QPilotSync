@@ -1678,6 +1678,13 @@ QString KF6MainWindow::runStartupForTest()
     return resolveStartupProfile();
 }
 
+// F.1b T10: currentProfileIdForTest() — non-inline because Profile is only
+// forward-declared in the header; profile.h is included in this .cpp.
+QString KF6MainWindow::currentProfileIdForTest() const
+{
+    return m_currentProfile ? m_currentProfile->id() : QString();
+}
+
 void KF6MainWindow::onProfileSettings()
 {
     if (!m_currentProfile) {

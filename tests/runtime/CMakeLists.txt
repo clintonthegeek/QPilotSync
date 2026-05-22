@@ -394,6 +394,35 @@ set_tests_properties(tst_kf6mainwindow_startup PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1b T10: KF6MainWindow forget — integration tests + seams.
+# Exercises onForgetProfile via QMetaObject::invokeMethod on private slots,
+# with confirmForgetProfile overridden to skip the real dialog.
+# Needs the full link set because forgetActiveProfileIsRejected exercises
+# loadProfile(), which instantiates PalmRuntime + AccountController.
+add_executable(tst_kf6mainwindow_forget_profile
+    tst_kf6mainwindow_forget_profile.cpp)
+target_link_libraries(tst_kf6mainwindow_forget_profile
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::XmlGui
+        KF6::ConfigCore
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_kf6mainwindow_forget_profile
+         COMMAND tst_kf6mainwindow_forget_profile)
+set_tests_properties(tst_kf6mainwindow_forget_profile PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes

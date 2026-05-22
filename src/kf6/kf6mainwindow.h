@@ -56,6 +56,15 @@ public:
         std::unique_ptr<WildPalms::Runtime::ProfileRegistry> reg);
     QString runStartupForTest();
 
+    // Test seams (F.1b T10): read-only accessors used by Forget tests.
+    WildPalms::Runtime::ProfileRegistry *profileRegistryForTest() const {
+        return m_profileRegistry.get();
+    }
+    void runLoadProfileForTest(const QString &path) { loadProfile(path); }
+    // Non-inline: Profile is forward-declared here; definition is in .cpp
+    // where profile.h is included.
+    QString currentProfileIdForTest() const;
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 
