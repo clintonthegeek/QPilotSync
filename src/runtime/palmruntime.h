@@ -36,6 +36,10 @@ namespace Kalburator::Storage {
     class BaselineStore;
 }
 
+namespace Kalburator::Sync {
+    struct ConflictInfo;
+}
+
 namespace Kalburator::Shape {
     struct Shape;
 }
@@ -149,6 +153,14 @@ signals:
     void errorOccurred(QString error);
     void progressUpdated(int current, int total, QString message);
     void palmScreenMessage(QString message);
+
+    /// Forwarded from the embedded SyncEngine. Fires every time a
+    /// mapping with policy=AskUser encounters a conflict that the
+    /// engine cannot auto-resolve. The conflict is also persisted
+    /// to SyncConflictStore (engine-side); this signal exists so
+    /// the WildPalms UI can update a pending-count display in real
+    /// time without polling.
+    void conflictDetected(const Kalburator::Sync::ConflictInfo &info);
 
 private:
     /// Run after PalmDeviceAccess emits connectionComplete(true, "").

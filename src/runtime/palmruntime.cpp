@@ -137,6 +137,10 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     if (m_conflictHandler)
         m_engine->conflictRegistry()->setDefaultHandler(m_conflictHandler);
 
+    QObject::connect(m_engine.get(),
+                     &Kalburator::Sync::SyncEngine::conflictDetected,
+                     this, &PalmRuntime::conflictDetected);
+
     // K.8b T6: load the five static Palm plugins in-process.
     registerPalmPlugins();
 
