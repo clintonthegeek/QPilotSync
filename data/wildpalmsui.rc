@@ -1,13 +1,18 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="wildpalms" version="4">
+<gui name="wildpalms" version="5">
     <MenuBar>
         <Menu name="file">
             <text>&amp;File</text>
-            <Action name="file_new_profile"/>
-            <Action name="file_recent_profiles"/>
-            <Action name="file_close_profile"/>
-            <Separator/>
-            <Action name="file_profile_settings"/>
+            <Menu name="file_profile">
+                <text>&amp;Profile</text>
+                <Action name="file_new_profile"/>
+                <Action name="file_switch_profile"/>
+                <Action name="file_import_profile"/>
+                <Action name="file_forget_profile"/>
+                <Action name="file_close_profile"/>
+                <Separator/>
+                <Action name="file_profile_settings"/>
+            </Menu>
             <Action name="file_configure_mappings"/>
             <Separator/>
             <Action name="file_quit"/>
