@@ -56,14 +56,24 @@ void ProfileRegistry::setDefaultRoot(const QString &root)
 
 QString ProfileRegistry::allocateNewId() const
 {
-    for (int i = 1; ; ++i) {
-        const QString id = QStringLiteral("profile%1").arg(i);
-        bool taken = false;
-        for (const auto &e : m_cache) {
-            if (e.id == id) { taken = true; break; }
-        }
-        if (!taken) return id;
+    int high = 0;
+    static const QRegularExpression re(QStringLiteral("^profile(\\d+)$"));
+    auto scan = [&](const QString &candidate) {
+        const auto m = re.match(candidate);
+        if (m.hasMatch())
+            high = std::max(high, m.captured(1).toInt());
+    };
+
+    for (const auto &e : m_cache) scan(e.id);
+
+    const QStringList groups = m_config->groupList();
+    for (const QString &g : groups) {
+        if (g.startsWith(QStringLiteral("profile-")))
+            scan(g.mid(QStringLiteral("profile-").size()));
+        else if (g.startsWith(QStringLiteral("tombstone-")))
+            scan(g.mid(QStringLiteral("tombstone-").size()));
     }
+    return QStringLiteral("profile%1").arg(high + 1);
 }
 
 bool ProfileRegistry::isValidIdChars(const QString &id)
@@ -166,15 +176,49 @@ ProfileEntry ProfileRegistry::registerExisting(const QString &path)
     return e;
 }
 
-bool ProfileRegistry::unregister(const QString & /*id*/)
+bool ProfileRegistry::unregister(const QString &id)
 {
-    // Implemented in Task 7.
-    return false;
+    bool found = false;
+    for (auto it = m_cache.begin(); it != m_cache.end(); ++it) {
+        if (it->id == id) {
+            m_cache.erase(it);
+            found = true;
+            break;
+        }
+    }
+    if (!found) return false;
+
+    if (m_lastActiveId == id)
+        m_lastActiveId.clear();
+
+    // Write a tombstone group so allocateNewId() still sees the id was used.
+    KConfigGroup tomb(m_config, QStringLiteral("tombstone-") + id);
+    tomb.writeEntry("retired", true);
+
+    save();
+    emit registryChanged();
+    return true;
 }
 
-void ProfileRegistry::setLastActive(const QString & /*id*/)
+void ProfileRegistry::setLastActive(const QString &id)
 {
-    // Implemented in Task 7.
+    bool found = false;
+    for (auto &e : m_cache) {
+        if (e.id == id) {
+            e.lastOpened = QDateTime::currentDateTimeUtc();
+            found = true;
+            break;
+        }
+    }
+    if (!found) return;
+
+    m_lastActiveId = id;
+    std::sort(m_cache.begin(), m_cache.end(),
+              [](const ProfileEntry &a, const ProfileEntry &b) {
+                  return a.lastOpened > b.lastOpened;
+              });
+    save();
+    emit entryUpdated(id);
 }
 
 void ProfileRegistry::load()

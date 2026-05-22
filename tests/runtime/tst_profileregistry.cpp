@@ -7,6 +7,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QSettings>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 
 using namespace WildPalms::Runtime;
@@ -29,6 +30,12 @@ private slots:
     void registerExistingMissingConf();
     void registerExistingIdMismatch();
     void registerExistingIdConflict();
+    void unregisterDoesNotDelete();
+    void unregisterUnknown();
+    void setLastActiveRoundTrip();
+    void entriesSortedByLastOpenedDesc();
+    void registryChangedSignalFires();
+    void allocateNewIdAfterUnregister();
 };
 
 void TstProfileRegistry::defaultRootIsUnderHome()
@@ -50,7 +57,10 @@ void TstProfileRegistry::setDefaultRootOverrides()
 
 void TstProfileRegistry::allocateNewIdOnEmptyRegistry()
 {
-    ProfileRegistry reg;
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
     // Empty registry — first allocation is profile1.
     QCOMPARE(reg.allocateNewId(), QStringLiteral("profile1"));
     QCOMPARE(reg.allocateNewId(), QStringLiteral("profile1"));  // pure; no side effect
@@ -278,6 +288,114 @@ void TstProfileRegistry::registerExistingIdConflict()
 
     const auto e = reg.registerExisting(dupDir);
     QVERIFY(!e.isValid());
+}
+
+void TstProfileRegistry::unregisterDoesNotDelete()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+    reg.setDefaultRoot(tmp.path() + QStringLiteral("/wp-root"));
+
+    const auto e = reg.registerNew(QStringLiteral("ToRemove"));
+    QVERIFY(e.isValid());
+    QVERIFY(QDir(e.path).exists());
+
+    QVERIFY(reg.unregister(e.id));
+    QVERIFY(reg.entries().isEmpty());
+    QVERIFY(QDir(e.path).exists());  // dir survives
+}
+
+void TstProfileRegistry::unregisterUnknown()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+
+    QVERIFY(!reg.unregister(QStringLiteral("never-registered")));
+}
+
+void TstProfileRegistry::setLastActiveRoundTrip()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+    reg.setDefaultRoot(tmp.path() + QStringLiteral("/wp-root"));
+
+    const auto a = reg.registerNew(QStringLiteral("A"));
+    const auto b = reg.registerNew(QStringLiteral("B"));
+    QVERIFY(a.isValid() && b.isValid());
+
+    const QDateTime beforeBump = reg.entry(a.id).lastOpened;
+    reg.setLastActive(a.id);
+    QCOMPARE(reg.lastActiveId(), a.id);
+    QVERIFY(reg.entry(a.id).lastOpened >= beforeBump);
+
+    // Round-trip via a fresh registry instance.
+    ProfileRegistry reg2(cfg);
+    QCOMPARE(reg2.lastActiveId(), a.id);
+}
+
+void TstProfileRegistry::entriesSortedByLastOpenedDesc()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+    reg.setDefaultRoot(tmp.path() + QStringLiteral("/wp-root"));
+
+    const auto a = reg.registerNew(QStringLiteral("A"));   // older
+    QTest::qSleep(20);
+    const auto b = reg.registerNew(QStringLiteral("B"));   // newer
+
+    // After registration, entries() is sorted by lastOpened desc.
+    auto entries = reg.entries();
+    QCOMPARE(entries.at(0).id, b.id);
+    QCOMPARE(entries.at(1).id, a.id);
+
+    // setLastActive bumps to head.
+    QTest::qSleep(20);
+    reg.setLastActive(a.id);
+    entries = reg.entries();
+    QCOMPARE(entries.at(0).id, a.id);
+}
+
+void TstProfileRegistry::registryChangedSignalFires()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+    reg.setDefaultRoot(tmp.path() + QStringLiteral("/wp-root"));
+
+    QSignalSpy spy(&reg, &ProfileRegistry::registryChanged);
+    const auto e = reg.registerNew(QStringLiteral("X"));
+    QVERIFY(e.isValid());
+    QCOMPARE(spy.count(), 1);
+
+    reg.unregister(e.id);
+    QCOMPARE(spy.count(), 2);
+}
+
+void TstProfileRegistry::allocateNewIdAfterUnregister()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+    reg.setDefaultRoot(tmp.path() + QStringLiteral("/wp-root"));
+
+    const auto a = reg.registerNew(QStringLiteral("A"));  // profile1
+    const auto b = reg.registerNew(QStringLiteral("B"));  // profile2
+    QCOMPARE(a.id, QStringLiteral("profile1"));
+    QCOMPARE(b.id, QStringLiteral("profile2"));
+
+    reg.unregister(a.id);  // drop profile1; gap remains
+    // Next allocation must NOT recycle profile1 — should be profile3.
+    QCOMPARE(reg.allocateNewId(), QStringLiteral("profile3"));
 }
 
 WILDPALMS_QTEST_GUILESS_MAIN(TstProfileRegistry)
