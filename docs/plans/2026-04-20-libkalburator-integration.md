@@ -56,6 +56,16 @@ for the Phase E sub-phase status table.
   LWW policy, D: conflict-surfacing UI, E: mass-delete-guard E2E
   verification). Spec: `docs/superpowers/specs/2026-05-22-palm-sync-honesty-design.md`.
   Plans: `docs/superpowers/plans/2026-05-22-palm-sync-{A,B,C,D,E}-*.md`.
+  Two follow-ups closed 2026-05-22 in commit `13a5df2`:
+  (1) `ConflictReviewDialog` now receives a populated
+  `Kalburator::Conflict::ConflictStore` mirrored from engine-side
+  `Sync::ConflictInfo` via a new `PalmRuntime::toConflictRecord`
+  helper, so the status-bar badge click actually shows the
+  recorded conflicts; (2) spec §1 Bug 3 + §4.2 corrected — only
+  `ToDoDB` has the asymmetric encode/decode round-trip, and todos
+  already used the explicit-dbName path, so the calendar/memo work
+  in sub-project B was a consistency change, not a correctness
+  fix. See spec §11 retrospective.
 - Phase F also covers F.3 (calendar-binding UX polish), F.4
   (Radicale E2E + user docs).
 - Phase G (joint v1.0 cut) depends on Phase F and on PlanStan's own
