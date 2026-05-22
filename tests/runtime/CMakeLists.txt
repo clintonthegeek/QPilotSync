@@ -490,6 +490,31 @@ set_tests_properties(tst_massdeleteguardpresenter PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Sub-project E: mass-delete guard E2E — proves the guard fires against
+# the original-destruction scenario (PC emptied between syncs).
+# MockBlobBackend + BlobSyncBackendWrapper + MassDeleteGuardPresenter fixture.
+# Needs WHOLE_ARCHIVE for blob DomainPlugin registrars (same as tst_palm_runtime_hotsync).
+add_executable(tst_palm_mass_delete_guard_e2e
+    tst_palm_mass_delete_guard_e2e.cpp)
+target_link_libraries(tst_palm_mass_delete_guard_e2e
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_mass_delete_guard_e2e
+         COMMAND tst_palm_mass_delete_guard_e2e)
+set_tests_properties(tst_palm_mass_delete_guard_e2e PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
