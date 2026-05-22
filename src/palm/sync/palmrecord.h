@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include <QByteArray>
+#include <QCryptographicHash>
 #include <QDataStream>
 #include <QDateTime>
 #include <QIODevice>
@@ -92,6 +93,28 @@ struct PalmRecord {
         r.category = cat;
         r.attributes = attrs;
         return r;
+    }
+
+    /// Returns a deterministic SHA-256 over the stable identity
+    /// fields (recordId + category + data). Does NOT include
+    /// attributes or lastModified — those carry per-sync metadata
+    /// (dirty/busy bits, mtime) that change between reads of
+    /// otherwise-unchanged records and would corrupt the engine's
+    /// content-equality diff.
+    ///
+    /// Used by sync-plugin backends as the BackendRecord::contentHash.
+    /// Wire-bytes serialization (toWireBytes) stays unchanged for
+    /// in-process transport; this is purely the identity hash.
+    QString contentHash() const
+    {
+        QByteArray buf;
+        QDataStream ds(&buf, QIODevice::WriteOnly);
+        ds.setVersion(QDataStream::Qt_6_0);
+        ds << static_cast<quint32>(recordId)
+           << static_cast<quint8>(category)
+           << data;
+        return QString::fromLatin1(
+            QCryptographicHash::hash(buf, QCryptographicHash::Sha256).toHex());
     }
 };
 
