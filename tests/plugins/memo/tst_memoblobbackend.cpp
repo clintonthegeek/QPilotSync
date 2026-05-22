@@ -20,6 +20,7 @@ private slots:
     void createRecordEncodesMarkdownToPalmPreservingCategory();
     void updateRecordRoundTripsCategory();
     void deleteRecordPropagatesToDevice();
+    void deleteRecord_usesMemoDBCanonicalName();
     void modifiedSinceDelegates();
     void privateFlagPreservedBothDirections();
     void categoryNameResolvedFromStoreWhenPresent();
@@ -203,6 +204,22 @@ void TestMemoBlobBackend::categoryNameResolvedFromStoreWhenPresent()
     const QString md = QString::fromUtf8(recs.first().data);
     QVERIFY(md.contains(QStringLiteral("category: 3")));
     QVERIFY(md.contains(QStringLiteral("categoryName: Work")));
+}
+
+void TestMemoBlobBackend::deleteRecord_usesMemoDBCanonicalName()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase("MemoDB");
+    const auto id = seedMemo(&dev, QStringLiteral("memo body"), 0, false);
+    PalmBackend pb(&dev);
+    MemoBlobBackend mb(&pb);
+
+    const QString encoded = PalmBackend::encodeRecordId(
+        QStringLiteral("MemoDB"), id);
+    QVERIFY(mb.deleteRecord(encoded));
+
+    const auto remaining = dev.readAllRecords("MemoDB");
+    QCOMPARE(remaining.size(), 0);
 }
 
 QTEST_MAIN(TestMemoBlobBackend)
