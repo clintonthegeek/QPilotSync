@@ -1,10 +1,38 @@
-# F.1 — New Profile Wizard — design
+# F.1 — New Profile Wizard — design  ⚠ SUPERSEDED 2026-05-21
 
-**Date:** 2026-05-21
-**Status:** Design approved through brainstorming. Spec ready for plan.
-**Phase:** F.1 (first of four Phase F sub-projects: wizard / `IConflictPresenter` / calendar-binding UX / Radicale E2E + user docs).
+> **This spec is superseded.** During plan-writing, the design hit a
+> blocker: it assumed remote accounts could exist *before* a profile
+> was created, but in the current codebase accounts are per-profile.
+> Rather than work around that, the user chose to redesign the whole
+> profile-creation story:
+>
+> - Accounts stay per-profile (no app-global hoist).
+> - Profile location becomes auto-generated (`~/.wildpalms/profileN`);
+>   "open by directory" is removed entirely.
+> - Profiles become app-registered (KConfig registry); the File menu
+>   gains Switch / Import / Forget; first-run auto-launches the wizard.
+> - Profile persistence gets restructured into multiple KConfig files.
+> - The wizard handles inline account creation (Akonadi first, then
+>   CalDAV/CardDAV with inline credentials), folder pickers move
+>   down into the per-domain step.
+>
+> The new direction is split into three sub-projects:
+>
+> - **F.1a** — Profile persistence refactor + app-level
+>   `ProfileRegistry`. No UI change. (See `2026-05-21-f1a-…-design.md`
+>   once written.)
+> - **F.1b** — New File menu (Switch / Import / Forget; removes
+>   Open); first-run auto-launches the stopgap.
+> - **F.1c** — The full multi-page wizard, replacing the stopgap.
+>
+> Everything below is preserved for reference: parts of it (page
+> structure, testing approach, MappingSpec translation) will be reused
+> in F.1c with adjustments for the new model.
+
+**Date:** 2026-05-21 (superseded same day)
+**Status:** ⚠ Superseded. See banner above.
+**Original phase:** F.1 (first of four Phase F sub-projects: wizard / `IConflictPresenter` / calendar-binding UX / Radicale E2E + user docs).
 **Predecessor:** Phase E ✅ closed 2026-05-21 (`docs/superpowers/specs/2026-04-21-phase-e-plugin-abi-rewrite-design.md`).
-**Tag on completion:** TBD when the implementation lands.
 
 ---
 
