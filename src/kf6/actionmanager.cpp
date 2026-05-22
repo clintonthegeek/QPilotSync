@@ -51,6 +51,15 @@ void ActionManager::setupFileActions()
     m_actionCollection->setDefaultShortcut(newProfile, QKeySequence::New);
     connect(newProfile, &QAction::triggered, this, &ActionManager::newProfileRequested);
 
+    // Import Profile (F.1b)
+    QAction *importProfile = new QAction(
+        QIcon::fromTheme(QStringLiteral("document-open-folder")),
+        i18n("&Import Profile..."), this);
+    m_actionCollection->addAction(
+        QStringLiteral("file_import_profile"), importProfile);
+    connect(importProfile, &QAction::triggered,
+            this, &ActionManager::importProfileRequested);
+
     // Close Profile
     QAction *closeProfile = new QAction(i18n("Close Profile"), this);
     connect(closeProfile, &QAction::triggered, this, &ActionManager::closeProfileRequested);
