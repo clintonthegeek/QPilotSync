@@ -34,6 +34,7 @@ private slots:
     void pushToUnnamedSlotStillStores();
     void deleteItemsInvalidCalendarIdFails();
     void fetchItemsEmptySlotReturnsEmpty();
+    void deleteRecord_usesDatebookDBCanonicalName();
 };
 
 void TestPalmCalendarBackend::identity()
@@ -405,6 +406,32 @@ void TestPalmCalendarBackend::fetchItemsEmptySlotReturnsEmpty()
     auto *op = backend.fetchItems(QStringLiteral("palm:calendar/4"));
     QCOMPARE(op->state(), SyncOperation::Succeeded);
     QVERIFY(op->fetchedItems().isEmpty());
+    op->deleteLater();
+}
+
+void TestPalmCalendarBackend::deleteRecord_usesDatebookDBCanonicalName()
+{
+    // Regression guard: deleteItems must route the delete to "DatebookDB"
+    // (the canonical Palm database name) regardless of how the record UID
+    // was encoded. If the backend decoded the UID into a non-canonical name
+    // (e.g. "DatebookdbDB") the mock device would return false and the
+    // record would survive — the guard below catches that regression.
+    MockPalmDatabaseAccess dev;
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&dev, &store);
+
+    const auto staged = stageDatebookRecord(dev, 0, QStringLiteral("ToDelete"));
+    QCOMPARE(dev.readAllRecords(QStringLiteral("DatebookDB")).size(), 1);
+
+    const QString uid =
+        QStringLiteral("palm-datebook-%1").arg(staged.recordId);
+    auto *op = backend.deleteItems(QStringLiteral("palm:calendar/0"),
+                                   QStringList{ uid });
+    QCOMPARE(op->state(), SyncOperation::Succeeded);
+    QCOMPARE(op->succeededUids(), QStringList{ uid });
+
+    // The record must actually be gone from the device — not a silent no-op.
+    QCOMPARE(dev.readAllRecords(QStringLiteral("DatebookDB")).size(), 0);
     op->deleteLater();
 }
 
