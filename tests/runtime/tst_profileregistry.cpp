@@ -25,6 +25,10 @@ private slots:
     void registerNewCustomPath();
     void registerNewCustomPathInvalidId();
     void registerNewSecondAllocation();
+    void registerExistingValid();
+    void registerExistingMissingConf();
+    void registerExistingIdMismatch();
+    void registerExistingIdConflict();
 };
 
 void TstProfileRegistry::defaultRootIsUnderHome()
@@ -186,6 +190,94 @@ void TstProfileRegistry::registerNewSecondAllocation()
     QCOMPARE(a.id, QStringLiteral("profile1"));
     QCOMPARE(b.id, QStringLiteral("profile2"));
     QCOMPARE(reg.entries().size(), 2);
+}
+
+void TstProfileRegistry::registerExistingValid()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+
+    // Pre-create a profile dir with a valid profile.conf.
+    const QString dir = tmp.path() + QStringLiteral("/imported");
+    QVERIFY(QDir().mkpath(dir));
+    {
+        QSettings s(dir + QStringLiteral("/profile.conf"), QSettings::IniFormat);
+        s.setValue("meta/schemaVersion", 1);
+        s.setValue("profile/id", "imported");
+        s.setValue("profile/name", "Imported");
+        s.sync();
+    }
+
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+
+    const auto e = reg.registerExisting(dir);
+    QVERIFY(e.isValid());
+    QCOMPARE(e.id, QStringLiteral("imported"));
+    QCOMPARE(e.name, QStringLiteral("Imported"));
+    QCOMPARE(e.path, dir);
+}
+
+void TstProfileRegistry::registerExistingMissingConf()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString dir = tmp.path() + QStringLiteral("/empty");
+    QVERIFY(QDir().mkpath(dir));
+
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+
+    const auto e = reg.registerExisting(dir);
+    QVERIFY(!e.isValid());
+}
+
+void TstProfileRegistry::registerExistingIdMismatch()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString dir = tmp.path() + QStringLiteral("/foo");
+    QVERIFY(QDir().mkpath(dir));
+    {
+        QSettings s(dir + QStringLiteral("/profile.conf"), QSettings::IniFormat);
+        s.setValue("meta/schemaVersion", 1);
+        s.setValue("profile/id", "bar");  // id != basename
+        s.setValue("profile/name", "Mismatch");
+        s.sync();
+    }
+
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+
+    const auto e = reg.registerExisting(dir);
+    QVERIFY(!e.isValid());
+}
+
+void TstProfileRegistry::registerExistingIdConflict()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
+    ProfileRegistry reg(cfg);
+    reg.setDefaultRoot(tmp.path() + QStringLiteral("/wp-root"));
+
+    // Register profile1 via the normal path.
+    const auto first = reg.registerNew(QStringLiteral("A"));
+    QVERIFY(first.isValid());
+
+    // Pre-create a dir at a different location but with id=profile1.
+    const QString dupDir = tmp.path() + QStringLiteral("/profile1");
+    QVERIFY(QDir().mkpath(dupDir));
+    {
+        QSettings s(dupDir + QStringLiteral("/profile.conf"), QSettings::IniFormat);
+        s.setValue("meta/schemaVersion", 1);
+        s.setValue("profile/id", "profile1");
+        s.setValue("profile/name", "Duplicate");
+        s.sync();
+    }
+
+    const auto e = reg.registerExisting(dupDir);
+    QVERIFY(!e.isValid());
 }
 
 WILDPALMS_QTEST_GUILESS_MAIN(TstProfileRegistry)

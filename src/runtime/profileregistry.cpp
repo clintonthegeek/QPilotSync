@@ -2,6 +2,7 @@
 
 #include <KConfigGroup>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QSettings>
@@ -125,10 +126,44 @@ ProfileEntry ProfileRegistry::registerNew(const QString &name,
     return e;
 }
 
-ProfileEntry ProfileRegistry::registerExisting(const QString & /*path*/)
+ProfileEntry ProfileRegistry::registerExisting(const QString &path)
 {
-    // Implemented in Task 6.
-    return ProfileEntry{};
+    const QString confPath = path + QStringLiteral("/profile.conf");
+    if (!QFile::exists(confPath))
+        return ProfileEntry{};
+
+    QSettings s(confPath, QSettings::IniFormat);
+    const QString id   = s.value(QStringLiteral("profile/id")).toString();
+    const QString name = s.value(QStringLiteral("profile/name")).toString();
+    if (id.isEmpty())
+        return ProfileEntry{};
+
+    // id must match directory basename.
+    const QString basename = QFileInfo(path).fileName();
+    if (id != basename)
+        return ProfileEntry{};
+
+    // Reject if id already in cache (possibly at a different path).
+    for (const auto &existing : m_cache) {
+        if (existing.id == id)
+            return ProfileEntry{};
+    }
+
+    ProfileEntry e;
+    e.id         = id;
+    e.name       = name;
+    e.path       = path;
+    e.lastOpened = QDateTime::currentDateTimeUtc();
+
+    m_cache.append(e);
+    std::sort(m_cache.begin(), m_cache.end(),
+              [](const ProfileEntry &a, const ProfileEntry &b) {
+                  return a.lastOpened > b.lastOpened;
+              });
+
+    save();
+    emit registryChanged();
+    return e;
 }
 
 bool ProfileRegistry::unregister(const QString & /*id*/)
