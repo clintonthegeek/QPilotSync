@@ -24,6 +24,11 @@ private slots:
     void activeProfileCheckedAndDisabledInSwitch();
     void activeProfileDisabledInForget();
     void clearingActiveIdReenablesAll();
+    void switchRequestedSignalFiresWithId();
+    void forgetRequestedSignalFiresWithId();
+    void registryChangedRebuilds();
+    void entryUpdatedRebuilds();
+    void unregisterRemovesFromBoth();
 };
 
 namespace {
@@ -140,6 +145,90 @@ void TstProfileMenuController::clearingActiveIdReenablesAll()
         QVERIFY(act->isEnabled());
     }
     Q_UNUSED(a);
+}
+
+void TstProfileMenuController::switchRequestedSignalFiresWithId()
+{
+    Fixture f;
+    const auto a = f.registry.registerNew(QStringLiteral("Alpha"));
+    const auto b = f.registry.registerNew(QStringLiteral("Bravo"));
+
+    ProfileMenuController ctrl(&f.registry, &f.actions);
+    QSignalSpy spy(&ctrl, &ProfileMenuController::switchRequested);
+
+    QAction *bAction = nullptr;
+    for (auto *act : ctrl.switchMenu()->menu()->actions())
+        if (act->data().toString() == b.id) bAction = act;
+    QVERIFY(bAction);
+    bAction->trigger();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.first().first().toString(), b.id);
+    Q_UNUSED(a);
+}
+
+void TstProfileMenuController::forgetRequestedSignalFiresWithId()
+{
+    Fixture f;
+    const auto a = f.registry.registerNew(QStringLiteral("Alpha"));
+    const auto b = f.registry.registerNew(QStringLiteral("Bravo"));
+
+    ProfileMenuController ctrl(&f.registry, &f.actions);
+    QSignalSpy spy(&ctrl, &ProfileMenuController::forgetRequested);
+
+    QAction *bAction = nullptr;
+    for (auto *act : ctrl.forgetMenu()->menu()->actions())
+        if (act->data().toString() == b.id) bAction = act;
+    QVERIFY(bAction);
+    bAction->trigger();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.first().first().toString(), b.id);
+    Q_UNUSED(a);
+}
+
+void TstProfileMenuController::registryChangedRebuilds()
+{
+    Fixture f;
+    f.registry.registerNew(QStringLiteral("Alpha"));
+
+    ProfileMenuController ctrl(&f.registry, &f.actions);
+    QCOMPARE(ctrl.switchMenu()->menu()->actions().size(), 1);
+
+    f.registry.registerNew(QStringLiteral("Bravo"));
+    QCOMPARE(ctrl.switchMenu()->menu()->actions().size(), 2);
+    QCOMPARE(ctrl.forgetMenu()->menu()->actions().size(), 2);
+}
+
+void TstProfileMenuController::entryUpdatedRebuilds()
+{
+    Fixture f;
+    const auto a = f.registry.registerNew(QStringLiteral("Alpha"));
+    const auto b = f.registry.registerNew(QStringLiteral("Bravo"));
+
+    ProfileMenuController ctrl(&f.registry, &f.actions);
+    QVERIFY(f.registry.rename(a.id, QStringLiteral("Alpha2")));
+
+    QStringList swNames;
+    for (auto *act : ctrl.switchMenu()->menu()->actions())
+        swNames << act->text();
+    QVERIFY(swNames.contains(QStringLiteral("Alpha2")));
+    QVERIFY(!swNames.contains(QStringLiteral("Alpha")));
+    Q_UNUSED(b);
+}
+
+void TstProfileMenuController::unregisterRemovesFromBoth()
+{
+    Fixture f;
+    const auto a = f.registry.registerNew(QStringLiteral("Alpha"));
+    const auto b = f.registry.registerNew(QStringLiteral("Bravo"));
+
+    ProfileMenuController ctrl(&f.registry, &f.actions);
+    QVERIFY(f.registry.unregister(b.id));
+
+    QCOMPARE(ctrl.switchMenu()->menu()->actions().size(), 1);
+    QCOMPARE(ctrl.forgetMenu()->menu()->actions().size(), 1);
+    QCOMPARE(ctrl.switchMenu()->menu()->actions().first()->data().toString(), a.id);
 }
 
 WILDPALMS_QTEST_MAIN(TstProfileMenuController)
