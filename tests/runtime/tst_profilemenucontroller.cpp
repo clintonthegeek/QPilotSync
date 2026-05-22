@@ -71,7 +71,9 @@ void TstProfileMenuController::submenusPopulatedSorted()
     const auto c = f.registry.registerNew(QStringLiteral("Charlie"));
     // Bump lastOpened so the desired order is Bravo (most recent) > Charlie > Alpha.
     f.registry.setLastActive(a.id);
+    QTest::qSleep(5);
     f.registry.setLastActive(c.id);
+    QTest::qSleep(5);
     f.registry.setLastActive(b.id);
 
     ProfileMenuController ctrl(&f.registry, &f.actions);
