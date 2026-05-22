@@ -25,6 +25,22 @@ add_wildpalms_runtime_test(tst_profileregistry tst_profileregistry.cpp)
 add_wildpalms_runtime_test(tst_profile_registry_integration
     tst_profile_registry_integration.cpp)
 add_wildpalms_runtime_test(tst_profileregistry_rename tst_profileregistry_rename.cpp)
+add_executable(tst_profilemenucontroller tst_profilemenucontroller.cpp)
+target_link_libraries(tst_profilemenucontroller
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::XmlGui
+        KF6::ConfigCore
+        KF6::I18n
+        WildPalmsCore
+        WildPalmsRuntime
+)
+add_test(NAME tst_profilemenucontroller COMMAND tst_profilemenucontroller)
+set_tests_properties(tst_profilemenucontroller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
 # tst_palm_device_access links PalmDeviceAccessLib directly (kept after

@@ -64,6 +64,8 @@ add_library(WildPalmsCore SHARED
     # KF6 integration
     kf6/actionmanager.cpp
     kf6/actionmanager.h
+    kf6/profilemenucontroller.cpp
+    kf6/profilemenucontroller.h
     kf6/autosyncorchestrator.cpp
     kf6/autosyncorchestrator.h
     # K.8b T13: ConduitManager deleted (plugin loop removed in T6; only
