@@ -11,6 +11,7 @@
 // Forward declarations
 class QTimer;
 class QDockWidget;
+class QPushButton;
 class KPageWidget;
 class KPageWidgetItem;
 class ActionManager;
@@ -27,6 +28,10 @@ namespace WildPalms::Runtime {
     class AccountController;
     class MassDeleteGuardPresenter;
     // ProfileRegistry is fully included above; no forward declaration needed.
+}
+
+namespace Kalburator::Sync {
+    struct ConflictInfo;
 }
 
 
@@ -65,6 +70,13 @@ public:
     // Non-inline: Profile is forward-declared here; definition is in .cpp
     // where profile.h is included.
     QString currentProfileIdForTest() const;
+
+    // Test seams (F.2 sub-project D).
+    int pendingConflictCountForTest() const { return m_pendingConflictCount; }
+    QPushButton *conflictBadgeForTest() const { return m_conflictBadge; }
+    void runConflictDetectedForTest(const Kalburator::Sync::ConflictInfo &info) {
+        onConflictDetected(info);
+    }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -149,6 +161,10 @@ private Q_SLOTS:
     // M5b — open MappingEditorDialog and reload PalmRuntime
     void onConfigureMappings();
 
+    // F.2 sub-project D — conflict badge
+    void onConflictDetected(const Kalburator::Sync::ConflictInfo &info);
+    void onConflictBadgeClicked();
+
 private:
     // UI setup
     void setupUI();
@@ -173,6 +189,9 @@ private:
     // State persistence
     void saveWindowState();
     void restoreWindowState();
+
+    // F.2 sub-project D — conflict badge helper
+    void refreshConflictBadge();
 
     // KPageWidget layout
     KPageWidget *m_pageWidget;
@@ -207,6 +226,10 @@ private:
     // Mass-delete guard: constructed once, registered with PalmRuntime on
     // every loadProfile call. Lifetime matches the window.
     std::unique_ptr<WildPalms::Runtime::MassDeleteGuardPresenter> m_massDeleteGuard;
+
+    // F.2 sub-project D — conflict badge
+    int          m_pendingConflictCount = 0;
+    QPushButton *m_conflictBadge = nullptr;
 
     QString m_syncPath;
 

@@ -30,6 +30,7 @@
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
 #include "../widgets/dialogs/profilepropertiesdialog.h"
+#include "../widgets/dialogs/conflictreviewdialog.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -166,7 +167,15 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // Load minimize-to-tray preference (default: true = closing minimizes to tray)
     m_minimizeToTray = KF6Settings::instance().minimizeToTray();
 
-    // Status bar
+    // Status bar — conflict badge (hidden until conflicts arrive)
+    m_conflictBadge = new QPushButton(this);
+    m_conflictBadge->setFlat(true);
+    m_conflictBadge->setIcon(QIcon::fromTheme(QStringLiteral("dialog-warning")));
+    m_conflictBadge->setVisible(false);
+    statusBar()->addPermanentWidget(m_conflictBadge);
+    connect(m_conflictBadge, &QPushButton::clicked,
+            this, &KF6MainWindow::onConflictBadgeClicked);
+
     statusBar()->showMessage(i18n("Ready - No device connected"));
 
     // Log initial message
@@ -546,6 +555,18 @@ void KF6MainWindow::loadProfile(const QString &path)
     // Tickle the device link while the dialog is open (matches legacy handler).
     connect(handler, &KalburatorInteractiveConflictHandler::keepAliveRequested,
             this, [this]() { onPalmConflictHandlerKeepAlive(); });
+
+    // F.2 sub-project D: wire conflict signal + reset badge for fresh profile.
+    connect(m_palmRuntime.get(),
+            &WildPalms::Runtime::PalmRuntime::conflictDetected,
+            this, &KF6MainWindow::onConflictDetected);
+
+    // Reset badge for the freshly-loaded profile. SyncConflictStore
+    // may have unresolved entries from a previous session; the badge
+    // populates as new conflicts come in. (TODO: when
+    // SyncConflictStore exposes a count() accessor, seed from there.)
+    m_pendingConflictCount = 0;
+    refreshConflictBadge();
 
     // Wire Palm plugin pages synchronously now that PalmRuntime has loaded plugins.
     for (auto *page : m_palmPluginPages.values()) {
@@ -1901,6 +1922,45 @@ void KF6MainWindow::onConfigureMappings()
 
     if (m_palmRuntime)
         m_palmRuntime->reloadMappings(updated);
+}
+
+// ========== F.2 sub-project D — conflict badge ==========
+
+void KF6MainWindow::onConflictDetected(const Kalburator::Sync::ConflictInfo &info)
+{
+    Q_UNUSED(info);
+    ++m_pendingConflictCount;
+    refreshConflictBadge();
+}
+
+void KF6MainWindow::onConflictBadgeClicked()
+{
+    if (!m_palmRuntime) return;
+    // Note: ConflictReviewDialog takes Kalburator::Conflict::ConflictStore*.
+    // The SyncEngine-side SyncConflictStore is a separate class; the
+    // Conflict::ConflictStore wiring is deferred (M5b chore). For now
+    // open the dialog with nullptr — it will render an empty list.
+    auto *dlg = new ConflictReviewDialog(nullptr, nullptr, this);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dlg, &QDialog::finished, this, [this]() {
+        // Conservative: reset count on dialog close. Next sync will
+        // repopulate any still-unresolved.
+        m_pendingConflictCount = 0;
+        refreshConflictBadge();
+    });
+    dlg->show();
+}
+
+void KF6MainWindow::refreshConflictBadge()
+{
+    if (!m_conflictBadge) return;
+    if (m_pendingConflictCount > 0) {
+        m_conflictBadge->setText(
+            i18n("%1 conflicts pending", m_pendingConflictCount));
+        m_conflictBadge->setVisible(true);
+    } else {
+        m_conflictBadge->setVisible(false);
+    }
 }
 
 void KF6MainWindow::onPalmRunFinished(WildPalms::Runtime::PalmRunResult result)

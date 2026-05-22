@@ -444,6 +444,12 @@ PalmRuntime::conflictHandlerForTest() const
     return m_engine->conflictRegistry()->handlerFor(QString{});
 }
 
+Kalburator::Sync::SyncConflictStore *
+PalmRuntime::syncConflictStore() const
+{
+    return m_engine ? m_engine->syncConflictStore() : nullptr;
+}
+
 QList<QString> PalmRuntime::enabledPluginIds() const {
     QList<QString> ids;
     if (m_pluginManager) {

@@ -38,6 +38,7 @@ namespace Kalburator::Storage {
 
 namespace Kalburator::Sync {
     struct ConflictInfo;
+    class SyncConflictStore;
 }
 
 namespace Kalburator::Shape {
@@ -117,6 +118,12 @@ public:
     /// outlive the runtime. nullptr clears. See libkalburator's
     /// imassdeleteguard.h for threshold semantics.
     void setMassDeleteGuard(Kalburator::Conflict::IMassDeleteGuard *guard);
+
+    /// Borrowed pointer to the embedded engine's SyncConflictStore.
+    /// Used by the conflict UI to read deferred conflicts. May be
+    /// nullptr if the engine wasn't given a store.
+    Kalburator::Sync::SyncConflictStore *syncConflictStore() const;
+
 
     // Test seams
     void setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess>);
