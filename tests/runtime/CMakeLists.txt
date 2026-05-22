@@ -24,6 +24,7 @@ add_wildpalms_runtime_test(tst_pluginmetadatahelpers tst_pluginmetadatahelpers.c
 add_wildpalms_runtime_test(tst_profileregistry tst_profileregistry.cpp)
 add_wildpalms_runtime_test(tst_profile_registry_integration
     tst_profile_registry_integration.cpp)
+add_wildpalms_runtime_test(tst_profileregistry_rename tst_profileregistry_rename.cpp)
 add_wildpalms_runtime_test(tst_simpleactioncontext tst_simpleactioncontext.cpp)
 add_wildpalms_runtime_test(tst_pluginactionmanager tst_pluginactionmanager.cpp)
 # tst_palm_device_access links PalmDeviceAccessLib directly (kept after
