@@ -506,8 +506,12 @@ void KF6MainWindow::loadProfile(const QString &path)
     }
 
     // (Re)create PalmRuntime for the new profile path.
+    //
+    // Pass the profile root, NOT stateDirectoryPath(). PalmRuntime uses the
+    // root for rawfiles/<plugin>/<col>/ and backup/ (per F.1a §4.2 layout)
+    // and computes <root>/.state internally for the baselines DB.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
-        m_currentProfile->stateDirectoryPath(), this);
+        m_currentProfile->syncFolderPath(), this);
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runStarted,
             this, &KF6MainWindow::onPalmRunStarted);
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,

@@ -111,7 +111,7 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     , m_backupRoot(QDir(profilePath).filePath(QStringLiteral("backup")))
     , m_registry(std::make_unique<Kalburator::Sync::BackendRegistry>())
     , m_baselineStore(std::make_unique<Kalburator::Storage::BaselineStore>(
-          QDir(profilePath).filePath(QStringLiteral(".wildpalms-blob-baselines.db"))))
+          QDir(profilePath).filePath(QStringLiteral(".state/.wildpalms-blob-baselines.db"))))
 {
     qRegisterMetaType<PalmRunResult>();
 
