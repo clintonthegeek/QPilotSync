@@ -159,8 +159,12 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // Restore window state
     restoreWindowState();
 
-    // F.1a: registry-driven startup (replaces QSettings defaultProfilePath lookup)
-    resolveStartupProfile();
+    // F.1a: registry-driven startup (replaces QSettings defaultProfilePath lookup).
+    // Deferred via singleShot(0) so that virtual dispatch works correctly from
+    // subclasses (constructors run before the most-derived vtable is in place).
+    // Tests call runStartupForTest() directly and never spin the event loop,
+    // so this lambda is never invoked during tests.
+    QTimer::singleShot(0, this, [this]() { resolveStartupProfile(); });
 
     // Initialize menu state
     updateMenuState(false);

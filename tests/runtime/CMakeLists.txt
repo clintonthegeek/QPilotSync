@@ -350,6 +350,33 @@ set_tests_properties(tst_main_window_plugin_pages_populated PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1a T15: KF6MainWindow startup regression tests.
+# Tests the three resolveStartupProfile() branches via the
+# setProfileRegistryForTest + runStartupForTest seams added in T14.
+# Needs the full link set because validLastActiveAutoLoads exercises
+# loadProfile(), which instantiates PalmRuntime + AccountController.
+add_executable(tst_kf6mainwindow_startup tst_kf6mainwindow_startup.cpp)
+target_link_libraries(tst_kf6mainwindow_startup
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::XmlGui
+        KF6::ConfigCore
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_kf6mainwindow_startup COMMAND tst_kf6mainwindow_startup)
+set_tests_properties(tst_kf6mainwindow_startup PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
