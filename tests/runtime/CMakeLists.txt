@@ -444,6 +444,26 @@ set_tests_properties(tst_profilepropertiesdialog_rename PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1a T6: MassDeleteGuardPresenter — TDD red-phase failing tests.
+# Tests the future IMassDeleteGuard::confirmMassDelete routing through promptUser.
+add_executable(tst_massdeleteguardpresenter
+    tst_massdeleteguardpresenter.cpp)
+target_link_libraries(tst_massdeleteguardpresenter
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        KF6::I18n
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsRuntime
+)
+add_test(NAME tst_massdeleteguardpresenter
+         COMMAND tst_massdeleteguardpresenter)
+set_tests_properties(tst_massdeleteguardpresenter PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M3 Tasks 14-17: fullSync / copyPalmToPC / copyPCToPalm / backup / restore
 add_executable(tst_palm_runtime_modes tst_palm_runtime_modes.cpp)
 target_link_libraries(tst_palm_runtime_modes
