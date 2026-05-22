@@ -2,8 +2,11 @@
 #include <QTemporaryDir>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <memory>
 
 #include "runtime/palmruntime.h"
+#include "runtime/palmdeviceaccess.h"
+#include "palm/sync/mockpalmdatabaseaccess.h"
 #include "synctypes.h"
 
 class TstPalmRuntimeDefaultMappingsOnlyWhenEmpty : public QObject
@@ -12,6 +15,7 @@ class TstPalmRuntimeDefaultMappingsOnlyWhenEmpty : public QObject
 private slots:
     void defaults_skipped_if_user_mappings_present();
     void defaultsOnlyForUncoveredSlots();
+    void defaultMappings_useLastWriteWinsPolicy();
 };
 
 void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaults_skipped_if_user_mappings_present()
@@ -51,6 +55,45 @@ void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaultsOnlyForUncoveredSlots()
     // tst_runtime_caldav_e2e::default_mappings_per_slot_when_calendar_bound.
     QSKIP("Implement after reviewing existing test patterns in this file; "
           "F1 logic is already exercised by tst_runtime_caldav_e2e::default_mappings_per_slot_when_calendar_bound");
+}
+
+void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaultMappings_useLastWriteWinsPolicy()
+{
+    // Seed mock device with a Calendar database to trigger default mapping
+    // creation. finishConnect iterates plugins, creates backends, gets
+    // available collections, and creates a default mapping for each
+    // collection not already covered by a user mapping.
+    auto mockDb = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
+
+    // Create a Calendar database with at least one record so the plugin
+    // can observe it and advertise a collection.
+    mockDb->createDatabase(QStringLiteral("CalendarDB-PDat"));
+    WildPalms::PalmSync::PalmRecord pr;
+    pr.recordId = 1;
+    pr.category = 0;
+    pr.data     = QByteArrayLiteral("seed event data");
+    mockDb->createRecord(QStringLiteral("CalendarDB-PDat"), pr);
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+
+    WildPalms::Runtime::PalmRuntime runtime(tmp.path());
+
+    // Wrap the mock in a PalmDeviceAccess and inject it. This triggers
+    // finishConnect(), which creates default mappings.
+    auto deviceAccess = std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(
+        std::move(mockDb), nullptr);
+    runtime.setDeviceAccessForTest(std::move(deviceAccess));
+
+    // Verify at least one mapping was created (the default for Calendar).
+    const auto mappings = runtime.palmMappings();
+    QVERIFY(!mappings.isEmpty());
+
+    // All auto-created mappings must use LastWriteWins conflict policy.
+    for (const auto &m : mappings) {
+        QCOMPARE(m.conflictPolicy,
+                 Kalburator::Sync::ConflictResolution::LastWriteWins);
+    }
 }
 
 QTEST_MAIN(TstPalmRuntimeDefaultMappingsOnlyWhenEmpty)
