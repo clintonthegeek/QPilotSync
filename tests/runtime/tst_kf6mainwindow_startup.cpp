@@ -30,7 +30,7 @@ class TstKf6MainWindowStartup : public QObject
 private slots:
     void emptyRegistryInvokesStopgap();
     void validLastActiveAutoLoads();
-    void staleLastActiveFallsBack();
+    void staleLastActiveAutoLoadsMostRecent();
 };
 
 void TstKf6MainWindowStartup::emptyRegistryInvokesStopgap()
@@ -73,34 +73,37 @@ void TstKf6MainWindowStartup::validLastActiveAutoLoads()
     QCOMPARE(picked, entry.path);
 }
 
-void TstKf6MainWindowStartup::staleLastActiveFallsBack()
+void TstKf6MainWindowStartup::staleLastActiveAutoLoadsMostRecent()
 {
-    QTemporaryDir tmp;
-    QVERIFY(tmp.isValid());
-    auto cfg = KSharedConfig::openConfig(tmp.path() + QStringLiteral("/wprc"));
-
-    // Pre-write a registry entry whose path does NOT exist.
+    QTemporaryDir tmp; QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(
+        tmp.path() + QStringLiteral("/wprc"));
+    auto reg = std::make_unique<WildPalms::Runtime::ProfileRegistry>(cfg);
+    reg->setDefaultRoot(tmp.path());
+    const auto a = reg->registerNew(QStringLiteral("Alpha"));
+    const auto b = reg->registerNew(QStringLiteral("Bravo"));
+    // Make Bravo more recent.
+    reg->setLastActive(a.id);
+    QTest::qSleep(5);
+    reg->setLastActive(b.id);
+    // Stamp lastActiveId with a bogus value (stale).
     {
-        KConfigGroup g(cfg, QStringLiteral("profile-profile1"));
-        g.writeEntry("name", "Ghost");
-        g.writeEntry("path", "/nonexistent-path/profile1");
-        g.writeEntry("lastOpened", QDateTime::currentDateTimeUtc());
-        KConfigGroup gen(cfg, QStringLiteral("General"));
-        gen.writeEntry("lastActiveProfileId", "profile1");
+        KConfigGroup g(cfg, QStringLiteral("General"));
+        g.writeEntry("lastActiveProfileId", QStringLiteral("does-not-exist"));
         cfg->sync();
     }
-
-    auto reg = std::make_unique<WildPalms::Runtime::ProfileRegistry>(cfg);
-    QCOMPARE(reg->lastActiveId(), QStringLiteral("profile1"));
+    // Reload so the registry picks up the on-disk stale id.
+    reg = std::make_unique<WildPalms::Runtime::ProfileRegistry>(cfg);
+    reg->setDefaultRoot(tmp.path());
 
     TestableMainWindow w;
+    w.stopgapReturn = QString();  // should NOT be reached
     w.setProfileRegistryForTest(std::move(reg));
-    w.stopgapReturn = QString();
 
     const QString picked = w.runStartupForTest();
 
-    QCOMPARE(w.stopgapInvocations, 1);   // last-active stale, picker fired
-    QVERIFY(picked.isEmpty());
+    QCOMPARE(w.stopgapInvocations, 0);
+    QCOMPARE(picked, b.path);
 }
 
 WILDPALMS_QTEST_MAIN(TstKf6MainWindowStartup)

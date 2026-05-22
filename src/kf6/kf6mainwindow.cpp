@@ -1608,6 +1608,16 @@ QString KF6MainWindow::resolveStartupProfile()
             return e.path;
         }
     }
+    // F.1b: stale or missing last-active falls through to
+    // auto-load-most-recent.
+    const auto entries = m_profileRegistry->entries();
+    for (const auto &e : entries) {
+        if (QDir(e.path).exists()) {
+            loadProfile(e.path);
+            return e.path;
+        }
+    }
+    // Empty registry (or every entry stale) — F.1a name-prompt stopgap.
     const QString picked = showProfilePickerStopgap();
     if (!picked.isEmpty()) {
         loadProfile(picked);
@@ -1618,42 +1628,25 @@ QString KF6MainWindow::resolveStartupProfile()
 
 QString KF6MainWindow::showProfilePickerStopgap()
 {
-    const auto entries = m_profileRegistry->entries();
+    QMessageBox::information(this,
+        i18n("No Profile"),
+        i18n("No WildPalms profile has been created yet.\n"
+             "Let's create one to get started."));
 
-    if (entries.isEmpty()) {
-        QMessageBox::information(this,
-            i18n("No Profile"),
-            i18n("No WildPalms profile has been created yet.\n"
-                 "Let's create one to get started."));
-
-        bool ok = false;
-        const QString name = QInputDialog::getText(this,
-            i18n("New Profile"),
-            i18n("Profile name:"),
-            QLineEdit::Normal, QString(), &ok);
-        if (!ok || name.trimmed().isEmpty()) return QString();
-
-        const auto e = m_profileRegistry->registerNew(name.trimmed());
-        if (!e.isValid()) {
-            QMessageBox::critical(this, i18n("New Profile"),
-                i18n("Could not create profile."));
-            return QString();
-        }
-        return e.path;
-    }
-
-    QStringList names;
-    for (const auto &e : entries) names << e.name;
     bool ok = false;
-    const QString chosenName = QInputDialog::getItem(this,
-        i18n("Select Profile"),
-        i18n("Pick a profile:"),
-        names, 0, false, &ok);
-    if (!ok || chosenName.isEmpty()) return QString();
+    const QString name = QInputDialog::getText(this,
+        i18n("New Profile"),
+        i18n("Profile name:"),
+        QLineEdit::Normal, QString(), &ok);
+    if (!ok || name.trimmed().isEmpty()) return QString();
 
-    for (const auto &e : entries)
-        if (e.name == chosenName) return e.path;
-    return QString();
+    const auto e = m_profileRegistry->registerNew(name.trimmed());
+    if (!e.isValid()) {
+        QMessageBox::critical(this, i18n("New Profile"),
+            i18n("Could not create profile."));
+        return QString();
+    }
+    return e.path;
 }
 
 void KF6MainWindow::setProfileRegistryForTest(
