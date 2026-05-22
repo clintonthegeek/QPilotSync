@@ -340,6 +340,7 @@ void PalmRuntime::finishConnect()
             m.sourceCalendar = palmCol.id;
             m.targetCalendar = safeColId;
             m.mode           = Kalburator::Sync::SyncMode::TwoWay;
+            m.conflictPolicy = Kalburator::Sync::ConflictResolution::LastWriteWins;
             m.enabled        = true;
             m_mappings.append(m);
 
