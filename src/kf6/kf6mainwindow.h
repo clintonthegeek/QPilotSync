@@ -6,6 +6,7 @@
 #include <memory>
 #include "runtime/palmrunresult.h"
 #include "runtime/profileregistry.h"
+#include "profilemenucontroller.h"
 
 // Forward declarations
 class QTimer;
@@ -86,6 +87,9 @@ private Q_SLOTS:
     void onNewProfile();
     void onCloseProfile();
     void onProfileSettings();
+    void onImportProfile();
+    void onSwitchProfile(const QString &id);
+    void onForgetProfile(const QString &id);
 
     // Sync operations
     void onHotSync();
@@ -178,6 +182,9 @@ private:
 
     // F.1a: App-level profile registry
     std::unique_ptr<WildPalms::Runtime::ProfileRegistry> m_profileRegistry;
+
+    // F.1b: Switch ▸ / Forget ▸ menu controller
+    std::unique_ptr<ProfileMenuController> m_profileMenuController;
 
     QString m_syncPath;
 

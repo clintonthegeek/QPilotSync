@@ -95,6 +95,19 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // F.1a: construct registry immediately after action manager is ready
     m_profileRegistry = std::make_unique<WildPalms::Runtime::ProfileRegistry>(this);
 
+    // F.1b: construct menu controller before setupGUI so KXmlGui finds
+    // file_switch_profile / file_forget_profile in the action collection
+    m_profileMenuController = std::make_unique<ProfileMenuController>(
+        m_profileRegistry.get(),
+        actionCollection(),
+        this);
+    connect(m_profileMenuController.get(),
+            &ProfileMenuController::switchRequested,
+            this, &KF6MainWindow::onSwitchProfile);
+    connect(m_profileMenuController.get(),
+            &ProfileMenuController::forgetRequested,
+            this, &KF6MainWindow::onForgetProfile);
+
     // Auto-detection
     m_deviceMonitor = new PalmDeviceMonitor(this);
     m_autoSync = new AutoSyncOrchestrator(this);
@@ -257,6 +270,8 @@ void KF6MainWindow::setupConnections()
     // Connect action manager signals
     connect(m_actionManager, &ActionManager::newProfileRequested,
             this, &KF6MainWindow::onNewProfile);
+    connect(m_actionManager, &ActionManager::importProfileRequested,
+            this, &KF6MainWindow::onImportProfile);
     connect(m_actionManager, &ActionManager::closeProfileRequested,
             this, &KF6MainWindow::onCloseProfile);
     connect(m_actionManager, &ActionManager::profileSettingsRequested,
@@ -1476,6 +1491,38 @@ void KF6MainWindow::onNewProfile()
 void KF6MainWindow::onCloseProfile()
 {
     closeProfile();
+}
+
+void KF6MainWindow::onImportProfile()
+{
+    const QString path = QFileDialog::getExistingDirectory(this,
+        i18n("Import Profile"),
+        QDir::homePath(),
+        QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+    if (path.isEmpty()) return;
+
+    const auto entry = m_profileRegistry->registerExisting(path);
+    if (!entry.isValid()) {
+        QMessageBox::warning(this, i18n("Import Profile"),
+            i18n("Could not import \"%1\".\n\n"
+                 "The folder must contain a valid profile.conf with "
+                 "an id matching the folder name, and the id must "
+                 "not already be registered.", path));
+        return;
+    }
+    loadProfile(entry.path);
+}
+
+void KF6MainWindow::onSwitchProfile(const QString &id)
+{
+    Q_UNUSED(id);
+    // Implementation in T8.
+}
+
+void KF6MainWindow::onForgetProfile(const QString &id)
+{
+    Q_UNUSED(id);
+    // Implementation in T9.
 }
 
 // ========== F.1a: Profile registry helpers ==========
