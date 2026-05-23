@@ -16,6 +16,8 @@ add_library(WildPalmsAppMapping STATIC
     palmdbnode.cpp
     providernode.h
     providernode.cpp
+    mappingedge.h
+    mappingedge.cpp
 )
 
 target_include_directories(WildPalmsAppMapping
