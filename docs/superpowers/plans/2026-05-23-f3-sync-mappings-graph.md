@@ -1472,6 +1472,8 @@ private slots:
     void domainMismatchRejected();
     void deleteMappingRemovesEdge();
     void readOnlyBlocksMutations();
+    void dragConnectCreatesMapping();
+    void dragOnIncompatibleTargetCancels();
 };
 
 namespace {
@@ -1651,6 +1653,48 @@ void TstSyncMappingsGraphView::readOnlyBlocksMutations()
     QCOMPARE(view.edgeCount(), 0);
 }
 
+void TstSyncMappingsGraphView::dragConnectCreatesMapping()
+{
+    SyncMappingGraphView view;
+    view.setSnapshotForTest(exampleSnapshot());
+    view.setProvidersForTest({
+        {QStringLiteral("p1"), QStringLiteral("Fastmail"), calCollections()},
+    });
+    view.rebuild();
+
+    QSignalSpy spy(&view, &SyncMappingGraphView::mappingsChanged);
+
+    view.beginDragForTest(QStringLiteral("DatebookDB"), 1);
+    QVERIFY(view.isDraggingForTest());
+
+    const bool ok = view.endDragOnProviderForTest(
+        QStringLiteral("p1"), QStringLiteral("caldav:p1:work"));
+    QVERIFY(ok);
+    QVERIFY(!view.isDraggingForTest());
+    QCOMPARE(view.edgeCount(), 1);
+    QCOMPARE(spy.count(), 1);
+}
+
+void TstSyncMappingsGraphView::dragOnIncompatibleTargetCancels()
+{
+    SyncMappingGraphView view;
+    view.setSnapshotForTest(exampleSnapshot());
+    view.setProvidersForTest({
+        {QStringLiteral("p2"), QStringLiteral("iCloud"), contactCollections()},
+    });
+    view.rebuild();
+
+    view.beginDragForTest(QStringLiteral("DatebookDB"), 1);
+    QVERIFY(view.isDraggingForTest());
+
+    // DatebookDB (calendar) dropped on a contacts collection → no edge.
+    const bool ok = view.endDragOnProviderForTest(
+        QStringLiteral("p2"), QStringLiteral("carddav:p2:contacts"));
+    QVERIFY(!ok);
+    QVERIFY(!view.isDraggingForTest());
+    QCOMPARE(view.edgeCount(), 0);
+}
+
 WILDPALMS_QTEST_MAIN(TstSyncMappingsGraphView)
 #include "tst_syncmappingsgraphview.moc"
 ```
@@ -1762,6 +1806,49 @@ private:
                                    const QString &providerId,
                                    const QString &collectionId) const;
 
+    /// Drag-to-connect helpers. `scenePos` is in scene coordinates.
+    /// Production mouse handlers translate viewport→scene before
+    /// calling these; tests call them directly via the *ForTest seams.
+    void beginDrag(PalmDbNode *src, int slot, const QPointF &scenePos);
+    void updateDrag(const QPointF &scenePos);
+    /// Returns true if the drag landed on a compatible target and a
+    /// new mapping was created.
+    bool endDrag(const QPointF &scenePos);
+    void cancelDrag();
+
+    /// Hit-test helpers — find which node + which port lives at scenePos
+    /// (right-side anchor of a PalmDbNode, or left-side anchor of a
+    /// ProviderNode). Returns nullptr / -1 / empty on miss.
+    PalmDbNode  *palmAnchorAtScenePos(const QPointF &scenePos, int *outSlot) const;
+    ProviderNode *providerAnchorAtScenePos(const QPointF &scenePos,
+                                            QString *outCollectionId) const;
+
+protected:
+    // Re-declared protected in addition to the override below so tests
+    // can construct a viewport-coord event if they ever need to. The
+    // canonical test path uses beginDrag/updateDrag/endDrag directly.
+
+public:
+    // Test seams for the drag interaction. Production callers go through
+    // the mouse event handlers.
+    void beginDragForTest(const QString &dbName, int slot) {
+        if (auto *node = nodeForDb(dbName)) {
+            const QPointF p = node->slotAnchorScenePos(slot);
+            beginDrag(node, slot, p);
+        }
+    }
+    bool endDragOnProviderForTest(const QString &providerId,
+                                  const QString &collectionId) {
+        if (auto *node = nodeForProvider(providerId)) {
+            const QPointF p = node->collectionAnchorScenePos(collectionId);
+            return endDrag(p);
+        }
+        cancelDrag();
+        return false;
+    }
+    bool isDraggingForTest() const { return m_dragSourceNode != nullptr; }
+
+private:
     QGraphicsScene *m_scene {nullptr};
 
     QHash<QString, QStringList>     m_snapshot;
@@ -1772,6 +1859,11 @@ private:
     QList<MappingEdge*>   m_edges;
 
     bool m_readOnly {false};
+
+    // Drag-to-connect state. Non-null source means a drag is in flight.
+    PalmDbNode         *m_dragSourceNode {nullptr};
+    int                 m_dragSourceSlot {-1};
+    QGraphicsPathItem  *m_dragPathItem   {nullptr};   // rubber-band feedback
 };
 
 } // namespace WildPalms::AppMapping
@@ -1790,11 +1882,17 @@ Create `src/app/mapping/syncmappingsgraphview.cpp`:
 #include "providernode.h"
 #include "mappingedge.h"
 
+#include <QApplication>
+#include <QGraphicsPathItem>
 #include <QGraphicsScene>
-#include <QMouseEvent>
-#include <QKeyEvent>
-#include <QUuid>
 #include <QJsonObject>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPalette>
+#include <QPen>
+#include <QUuid>
 
 #include <synctypes.h>   // syncMappingToJson, syncMappingFromJson
 
@@ -2097,24 +2195,131 @@ void SyncMappingGraphView::onSceneSelectionChanged()
     Q_EMIT edgeSelected(sel);
 }
 
-// Mouse + key event handlers — drag-to-connect is left as a follow-up
-// once the unit-tested addMappingForTest path is solid. For F.3 T7 the
-// production UI uses addMappingForTest directly (via context menus added
-// in T8/T9). Mouse drag-and-drop can land in a polish task without
-// changing the underlying graph state machinery.
+// Mouse + key event handlers implement drag-to-connect: press on a
+// Palm port anchor begins a drag, move tracks a rubber-band bezier,
+// release on a compatible provider anchor creates a SyncMapping
+// (validated by isCompatible + isDuplicate). The same code path is
+// exercised by tests via beginDragForTest/endDragOnProviderForTest.
+
+PalmDbNode *SyncMappingGraphView::palmAnchorAtScenePos(
+    const QPointF &scenePos, int *outSlot) const
+{
+    if (outSlot) *outSlot = -1;
+    for (auto *node : m_palmNodes) {
+        const int slot = node->slotAtScenePos(scenePos);
+        if (slot >= 0) {
+            if (outSlot) *outSlot = slot;
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+ProviderNode *SyncMappingGraphView::providerAnchorAtScenePos(
+    const QPointF &scenePos, QString *outCollectionId) const
+{
+    if (outCollectionId) outCollectionId->clear();
+    for (auto *node : m_providerNodes) {
+        const QString c = node->collectionAtScenePos(scenePos);
+        if (!c.isEmpty()) {
+            if (outCollectionId) *outCollectionId = c;
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+void SyncMappingGraphView::beginDrag(PalmDbNode *src, int slot,
+                                     const QPointF &scenePos)
+{
+    cancelDrag();
+    if (!src || slot < 0 || m_readOnly) return;
+
+    m_dragSourceNode = src;
+    m_dragSourceSlot = slot;
+
+    m_dragPathItem = new QGraphicsPathItem();
+    QPen pen(QApplication::palette().color(QPalette::Highlight));
+    pen.setWidthF(2.0);
+    pen.setStyle(Qt::DashLine);
+    m_dragPathItem->setPen(pen);
+    m_dragPathItem->setZValue(10.0);   // above edges + nodes
+    m_scene->addItem(m_dragPathItem);
+    updateDrag(scenePos);
+}
+
+void SyncMappingGraphView::updateDrag(const QPointF &scenePos)
+{
+    if (!m_dragSourceNode || !m_dragPathItem) return;
+    const QPointF a = m_dragSourceNode->slotAnchorScenePos(m_dragSourceSlot);
+    if (a.isNull()) return;
+    const qreal dx = std::abs(scenePos.x() - a.x());
+    const qreal c  = std::max<qreal>(40.0, dx * 0.5);
+    QPainterPath path;
+    path.moveTo(a);
+    path.cubicTo(a.x() + c, a.y(),
+                 scenePos.x() - c, scenePos.y(),
+                 scenePos.x(),     scenePos.y());
+    m_dragPathItem->setPath(path);
+}
+
+bool SyncMappingGraphView::endDrag(const QPointF &scenePos)
+{
+    if (!m_dragSourceNode) { cancelDrag(); return false; }
+
+    const QString dbName = m_dragSourceNode->dbName();
+    const int     slot   = m_dragSourceSlot;
+
+    QString collectionId;
+    ProviderNode *tgt = providerAnchorAtScenePos(scenePos, &collectionId);
+    cancelDrag();
+    if (!tgt) return false;
+
+    return addMappingForTest(dbName, slot, tgt->providerId(), collectionId);
+}
+
+void SyncMappingGraphView::cancelDrag()
+{
+    if (m_dragPathItem) {
+        m_scene->removeItem(m_dragPathItem);
+        delete m_dragPathItem;
+        m_dragPathItem = nullptr;
+    }
+    m_dragSourceNode = nullptr;
+    m_dragSourceSlot = -1;
+}
 
 void SyncMappingGraphView::mousePressEvent(QMouseEvent *event)
 {
+    if (event->button() == Qt::LeftButton && !m_readOnly) {
+        const QPointF scenePos = mapToScene(event->pos());
+        int slot = -1;
+        if (auto *node = palmAnchorAtScenePos(scenePos, &slot)) {
+            beginDrag(node, slot, scenePos);
+            event->accept();
+            return;
+        }
+    }
     QGraphicsView::mousePressEvent(event);
 }
 
 void SyncMappingGraphView::mouseMoveEvent(QMouseEvent *event)
 {
+    if (m_dragSourceNode) {
+        updateDrag(mapToScene(event->pos()));
+        event->accept();
+        return;
+    }
     QGraphicsView::mouseMoveEvent(event);
 }
 
 void SyncMappingGraphView::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (m_dragSourceNode) {
+        endDrag(mapToScene(event->pos()));
+        event->accept();
+        return;
+    }
     QGraphicsView::mouseReleaseEvent(event);
 }
 
@@ -2193,7 +2398,7 @@ ctest --test-dir build-dev -R tst_syncmappingsgraphview --output-on-failure 2>&1
 ctest --test-dir build-dev 2>&1 | tail -3
 ```
 
-Expected: 7/7 in new test; 97 tests total passing.
+Expected: 9/9 in new test (7 state-machinery + 2 drag); 97 tests total passing.
 
 - [ ] **Step 6: Commit**
 
@@ -2202,7 +2407,7 @@ git add src/app/mapping/syncmappingsgraphview.h src/app/mapping/syncmappingsgrap
         src/app/mapping/CMakeLists.txt \
         tests/runtime/tst_syncmappingsgraphview.cpp tests/runtime/CMakeLists.txt
 git commit -m "$(cat <<'EOF'
-feat: SyncMappingGraphView + 7 unit tests (F.3 T7)
+feat: SyncMappingGraphView + drag-to-connect + 9 unit tests (F.3 T7)
 
 QGraphicsView subclass laying out PalmDbNodes (left column) and
 ProviderNodes (right column) with MappingEdges between them.
@@ -2210,11 +2415,13 @@ Domain compatibility is enforced per port-pair using
 CollectionInfo::type. Duplicate-mapping guard rejects edges that
 already exist. Read-only mode blocks mutations.
 
-The canonical mutation paths are addMappingForTest /
-removeMappingForTest; production callers will reach them via
-context menus added in T8/T9. Mouse drag-to-connect rubber-band
-feedback is deferred to a polish follow-up — the state machinery
-and tests are already in place.
+Drag-to-connect: mouse press on a Palm slot anchor begins a drag;
+a dashed bezier rubber-band tracks the cursor; release on a
+compatible provider collection anchor creates a new SyncMapping
+(rejected on incompatible drop or non-anchor release). The drag
+helpers (beginDrag/updateDrag/endDrag/cancelDrag) are exposed via
+*ForTest seams so the unit suite exercises the full drag flow
+without simulating viewport events.
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 EOF
@@ -3255,7 +3462,7 @@ Expected: clean build; full test suite green; commit pushed.
 - §2.1 SyncMappingsPage tab → T9, T10
 - §2.1 SyncMappingGraphView with bipartite layout → T7
 - §2.1 PalmDbNode / ProviderNode → T4, T5
-- §2.1 Drag-to-connect creates SyncMapping → T7 (state machinery; rubber-band feedback deferred to a polish task as noted)
+- §2.1 Drag-to-connect creates SyncMapping → T7 (state machinery + mouse handlers + rubber-band feedback all in T7; `beginDragForTest` / `endDragOnProviderForTest` exercise the full drag flow without simulating viewport events)
 - §2.1 MappingInspectorPanel → T8
 - §2.1 Category slot name persistence → T1
 - §2.1 Plugin write-back via PalmRuntime → T2, T3
@@ -3270,7 +3477,7 @@ Expected: clean build; full test suite green; commit pushed.
 - §6.1 Two new test files → T1, T7 (plus T2 extends existing CategoryMappingStore test)
 - §8 Success criteria covered across T1–T13
 
-**Placeholder scan:** No "TBD", "TODO", or "implement later" sentinels in the plan. The rubber-band drag feedback is explicitly deferred with rationale in T7 Step 6 commit message — this is a documented scope reduction, not a hidden TODO.
+**Placeholder scan:** No "TBD", "TODO", or "implement later" sentinels in the plan. No scope reductions vs. the spec — drag-to-connect is fully implemented in T7 with both mouse handlers and test seams.
 
 **Type consistency:**
 - `categorySlotNames()` / `setCategorySlotNames()` names match between Profile, plugins, and PalmRuntime call sites
