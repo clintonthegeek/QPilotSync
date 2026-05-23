@@ -1,6 +1,8 @@
 #include "settingsdialog.h"
 #include "kf6/kf6settings.h"
 #include "profile.h"
+#include "app/accounts/accountspage.h"
+#include "app/mapping/syncmappingspage.h"
 
 #include <KConfigGroup>
 #include <KSharedConfig>
@@ -499,4 +501,55 @@ void SettingsDialog::onClearDeviceRegistry()
 void SettingsDialog::onApply()
 {
     saveSettings();
+    onApplyAccountsAndMappings();    // F.3
+}
+
+// ========== F.3: Accounts + Sync Mappings ==========
+
+void SettingsDialog::setAccountController(WildPalms::Runtime::AccountController *ac)
+{
+    m_accountController = ac;
+    buildAccountsAndMappingsPagesIfReady();
+}
+
+void SettingsDialog::setPalmRuntime(WildPalms::Runtime::PalmRuntime *palmRuntime)
+{
+    m_palmRuntime = palmRuntime;
+    buildAccountsAndMappingsPagesIfReady();
+}
+
+void SettingsDialog::buildAccountsAndMappingsPagesIfReady()
+{
+    // Accounts page only needs AccountController.
+    if (m_accountController && !m_accountsPage) {
+        m_accountsPage = new WildPalms::App::Accounts::AccountsPage(
+            m_accountController, m_palmRuntime, this);
+        auto *item = new KPageWidgetItem(m_accountsPage, i18n("Accounts"));
+        item->setIcon(QIcon::fromTheme(QStringLiteral("network-server")));
+        addPage(item);
+    }
+
+    // Sync Mappings page needs Profile + AccountController + PalmRuntime.
+    if (m_profile && m_accountController && m_palmRuntime
+        && !m_syncMappingsPage) {
+        m_syncMappingsPage = new WildPalms::AppMapping::SyncMappingsPage(
+            m_profile, m_accountController, m_palmRuntime, this);
+        m_syncMappingsPageItem = new KPageWidgetItem(
+            m_syncMappingsPage, i18n("Sync Mappings"));
+        m_syncMappingsPageItem->setIcon(
+            QIcon::fromTheme(QStringLiteral("view-list-tree")));
+        addPage(m_syncMappingsPageItem);
+    }
+}
+
+void SettingsDialog::navigateToSyncMappings()
+{
+    if (m_syncMappingsPageItem)
+        setCurrentPage(m_syncMappingsPageItem);
+}
+
+void SettingsDialog::onApplyAccountsAndMappings()
+{
+    if (m_syncMappingsPage && m_profile)
+        m_syncMappingsPage->applyTo(m_profile);
 }

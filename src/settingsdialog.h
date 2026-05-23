@@ -12,6 +12,18 @@ class QLabel;
 class QSpinBox;
 class Profile;
 
+namespace WildPalms::Runtime {
+    class AccountController;
+    class PalmRuntime;
+}
+namespace WildPalms::AppMapping {
+    class SyncMappingsPage;
+}
+namespace WildPalms::App::Accounts {
+    class AccountsPage;
+}
+class KPageWidgetItem;
+
 /**
  * @brief Global settings dialog using KPageDialog (icon-sidebar layout)
  *
@@ -32,6 +44,21 @@ class SettingsDialog : public KPageDialog
 public:
     explicit SettingsDialog(QWidget *parent = nullptr, Profile *profile = nullptr);
 
+    /// F.3: borrow AccountController for the Accounts + Sync Mappings
+    /// pages. Must be called BEFORE exec() and BEFORE setPalmRuntime()
+    /// (the Sync Mappings page is added only when both are non-null).
+    /// Non-owning — must outlive the dialog.
+    void setAccountController(WildPalms::Runtime::AccountController *ac);
+
+    /// F.3: borrow PalmRuntime for the Sync Mappings page (read-only
+    /// banner + reloadMappings on apply). Non-owning. nullptr leaves
+    /// the Sync Mappings page unbuilt.
+    void setPalmRuntime(WildPalms::Runtime::PalmRuntime *palmRuntime);
+
+    /// F.3: navigate to the Sync Mappings page (no-op if not present).
+    /// Used by KF6MainWindow::onConfigureMappings to deep-link.
+    void navigateToSyncMappings();
+
 Q_SIGNALS:
     void settingsChanged();
 
@@ -43,10 +70,13 @@ private Q_SLOTS:
     void onClearRecentProfiles();
     void onClearDeviceRegistry();
     void onApply();
+    // F.3: forward Apply to per-page handlers.
+    void onApplyAccountsAndMappings();
 
 private:
     void loadSettings();
     void saveSettings();
+    void buildAccountsAndMappingsPagesIfReady();
     QWidget* createProfilesPage();
     QWidget* createDevicesPage();
     QWidget* createAdvancedPage();
@@ -79,6 +109,13 @@ private:
     QComboBox *m_syncPromptCombo = nullptr;
     QComboBox *m_syncConnectionCombo = nullptr;
     QSpinBox *m_syncTimeoutSpin = nullptr;
+
+    // F.3: Accounts + Sync Mappings pages (added when controllers supplied)
+    WildPalms::Runtime::AccountController *m_accountController = nullptr;
+    WildPalms::Runtime::PalmRuntime       *m_palmRuntime = nullptr;
+    WildPalms::App::Accounts::AccountsPage *m_accountsPage = nullptr;
+    WildPalms::AppMapping::SyncMappingsPage *m_syncMappingsPage = nullptr;
+    KPageWidgetItem                       *m_syncMappingsPageItem = nullptr;
 };
 
 #endif // SETTINGSDIALOG_H
