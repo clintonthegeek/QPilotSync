@@ -58,6 +58,21 @@ struct DeviceFingerprint
     bool isValid() const { return userId != 0 || !userName.isEmpty() || !usbSerialNumber.isEmpty(); }
     bool isEmpty() const { return userId == 0 && userName.isEmpty() && usbSerialNumber.isEmpty(); }
 
+    enum class MatchResult { Match, MismatchKnown, Indeterminate };
+
+    MatchResult compare(const DeviceFingerprint &other) const {
+        if (!usbSerialNumber.isEmpty() && !other.usbSerialNumber.isEmpty())
+            return usbSerialNumber == other.usbSerialNumber
+                ? MatchResult::Match : MatchResult::MismatchKnown;
+        if (userId != 0 && other.userId != 0)
+            return userId == other.userId
+                ? MatchResult::Match : MatchResult::MismatchKnown;
+        if (!userName.isEmpty() && !other.userName.isEmpty())
+            return userName == other.userName
+                ? MatchResult::Match : MatchResult::MismatchKnown;
+        return MatchResult::Indeterminate;
+    }
+
     // Match another fingerprint (USB serial takes priority, then userId, then userName)
     bool matches(const DeviceFingerprint &other) const {
         // USB serial number is the most reliable identifier

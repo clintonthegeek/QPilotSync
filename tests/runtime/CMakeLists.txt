@@ -849,3 +849,20 @@ add_test(NAME tst_profileregistry_serial_binding COMMAND tst_profileregistry_ser
 set_tests_properties(tst_profileregistry_serial_binding PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# F.1d T2 — DeviceFingerprint::compare()
+add_executable(tst_devicefingerprint_compare tst_devicefingerprint_compare.cpp)
+target_link_libraries(tst_devicefingerprint_compare
+    PRIVATE
+        Qt::Core Qt::Test
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        KF6::I18n
+        pisock bluetooth usb
+)
+add_test(NAME tst_devicefingerprint_compare COMMAND tst_devicefingerprint_compare)
+set_tests_properties(tst_devicefingerprint_compare PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
