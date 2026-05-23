@@ -16,6 +16,7 @@ private slots:
     void defaults_skipped_if_user_mappings_present();
     void defaultsOnlyForUncoveredSlots();
     void defaultMappings_useLastWriteWinsPolicy();
+    void wildcardSourceCalendarSuppressesDefaults();  // F.1c.1 T1
 };
 
 void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaults_skipped_if_user_mappings_present()
@@ -94,6 +95,59 @@ void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaultMappings_useLastWriteWin
         QCOMPARE(m.conflictPolicy,
                  Kalburator::Sync::ConflictResolution::LastWriteWins);
     }
+}
+
+void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::wildcardSourceCalendarSuppressesDefaults()
+{
+    // F.1c.1 T1: a user mapping with sourceCalendar=="" is a wildcard meaning
+    // "this target covers every slot for this pluginId". finishConnect must
+    // treat such a mapping as already-covering all Palm collections for that
+    // plugin and skip per-slot default RawFiles creation.
+
+    auto mockDb = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
+    mockDb->createDatabase(QStringLiteral("CalendarDB-PDat"));
+    WildPalms::PalmSync::PalmRecord pr;
+    pr.recordId = 1;
+    pr.category = 0;
+    pr.data     = QByteArrayLiteral("seed");
+    mockDb->createRecord(QStringLiteral("CalendarDB-PDat"), pr);
+
+    QTemporaryDir tmp; QVERIFY(tmp.isValid());
+    WildPalms::Runtime::PalmRuntime runtime(tmp.path());
+
+    // Seed a wildcard mapping BEFORE injecting the device. finishConnect runs
+    // on setDeviceAccessForTest; with the wildcard in place, no default rawfiles
+    // row should be appended for wildpalms.calendar.
+    QJsonObject m;
+    m[QStringLiteral("id")]              = QStringLiteral("user-wildcard");
+    m[QStringLiteral("sourceBackend")]   = QStringLiteral("calendar");
+    m[QStringLiteral("sourceCalendar")]  = QString();   // wildcard
+    m[QStringLiteral("targetBackend")]   = QStringLiteral("test-target");
+    m[QStringLiteral("targetCalendar")]  = QStringLiteral("Personal");
+    m[QStringLiteral("mode")]            = QStringLiteral("TwoWay");
+    m[QStringLiteral("conflictPolicy")]  = QStringLiteral("LastWriteWins");
+    m[QStringLiteral("lossPolicy")]      = QStringLiteral("Warn");
+    m[QStringLiteral("enabled")]         = true;
+    QJsonArray arr; arr.append(m);
+    runtime.reloadMappings(arr);
+    QCOMPARE(runtime.palmMappings().size(), 1);
+
+    auto deviceAccess = std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(
+        std::move(mockDb), nullptr);
+    runtime.setDeviceAccessForTest(std::move(deviceAccess));
+
+    // Without the wildcard fix, the post-finishConnect mapping count is 2:
+    // the wildcard row PLUS an auto-appended rawfiles-wildpalms.calendar-...
+    // row for the Palm calendar slot. With the fix, the wildcard covers
+    // every wildpalms.calendar slot and no default is appended.
+    const auto post = runtime.palmMappings();
+    int defaultCalendarRows = 0;
+    for (const auto &x : post) {
+        if (x.sourceBackend == QStringLiteral("calendar") &&
+            x.id != QStringLiteral("user-wildcard"))
+            ++defaultCalendarRows;
+    }
+    QCOMPARE(defaultCalendarRows, 0);
 }
 
 QTEST_MAIN(TstPalmRuntimeDefaultMappingsOnlyWhenEmpty)

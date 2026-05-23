@@ -312,7 +312,14 @@ void PalmRuntime::finishConnect()
             const bool alreadyCovered = std::any_of(
                 m_mappings.cbegin(), m_mappings.cend(),
                 [&](const Kalburator::Sync::SyncMapping &m) {
-                    return m.sourceBackend == id && m.sourceCalendar == palmCol.id;
+                    // F.1c.1 T1: empty sourceCalendar is a wildcard meaning
+                    // "this target covers every Palm slot for sourceBackend".
+                    // The NewProfileWizard writes such rows for per-domain
+                    // remote-target picks; finishConnect honors them by
+                    // skipping per-slot RawFiles auto-mapping.
+                    return m.sourceBackend == id
+                        && (m.sourceCalendar.isEmpty()
+                            || m.sourceCalendar == palmCol.id);
                 });
             if (alreadyCovered)
                 continue;
