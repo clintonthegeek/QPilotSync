@@ -307,6 +307,9 @@ add_subdirectory(app/conflict)
 # header (not WP-local Sync:: namespace).
 add_subdirectory(app/mapping)
 
+# F.1c.1 — NewProfileWizard.
+add_subdirectory(app/wizard)
+
 # Plugin runtime — managers, simple action context, install source
 # collector, and (since E.15b) the Full-Sync host-interface
 # implementations consumed by libkalburator.
