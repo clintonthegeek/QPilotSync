@@ -503,8 +503,18 @@ target_link_libraries(tst_mapping_row_dialog
         Qt::Core
         Qt::Test
         Qt::Widgets
-        Kalburator::Sync
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         WildPalmsAppMapping
+        # F.3 T9: WildPalmsAppMapping now links PalmDeviceAccessLib
+        # PRIVATE (for SyncMappingsPage). Static-archive consumers
+        # transitively pull those symbols, so the test exe must
+        # resolve them — same pattern as tst_syncmappingsgraphview.
+        WildPalmsCore
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        PalmDeviceAccessLib
+        KF6::I18n KF6::ConfigCore
+        pisock bluetooth usb
 )
 add_test(NAME tst_mapping_row_dialog COMMAND tst_mapping_row_dialog)
 set_tests_properties(tst_mapping_row_dialog PROPERTIES
@@ -518,8 +528,16 @@ target_link_libraries(tst_mapping_editor_dialog
         Qt::Core
         Qt::Test
         Qt::Widgets
-        Kalburator::Sync
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         WildPalmsAppMapping
+        # F.3 T9: same transitive PalmDeviceAccessLib chain as
+        # tst_mapping_row_dialog above.
+        WildPalmsCore
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        PalmDeviceAccessLib
+        KF6::I18n KF6::ConfigCore
+        pisock bluetooth usb
 )
 add_test(NAME tst_mapping_editor_dialog COMMAND tst_mapping_editor_dialog)
 set_tests_properties(tst_mapping_editor_dialog PROPERTIES
