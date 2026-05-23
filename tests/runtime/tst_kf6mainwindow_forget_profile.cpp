@@ -39,6 +39,7 @@ private slots:
     void forgetWithDeleteRemovesFiles();
     void forgetCancelDoesNothing();
     void forgetActiveProfileIsRejected();
+    void forgetClearsSerialBinding();
 };
 
 void TstKf6MainWindowForgetProfile::forgetWithoutDeleteKeepsFiles()
@@ -136,6 +137,34 @@ void TstKf6MainWindowForgetProfile::forgetActiveProfileIsRejected()
 
     QCOMPARE(win.confirmInvocations, 0);
     QVERIFY(win.profileRegistryForTest()->entry(entry.id).isValid());
+}
+
+void TstKf6MainWindowForgetProfile::forgetClearsSerialBinding()
+{
+    QTemporaryDir tmp; QVERIFY(tmp.isValid());
+    auto cfg = KSharedConfig::openConfig(
+        tmp.path() + QStringLiteral("/wprc"));
+    auto reg = std::make_unique<ProfileRegistry>(cfg);
+    reg->setDefaultRoot(tmp.path());
+    const auto entry = reg->registerNew(QStringLiteral("Alpha"));
+    QVERIFY(entry.isValid());
+
+    // F.1d: bind a serial before forgetting.
+    const QString boundSerial = QStringLiteral("F1D-SN-TEST");
+    QVERIFY(reg->bindSerial(entry.id, boundSerial));
+    QVERIFY(reg->findBySerial(boundSerial).isValid());
+
+    TestableForgetWindow win;
+    win.setProfileRegistryForTest(std::move(reg));
+    win.nextConfirmReturn = true;
+    win.nextDeleteFiles   = false;
+
+    QMetaObject::invokeMethod(&win, "onForgetProfile",
+        Qt::DirectConnection,
+        Q_ARG(QString, entry.id));
+
+    // Forget cascades the serial binding — serial must be unbound.
+    QVERIFY(!win.profileRegistryForTest()->findBySerial(boundSerial).isValid());
 }
 
 WILDPALMS_QTEST_MAIN(TstKf6MainWindowForgetProfile)
