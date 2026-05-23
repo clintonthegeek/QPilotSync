@@ -5,12 +5,11 @@
 
 add_library(WildPalmsAppWizard STATIC
     wizardstate.h
+    newprofilewizard.h
+    newprofilewizard.cpp
 )
 
-set_target_properties(WildPalmsAppWizard PROPERTIES
-    LINKER_LANGUAGE CXX
-    POSITION_INDEPENDENT_CODE ON
-)
+set_target_properties(WildPalmsAppWizard PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(WildPalmsAppWizard
     PUBLIC
