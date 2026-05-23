@@ -1,5 +1,6 @@
 #include "addaccountspage.h"
 #include "wizardstate.h"
+#include "newprofilewizard.h"
 
 #include "app/accounts/accountformwidget.h"
 
@@ -80,6 +81,16 @@ bool AddAccountsPage::validatePage()
         }
     }
     return true;
+}
+
+int AddAccountsPage::nextId() const
+{
+    if (!m_state) return NewProfileWizard::ReviewPageId;
+    for (const auto &m : m_state->mappings) {
+        if (m.kind == TargetKind::RemoteNew)
+            return NewProfileWizard::DiscoveryPageId;
+    }
+    return NewProfileWizard::ReviewPageId;
 }
 
 }  // namespace WildPalms::Wizard

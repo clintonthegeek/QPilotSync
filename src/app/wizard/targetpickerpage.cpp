@@ -1,11 +1,24 @@
 #include "targetpickerpage.h"
 #include "targetpickerrow.h"
 #include "wizardstate.h"
+#include "newprofilewizard.h"
 
 #include <QUuid>
 #include <QVBoxLayout>
 
 namespace WildPalms::Wizard {
+
+int TargetPickerPage::nextId() const
+{
+    if (!m_state) return NewProfileWizard::ReviewPageId;
+    if (!m_state->pendingAccounts.isEmpty())
+        return NewProfileWizard::AddAccountsPageId;
+    for (const auto &m : m_state->mappings) {
+        if (m.kind == TargetKind::RemoteNew)
+            return NewProfileWizard::DiscoveryPageId;
+    }
+    return NewProfileWizard::ReviewPageId;
+}
 
 TargetPickerPage::TargetPickerPage(WizardState *state, QWidget *parent)
     : QWizardPage(parent)

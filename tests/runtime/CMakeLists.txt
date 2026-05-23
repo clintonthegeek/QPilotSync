@@ -309,6 +309,29 @@ set_tests_properties(tst_accounts_page PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1c.1 T10 — NewProfileWizard e2e test
+add_executable(tst_newprofilewizard tst_newprofilewizard.cpp)
+target_link_libraries(tst_newprofilewizard
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_newprofilewizard COMMAND tst_newprofilewizard)
+set_tests_properties(tst_newprofilewizard PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1c.1 T9 — ReviewPage unit test
 add_executable(tst_reviewpage tst_reviewpage.cpp)
 target_link_libraries(tst_reviewpage

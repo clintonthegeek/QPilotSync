@@ -16,6 +16,7 @@ public:
 
     void initializePage() override;
     bool isComplete() const override { return true; }
+    int  nextId() const override;
 
     // Called by rows (and exposed for tests).
     void addNewAccount(const QString &pluginId, const QString &kind);

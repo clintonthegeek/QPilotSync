@@ -25,6 +25,7 @@ public:
     void initializePage() override;
     bool isComplete() const override;
     bool validatePage() override;
+    int  nextId() const override;
 
 private:
     Kalburator::Sync::BackendRegistry *m_registry;
