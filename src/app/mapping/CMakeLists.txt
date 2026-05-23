@@ -14,6 +14,8 @@ add_library(WildPalmsAppMapping STATIC
     mappingeditordialog.cpp
     palmdbnode.h
     palmdbnode.cpp
+    providernode.h
+    providernode.cpp
 )
 
 target_include_directories(WildPalmsAppMapping
