@@ -19,6 +19,8 @@ add_library(WildPalmsAppWizard STATIC
     discoveryrow.cpp
     discoverypage.h
     discoverypage.cpp
+    reviewpage.h
+    reviewpage.cpp
 )
 
 set_target_properties(WildPalmsAppWizard PROPERTIES POSITION_INDEPENDENT_CODE ON)
