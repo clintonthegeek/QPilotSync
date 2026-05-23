@@ -309,6 +309,21 @@ set_tests_properties(tst_accounts_page PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1c.0 — AccountFormWidget unit test
+add_executable(tst_accountformwidget tst_accountformwidget.cpp)
+target_link_libraries(tst_accountformwidget
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppAccounts
+)
+add_test(NAME tst_accountformwidget COMMAND tst_accountformwidget)
+set_tests_properties(tst_accountformwidget PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M5b Task 4: MappingRowDialog — modal editor for one SyncMapping
 add_executable(tst_mapping_row_dialog tst_mapping_row_dialog.cpp)
 target_link_libraries(tst_mapping_row_dialog
