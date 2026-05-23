@@ -98,10 +98,12 @@ instead.
 | `src/settingsdialog.h/.cpp` | Gains `setAccountController(AC*)` + `setPalmRuntime(PalmRuntime*)` setters; adds an **Accounts** page (`AccountsPage` widget, already exists at `src/app/accounts/accountspage.h`) when `accountController` is non-null — inserted between Sync and Advanced; constructs `SyncMappingsPage` when both are non-null — inserted after Accounts. **Note:** `AccountsPage` is currently wired only in the wizard; adding it here is the prerequisite for the "Accounts tab stays as-is" assumption in §2.2. |
 | `src/kf6/kf6mainwindow.cpp` | `onSettings()` passes `m_accountController.get()` + `m_palmRuntime.get()` to `SettingsDialog`; `onConfigureMappings()` opens `SettingsDialog` navigated to Sync Mappings page |
 | `src/profile.h/.cpp` | Gains `categorySlotNames(const QString &dbName) const → QStringList` (16-entry, index = slot, empty = unnamed) and `setCategorySlotNames(const QString &dbName, const QStringList &names)` |
-| `src/plugins/calendar/calendarbackendplugin.cpp` | Calls `m_profile->setCategorySlotNames("DatebookDB", names)` after `populateFromAppInfo()` succeeds |
-| `src/plugins/contacts/contactsbackendplugin.cpp` | Same for `"AddressDB"` |
-| `src/plugins/memo/memoblobbackend.cpp` | Same for `"MemoDB"` |
-| `src/plugins/todos/todobackendplugin.cpp` | Same for `"ToDoDB"` |
+| `src/plugins/calendar/calendarbackendplugin.h/.cpp` | Gains `QStringList categorySlotNames() const` accessor that returns a 16-entry snapshot of `m_categoryStore` for `"DatebookDB"`; gains `QString primaryDbName() const` returning `"DatebookDB"` |
+| `src/plugins/contacts/contactsbackendplugin.h/.cpp` | Same pattern for `"AddressDB"` |
+| `src/plugins/memo/memoplugin.h/.cpp` (the `Kalburator::Plugin` subclass, not `MemoBlobBackend`) | Same pattern for `"MemoDB"` |
+| `src/plugins/todos/todobackendplugin.h/.cpp` | Same pattern for `"ToDoDB"` |
+| `src/runtime/palmruntime.h/.cpp` | Gains `void setProfile(Profile *profile)` setter. In `finishConnect()`, after each `createPalmBackend()` returns a non-null backend, calls `m_profile->setCategorySlotNames(plugin->primaryDbName(), plugin->categorySlotNames())` if `m_profile` is non-null |
+| `src/kf6/kf6mainwindow.cpp` | After `m_palmRuntime` is constructed in `loadProfile()`, calls `m_palmRuntime->setProfile(m_currentProfile.get())` |
 
 ---
 
@@ -146,21 +148,23 @@ Fixed bipartite layout — nodes are not user-repositionable:
 
 **Domain tagging**
 
-Each node is tagged with a domain:
+Each Palm DB node is tagged with a domain matching `CollectionInfo::type`:
 
 | Node | Domain |
 |---|---|
 | DatebookDB | `calendar` |
 | AddressDB | `contacts` |
-| MemoDB | `memo` |
-| ToDoDB | `todo` |
+| MemoDB | `memos` |
+| ToDoDB | `todos` |
 
-Provider nodes are tagged by inspecting their backend ID prefix (e.g.,
-`caldav-calendar` → `calendar`; `carddav` → `contacts`; `rawfiles-cal` →
-`calendar`). The mapping between backend ID prefixes and domains is a
-compile-time lookup table in `SyncMappingGraphView`. When a backend ID is
-unrecognised the provider node is tagged `unknown` and can connect to any Palm
-DB (fallback for future backend types).
+Provider nodes don't carry a single node-level domain — each collection port
+row inherits its domain directly from
+`Kalburator::Sync::CollectionInfo::type` (which is one of `calendar`,
+`contacts`, `memos`, `todos`). Domain compatibility is enforced **per port pair**:
+a Palm DB port can connect to a provider collection port only when their
+domains match. When `CollectionInfo::type` is empty or unrecognised the port
+is treated as domain `unknown` and accepts connections from any Palm DB
+(fallback for future backend types).
 
 ### 4.3 Edges
 
@@ -206,8 +210,8 @@ When an edge is selected:
 
 | Control | Type | Values |
 |---|---|---|
-| Sync Mode | `QComboBox` | Two-Way, Palm → Provider, Provider → Palm |
-| Conflict Policy | `QComboBox` | from `Kalburator::Sync::ConflictResolution` enum |
+| Sync Mode | `QComboBox` | from `Kalburator::Sync::SyncMode`: Disabled, OneWayUpload (Palm → Provider), OneWayDownload (Provider → Palm), TwoWay (Two-Way) — displayed labels in parentheses |
+| Conflict Policy | `QComboBox` | from `Kalburator::Sync::ConflictResolution`: SourceWins, TargetWins, Duplicate, Skip, AskUser, LastWriteWins. `CustomMerge` is intentionally omitted (existing `MappingRowDialog` precedent — requires merge-rule configuration not exposed in this UI) |
 | Enabled | `QCheckBox` | — |
 
 Changes update the in-memory graph immediately and are reflected in the edge
@@ -252,21 +256,33 @@ slot1=Work
   — `names` must have exactly 16 entries. Writes to `profile.conf` and calls
   `save()`.
 
-### 5.2 Write-back from plugins
+### 5.2 Write-back via PalmRuntime
 
-Each DB-specific plugin calls `setCategorySlotNames` after
-`populateFromAppInfo()` succeeds at session start. The call site is already
-inside the sync session, so `m_profile` is valid. This persists the snapshot
-to disk immediately, making it available to the graph between sessions.
+Plugins (the `Kalburator::Plugin` subclasses) do not carry a `Profile*`
+reference. The write-back lives in `PalmRuntime::finishConnect()` instead:
+after each `createPalmBackend()` returns successfully, PalmRuntime queries
+the plugin's new `categorySlotNames()` accessor and calls
+`m_profile->setCategorySlotNames(plugin->primaryDbName(), names)` if
+`m_profile` is non-null.
 
-The four plugins and their `dbName` values:
+PalmRuntime gains:
 
-| Plugin | dbName |
-|---|---|
-| `CalendarBackendPlugin` | `"DatebookDB"` |
-| `ContactsBackendPlugin` | `"AddressDB"` |
-| `MemoBackendPlugin` | `"MemoDB"` |
-| `TodoBackendPlugin` | `"ToDoDB"` |
+- `void setProfile(Profile *profile)` — called by `KF6MainWindow::loadProfile()`
+  immediately after PalmRuntime is constructed
+- Private member `Profile *m_profile = nullptr` — borrowed, must outlive
+  PalmRuntime
+
+Each of the four Palm DB plugins gains two accessors:
+
+| Plugin | `primaryDbName()` | `categorySlotNames()` returns |
+|---|---|---|
+| `CalendarBackendPlugin` | `"DatebookDB"` | 16-entry list from `m_categoryStore` |
+| `ContactsBackendPlugin` | `"AddressDB"` | same pattern |
+| `MemoPlugin` (the `Kalburator::Plugin` subclass) | `"MemoDB"` | same pattern |
+| `TodoBackendPlugin` | `"ToDoDB"` | same pattern |
+
+The 16-entry list is built by querying `CategoryMappingStore::slotName(dbName, slot)`
+for slots 0..15; slot 0 is forced to `"Unfiled"` if empty.
 
 ### 5.3 Graph read
 
