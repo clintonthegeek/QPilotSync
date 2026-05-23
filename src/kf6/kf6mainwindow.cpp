@@ -928,6 +928,8 @@ void KF6MainWindow::onConnectionComplete(bool success, const QString &error)
         DeviceFingerprint connectedDevice;
         connectedDevice.userId = userId;
         connectedDevice.userName = userName;
+        if (m_autoSync && !m_autoSync->currentUsbSerial().isEmpty())
+            connectedDevice.usbSerialNumber = m_autoSync->currentUsbSerial();
         if (deviceLink->handshakeSysInfoValid()) {
             connectedDevice.romVersion = deviceLink->handshakeRomVersion();
             connectedDevice.productId = deviceLink->handshakeProductId();
