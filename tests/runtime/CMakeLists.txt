@@ -827,3 +827,25 @@ add_test(NAME tst_runtime_stress COMMAND tst_runtime_stress)
 set_tests_properties(tst_runtime_stress PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# F.1d T1 — ProfileRegistry serial binding
+add_executable(tst_profileregistry_serial_binding tst_profileregistry_serial_binding.cpp)
+target_link_libraries(tst_profileregistry_serial_binding
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsRuntime
+        PalmDeviceAccessLib
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_profileregistry_serial_binding COMMAND tst_profileregistry_serial_binding)
+set_tests_properties(tst_profileregistry_serial_binding PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

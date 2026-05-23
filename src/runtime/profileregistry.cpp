@@ -271,6 +271,7 @@ void ProfileRegistry::load()
         e.name       = cg.readEntry("name", QString());
         e.path       = cg.readEntry("path", QString());
         e.lastOpened = cg.readEntry("lastOpened", QDateTime());
+        e.usbSerial  = cg.readEntry("usbSerial", QString());
         m_cache.append(e);
     }
 
@@ -299,6 +300,10 @@ void ProfileRegistry::save() const
         cg.writeEntry("name", e.name);
         cg.writeEntry("path", e.path);
         cg.writeEntry("lastOpened", e.lastOpened);
+        if (!e.usbSerial.isEmpty())
+            cg.writeEntry("usbSerial", e.usbSerial);
+        else
+            cg.deleteEntry("usbSerial");
     }
 
     // [General]/lastActiveProfileId.
@@ -306,6 +311,43 @@ void ProfileRegistry::save() const
     gen.writeEntry("lastActiveProfileId", m_lastActiveId);
 
     m_config->sync();
+}
+
+ProfileEntry ProfileRegistry::findBySerial(const QString &usbSerial) const
+{
+    if (usbSerial.isEmpty()) return {};
+    for (const auto &e : m_cache)
+        if (e.usbSerial == usbSerial) return e;
+    return {};
+}
+
+bool ProfileRegistry::bindSerial(const QString &id, const QString &usbSerial)
+{
+    if (id.isEmpty()) return false;
+    int targetIdx = -1;
+    for (int i = 0; i < m_cache.size(); ++i)
+        if (m_cache[i].id == id) { targetIdx = i; break; }
+    if (targetIdx < 0) return false;
+
+    // If another entry already owns this serial, clear it there first.
+    if (!usbSerial.isEmpty()) {
+        for (int i = 0; i < m_cache.size(); ++i) {
+            if (i == targetIdx) continue;
+            if (m_cache[i].usbSerial == usbSerial) {
+                m_cache[i].usbSerial.clear();
+                emit entryUpdated(m_cache[i].id);
+            }
+        }
+    }
+    if (m_cache[targetIdx].usbSerial == usbSerial) {
+        // No-op (already bound).
+        save();
+        return true;
+    }
+    m_cache[targetIdx].usbSerial = usbSerial;
+    save();
+    emit entryUpdated(id);
+    return true;
 }
 
 } // namespace WildPalms::Runtime

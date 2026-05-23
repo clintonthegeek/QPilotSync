@@ -23,6 +23,7 @@ struct ProfileEntry {
     QString   name;
     QString   path;
     QDateTime lastOpened;
+    QString   usbSerial;
 
     bool isValid() const { return !id.isEmpty(); }
 };
@@ -63,6 +64,9 @@ public:
     /// cache is rolled back on disk failure). Emits entryUpdated(id)
     /// on success.
     bool rename(const QString &id, const QString &newName);
+
+    ProfileEntry findBySerial(const QString &usbSerial) const;
+    bool         bindSerial(const QString &id, const QString &usbSerial);
 
     QString defaultRoot() const;
     void    setDefaultRoot(const QString &root);
