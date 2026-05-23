@@ -884,3 +884,25 @@ add_test(NAME tst_kf6mainwindow_mismatch_dialog COMMAND tst_kf6mainwindow_mismat
 set_tests_properties(tst_kf6mainwindow_mismatch_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# F.3 T1 — Profile category-slot snapshot persistence
+add_executable(tst_profile_category_snapshot tst_profile_category_snapshot.cpp)
+target_link_libraries(tst_profile_category_snapshot
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsRuntime
+        PalmDeviceAccessLib
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_profile_category_snapshot COMMAND tst_profile_category_snapshot)
+set_tests_properties(tst_profile_category_snapshot PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

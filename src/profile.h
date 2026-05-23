@@ -282,6 +282,24 @@ public:
     QJsonArray syncMappingsJson() const;
     void setSyncMappingsJson(const QJsonArray &json);
 
+    // ========== Category slot snapshot persistence (F.3 T1) =========
+
+    /// F.3: Category slot snapshot persistence.
+    ///
+    /// Returns an empty QStringList (size 0) if no snapshot has been stored
+    /// for `dbName`. Otherwise returns exactly 16 entries indexed by slot
+    /// (0..15). Slot 0 is always returned as "Unfiled" (forced even if the
+    /// stored value is empty). Empty string at any other index means the
+    /// slot is unnamed/absent.
+    QStringList categorySlotNames(const QString &dbName) const;
+
+    /// Set the category slot snapshot for `dbName`. `names` must have
+    /// exactly 16 entries (slot 0..15). Writes to [categories/<dbName>]
+    /// in profile.conf and calls QSettings::sync() before returning — does
+    /// NOT invoke Profile::save() (categories live outside the in-memory
+    /// state Profile::save would write).
+    void setCategorySlotNames(const QString &dbName, const QStringList &names);
+
     // ========== Accounts (K.8b T9: replaces .wildpalms.providers sidecar) =========
 
     QList<Kalburator::Sync::BackendConfiguration> accounts() const;

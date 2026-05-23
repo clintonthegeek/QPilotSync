@@ -1,5 +1,6 @@
 #include "profile.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -406,6 +407,62 @@ bool Profile::loadMappingsConf()
 QJsonArray Profile::syncMappingsJson() const { return m_syncMappingsJson; }
 
 void Profile::setSyncMappingsJson(const QJsonArray &json) { m_syncMappingsJson = json; }
+
+// ========== Category slot snapshot persistence (F.3 T1) =========
+
+QStringList Profile::categorySlotNames(const QString &dbName) const
+{
+    if (dbName.isEmpty() || m_syncFolderPath.isEmpty()) return {};
+
+    QSettings s(m_syncFolderPath + QStringLiteral("/profile.conf"),
+                QSettings::IniFormat);
+    const QString group = QStringLiteral("categories/") + dbName;
+    s.beginGroup(group);
+    const QStringList keys = s.childKeys();
+    if (keys.isEmpty()) {
+        s.endGroup();
+        return {};
+    }
+
+    QStringList out;
+    out.reserve(16);
+    for (int slot = 0; slot < 16; ++slot) {
+        QString value = s.value(QStringLiteral("slot%1").arg(slot)).toString();
+        if (slot == 0 && value.isEmpty())
+            value = QStringLiteral("Unfiled");
+        out << value;
+    }
+    s.endGroup();
+    return out;
+}
+
+void Profile::setCategorySlotNames(const QString &dbName,
+                                   const QStringList &names)
+{
+    if (m_syncFolderPath.isEmpty()) return;
+    if (dbName.isEmpty()) {
+        qWarning() << "[Profile] setCategorySlotNames: empty dbName";
+        return;
+    }
+    if (names.size() != 16) {
+        qWarning() << "[Profile] setCategorySlotNames: expected 16 entries, got"
+                   << names.size();
+        return;
+    }
+
+    QSettings s(m_syncFolderPath + QStringLiteral("/profile.conf"),
+                QSettings::IniFormat);
+    const QString group = QStringLiteral("categories/") + dbName;
+    s.remove(group);                     // clear stale slot keys
+    s.beginGroup(group);
+    for (int slot = 0; slot < 16; ++slot) {
+        const QString &v = names.at(slot);
+        if (!v.isEmpty())
+            s.setValue(QStringLiteral("slot%1").arg(slot), v);
+    }
+    s.endGroup();
+    s.sync();
+}
 
 // ========== Accounts (K.8b T9) ==========
 
