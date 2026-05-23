@@ -39,11 +39,8 @@
 #include "plugins/todos/todobackendplugin.h"
 
 #include <rawfilesbackend.h>
-#include <caldavbackendcontribution.h>
-#include <carddavbackendcontribution.h>
-#ifdef HAVE_AKONADI
-#include <akonadibackendcontribution.h>
-#endif
+
+#include "standardcontributions.h"
 
 namespace {
 
@@ -119,15 +116,11 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
 
     // Register provider contributions into this runtime's local registry.
     // ProviderManager no longer auto-registers these (K.8a T6); the
-    // application layer is now responsible for seeding contributions.
-    m_registry->registerContribution(
-        std::make_shared<Kalburator::Sync::CalDavBackendContribution>());
-    m_registry->registerContribution(
-        std::make_shared<Kalburator::Sync::CardDavBackendContribution>());
-#ifdef HAVE_AKONADI
-    m_registry->registerContribution(
-        std::make_shared<Kalburator::Sync::AkonadiBackendContribution>());
-#endif
+    // application layer is responsible for seeding contributions.
+    // F.1c.1 T2: the same registration is needed for KF6MainWindow's
+    // app-level registry (used by NewProfileWizard for pre-profile
+    // discovery), so the calls live in a shared free function.
+    WildPalms::Runtime::registerStandardContributions(m_registry.get());
 
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(

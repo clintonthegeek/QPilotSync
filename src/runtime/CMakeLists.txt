@@ -101,6 +101,10 @@ add_library(PalmDeviceAccessLib STATIC
     accountcontroller.cpp
     palmtickle.h
     palmtickle.cpp
+    # F.1c.1 T2 — shared contribution-registration helper used by
+    # PalmRuntime ctor and (T11) KF6MainWindow ctor.
+    standardcontributions.h
+    standardcontributions.cpp
 )
 target_include_directories(PalmDeviceAccessLib
     PUBLIC
