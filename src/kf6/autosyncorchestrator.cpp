@@ -1,5 +1,6 @@
 #include "autosyncorchestrator.h"
 #include "kf6settings.h"
+#include "runtime/profileregistry.h"
 
 #include "../palm/palmdevicemonitor.h"
 #include "../profile.h"
@@ -38,6 +39,11 @@ void AutoSyncOrchestrator::setLogWidget(LogWidget *logWidget)
     m_logWidget = logWidget;
 }
 
+void AutoSyncOrchestrator::setProfileRegistry(WildPalms::Runtime::ProfileRegistry *registry)
+{
+    m_profileRegistry = registry;
+}
+
 // ========== Private Slots ==========
 
 void AutoSyncOrchestrator::onPalmDetected(const QStringList &ports, const QString &usbSerial)
@@ -65,18 +71,17 @@ void AutoSyncOrchestrator::onPalmDetected(const QStringList &ports, const QStrin
     // Resolve profile by USB serial only (fingerprint-keyed registry
     // removed in Task 0.B; the serial registry is the sole lookup).
     Profile *profile = nullptr;
-    KF6Settings &settings = KF6Settings::instance();
 
-    if (!usbSerial.isEmpty()) {
-        QString profilePath = settings.findProfileBySerial(usbSerial);
-        if (!profilePath.isEmpty() && QDir(profilePath).exists()) {
-            auto *p = new Profile(profilePath);
+    if (!usbSerial.isEmpty() && m_profileRegistry) {
+        const auto entry = m_profileRegistry->findBySerial(usbSerial);
+        if (entry.isValid() && QDir(entry.path).exists()) {
+            auto *p = new Profile(entry.path);
             if (p->exists()) {
                 p->load();
                 profile = p;
                 if (m_logWidget) {
                     m_logWidget->logInfo(
-                        QStringLiteral("Found profile by serial: %1").arg(profilePath));
+                        QStringLiteral("Found profile by serial: %1").arg(entry.path));
                 }
             } else {
                 delete p;
@@ -105,18 +110,15 @@ Profile* AutoSyncOrchestrator::findOrCreateProfile(const QString &usbSerial,
                                                      const QString &userName,
                                                      quint32 userId)
 {
-    KF6Settings &settings = KF6Settings::instance();
-
     // 1. Look up by USB serial number (most reliable)
-    if (!usbSerial.isEmpty()) {
-        QString profilePath = settings.findProfileBySerial(usbSerial);
-        if (!profilePath.isEmpty() && QDir(profilePath).exists()) {
+    if (!usbSerial.isEmpty() && m_profileRegistry) {
+        const auto entry = m_profileRegistry->findBySerial(usbSerial);
+        if (entry.isValid() && QDir(entry.path).exists()) {
             if (m_logWidget) {
                 m_logWidget->logInfo(
-                    QStringLiteral("Found profile by serial: %1").arg(profilePath));
+                    QStringLiteral("Found profile by serial: %1").arg(entry.path));
             }
-
-            auto *profile = new Profile(profilePath);
+            auto *profile = new Profile(entry.path);
             if (profile->exists()) {
                 profile->load();
                 return profile;

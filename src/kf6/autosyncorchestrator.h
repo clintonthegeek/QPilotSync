@@ -7,6 +7,8 @@ class PalmDeviceMonitor;
 class Profile;
 class LogWidget;
 
+namespace WildPalms::Runtime { class ProfileRegistry; }
+
 /**
  * @brief Lightweight USB device detection and profile resolution.
  *
@@ -26,6 +28,7 @@ public:
 
     void setDeviceMonitor(PalmDeviceMonitor *monitor);
     void setLogWidget(LogWidget *logWidget);
+    void setProfileRegistry(WildPalms::Runtime::ProfileRegistry *registry);
 
     bool isBusy() const { return m_busy; }
 
@@ -79,6 +82,7 @@ private Q_SLOTS:
 private:
     PalmDeviceMonitor *m_monitor = nullptr;
     LogWidget *m_logWidget = nullptr;
+    WildPalms::Runtime::ProfileRegistry *m_profileRegistry = nullptr;
     QString m_currentUsbSerial;
     bool m_busy = false;
 };

@@ -139,6 +139,7 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     m_autoSync = new AutoSyncOrchestrator(this);
     m_autoSync->setDeviceMonitor(m_deviceMonitor);
     m_autoSync->setLogWidget(m_logWidget);
+    m_autoSync->setProfileRegistry(m_profileRegistry.get());
 
     // Now setup connections after all objects are created
     setupConnections();
@@ -949,13 +950,10 @@ void KF6MainWindow::onConnectionComplete(bool success, const QString &error)
                 return;
             }
         } else {
-            // Phase L Task 0.B: look up by USB serial only (fingerprint
-            // registry removed). In direct-USB connections the serial may
-            // be absent; findProfileBySerial returns "" if serial is empty.
             QString knownProfile;
-            if (!connectedDevice.usbSerialNumber.isEmpty()) {
-                knownProfile = KF6Settings::instance().findProfileBySerial(
-                    connectedDevice.usbSerialNumber);
+            if (m_profileRegistry) {
+                const auto serialEntry = m_profileRegistry->findBySerial(connectedDevice.usbSerialNumber);
+                knownProfile = serialEntry.isValid() ? serialEntry.path : QString();
             }
             if (!knownProfile.isEmpty()) {
                 int ret = QMessageBox::question(this, i18n("Known Device"),
@@ -1118,11 +1116,10 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
         m_logWidget->logWarning(i18n("User chose to continue with mismatched device"));
         return true;
     } else if (msgBox.clickedButton() == switchBtn) {
-        // Phase L Task 0.B: look up by USB serial only.
         QString profilePath;
-        if (!connectedDevice.usbSerialNumber.isEmpty()) {
-            profilePath = KF6Settings::instance().findProfileBySerial(
-                connectedDevice.usbSerialNumber);
+        if (m_profileRegistry) {
+            const auto switchEntry = m_profileRegistry->findBySerial(connectedDevice.usbSerialNumber);
+            profilePath = switchEntry.isValid() ? switchEntry.path : QString();
         }
         if (!profilePath.isEmpty()) {
             m_logWidget->logInfo(i18n("Switching to profile: %1", profilePath));
