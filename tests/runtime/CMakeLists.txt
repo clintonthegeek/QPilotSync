@@ -906,3 +906,22 @@ add_test(NAME tst_profile_category_snapshot COMMAND tst_profile_category_snapsho
 set_tests_properties(tst_profile_category_snapshot PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# F.3 T7 — Sync mappings graph view
+add_executable(tst_syncmappingsgraphview tst_syncmappingsgraphview.cpp)
+target_link_libraries(tst_syncmappingsgraphview
+    PRIVATE
+        Qt::Core Qt::Test Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsAppMapping
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        PalmDeviceAccessLib
+        KF6::I18n KF6::ConfigCore
+        pisock bluetooth usb
+)
+add_test(NAME tst_syncmappingsgraphview COMMAND tst_syncmappingsgraphview)
+set_tests_properties(tst_syncmappingsgraphview PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
