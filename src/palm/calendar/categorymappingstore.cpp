@@ -53,4 +53,14 @@ void CategoryMappingStore::clear(const QString &dbName)
     m_slots.remove(dbName);
 }
 
+QStringList CategoryMappingStore::sixteenSlotNames(const QString &dbName) const
+{
+    QStringList out;
+    out.reserve(16);
+    out << UnfiledName;
+    for (int slot = 1; slot < 16; ++slot)
+        out << slotName(dbName, slot);
+    return out;
+}
+
 } // namespace WildPalms::PalmCalendar

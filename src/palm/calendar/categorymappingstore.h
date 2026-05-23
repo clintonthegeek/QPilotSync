@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 namespace WildPalms::PalmCalendar {
 
@@ -42,6 +43,13 @@ public:
 
     /// Remove all entries for dbName.
     void clear(const QString &dbName);
+
+    /// F.3: returns a 16-entry list of slot names for `dbName`. Index =
+    /// slot number (0..15). Slot 0 is forced to "Unfiled" regardless of
+    /// what (if anything) is stored. Slots 1..15 return the stored name or
+    /// empty string if unset. The list is ALWAYS 16 entries — even for an
+    /// unknown dbName, slot 0 will read "Unfiled" and 1..15 will be empty.
+    QStringList sixteenSlotNames(const QString &dbName) const;
 
 private:
     // dbName → (slot → name). slot keys only ever in 1..15.

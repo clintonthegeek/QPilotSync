@@ -15,6 +15,7 @@ private slots:
     void slotZeroRejectsArbitraryNames();
     void populatedSlotsIsSortedAndExcludesZero();
     void outOfRangeSlotRejected();
+    void sixteenSlotNamesProducesFixedShape();
 };
 
 void TestCategoryMappingStore::slotZeroAlwaysReturnsUnfiled()
@@ -91,6 +92,33 @@ void TestCategoryMappingStore::outOfRangeSlotRejected()
     QVERIFY(!store.setSlotName(QStringLiteral("DatebookDB"), 16,
                                QStringLiteral("X")));
     QVERIFY(store.populatedSlots(QStringLiteral("DatebookDB")).isEmpty());
+}
+
+void TestCategoryMappingStore::sixteenSlotNamesProducesFixedShape()
+{
+    CategoryMappingStore store;
+
+    store.setSlotName(QStringLiteral("DatebookDB"), 1, QStringLiteral("Work"));
+    store.setSlotName(QStringLiteral("DatebookDB"), 3, QStringLiteral("Personal"));
+
+    const QStringList names =
+        store.sixteenSlotNames(QStringLiteral("DatebookDB"));
+
+    QCOMPARE(names.size(), 16);
+    QCOMPARE(names.at(0), QStringLiteral("Unfiled"));
+    QCOMPARE(names.at(1), QStringLiteral("Work"));
+    QCOMPARE(names.at(2), QString());
+    QCOMPARE(names.at(3), QStringLiteral("Personal"));
+    for (int i = 4; i < 16; ++i)
+        QCOMPARE(names.at(i), QString());
+
+    // Different dbName returns empty (all empties + slot 0 = "Unfiled")
+    const QStringList empty =
+        store.sixteenSlotNames(QStringLiteral("MissingDB"));
+    QCOMPARE(empty.size(), 16);
+    QCOMPARE(empty.at(0), QStringLiteral("Unfiled"));
+    for (int i = 1; i < 16; ++i)
+        QCOMPARE(empty.at(i), QString());
 }
 
 QTEST_MAIN(TestCategoryMappingStore)
