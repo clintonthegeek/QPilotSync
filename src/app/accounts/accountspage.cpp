@@ -1,6 +1,5 @@
 #include "accountspage.h"
 #include "addaccountdialog.h"
-#include "mappingpromptdialog.h"
 
 #include "runtime/accountcontroller.h"
 #include "runtime/palmruntime.h"
@@ -95,9 +94,8 @@ void AccountsPage::onAddClicked() {
                "or the kind isn't supported)."));
         return;
     }
-
-    MappingPromptDialog prompt(m_accounts, uuid, this);
-    prompt.exec();
+    // The F.3 Sync Mappings graph view (next settings tab) takes over the
+    // collection-binding flow that the old MappingPromptDialog handled here.
 }
 
 void AccountsPage::onPalmRunStarted()  { m_listWidget->setEnabled(false); }

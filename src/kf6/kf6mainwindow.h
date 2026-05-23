@@ -189,7 +189,7 @@ private Q_SLOTS:
     // M5a — keepAlive from KalburatorInteractiveConflictHandler
     void onPalmConflictHandlerKeepAlive();
 
-    // M5b — open MappingEditorDialog and reload PalmRuntime
+    // F.3 — open SettingsDialog deep-linked to the Sync Mappings graph page
     void onConfigureMappings();
 
     // F.2 sub-project D — conflict badge

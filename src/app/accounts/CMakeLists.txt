@@ -1,5 +1,6 @@
-# WildPalmsAppAccounts — Phase Ic AccountsPage + AddAccountDialog +
-# MappingPromptDialog.
+# WildPalmsAppAccounts — Phase Ic AccountsPage + AddAccountDialog.
+# (F.3 T12: MappingPromptDialog retired — the SyncMappingsPage graph
+# view replaces the post-add collection-binding prompt.)
 #
 # Lives in a separate static lib (not compiled into WildPalmsCore directly)
 # for the same reason as WildPalmsAppMapping/WildPalmsAppConflict: avoids
@@ -14,8 +15,6 @@ add_library(WildPalmsAppAccounts STATIC
     addaccountdialog.h
     accountspage.cpp
     accountspage.h
-    mappingpromptdialog.cpp
-    mappingpromptdialog.h
 )
 
 target_include_directories(WildPalmsAppAccounts

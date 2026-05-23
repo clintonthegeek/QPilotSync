@@ -73,15 +73,16 @@ public:
     QStringList mappingDescriptionsFor(const QString &providerId, int max) const;
 
     /// Backing ProviderManager (used by AccountsPage to wire signals and by
-    /// MappingPromptDialog to look up providerById).
+    /// the Sync Mappings graph view to look up providers by id).
     Kalburator::Sync::ProviderManager *providerManager() const;
 
     /// BackendRegistry (used by AddAccountDialog to enumerate contributions).
     Kalburator::Sync::BackendRegistry *backendRegistry() const;
 
-    /// Append rows to Profile::syncMappingsJson and persist. Used by
-    /// MappingPromptDialog to bind a freshly-added provider's collections
-    /// to Palm slots. The caller decides slot semantics; AC just persists.
+    /// Append rows to Profile::syncMappingsJson and persist. Binds a
+    /// provider's collections to Palm slots. The caller decides slot
+    /// semantics; AC just persists. (The Sync Mappings graph view is the
+    /// current caller; previously MappingPromptDialog.)
     void appendMappings(const QJsonArray &rows);
 
     bool providerEnabled(const QString &id) const;

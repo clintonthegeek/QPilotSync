@@ -496,53 +496,9 @@ set_tests_properties(tst_accountformwidget PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
-# M5b Task 4: MappingRowDialog — modal editor for one SyncMapping
-add_executable(tst_mapping_row_dialog tst_mapping_row_dialog.cpp)
-target_link_libraries(tst_mapping_row_dialog
-    PRIVATE
-        Qt::Core
-        Qt::Test
-        Qt::Widgets
-        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
-        WildPalmsAppMapping
-        # F.3 T9: WildPalmsAppMapping now links PalmDeviceAccessLib
-        # PRIVATE (for SyncMappingsPage). Static-archive consumers
-        # transitively pull those symbols, so the test exe must
-        # resolve them — same pattern as tst_syncmappingsgraphview.
-        WildPalmsCore
-        WildPalmsRuntime
-        WildPalmsPalmDevice
-        PalmDeviceAccessLib
-        KF6::I18n KF6::ConfigCore
-        pisock bluetooth usb
-)
-add_test(NAME tst_mapping_row_dialog COMMAND tst_mapping_row_dialog)
-set_tests_properties(tst_mapping_row_dialog PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-)
-
-# M5b Task 5: MappingEditorDialog — list/add/edit/delete + JSON round-trip
-add_executable(tst_mapping_editor_dialog tst_mapping_editor_dialog.cpp)
-target_link_libraries(tst_mapping_editor_dialog
-    PRIVATE
-        Qt::Core
-        Qt::Test
-        Qt::Widgets
-        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
-        WildPalmsAppMapping
-        # F.3 T9: same transitive PalmDeviceAccessLib chain as
-        # tst_mapping_row_dialog above.
-        WildPalmsCore
-        WildPalmsRuntime
-        WildPalmsPalmDevice
-        PalmDeviceAccessLib
-        KF6::I18n KF6::ConfigCore
-        pisock bluetooth usb
-)
-add_test(NAME tst_mapping_editor_dialog COMMAND tst_mapping_editor_dialog)
-set_tests_properties(tst_mapping_editor_dialog PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-)
+# F.3 T12: tst_mapping_row_dialog + tst_mapping_editor_dialog removed —
+# MappingRowDialog / MappingEditorDialog retired in favour of the
+# SyncMappingsPage graph view.
 
 # M5c Task 2: smoke test — KF6MainWindow per-plugin KPageWidget wiring.
 # Loads real WildPalms plugins via BackendPluginManager (same path

@@ -150,10 +150,12 @@ target_link_libraries(WildPalmsCore
         # collision between libkalburator's conflict/conflictpolicy.h and
         # WildPalms' local sync/qsynccore/conflictpolicy.h.
         WildPalmsAppConflict
-        # M5b — Mapping editor dialogs. Separate static lib so its TUs
-        # see libkalburator's synctypes.h (not WP-local core/synctypes.h).
+        # F.3 — Sync Mappings graph view (PalmDbNode/ProviderNode/
+        # MappingEdge/SyncMappingGraphView/MappingInspectorPanel/
+        # SyncMappingsPage). Separate static lib so its TUs see
+        # libkalburator's synctypes.h (not WP-local core/synctypes.h).
         WildPalmsAppMapping
-        # Phase Ic — AccountsPage + AddAccountDialog + MappingPromptDialog.
+        # Phase Ic — AccountsPage + AddAccountDialog.
         # SettingsDialog instantiates AccountsPage when AccountController +
         # PalmRuntime are supplied; without this link the symbols are missing.
         WildPalmsAppAccounts
@@ -291,7 +293,7 @@ add_subdirectory(palm/memo)
 add_subdirectory(palm/todo)
 add_subdirectory(palm/transformations)
 
-# Phase Ic — AccountsPage + AddAccountDialog + MappingPromptDialog.
+# Phase Ic — AccountsPage + AddAccountDialog.
 # Same pattern as WildPalmsAppConflict / WildPalmsAppMapping: separate lib so
 # libkalburator headers resolve to Kalburator::Sync (not WP-local Sync::).
 add_subdirectory(app/accounts)
@@ -302,7 +304,7 @@ add_subdirectory(app/accounts)
 # sync/qsynccore/conflictpolicy.h.
 add_subdirectory(app/conflict)
 
-# M5b — Mapping editor dialogs (MappingRowDialog, MappingEditorDialog).
+# F.3 — Sync Mappings graph view (WildPalmsAppMapping).
 # Separate static lib for the same reason as WildPalmsAppConflict: avoids
 # having WildPalmsCore's PUBLIC src/core/ on the include path so that
 # `#include "synctypes.h"` resolves to libkalburator's Kalburator::Sync
