@@ -26,7 +26,6 @@
 // contactsbackendplugin.h and webcalbackendplugin.h are intentionally omitted:
 // those plugins have hasMainView()=false and never appear in the cast loop below.
 #include "../app/conflict/kalburatorinteractiveconflicthandler.h"
-#include "../app/mapping/mappingeditordialog.h"
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
 #include "../widgets/dialogs/profilepropertiesdialog.h"
@@ -2044,25 +2043,15 @@ void KF6MainWindow::onConfigureMappings()
             tr("No profile loaded."));
         return;
     }
-    if (m_palmRuntime && m_palmRuntime->isRunning()) {
-        QMessageBox::information(this, tr("Configure Mappings"),
-            tr("A sync is currently in progress. Wait for it to finish "
-               "before editing mappings."));
-        return;
-    }
 
-    MappingEditorDialog dlg(this);
-    dlg.setMappings(m_currentProfile->syncMappingsJson());
-
-    if (dlg.exec() != QDialog::Accepted)
-        return;
-
-    const QJsonArray updated = dlg.mappings();
-    m_currentProfile->setSyncMappingsJson(updated);
-    m_currentProfile->save();
-
-    if (m_palmRuntime)
-        m_palmRuntime->reloadMappings(updated);
+    SettingsDialog dialog(this, m_currentProfile.get());
+    dialog.setAccountController(m_accountController.get());
+    dialog.setPalmRuntime(m_palmRuntime.get());
+    dialog.navigateToSyncMappings();
+    connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
+        m_minimizeToTray = KF6Settings::instance().minimizeToTray();
+    });
+    dialog.exec();
 }
 
 // ========== F.2 sub-project D — conflict badge ==========
@@ -2170,6 +2159,10 @@ void KF6MainWindow::onAbout()
 void KF6MainWindow::onSettings()
 {
     SettingsDialog dialog(this, m_currentProfile.get());
+    // F.3: feed AC + PalmRuntime so the dialog can show the
+    // Accounts + Sync Mappings pages.
+    dialog.setAccountController(m_accountController.get());
+    dialog.setPalmRuntime(m_palmRuntime.get());
     connect(&dialog, &SettingsDialog::settingsChanged, this, [this]() {
         m_minimizeToTray = KF6Settings::instance().minimizeToTray();
     });
