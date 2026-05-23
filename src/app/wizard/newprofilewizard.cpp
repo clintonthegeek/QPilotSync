@@ -1,5 +1,6 @@
 #include "newprofilewizard.h"
 #include "namepage.h"
+#include "targetpickerpage.h"
 
 #include "runtime/profileregistry.h"
 
@@ -29,6 +30,7 @@ NewProfileWizard::NewProfileWizard(WildPalms::Runtime::ProfileRegistry *registry
     }
 
     setPage(NamePageId, new NamePage(m_profileRegistry, &m_state, this));
+    setPage(TargetPickerPageId, new TargetPickerPage(&m_state, this));
     setStartId(NamePageId);
 }
 

@@ -309,6 +309,29 @@ set_tests_properties(tst_accounts_page PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1c.1 T6 — TargetPickerPage unit test
+add_executable(tst_targetpickerpage tst_targetpickerpage.cpp)
+target_link_libraries(tst_targetpickerpage
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_targetpickerpage COMMAND tst_targetpickerpage)
+set_tests_properties(tst_targetpickerpage PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1c.1 T5 — NamePage unit test
 add_executable(tst_namepage tst_namepage.cpp)
 target_link_libraries(tst_namepage

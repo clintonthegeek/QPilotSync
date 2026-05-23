@@ -9,6 +9,10 @@ add_library(WildPalmsAppWizard STATIC
     newprofilewizard.cpp
     namepage.h
     namepage.cpp
+    targetpickerrow.h
+    targetpickerrow.cpp
+    targetpickerpage.h
+    targetpickerpage.cpp
 )
 
 set_target_properties(WildPalmsAppWizard PROPERTIES POSITION_INDEPENDENT_CODE ON)
