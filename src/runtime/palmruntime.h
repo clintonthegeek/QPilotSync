@@ -12,6 +12,8 @@
 
 namespace Kalburator { class PluginManager; class Plugin; }
 
+class Profile;
+
 #include "palmrunresult.h"
 
 class KPilotDeviceLink;
@@ -113,6 +115,12 @@ public:
     // each round-trippable via syncMappingToJson()/syncMappingFromJson().
     void reloadMappings(const QJsonArray &json);
 
+    /// F.3: Borrow a Profile pointer for category-slot snapshot
+    /// write-back. Called by KF6MainWindow::loadProfile() right after
+    /// PalmRuntime is constructed. Non-owning — the Profile must
+    /// outlive this PalmRuntime. nullptr disables write-back.
+    void setProfile(Profile *profile);
+
     // Non-owning. Caller must ensure the handler outlives this PalmRuntime
     // (or call setConflictHandler(nullptr) before destroying the handler).
     void setConflictHandler(Kalburator::Conflict::ConflictHandler *handler);
@@ -195,6 +203,7 @@ private:
     QFuture<PalmRunResult> runMirror(MirrorDir dir, const QString &modeLabel);
 
     Kalburator::Conflict::ConflictHandler                *m_conflictHandler = nullptr;
+    Profile                                              *m_profile = nullptr;   // borrowed; see setProfile
     QString                                                      m_profilePath;
     QString                                                      m_backupRoot;
     // K.8b T16: watcher tracking the in-flight engine future so cancelSync()

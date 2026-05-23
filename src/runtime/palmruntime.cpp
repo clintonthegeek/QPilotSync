@@ -38,6 +38,8 @@
 #include "plugins/memo/memobackendplugin.h"
 #include "plugins/todos/todobackendplugin.h"
 
+#include "profile.h"
+
 #include <rawfilesbackend.h>
 
 #include "standardcontributions.h"
@@ -285,6 +287,31 @@ void PalmRuntime::finishConnect()
             continue;
         }
 
+        // F.3: write the category-slot snapshot for this plugin's primary
+        // database into the borrowed Profile, if one is set. Each plugin's
+        // createPalmBackend has already populated its internal
+        // CategoryMappingStore from the live AppInfo block.
+        if (m_profile) {
+            QString primaryDbName;
+            QStringList slotNames;
+            if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
+                primaryDbName = p->primaryDbName();
+                slotNames = p->categorySlotNames();
+            } else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get())) {
+                primaryDbName = p->primaryDbName();
+                slotNames = p->categorySlotNames();
+            } else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get())) {
+                primaryDbName = p->primaryDbName();
+                slotNames = p->categorySlotNames();
+            } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
+                primaryDbName = p->primaryDbName();
+                slotNames = p->categorySlotNames();
+            }
+            if (!primaryDbName.isEmpty() && slotNames.size() == 16) {
+                m_profile->setCategorySlotNames(primaryDbName, slotNames);
+            }
+        }
+
         // Read available collections before any ownership transfer.
         const auto palmCollections = ownedBackend->availableCollections();
 
@@ -420,6 +447,11 @@ void PalmRuntime::registerBackendInstanceForTest(const QString &id,
 void PalmRuntime::setMappingsForTest(QList<Kalburator::Sync::SyncMapping> mappings) {
     m_mappings = std::move(mappings);
     m_engine->setSyncMappings(m_mappings);
+}
+
+void PalmRuntime::setProfile(Profile *profile)
+{
+    m_profile = profile;
 }
 
 void PalmRuntime::setConflictHandler(

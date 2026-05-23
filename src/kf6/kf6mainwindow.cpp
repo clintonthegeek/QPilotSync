@@ -547,6 +547,9 @@ void KF6MainWindow::loadProfile(const QString &path)
     // and computes <root>/.state internally for the baselines DB.
     m_palmRuntime = std::make_unique<WildPalms::Runtime::PalmRuntime>(
         m_currentProfile->syncFolderPath(), this);
+    // F.3: borrow Profile pointer so PalmRuntime::finishConnect() can
+    // write the per-DB category-slot snapshot into the profile.
+    m_palmRuntime->setProfile(m_currentProfile.get());
     m_palmRuntime->setMassDeleteGuard(m_massDeleteGuard.get());
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runStarted,
             this, &KF6MainWindow::onPalmRunStarted);
