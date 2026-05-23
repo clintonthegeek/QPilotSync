@@ -47,9 +47,11 @@ void TestKF6SettingsMigration::testMigrationCopiesSerialEntries()
     KF6Settings &s = KF6Settings::instance();
 
     // Assert: DeviceSerials has both entries with the parsed serial as key.
-    QCOMPARE(s.findProfileBySerial(QStringLiteral("SN-AAA-001")),
+    KSharedConfig::Ptr verifyCfg = KSharedConfig::openConfig(QStringLiteral("wildpalmsrc"));
+    KConfigGroup serials(verifyCfg, QStringLiteral("DeviceSerials"));
+    QCOMPARE(serials.readEntry(QStringLiteral("SN-AAA-001"), QString()),
              QStringLiteral("/tmp/profileA"));
-    QCOMPARE(s.findProfileBySerial(QStringLiteral("SN-BBB-002")),
+    QCOMPARE(serials.readEntry(QStringLiteral("SN-BBB-002"), QString()),
              QStringLiteral("/tmp/profileB"));
 
     // Assert: legacy DeviceRegistry group is now empty.
@@ -65,8 +67,9 @@ void TestKF6SettingsMigration::testMigrationIsIdempotent()
     // instance from the prior test — that's exactly the in-process
     // "second access after migration ran" scenario we want to verify:
     // no crash, no undo, the migrated state is still present.
-    KF6Settings &s = KF6Settings::instance();
-    QCOMPARE(s.findProfileBySerial(QStringLiteral("SN-AAA-001")),
+    KSharedConfig::Ptr verifyCfg = KSharedConfig::openConfig(QStringLiteral("wildpalmsrc"));
+    KConfigGroup serials(verifyCfg, QStringLiteral("DeviceSerials"));
+    QCOMPARE(serials.readEntry(QStringLiteral("SN-AAA-001"), QString()),
              QStringLiteral("/tmp/profileA"));
 }
 

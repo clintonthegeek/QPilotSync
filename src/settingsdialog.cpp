@@ -3,6 +3,7 @@
 #include "profile.h"
 
 #include <KConfigGroup>
+#include <KSharedConfig>
 #include <KLocalizedString>
 #include <KPageWidgetItem>
 
@@ -379,7 +380,7 @@ void SettingsDialog::loadSettings()
     // Registered devices (by USB serial \u2014 Phase L Task 0.B consolidated
     // the previous fingerprint-keyed DeviceRegistry into DeviceSerials).
     m_deviceRegistryList->clear();
-    KConfigGroup serials = s.deviceSerialsGroup();
+    KConfigGroup serials(KSharedConfig::openConfig(), QStringLiteral("DeviceSerials"));
     QStringList serialKeys = serials.keyList();
     for (const QString &serial : serialKeys) {
         QString profilePath = serials.readEntry(serial, QString());
@@ -486,13 +487,12 @@ void SettingsDialog::onClearRecentProfiles()
 void SettingsDialog::onClearDeviceRegistry()
 {
     // Phase L Task 0.B: DeviceRegistry removed; clear DeviceSerials instead.
-    KF6Settings &s = KF6Settings::instance();
-    KConfigGroup serials = s.deviceSerialsGroup();
+    KConfigGroup serials(KSharedConfig::openConfig(), QStringLiteral("DeviceSerials"));
     const QStringList keys = serials.keyList();
     for (const QString &key : keys) {
         serials.deleteEntry(key);
     }
-    s.sync();
+    KSharedConfig::openConfig()->sync();
     loadSettings();
 }
 

@@ -48,11 +48,6 @@ KConfigGroup KF6Settings::systemTrayGroup() const
     return KConfigGroup(m_config, QStringLiteral("SystemTray"));
 }
 
-KConfigGroup KF6Settings::deviceSerialsGroup() const
-{
-    return KConfigGroup(m_config, QStringLiteral("DeviceSerials"));
-}
-
 void KF6Settings::migrateLegacyDeviceRegistry()
 {
     // Phase L Task 0.B: legacy "DeviceRegistry" group keyed on
@@ -64,7 +59,7 @@ void KF6Settings::migrateLegacyDeviceRegistry()
         return;
     }
 
-    KConfigGroup serials = deviceSerialsGroup();
+    KConfigGroup serials(m_config, QStringLiteral("DeviceSerials"));
     for (const QString &key : legacyKeys) {
         // Parse the serial out of the trailing segment after the second ':'.
         int firstColon = key.indexOf(QLatin1Char(':'));
@@ -258,25 +253,6 @@ bool KF6Settings::minimizeToTray() const
 void KF6Settings::setMinimizeToTray(bool enabled)
 {
     systemTrayGroup().writeEntry("MinimizeToTray", enabled);
-    m_config->sync();
-}
-
-// ========== Device Registry by USB Serial ==========
-
-void KF6Settings::registerDeviceBySerial(const QString &usbSerial, const QString &profilePath)
-{
-    deviceSerialsGroup().writeEntry(usbSerial, profilePath);
-    m_config->sync();
-}
-
-QString KF6Settings::findProfileBySerial(const QString &usbSerial) const
-{
-    return deviceSerialsGroup().readEntry(usbSerial, QString());
-}
-
-void KF6Settings::unregisterDeviceBySerial(const QString &usbSerial)
-{
-    deviceSerialsGroup().deleteEntry(usbSerial);
     m_config->sync();
 }
 
