@@ -20,6 +20,8 @@ add_library(WildPalmsAppMapping STATIC
     mappingedge.cpp
     syncmappingsgraphview.h
     syncmappingsgraphview.cpp
+    mappinginspectorpanel.h
+    mappinginspectorpanel.cpp
 )
 
 target_include_directories(WildPalmsAppMapping
