@@ -3,6 +3,7 @@
 
 #include <KXmlGuiWindow>
 #include <QMap>
+#include <functional>
 #include <memory>
 #include "runtime/palmrunresult.h"
 #include "runtime/profileregistry.h"
@@ -32,10 +33,15 @@ namespace WildPalms::Runtime {
 
 namespace Kalburator::Sync {
     struct ConflictInfo;
+    class BackendRegistry;
 }
 
 namespace Kalburator::Conflict {
     class ConflictStore;
+}
+
+namespace WildPalms::Wizard {
+    struct Result;
 }
 
 
@@ -84,6 +90,12 @@ public:
     Kalburator::Conflict::ConflictStore *conflictStoreForTest() const {
         return m_uiConflictStore.get();
     }
+
+    // F.1c.1 test seam — install a stub wizard runner that returns a
+    // pre-built Result without actually exec()ing a QWizard.
+    void setRunProfileWizardForTest(
+        std::function<WildPalms::Wizard::Result()> fn);
+    void runNewProfileForTest() { onNewProfile(); }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -200,6 +212,14 @@ private:
     // F.2 sub-project D — conflict badge helper
     void refreshConflictBadge();
 
+    // F.1c.1 — NewProfileWizard integration. runProfileWizard() is the
+    // test seam: production exec()s the real wizard; tests set
+    // m_runWizardOverride to inject a pre-built Result. Returns an
+    // empty-name Result on Cancel.
+    virtual WildPalms::Wizard::Result runProfileWizard();
+    bool writeWizardResultToProfile(const QString &path,
+                                    const WildPalms::Wizard::Result &r);
+
     // KPageWidget layout
     KPageWidget *m_pageWidget;
     QDockWidget *m_logDock;
@@ -237,6 +257,15 @@ private:
     // F.2 sub-project D — conflict badge
     int          m_pendingConflictCount = 0;
     QPushButton *m_conflictBadge = nullptr;
+
+    // F.1c.1 — App-level BackendRegistry. Lifetime equals KF6MainWindow.
+    // The NewProfileWizard borrows this to construct transient IProvider
+    // instances for collection discovery before any profile is loaded.
+    // (Per-profile BackendRegistry remains owned by PalmRuntime.)
+    std::unique_ptr<Kalburator::Sync::BackendRegistry> m_appBackendRegistry;
+
+    // F.1c.1 — test seam for runProfileWizard().
+    std::function<WildPalms::Wizard::Result()> m_runWizardOverride;
 
     // UI-side ConflictStore. The engine writes to its own SQLite
     // Sync::SyncConflictStore (a different type); we mirror each

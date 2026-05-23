@@ -157,6 +157,8 @@ target_link_libraries(WildPalmsCore
         # SettingsDialog instantiates AccountsPage when AccountController +
         # PalmRuntime are supplied; without this link the symbols are missing.
         WildPalmsAppAccounts
+        # F.1c.1 — NewProfileWizard. KF6MainWindow::onNewProfile() invokes it.
+        WildPalmsAppWizard
         # K.8b T6: five static Palm plugins loaded in-process by
         # PalmRuntime::registerPalmPlugins(). Linked here into WildPalmsCore.so
         # so that palmruntime.o (in PalmDeviceAccessLib, also PRIVATE here) can

@@ -309,6 +309,32 @@ set_tests_properties(tst_accounts_page PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1c.1 T11 — KF6MainWindow integration test (NewProfileWizard via seam)
+add_executable(tst_kf6mainwindow_newprofile tst_kf6mainwindow_newprofile.cpp)
+target_link_libraries(tst_kf6mainwindow_newprofile
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        WildPalmsRuntime
+        PalmDeviceAccessLib
+        KF6::I18n
+        KF6::ConfigCore
+        KF6::XmlGui
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_kf6mainwindow_newprofile COMMAND tst_kf6mainwindow_newprofile)
+set_tests_properties(tst_kf6mainwindow_newprofile PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1c.1 T10 — NewProfileWizard e2e test
 add_executable(tst_newprofilewizard tst_newprofilewizard.cpp)
 target_link_libraries(tst_newprofilewizard

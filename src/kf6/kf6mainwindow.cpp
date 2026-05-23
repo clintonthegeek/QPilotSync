@@ -32,6 +32,13 @@
 #include "../widgets/dialogs/profilepropertiesdialog.h"
 #include "../widgets/dialogs/conflictreviewdialog.h"
 
+#include "../app/wizard/newprofilewizard.h"
+#include "../app/wizard/wizardstate.h"
+#include "../runtime/standardcontributions.h"
+
+#include <backendregistry.h>
+#include <backendconfiguration.h>
+
 #include "conflictstore.h"
 
 #include <QJsonArray>
@@ -96,6 +103,14 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
     // mirrors engine-detected conflicts so the badge dialog has data.
     m_uiConflictStore =
         std::make_unique<Kalburator::Conflict::ConflictStore>(this);
+
+    // F.1c.1 — app-level BackendRegistry. Used by NewProfileWizard for
+    // pre-profile discovery (PalmRuntime's per-profile registry doesn't
+    // exist yet at that point).
+    m_appBackendRegistry =
+        std::make_unique<Kalburator::Sync::BackendRegistry>();
+    WildPalms::Runtime::registerStandardContributions(
+        m_appBackendRegistry.get());
 
     // Setup UI
     setupUI();
@@ -1516,20 +1531,97 @@ void KF6MainWindow::onDeviceInfo()
 
 void KF6MainWindow::onNewProfile()
 {
-    bool ok = false;
-    const QString name = QInputDialog::getText(this,
-        i18n("New Profile"),
-        i18n("Profile name:"),
-        QLineEdit::Normal, QString(), &ok);
-    if (!ok || name.trimmed().isEmpty()) return;
+    const auto r = runProfileWizard();
+    if (r.state.profileName.isEmpty()) return;   // cancelled
 
-    const auto entry = m_profileRegistry->registerNew(name.trimmed());
+    const auto entry = m_profileRegistry->registerNew(r.state.profileName);
     if (!entry.isValid()) {
         QMessageBox::critical(this, i18n("New Profile"),
             i18n("Could not create profile."));
         return;
     }
+
+    if (!writeWizardResultToProfile(entry.path, r)) {
+        QMessageBox::critical(this, i18n("New Profile"),
+            i18n("Could not write profile files. Check the log."));
+        // Best-effort rollback per F.1c spec §4.5.
+        m_profileRegistry->unregister(entry.id);
+        QDir(entry.path).removeRecursively();
+        return;
+    }
+
     loadProfile(entry.path);
+}
+
+WildPalms::Wizard::Result KF6MainWindow::runProfileWizard()
+{
+    if (m_runWizardOverride) return m_runWizardOverride();
+
+    WildPalms::Wizard::NewProfileWizard wiz(
+        m_profileRegistry.get(),
+        m_appBackendRegistry.get(),
+        this);
+    if (wiz.exec() != QDialog::Accepted)
+        return WildPalms::Wizard::Result{};   // empty profileName == cancel
+    return wiz.result();
+}
+
+void KF6MainWindow::setRunProfileWizardForTest(
+    std::function<WildPalms::Wizard::Result()> fn)
+{
+    m_runWizardOverride = std::move(fn);
+}
+
+bool KF6MainWindow::writeWizardResultToProfile(
+    const QString &path,
+    const WildPalms::Wizard::Result &r)
+{
+    Profile p(path);
+    if (!p.load()) {
+        // load() returned false: profile.conf was just registerNew'd, so
+        // it should always load. If it doesn't, fail loudly.
+        m_logWidget->logError(i18n("New Profile: profile.conf at %1 "
+                                    "failed to load", path));
+        return false;
+    }
+
+    // Name + sync folder (registerNew already wrote name = id; the wizard's
+    // chosen name overrides for display).
+    p.setName(r.state.profileName);
+    p.setSyncFolderPath(path);
+
+    // Accounts — convert PendingAccount → BackendConfiguration. Force id to
+    // the wizard-local UUID so MappingSpec.accountRef matches the on-disk
+    // account id (F.1c spec §10.2).
+    QList<Kalburator::Sync::BackendConfiguration> accounts;
+    for (const auto &pa : r.state.pendingAccounts) {
+        auto cfg = pa.config;
+        cfg.id   = pa.id;
+        if (cfg.type.isEmpty()) cfg.type = pa.kind;
+        accounts.append(cfg);
+    }
+    p.setAccounts(accounts);
+
+    // Mappings — one wildcard row per non-RawFiles MappingSpec. RawFiles
+    // entries produce nothing (PalmRuntime::finishConnect auto-generates).
+    QJsonArray rows;
+    for (const auto &m : r.state.mappings) {
+        if (m.kind == WildPalms::Wizard::TargetKind::RawFiles) continue;
+        QJsonObject row;
+        row[QStringLiteral("id")] = QStringLiteral(
+            "default-%1-%2-%3").arg(m.pluginId, m.accountRef, m.collectionId);
+        row[QStringLiteral("sourceBackend")]  = m.pluginId;
+        row[QStringLiteral("sourceCalendar")] = QString();   // wildcard
+        row[QStringLiteral("targetBackend")]  = m.accountRef;
+        row[QStringLiteral("targetCalendar")] = m.collectionId;
+        row[QStringLiteral("mode")]           = QStringLiteral("TwoWay");
+        row[QStringLiteral("conflictPolicy")] = QStringLiteral("LastWriteWins");
+        row[QStringLiteral("enabled")]        = true;
+        rows.append(row);
+    }
+    p.setSyncMappingsJson(rows);
+
+    return p.save();
 }
 
 void KF6MainWindow::onCloseProfile()
