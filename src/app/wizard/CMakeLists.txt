@@ -7,6 +7,8 @@ add_library(WildPalmsAppWizard STATIC
     wizardstate.h
     newprofilewizard.h
     newprofilewizard.cpp
+    namepage.h
+    namepage.cpp
 )
 
 set_target_properties(WildPalmsAppWizard PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -1,4 +1,5 @@
 #include "newprofilewizard.h"
+#include "namepage.h"
 
 #include "runtime/profileregistry.h"
 
@@ -26,6 +27,9 @@ NewProfileWizard::NewProfileWizard(WildPalms::Runtime::ProfileRegistry *registry
         s.kind     = TargetKind::RawFiles;
         m_state.mappings.append(s);
     }
+
+    setPage(NamePageId, new NamePage(m_profileRegistry, &m_state, this));
+    setStartId(NamePageId);
 }
 
 NewProfileWizard::~NewProfileWizard() = default;

@@ -309,6 +309,29 @@ set_tests_properties(tst_accounts_page PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1c.1 T5 — NamePage unit test
+add_executable(tst_namepage tst_namepage.cpp)
+target_link_libraries(tst_namepage
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_namepage COMMAND tst_namepage)
+set_tests_properties(tst_namepage PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1c.0 — AccountFormWidget unit test
 add_executable(tst_accountformwidget tst_accountformwidget.cpp)
 target_link_libraries(tst_accountformwidget
