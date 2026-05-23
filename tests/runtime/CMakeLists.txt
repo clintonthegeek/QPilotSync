@@ -309,6 +309,29 @@ set_tests_properties(tst_accounts_page PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# F.1c.1 T8 — DiscoveryPage unit test
+add_executable(tst_discoverypage tst_discoverypage.cpp)
+target_link_libraries(tst_discoverypage
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_discoverypage COMMAND tst_discoverypage)
+set_tests_properties(tst_discoverypage PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1c.1 T7 — AddAccountsPage unit test
 add_executable(tst_addaccountspage tst_addaccountspage.cpp)
 target_link_libraries(tst_addaccountspage

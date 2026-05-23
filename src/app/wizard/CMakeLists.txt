@@ -15,6 +15,10 @@ add_library(WildPalmsAppWizard STATIC
     targetpickerpage.cpp
     addaccountspage.h
     addaccountspage.cpp
+    discoveryrow.h
+    discoveryrow.cpp
+    discoverypage.h
+    discoverypage.cpp
 )
 
 set_target_properties(WildPalmsAppWizard PROPERTIES POSITION_INDEPENDENT_CODE ON)
