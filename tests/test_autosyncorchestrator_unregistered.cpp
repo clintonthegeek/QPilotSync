@@ -13,6 +13,8 @@
 #include <QDir>
 #include "kf6/autosyncorchestrator.h"
 #include "profile.h"
+#include "runtime/profileregistry.h"
+#include <KSharedConfig>
 
 class TestAutoSyncOrchestratorUnregistered : public QObject
 {
@@ -82,7 +84,15 @@ void TestAutoSyncOrchestratorUnregistered::testUnregisteredEmitsSignalAndDoesNot
 
 void TestAutoSyncOrchestratorUnregistered::testCreateProfileForDeviceCreatesProfile()
 {
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    auto cfg = KSharedConfig::openConfig(tempDir.path() + QStringLiteral("/wprc"));
+    WildPalms::Runtime::ProfileRegistry registry(cfg);
+    registry.setDefaultRoot(tempDir.path() + QStringLiteral("/root"));
+
     AutoSyncOrchestrator orch;
+    orch.setProfileRegistry(&registry);
 
     QSignalSpy created(&orch, &AutoSyncOrchestrator::profileCreated);
     QVERIFY(created.isValid());

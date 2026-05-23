@@ -7,7 +7,6 @@
 #include "../app/logwidget.h"
 
 #include <QDir>
-#include <QDebug>
 #include <QRegularExpression>
 
 AutoSyncOrchestrator::AutoSyncOrchestrator(QObject *parent)
@@ -135,63 +134,47 @@ Profile* AutoSyncOrchestrator::createProfileForDevice(const QString &usbSerial,
                                                        const QString &userName,
                                                        quint32 userId)
 {
-    KF6Settings &settings = KF6Settings::instance();
-
-    DeviceFingerprint fingerprint;
-    fingerprint.userId = userId;
-    fingerprint.userName = userName;
-    fingerprint.usbSerialNumber = usbSerial;
+    Q_UNUSED(userId)
+    if (!m_profileRegistry) return nullptr;
 
     QString safeName = userName.isEmpty() ? QStringLiteral("PalmUser") : userName;
     safeName.replace(QRegularExpression(QStringLiteral("[^a-zA-Z0-9_-]")),
                      QStringLiteral("_"));
 
-    QString basePath = QDir::homePath() + QStringLiteral("/PalmSync/") + safeName;
-    QString finalPath = basePath;
-    int suffix = 1;
-    while (QDir(finalPath).exists()) {
-        Profile existingProfile(finalPath);
-        if (existingProfile.exists()) {
-            existingProfile.load();
-            DeviceFingerprint existingFp = existingProfile.deviceFingerprint();
-            if (existingFp.isEmpty() || existingFp.matches(fingerprint)) {
-                break;
-            }
-        } else {
-            break;
+    const auto entry = m_profileRegistry->registerNew(safeName);
+    if (!entry.isValid()) {
+        if (m_logWidget) {
+            m_logWidget->logError(
+                QStringLiteral("Failed to create profile for: %1").arg(safeName));
         }
-        finalPath = basePath + QStringLiteral("_%1").arg(suffix++);
+        return nullptr;
     }
 
     if (m_logWidget) {
         m_logWidget->logInfo(
-            QStringLiteral("Creating new profile at: %1").arg(finalPath));
+            QStringLiteral("Creating new profile at: %1").arg(entry.path));
     }
 
-    auto *profile = new Profile(finalPath);
-    profile->setName(safeName);
-    profile->setDeviceFingerprint(fingerprint);
+    if (!usbSerial.isEmpty())
+        m_profileRegistry->bindSerial(entry.id, usbSerial);
 
-    if (!profile->initialize()) {
+    auto *profile = new Profile(entry.path);
+    if (!profile->exists()) {
         if (m_logWidget) {
             m_logWidget->logError(
-                QStringLiteral("Failed to initialize profile at: %1").arg(finalPath));
+                QStringLiteral("Profile not found at: %1").arg(entry.path));
         }
         delete profile;
         return nullptr;
     }
+    profile->load();
 
-    profile->save();
-
-    // Register only by USB serial (Task 0.B removes the fingerprint-keyed registry).
-    if (!usbSerial.isEmpty()) {
-        settings.registerDeviceBySerial(usbSerial, finalPath);
-    }
-    settings.addRecentProfile(finalPath);
-    settings.setDefaultProfilePath(finalPath);
+    KF6Settings &settings = KF6Settings::instance();
+    settings.addRecentProfile(entry.path);
+    settings.setDefaultProfilePath(entry.path);
     settings.sync();
 
-    Q_EMIT profileCreated(finalPath, userName);
+    Q_EMIT profileCreated(entry.path, userName);
 
     return profile;
 }

@@ -1144,12 +1144,10 @@ void KF6MainWindow::registerDeviceWithCurrentProfile(const DeviceFingerprint &fi
     m_currentProfile->setDeviceFingerprint(fingerprint);
     m_currentProfile->save();
 
-    // Phase L Task 0.B: register by USB serial only.
-    if (!fingerprint.usbSerialNumber.isEmpty()) {
-        KF6Settings::instance().registerDeviceBySerial(
-            fingerprint.usbSerialNumber, m_currentProfile->syncFolderPath());
+    if (!fingerprint.usbSerialNumber.isEmpty() && m_profileRegistry) {
+        m_profileRegistry->bindSerial(
+            m_currentProfile->id(), fingerprint.usbSerialNumber);
     }
-    KF6Settings::instance().sync();
 
     m_logWidget->logInfo(i18n("Device registered: %1", fingerprint.displayString()));
 }
