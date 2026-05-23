@@ -8,6 +8,8 @@
 # Kalburator::Sync namespace, not the WP-local Sync:: namespace.
 
 add_library(WildPalmsAppAccounts STATIC
+    accountformwidget.cpp
+    accountformwidget.h
     addaccountdialog.cpp
     addaccountdialog.h
     accountspage.cpp

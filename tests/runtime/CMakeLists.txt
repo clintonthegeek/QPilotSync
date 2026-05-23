@@ -318,6 +318,14 @@ target_link_libraries(tst_accountformwidget
         Qt::Widgets
         $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
         WildPalmsAppAccounts
+        # Same dependency chain as tst_accounts_page — WildPalmsAppAccounts
+        # transitively pulls in PalmDeviceAccessLib which references KPilotLink
+        # (in WildPalmsCore) plus pisock / bluetooth / usb. Link them all here.
+        WildPalmsCore
+        WildPalmsPalmDevice
+        pisock
+        bluetooth
+        usb
 )
 add_test(NAME tst_accountformwidget COMMAND tst_accountformwidget)
 set_tests_properties(tst_accountformwidget PROPERTIES
