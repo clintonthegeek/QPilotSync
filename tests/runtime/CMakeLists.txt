@@ -866,3 +866,21 @@ add_test(NAME tst_devicefingerprint_compare COMMAND tst_devicefingerprint_compar
 set_tests_properties(tst_devicefingerprint_compare PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# F.1d T7 — mismatch dialog
+add_executable(tst_kf6mainwindow_mismatch_dialog tst_kf6mainwindow_mismatch_dialog.cpp)
+target_link_libraries(tst_kf6mainwindow_mismatch_dialog
+    PRIVATE
+        Qt::Core Qt::Test Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        PalmDeviceAccessLib
+        KF6::I18n KF6::ConfigCore KF6::XmlGui
+        pisock bluetooth usb
+)
+add_test(NAME tst_kf6mainwindow_mismatch_dialog COMMAND tst_kf6mainwindow_mismatch_dialog)
+set_tests_properties(tst_kf6mainwindow_mismatch_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

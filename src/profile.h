@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QDateTime>
 #include <QJsonArray>
+#include <QObject>
 
 // K.8b T9: accounts subgroup — needs full type for QList<> member
 #include "backendconfiguration.h"
@@ -71,6 +72,33 @@ struct DeviceFingerprint
             return userName == other.userName
                 ? MatchResult::Match : MatchResult::MismatchKnown;
         return MatchResult::Indeterminate;
+    }
+
+    struct ComparisonRow { QString label; QString lhs; QString rhs; };
+
+    static QList<ComparisonRow>
+    comparisonRows(const DeviceFingerprint &expected,
+                   const DeviceFingerprint &connected) {
+        auto orDash = [](const QString &s) {
+            return s.isEmpty() ? QStringLiteral("—") : s;
+        };
+        auto idStr = [](quint32 id) {
+            return id == 0 ? QString() : QString::number(id);
+        };
+        QList<ComparisonRow> out;
+        out.append({ QObject::tr("Serial"),
+                     orDash(expected.usbSerialNumber),
+                     orDash(connected.usbSerialNumber) });
+        out.append({ QObject::tr("User"),
+                     orDash(expected.userName),
+                     orDash(connected.userName) });
+        out.append({ QObject::tr("User ID"),
+                     orDash(idStr(expected.userId)),
+                     orDash(idStr(connected.userId)) });
+        out.append({ QObject::tr("Model"),
+                     orDash(expected.modelName),
+                     orDash(connected.modelName) });
+        return out;
     }
 
     // Match another fingerprint (USB serial takes priority, then userId, then userName)

@@ -10,6 +10,7 @@
 #include "profilemenucontroller.h"
 
 // Forward declarations
+struct DeviceFingerprint;
 class QTimer;
 class QDockWidget;
 class QPushButton;
@@ -97,6 +98,12 @@ public:
         std::function<WildPalms::Wizard::Result()> fn);
     void runNewProfileForTest() { onNewProfile(); }
 
+    // F.1d test seams
+    QString renderMismatchMessageForTest(const DeviceFingerprint &expected,
+                                          const DeviceFingerprint &connected) const;
+    bool    runMismatchCheckForTest(const DeviceFingerprint &expected,
+                                     const DeviceFingerprint &connected);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 
@@ -112,6 +119,11 @@ protected:
     virtual bool confirmForgetProfile(
         const WildPalms::Runtime::ProfileEntry &entry,
         bool *outDeleteFiles);
+
+    // F.1d virtual seam — override in tests to capture dialog opens.
+    // Returns false (reject) to simulate disconnect. Real path calls QMessageBox::exec.
+    virtual bool openMismatchDialogForTest(const DeviceFingerprint &expected,
+                                            const DeviceFingerprint &connected);
 
 private Q_SLOTS:
     // Device connection

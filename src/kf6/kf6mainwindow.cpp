@@ -1046,7 +1046,9 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
         return true;
     }
 
-    if (expectedDevice.matches(connectedDevice)) {
+    const auto result = expectedDevice.compare(connectedDevice);
+
+    if (result == DeviceFingerprint::MatchResult::Match) {
         m_logWidget->logInfo(i18n("Device fingerprint verified"));
 
         // Merge extended info from connected device into stored fingerprint
@@ -1091,23 +1093,62 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
         return true;
     }
 
-    QString message = i18n(
-        "Device Mismatch!\n\n"
-        "Expected: %1\n"
-        "Connected: %2\n\n"
-        "This profile is configured for a different Palm device.\n"
-        "What would you like to do?",
-        expectedDevice.displayString(),
-        connectedDevice.displayString());
+    if (result == DeviceFingerprint::MatchResult::Indeterminate) {
+        m_logWidget->logInfo(i18n("Device fingerprint indeterminate — assuming match"));
+        registerDeviceWithCurrentProfile(connectedDevice);
+        return true;
+    }
+
+    // MismatchKnown — open structured dialog via virtual seam.
+    return openMismatchDialogForTest(expectedDevice, connectedDevice);
+}
+
+QString KF6MainWindow::renderMismatchMessageForTest(
+    const DeviceFingerprint &expected,
+    const DeviceFingerprint &connected) const
+{
+    QString msg;
+    msg += i18n("This profile is associated with a different Palm device.\n\n");
+    msg += QStringLiteral("<table>");
+    msg += QStringLiteral("<tr><th></th><th>%1</th><th>%2</th></tr>")
+        .arg(i18n("Expected"), i18n("Connected"));
+    const auto rows = DeviceFingerprint::comparisonRows(expected, connected);
+    for (const auto &r : rows) {
+        msg += QStringLiteral("<tr><td><b>%1</b></td><td>%2</td><td>%3</td></tr>")
+            .arg(r.label.toHtmlEscaped(),
+                 r.lhs.toHtmlEscaped(),
+                 r.rhs.toHtmlEscaped());
+    }
+    msg += QStringLiteral("</table>");
+    return msg;
+}
+
+bool KF6MainWindow::runMismatchCheckForTest(
+    const DeviceFingerprint &expected,
+    const DeviceFingerprint &connected)
+{
+    using MR = DeviceFingerprint::MatchResult;
+    const auto r = expected.compare(connected);
+    if (r == MR::Match || r == MR::Indeterminate) return true;
+    // MismatchKnown: delegate to virtual seam (test captures; real path exec's dialog).
+    return openMismatchDialogForTest(expected, connected);
+}
+
+bool KF6MainWindow::openMismatchDialogForTest(
+    const DeviceFingerprint &expected,
+    const DeviceFingerprint &connected)
+{
+    const QString message = renderMismatchMessageForTest(expected, connected);
 
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(i18n("Wrong Device"));
+    msgBox.setTextFormat(Qt::RichText);
     msgBox.setText(message);
     msgBox.setIcon(QMessageBox::Warning);
 
     QPushButton *continueBtn = msgBox.addButton(i18n("Continue Anyway"), QMessageBox::AcceptRole);
-    QPushButton *switchBtn = msgBox.addButton(i18n("Switch Profile"), QMessageBox::ActionRole);
-    QPushButton *abortBtn = msgBox.addButton(i18n("Disconnect"), QMessageBox::RejectRole);
+    QPushButton *switchBtn   = msgBox.addButton(i18n("Switch Profile"),   QMessageBox::ActionRole);
+    QPushButton *abortBtn    = msgBox.addButton(i18n("Disconnect"),        QMessageBox::RejectRole);
     Q_UNUSED(abortBtn)
 
     msgBox.exec();
@@ -1118,7 +1159,7 @@ bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDe
     } else if (msgBox.clickedButton() == switchBtn) {
         QString profilePath;
         if (m_profileRegistry) {
-            const auto switchEntry = m_profileRegistry->findBySerial(connectedDevice.usbSerialNumber);
+            const auto switchEntry = m_profileRegistry->findBySerial(connected.usbSerialNumber);
             profilePath = switchEntry.isValid() ? switchEntry.path : QString();
         }
         if (!profilePath.isEmpty()) {
