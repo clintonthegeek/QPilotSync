@@ -142,7 +142,6 @@ void TestPalmCalendarBackend::loadCalendarsUnknownCollectionFails()
 using KCalendarCore::Event;
 using KCalendarCore::Incidence;
 using Kalburator::Sync::SyncOperation;
-using Kalburator::Sync::TranscodingPlan;
 using WildPalms::PalmCalendar::DatebookCodec;
 using WildPalms::PalmSync::PalmRecord;
 
@@ -225,8 +224,7 @@ void TestPalmCalendarBackend::pushItemsCreatesNewRecordsWithCorrectSlot()
     ev->setDtStart(QDateTime(QDate(2026, 7, 1), QTime(0, 0), Qt::LocalTime));
 
     auto *op = backend.pushItems(QStringLiteral("palm:calendar/9"),
-                                 { ev.staticCast<Incidence>() },
-                                 TranscodingPlan{});
+                                 { ev.staticCast<Incidence>() });
     QCOMPARE(op->state(), SyncOperation::Succeeded);
     QCOMPARE(op->succeededUids().size(), 1);
     QCOMPARE(op->failedUids().size(),    0);
@@ -257,8 +255,7 @@ void TestPalmCalendarBackend::pushItemsUpdatesExistingRecord()
                           QString::number(existing.recordId));
 
     auto *op = backend.pushItems(QStringLiteral("palm:calendar/2"),
-                                 { ev.staticCast<Incidence>() },
-                                 TranscodingPlan{});
+                                 { ev.staticCast<Incidence>() });
     QCOMPARE(op->state(), SyncOperation::Succeeded);
 
     // Still only one record (update, not create).
@@ -283,8 +280,7 @@ void TestPalmCalendarBackend::pushItemsWithNonEventSkipsAndReportsFailed()
     todo->setUid(QStringLiteral("not-an-event"));
 
     auto *op = backend.pushItems(QStringLiteral("palm:calendar/0"),
-                                 { todo.staticCast<Incidence>() },
-                                 TranscodingPlan{});
+                                 { todo.staticCast<Incidence>() });
     QCOMPARE(op->state(), SyncOperation::Succeeded);
     QCOMPARE(op->succeededUids().size(), 0);
     QCOMPARE(op->failedUids().size(),    1);
@@ -341,8 +337,7 @@ void TestPalmCalendarBackend::pushThenFetchRoundTripsIncidence()
     ev->setDescription(QStringLiteral("Gate B12"));
 
     auto *pushOp = backend.pushItems(QStringLiteral("palm:calendar/7"),
-                                     { ev.staticCast<Incidence>() },
-                                     TranscodingPlan{});
+                                     { ev.staticCast<Incidence>() });
     QCOMPARE(pushOp->state(), SyncOperation::Succeeded);
     pushOp->deleteLater();
 
@@ -371,8 +366,7 @@ void TestPalmCalendarBackend::pushToUnnamedSlotStillStores()
     ev->setDtStart(QDateTime(QDate(2026, 9, 1), QTime(0, 0), Qt::LocalTime));
 
     auto *op = backend.pushItems(QStringLiteral("palm:calendar/12"),
-                                 { ev.staticCast<Incidence>() },
-                                 TranscodingPlan{});
+                                 { ev.staticCast<Incidence>() });
     QCOMPARE(op->state(), SyncOperation::Succeeded);
     op->deleteLater();
 
