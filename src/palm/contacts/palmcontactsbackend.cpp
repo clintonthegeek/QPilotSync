@@ -201,8 +201,7 @@ void PalmContactsBackend::startSync(
     const QString &, KCalendarCore::MemoryCalendar *,
     const QList<KCalendarCore::Incidence::Ptr> &,
     const QList<KCalendarCore::Incidence::Ptr> &,
-    const QMap<QString, QString> &,
-    const Kalburator::Sync::TranscodingPlan &) {}
+    const QMap<QString, QString> &) {}
 
 void PalmContactsBackend::removeItem(const QString &, const QString &) {}
 

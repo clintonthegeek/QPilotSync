@@ -187,8 +187,7 @@ void PalmToDoBackend::storeCalendars(const QString &,
 void PalmToDoBackend::startSync(const QString &, KCalendarCore::MemoryCalendar *,
                                 const QList<KCalendarCore::Incidence::Ptr> &,
                                 const QList<KCalendarCore::Incidence::Ptr> &,
-                                const QMap<QString, QString> &,
-                                const Kalburator::Sync::TranscodingPlan &) {}
+                                const QMap<QString, QString> &) {}
 void PalmToDoBackend::removeItem(const QString &, const QString &) {}
 
 } // namespace WildPalms::PalmToDo
