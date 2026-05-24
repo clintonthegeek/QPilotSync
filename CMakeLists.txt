@@ -59,7 +59,7 @@ option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" OFF)
 
 set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
     "Optional path to a local libkalburator checkout (override FetchContent)")
-set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v0.54-mass-delete-guard" CACHE STRING
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "8ca9c1bfea0244bd3fa1102f5628af20478b431c" CACHE STRING
     "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
 
 if(WILDPALMS_LIBKALBURATOR_SOURCE_DIR)
