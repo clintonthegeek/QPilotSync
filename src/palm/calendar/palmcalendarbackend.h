@@ -2,7 +2,6 @@
 #define WILDPALMS_CALENDAR_PALMCALENDARBACKEND_H
 
 #include "syncbackend.h"
-#include "transcodingplan.h"
 
 namespace WildPalms::PalmSync {
 class IPalmDatabaseAccess;
@@ -64,8 +63,7 @@ public:
         KCalendarCore::MemoryCalendar *calendar,
         const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
         const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
-        const QMap<QString, QString> &stagedDeletions,
-        const Kalburator::Sync::TranscodingPlan &plan) override;
+        const QMap<QString, QString> &stagedDeletions) override;
     void removeItem(const QString &calId, const QString &itemUid) override;
 
     // ========== Blob-level disconnect guard (Layer B) ==========
@@ -78,8 +76,7 @@ public:
         const QString &calendarId) override;
     Kalburator::Sync::PushOperation *pushItems(
         const QString &calendarId,
-        const QList<KCalendarCore::Incidence::Ptr> &items,
-        const Kalburator::Sync::TranscodingPlan &plan) override;
+        const QList<KCalendarCore::Incidence::Ptr> &items) override;
     Kalburator::Sync::DeleteOperation *deleteItems(
         const QString &calendarId, const QStringList &uids) override;
 
