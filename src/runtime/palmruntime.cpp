@@ -41,6 +41,7 @@
 #include "profile.h"
 
 #include <rawfilesbackend.h>
+#include <markdownfilesbackend.h>
 
 #include "standardcontributions.h"
 
@@ -356,11 +357,29 @@ void PalmRuntime::finishConnect()
                 ? registeredSrc->shapeFor(palmCol.id)
                 : Kalburator::Shape::Shape::Any();
 
-            auto pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
+            // Phase 5: the note domain keeps human-readable Markdown on disk, so
+            // its peer is a MarkdownFilesBackend declaring (note, markdown) — the
+            // engine then routes palm->markdown->canon into it. Every other domain
+            // keeps the generic RawFilesBackend mirroring the source shape.
+            const bool isNote = palmShape.domain
+                == Kalburator::Shape::DomainId{QStringLiteral("note")};
+
+            std::unique_ptr<Kalburator::Sinks::RawFilesBackend> pcBackend;
+            Kalburator::Shape::Shape peerShape;
+            if (isNote) {
+                pcBackend = std::make_unique<Kalburator::Sinks::MarkdownFilesBackend>(rootPath);
+                peerShape = Kalburator::Shape::Shape{
+                    Kalburator::Shape::DomainId{QStringLiteral("note")},
+                    Kalburator::Shape::EncodingId{QStringLiteral("markdown")} };
+            } else {
+                pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
+                peerShape = palmShape;
+            }
+
             Kalburator::Sync::CollectionInfo pcCol;
             pcCol.id   = safeColId;
             pcCol.name = palmCol.name;
-            pcBackend->createCollection(pcCol, palmShape);
+            pcBackend->createCollection(pcCol, peerShape);
 
             m_registry->registerBackendInstance(pcId, pcBackend.get());
             m_ownedBackends.push_back(std::move(pcBackend));
