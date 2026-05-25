@@ -52,9 +52,12 @@ add_executable(tst_calendarblobbackend
     tst_calendarblobbackend.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/palmcalendarbackend.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/palmtoicstransformation.cpp
 )
 target_include_directories(tst_calendarblobbackend
-    PRIVATE ${CMAKE_SOURCE_DIR}/src
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CALENDAR_PLUGIN_SRC_DIR}
 )
 # Prepend libkalburator's include dirs so "syncbackend.h" resolves to
 # Kalburator::Sync::SyncBackend (same as the plugin target itself).
@@ -102,11 +105,14 @@ add_executable(tst_calendarbackendplugin
     ${CALENDAR_PLUGIN_SRC_DIR}/palmcalendarbackend.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarconflicthandler.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/palmtoicstransformation.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendardomainextension.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarview.cpp
 )
 target_include_directories(tst_calendarbackendplugin
     PRIVATE
         ${CMAKE_SOURCE_DIR}/src
+        ${CALENDAR_PLUGIN_SRC_DIR}
         ${PILOT_LINK_INCLUDE_DIR}
 )
 # Prepend libkalburator's include dirs so "syncbackend.h" resolves to
@@ -139,3 +145,31 @@ set_tests_properties(tst_calendarbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PL
 # by tst_icstranscoder + tst_calendarblobbackend, and end-to-end engine
 # integration is covered by libkalburator's tests/calendar contract suite
 # plus the V2-style tst_memo_v2 / tst_contacts_v2 / tst_todo_v2 / tst_webcal_v2_e2e.
+
+# --- Phase 3: calendar canon round-trip ---
+add_executable(tst_calendar_canon_roundtrip
+    tst_calendar_canon_roundtrip.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendardomainextension.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/palmtoicstransformation.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/icstranscoder.cpp
+)
+target_include_directories(tst_calendar_canon_roundtrip
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CALENDAR_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_calendar_canon_roundtrip BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_calendar_canon_roundtrip
+    PRIVATE
+        WildPalmsPalmCalendar   # DatebookCodec, CategoryMappingStore
+        WildPalmsPalmSync       # PalmRecord
+        Kalburator::Sync
+        KF6::CalendarCore
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_calendar_canon_roundtrip COMMAND tst_calendar_canon_roundtrip)
+set_tests_properties(tst_calendar_canon_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
