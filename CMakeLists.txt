@@ -47,8 +47,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)
 
 # libkalburator — shared calendar-sync substrate. Fetched via FetchContent
-# from the published Codeberg repo, pinned to the engine-merger campaign-end
-# tag. Pass -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR=/path/to/libkalburator to
+# from the published Codeberg repo, pinned to the canon-convergence campaign
+# tip on main (note domain + shape-graph canon for all five PIM domains).
+# Pass -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR=/path/to/libkalburator to
 # override with a local checkout (development convenience).
 #
 # See docs/LIBKALBURATOR.md and docs/plans/2026-04-20-libkalburator-integration.md
@@ -59,7 +60,7 @@ option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" OFF)
 
 set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
     "Optional path to a local libkalburator checkout (override FetchContent)")
-set(WILDPALMS_LIBKALBURATOR_GIT_TAG "8ca9c1bfea0244bd3fa1102f5628af20478b431c" CACHE STRING
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "b629c8a981a6a8911d7c90e35d659d623a7db967" CACHE STRING
     "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
 
 if(WILDPALMS_LIBKALBURATOR_SOURCE_DIR)
