@@ -1,29 +1,33 @@
 #include <QtTest/QtTest>
 
 #include "plugins/memo/memoblobbackend.h"
-#include "plugins/memo/memomarkdown.h"
-#include "palm/calendar/categorymappingstore.h"
 #include "palm/codecs/memocodec.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "palm/sync/palmbackend.h"
+#include "palm/sync/palmrecord.h"
 
 using WildPalms::Memo::MemoBlobBackend;
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmBackend;
 using WildPalms::PalmSync::PalmRecord;
 
+// Phase 5: MemoBlobBackend presents/consumes raw (note, palm) PalmRecord wire
+// bytes. The Palm<->Markdown conversion moved into the shape-graph stages
+// (palmnotetransformation), so these tests assert the wire-bytes contract and
+// decode the payload to check fields — they no longer expect Markdown.
+
 class TestMemoBlobBackend : public QObject {
     Q_OBJECT
 private slots:
     void availableCollectionsExposesOnlyPalmMemo();
-    void loadRecordsDecodesPalmToMarkdown();
-    void createRecordEncodesMarkdownToPalmPreservingCategory();
+    void loadRecordsPresentsPalmWire();
+    void createRecordConsumesPalmWirePreservingCategory();
     void updateRecordRoundTripsCategory();
     void deleteRecordPropagatesToDevice();
     void deleteRecord_usesMemoDBCanonicalName();
     void modifiedSinceDelegates();
     void privateFlagPreservedBothDirections();
-    void categoryNameResolvedFromStoreWhenPresent();
+    void categorySlotCarriedInWireBytes();
 
 private:
     std::uint32_t seedMemo(MockPalmDatabaseAccess *dev,
@@ -63,7 +67,7 @@ void TestMemoBlobBackend::availableCollectionsExposesOnlyPalmMemo()
 
 // --- read path ---
 
-void TestMemoBlobBackend::loadRecordsDecodesPalmToMarkdown()
+void TestMemoBlobBackend::loadRecordsPresentsPalmWire()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase("MemoDB");
@@ -73,32 +77,37 @@ void TestMemoBlobBackend::loadRecordsDecodesPalmToMarkdown()
 
     const auto records = mb.loadRecords(QStringLiteral("palm:memo"));
     QCOMPARE(records.size(), 1);
-    const QString md = QString::fromUtf8(records.first().data);
-    QVERIFY(md.contains(QStringLiteral("hello\nworld")));
-    QVERIFY(md.startsWith(QStringLiteral("---\n")));
-    // contentHash should match the Palm record's hash, not the Markdown bytes
+    QCOMPARE(records.first().type, QStringLiteral("note"));
+
+    const PalmRecord pr = PalmRecord::fromWireBytes(records.first().data);
+    const auto pod = WildPalms::PalmCodecs::decodeMemo(pr.data);
+    QVERIFY(pod.has_value());
+    QCOMPARE(pod->text, QStringLiteral("hello\nworld"));
+
+    // contentHash should match the Palm record's hash.
     const auto palmRec = dev.readAllRecords("MemoDB").first();
     QCOMPARE(records.first().contentHash, palmRec.contentHash());
 }
 
 // --- write path ---
 
-void TestMemoBlobBackend::createRecordEncodesMarkdownToPalmPreservingCategory()
+void TestMemoBlobBackend::createRecordConsumesPalmWirePreservingCategory()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase("MemoDB");
     PalmBackend pb(&dev);
     MemoBlobBackend mb(&pb);
 
-    // Synthesise a Markdown BackendRecord as if coming from LocalBlobBackend.
-    WildPalms::Memo::MarkdownMemo m;
-    m.content.text = QStringLiteral("a new memo");
-    m.categorySlot = 4;
-    const QByteArray mdBytes = WildPalms::Memo::encode(m).toUtf8();
+    // Synthesise a (note, palm) wire BackendRecord as it arrives from the engine
+    // after the canon->palm stage. Memo carries category per-record (not per
+    // collection slot), so the backend keeps the wire bytes' category.
+    PalmRecord seed;
+    seed.category = 4;
+    seed.data = WildPalms::PalmCodecs::encodeMemo({QStringLiteral("a new memo"), false});
 
     Kalburator::Sync::BackendRecord br;
-    br.type = QStringLiteral("memos");
-    br.data = mdBytes;
+    br.type = QStringLiteral("note");
+    br.data = seed.toWireBytes();
     const QString newId = mb.createRecord(QStringLiteral("palm:memo"), br);
     QVERIFY(!newId.isEmpty());
 
@@ -118,16 +127,16 @@ void TestMemoBlobBackend::updateRecordRoundTripsCategory()
     PalmBackend pb(&dev);
     MemoBlobBackend mb(&pb);
 
-    // Load, mutate via markdown, write back.
+    // Load wire bytes, mutate the decoded payload + category, re-serialise.
     const auto recs = mb.loadRecords(QStringLiteral("palm:memo"));
     QCOMPARE(recs.size(), 1);
 
-    auto decoded = WildPalms::Memo::decode(QString::fromUtf8(recs.first().data));
-    decoded.content.text = QStringLiteral("updated body");
-    decoded.categorySlot = 6;
+    PalmRecord pr = PalmRecord::fromWireBytes(recs.first().data);
+    pr.data = WildPalms::PalmCodecs::encodeMemo({QStringLiteral("updated body"), false});
+    pr.category = 6;
 
     Kalburator::Sync::BackendRecord updated = recs.first();
-    updated.data = WildPalms::Memo::encode(decoded).toUtf8();
+    updated.data = pr.toWireBytes();
 
     QVERIFY(mb.updateRecord(updated));
 
@@ -163,7 +172,10 @@ void TestMemoBlobBackend::modifiedSinceDelegates()
 
     const auto mods = mb.modifiedSince(QStringLiteral("palm:memo"), cutoff);
     QCOMPARE(mods.size(), 1);
-    QVERIFY(QString::fromUtf8(mods.first().data).contains(QStringLiteral("old")));
+    const PalmRecord pr = PalmRecord::fromWireBytes(mods.first().data);
+    const auto pod = WildPalms::PalmCodecs::decodeMemo(pr.data);
+    QVERIFY(pod.has_value());
+    QCOMPARE(pod->text, QStringLiteral("old"));
 }
 
 void TestMemoBlobBackend::privateFlagPreservedBothDirections()
@@ -176,9 +188,10 @@ void TestMemoBlobBackend::privateFlagPreservedBothDirections()
 
     const auto recs = mb.loadRecords(QStringLiteral("palm:memo"));
     QCOMPARE(recs.size(), 1);
-    QVERIFY(QString::fromUtf8(recs.first().data).contains(QStringLiteral("private: true")));
+    const PalmRecord loaded = PalmRecord::fromWireBytes(recs.first().data);
+    QVERIFY((loaded.attributes & PalmRecord::AttrSecret) != 0);
 
-    // Round-trip the markdown back to Palm — private flag preserved.
+    // Round-trip the wire bytes back to Palm — private flag preserved.
     Kalburator::Sync::BackendRecord br = recs.first();
     br.data = recs.first().data;  // unchanged
     QVERIFY(mb.updateRecord(br));
@@ -188,22 +201,18 @@ void TestMemoBlobBackend::privateFlagPreservedBothDirections()
     QVERIFY((stored.first().attributes & PalmRecord::AttrSecret) != 0);
 }
 
-void TestMemoBlobBackend::categoryNameResolvedFromStoreWhenPresent()
+void TestMemoBlobBackend::categorySlotCarriedInWireBytes()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase("MemoDB");
     seedMemo(&dev, QStringLiteral("work thing"), 3, false);
     PalmBackend pb(&dev);
-
-    WildPalms::PalmCalendar::CategoryMappingStore store;
-    store.setSlotName(QStringLiteral("MemoDB"), 3, QStringLiteral("Work"));
-    MemoBlobBackend mb(&pb, &store);
+    MemoBlobBackend mb(&pb);
 
     const auto recs = mb.loadRecords(QStringLiteral("palm:memo"));
     QCOMPARE(recs.size(), 1);
-    const QString md = QString::fromUtf8(recs.first().data);
-    QVERIFY(md.contains(QStringLiteral("category: 3")));
-    QVERIFY(md.contains(QStringLiteral("categoryName: Work")));
+    const PalmRecord pr = PalmRecord::fromWireBytes(recs.first().data);
+    QCOMPARE(static_cast<int>(pr.category), 3);
 }
 
 void TestMemoBlobBackend::deleteRecord_usesMemoDBCanonicalName()
