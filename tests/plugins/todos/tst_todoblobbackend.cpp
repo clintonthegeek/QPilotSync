@@ -1,7 +1,6 @@
 #include <QtTest/QtTest>
 
 #include "plugins/todos/todoblobbackend.h"
-#include "plugins/todos/todoicstranscoder.h"
 
 #include "palm/calendar/categorymappingstore.h"
 #include "palm/codecs/todocodec.h"
@@ -130,9 +129,17 @@ void TestTodoBlobBackend::loadRecordsRoutesByCategory()
     auto personal = be.loadRecords(QStringLiteral("palm:todo/1"));
     QCOMPARE(unfiled.size(), 1);
     QCOMPARE(personal.size(), 1);
-    QVERIFY(unfiled[0].data.contains("Anything"));
-    QVERIFY(personal[0].data.contains("Personal one"));
-    QCOMPARE(unfiled[0].type, QStringLiteral("text/calendar"));
+    // Backend now presents raw Palm wire bytes (br.type="todo"); decode to
+    // verify the routed record's content.
+    QCOMPARE(unfiled[0].type, QStringLiteral("todo"));
+    const auto unfiledPod = WildPalms::PalmCodecs::decodeTodo(
+        QByteArrayView(PalmRecord::fromWireBytes(unfiled[0].data).data));
+    const auto personalPod = WildPalms::PalmCodecs::decodeTodo(
+        QByteArrayView(PalmRecord::fromWireBytes(personal[0].data).data));
+    QVERIFY(unfiledPod.has_value());
+    QVERIFY(personalPod.has_value());
+    QCOMPARE(unfiledPod->description, QStringLiteral("Anything"));
+    QCOMPARE(personalPod->description, QStringLiteral("Personal one"));
 }
 
 void TestTodoBlobBackend::loadRecordsMixedCategoryDataset()
@@ -164,13 +171,13 @@ void TestTodoBlobBackend::createRecordStampsSlotFromCollectionId()
     store.setSlotName(QStringLiteral("ToDoDB"), 5, QStringLiteral("Five"));
     TodoBlobBackend be(&palm, &store);
 
-    // Build an ICS payload from a slot-0 todo, then write into
+    // Build a Palm-wire payload from a slot-0 todo, then write into
     // collection palm:todo/5. Collection slot must win.
     PalmRecord seed = makeTodo(0, 0, QStringLiteral("Created"));
     BackendRecord br;
     br.id   = QString();
-    br.data = WildPalms::TodoPlugin::encodePalmToIcs(seed);
-    br.type = QStringLiteral("text/calendar");
+    br.data = seed.toWireBytes();
+    br.type = QStringLiteral("todo");
 
     QString newId = be.createRecord(QStringLiteral("palm:todo/5"), br);
     QVERIFY(!newId.isEmpty());
@@ -197,9 +204,9 @@ void TestTodoBlobBackend::updateRecordPreservesRecordId()
     QCOMPARE(records.size(), 1);
     BackendRecord br = records.first();
 
-    // Replace the description and round-trip through the transcoder.
+    // Replace the description; the backend consumes Palm wire bytes directly.
     PalmRecord modified = makeTodo(seedId, 1, QStringLiteral("Edited"));
-    br.data = WildPalms::TodoPlugin::encodePalmToIcs(modified);
+    br.data = modified.toWireBytes();
     QVERIFY(be.updateRecord(br));
 
     const auto stored = device.readRecord(QStringLiteral("ToDoDB"), seedId);
