@@ -2,9 +2,24 @@
 
 **Date:** 2026-05-25
 **For:** the next agent picking up Phase 5 (memo) of the libkalburator canon adoption.
-**Status:** libkalburator has **delivered** the capability we requested. WildPalms
-adoption has **not started**. Your job: investigate what they shipped, then write and
-execute the WildPalms adoption plan (mirroring Phase 3/4).
+**Status:** ✅ **DONE — WildPalms adoption LANDED 2026-05-25** (suite 99/99, unpushed, branch
+`feature/canon-adoption-phase1`). The plan that was written + executed from this handoff is
+`docs/superpowers/plans/2026-05-25-phase5-memo-note-canon-migration.md`; see its "Phase 5 done
+when" section and the `project_phase5_memo_note` memory for the as-built result. This handoff is
+retained for design context. **One design correction vs. §4 below:** the registry is
+hub-and-spoke (a peer connects DIRECTLY to the canonical, not peer→peer), and note's spine is a
+single node `[(note,canon)]`, so the WP edge is `(note,palm)↔(note,canon)` — NOT the
+`(note,palm)↔(note,markdown)` §4.1 anticipated. Each WP stage internally composes `memomarkdown`
+with libkalburator's `markdown↔canon` stages; the on-disk markdown peer is reached by routing
+`palm→canon→markdown` through the hub. Everything else below held.
+
+The original handoff text follows.
+
+---
+
+**Status (as written, now superseded):** libkalburator has **delivered** the capability we
+requested. WildPalms adoption has **not started**. Your job: investigate what they shipped, then
+write and execute the WildPalms adoption plan (mirroring Phase 3/4).
 
 ---
 
