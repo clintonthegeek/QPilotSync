@@ -119,6 +119,34 @@ set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PL
 # with IBackendPluginV2 + SyncEngine. Contract is covered end-to-end via
 # tst_palm_runtime_* (in-process Kalburator::Plugin path).
 
+# --- Phase 2: contacts canon round-trip (verify-and-lock) ---
+add_executable(tst_contacts_canon_roundtrip
+    tst_contacts_canon_roundtrip.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+)
+target_include_directories(tst_contacts_canon_roundtrip
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CONTACTS_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_contacts_canon_roundtrip BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_contacts_canon_roundtrip
+    PRIVATE
+        WildPalmsPalmCodecs
+        WildPalmsPalmSync
+        Kalburator::Sync
+        KF6::Contacts
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_contacts_canon_roundtrip COMMAND tst_contacts_canon_roundtrip)
+set_tests_properties(tst_contacts_canon_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- Phase Ia Task 14: ContactsDomainExtension (path A registration) ---
 add_executable(tst_contactsdomainextension
     tst_contactsdomainextension.cpp
