@@ -81,6 +81,33 @@ target_link_libraries(tst_memobackendplugin
 add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
 set_tests_properties(tst_memobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# --- Phase 5: memo (note) canon round-trip ---
+add_executable(tst_memo_note_roundtrip
+    tst_memo_note_roundtrip.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/notedomainextension.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/palmnotetransformation.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memomarkdown.cpp
+)
+target_include_directories(tst_memo_note_roundtrip
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${MEMO_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_memo_note_roundtrip BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_memo_note_roundtrip
+    PRIVATE
+        WildPalmsPalmCodecs     # encodeMemo / decodeMemo
+        WildPalmsPalmSync       # PalmRecord
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_memo_note_roundtrip COMMAND tst_memo_note_roundtrip)
+set_tests_properties(tst_memo_note_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # K.8b T13: tst_memo_v2 deleted along with IBackendPluginV2 + SyncEngine
 # (replaced by the in-process PalmRuntime plugin path; the contract is
 # exercised by tst_palm_runtime_modes).
