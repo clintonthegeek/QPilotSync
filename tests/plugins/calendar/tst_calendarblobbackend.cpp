@@ -1,7 +1,6 @@
 #include <QtTest/QtTest>
 
 #include "plugins/calendar/palmcalendarbackend.h"
-#include "plugins/calendar/icstranscoder.h"
 #include "palm/calendar/categorymappingstore.h"
 #include "palm/calendar/datebookcodec.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
@@ -11,9 +10,6 @@
 #include <KCalendarCore/Event>
 
 using Kalburator::Sync::BackendRecord;
-using Kalburator::Sync::CollectionInfo;
-using Kalburator::Shape::DomainId;
-using Kalburator::Shape::EncodingId;
 using WildPalms::CalendarPlugin::PalmCalendarBackend;
 using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCalendar::DatebookCodec;
@@ -42,12 +38,12 @@ class TestPalmCalendarBackend : public QObject
     Q_OBJECT
 private slots:
     void backendIdAndDisplayName();
-    void nativeShapes_returnsCalendarIcal();
+    void nativeShapes_returnsCalendarPalm();
     void backendType_returnsPalmCalendar();
     void availableCollectionsReflectsStore();
     void availableCollectionsAlwaysIncludesUnfiled();
     void loadRecordsFiltersBySlot();
-    void loadRecordsReturnsIcsContentType();
+    void loadRecordsReturnsPalmWireBytes();
     void createRecordRoutesToSlot();
     void updateRecordPreservesSlot();
     void deleteRecordForwards();
@@ -66,7 +62,7 @@ void TestPalmCalendarBackend::backendIdAndDisplayName()
     QVERIFY(backend.isAvailable());
 }
 
-void TestPalmCalendarBackend::nativeShapes_returnsCalendarIcal()
+void TestPalmCalendarBackend::nativeShapes_returnsCalendarPalm()
 {
     MockPalmDatabaseAccess dev;
     PalmBackend pb(&dev);
@@ -76,7 +72,7 @@ void TestPalmCalendarBackend::nativeShapes_returnsCalendarIcal()
     auto shapes = backend.nativeShapes();
     QCOMPARE(shapes.size(), 1);
     QCOMPARE(shapes.first().domain.toString(), QStringLiteral("calendar"));
-    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("ical"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
 }
 
 void TestPalmCalendarBackend::backendType_returnsPalmCalendar()
@@ -137,7 +133,7 @@ void TestPalmCalendarBackend::loadRecordsFiltersBySlot()
     QCOMPARE(backend.loadRecords(QStringLiteral("palm:calendar/2")).size(), 1);
 }
 
-void TestPalmCalendarBackend::loadRecordsReturnsIcsContentType()
+void TestPalmCalendarBackend::loadRecordsReturnsPalmWireBytes()
 {
     MockPalmDatabaseAccess dev;
     dev.createDatabase(QStringLiteral("DatebookDB"));
@@ -148,9 +144,15 @@ void TestPalmCalendarBackend::loadRecordsReturnsIcsContentType()
 
     auto recs = backend.loadRecords(QStringLiteral("palm:calendar/0"));
     QCOMPARE(recs.size(), 1);
-    QCOMPARE(recs.first().type, QStringLiteral("text/calendar"));
+    // Type must be "calendar" (palm wire encoding), not "text/calendar"
+    QCOMPARE(recs.first().type, QStringLiteral("calendar"));
     QVERIFY(!recs.first().data.isEmpty());
-    QVERIFY(recs.first().data.contains("BEGIN:VEVENT"));
+
+    // Data must round-trip through PalmRecord::fromWireBytes + DatebookCodec::decode
+    const auto pr = PalmRecord::fromWireBytes(recs.first().data);
+    const auto decoded = DatebookCodec::decode(pr);
+    QVERIFY(decoded.isValid());
+    QCOMPARE(decoded.event->summary(), QStringLiteral("Event a"));
 }
 
 void TestPalmCalendarBackend::createRecordRoutesToSlot()
@@ -162,11 +164,12 @@ void TestPalmCalendarBackend::createRecordRoutesToSlot()
     store.setSlotName(QStringLiteral("DatebookDB"), 5, QStringLiteral("Travel"));
     PalmCalendarBackend backend(&pb, &store);
 
+    // Build a BackendRecord with palm wire bytes (not iCal)
     auto seedPr = eventRecord("new-uid", 7);
     BackendRecord br;
     br.id   = QString();
-    br.data = WildPalms::CalendarPlugin::encodePalmToIcs(seedPr);
-    br.type = QStringLiteral("text/calendar");
+    br.data = seedPr.toWireBytes();
+    br.type = QStringLiteral("calendar");
 
     QString newId = backend.createRecord(
         QStringLiteral("palm:calendar/5"), br);
@@ -191,7 +194,16 @@ void TestPalmCalendarBackend::updateRecordPreservesSlot()
     auto recs = backend.loadRecords(QStringLiteral("palm:calendar/4"));
     QCOMPARE(recs.size(), 1);
     auto br = recs.first();
-    br.data.replace("SUMMARY:Event u-1", "SUMMARY:Event u-1 (revised)");
+
+    // Decode the wire bytes, revise the summary, re-encode to wire bytes
+    auto pr = PalmRecord::fromWireBytes(br.data);
+    auto decoded = DatebookCodec::decode(pr);
+    QVERIFY(decoded.isValid());
+    decoded.event->setSummary(QStringLiteral("Event u-1 (revised)"));
+    auto updatedPr = DatebookCodec::encode(decoded.event, decoded.slot);
+    updatedPr.recordId = pr.recordId;
+    br.data = updatedPr.toWireBytes();
+
     QVERIFY(backend.updateRecord(br));
 
     auto stored = dev.readRecord(QStringLiteral("DatebookDB"), seedId);
