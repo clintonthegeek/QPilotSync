@@ -76,6 +76,8 @@ add_executable(tst_todobackendplugin
     ${TODOS_PLUGIN_SRC_DIR}/todoblobbackend.cpp
     ${TODOS_PLUGIN_SRC_DIR}/todoconflicthandler.cpp
     ${TODOS_PLUGIN_SRC_DIR}/todoicstranscoder.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/palmtovtodotransformation.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/tododomainextension.cpp
     ${TODOS_PLUGIN_SRC_DIR}/taskview.cpp
 )
 target_include_directories(tst_todobackendplugin
