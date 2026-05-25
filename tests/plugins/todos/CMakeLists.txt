@@ -111,3 +111,31 @@ set_tests_properties(tst_todobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFO
 
 # K.8b T13: tst_todo_v2 deleted along with IBackendPluginV2 + SyncEngine
 # (replaced by the in-process PalmRuntime plugin path).
+
+# --- Phase 4: todo canon round-trip ---
+add_executable(tst_todo_canon_roundtrip
+    tst_todo_canon_roundtrip.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/tododomainextension.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/palmtovtodotransformation.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/todoicstranscoder.cpp
+)
+target_include_directories(tst_todo_canon_roundtrip
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${TODOS_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_todo_canon_roundtrip BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_todo_canon_roundtrip
+    PRIVATE
+        WildPalmsPalmCodecs     # encodeTodo / decodeTodo
+        WildPalmsPalmSync       # PalmRecord
+        Kalburator::Sync
+        KF6::CalendarCore
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_todo_canon_roundtrip COMMAND tst_todo_canon_roundtrip)
+set_tests_properties(tst_todo_canon_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
