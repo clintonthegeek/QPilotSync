@@ -182,6 +182,9 @@ add_subdirectory(core)
 # Phase E.9 — concrete PalmDeviceConnection aggregator.
 add_subdirectory(palm)
 
+# Dashboard redesign — SyncStatusModel unit tests.
+add_subdirectory(widgets)
+
 # ============================================================
 # M.12 — AddAccountDialog baseline (pre-migration smoke test)
 # ============================================================
