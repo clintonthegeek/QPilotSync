@@ -14,6 +14,11 @@ private slots:
     void primaryActionLabelTracksState();
     void changedSignalFiresOnTransition();
     void repeatedFailureUpdatesErrorText();
+    void seedingCreatesPendingChips();
+    void mappingStartedMarksActiveAndPreviousDone();
+    void mappingProgressUpdatesCounts();
+    void mappingFinishedFillsCountsAndState();
+    void unplugMidSyncInterruptsActiveChip();
 };
 
 void TestSyncStatusModel::initialStateIsListening()
@@ -86,6 +91,78 @@ void TestSyncStatusModel::repeatedFailureUpdatesErrorText()
     m.onConnectionComplete(false, QStringLiteral("permission denied"));
     QCOMPARE(m.errorText(), QStringLiteral("permission denied"));
     QVERIFY(spy.count() >= 1);
+}
+
+static QVector<SyncStatusModel::ConduitSeed> twoSeeds()
+{
+    return {
+        { QStringLiteral("m-cal"), QStringLiteral("Calendar"),  QStringLiteral("office-calendar") },
+        { QStringLiteral("m-con"), QStringLiteral("Contacts"),  QStringLiteral("contact-new") },
+    };
+}
+
+void TestSyncStatusModel::seedingCreatesPendingChips()
+{
+    SyncStatusModel m;
+    m.seedConduits(twoSeeds());
+    QCOMPARE(m.conduits().size(), 2);
+    QCOMPARE(m.conduits()[0].label, QStringLiteral("Calendar"));
+    QCOMPARE(m.conduits()[0].state, SyncStatusModel::ChipState::Pending);
+}
+
+void TestSyncStatusModel::mappingStartedMarksActiveAndPreviousDone()
+{
+    SyncStatusModel m;
+    m.seedConduits(twoSeeds());
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onMappingSyncStarted(QStringLiteral("m-cal"), QStringLiteral("Calendar"), QStringLiteral("office-calendar"));
+    QCOMPARE(m.conduits()[0].state, SyncStatusModel::ChipState::Active);
+    m.onMappingSyncStarted(QStringLiteral("m-con"), QStringLiteral("Contacts"), QStringLiteral("contact-new"));
+    QCOMPARE(m.conduits()[0].state, SyncStatusModel::ChipState::Done);   // previous auto-done
+    QCOMPARE(m.conduits()[1].state, SyncStatusModel::ChipState::Active);
+}
+
+void TestSyncStatusModel::mappingProgressUpdatesCounts()
+{
+    SyncStatusModel m;
+    m.seedConduits(twoSeeds());
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onMappingSyncStarted(QStringLiteral("m-cal"), QStringLiteral("Calendar"), QStringLiteral("office-calendar"));
+    m.onMappingSyncProgress(QStringLiteral("m-cal"), 0, 12, 45);
+    QCOMPARE(m.conduits()[0].current, 12);
+    QCOMPARE(m.conduits()[0].total, 45);
+}
+
+void TestSyncStatusModel::mappingFinishedFillsCountsAndState()
+{
+    SyncStatusModel m;
+    m.seedConduits(twoSeeds());
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onMappingSyncStarted(QStringLiteral("m-cal"), QStringLiteral("Calendar"), QStringLiteral("office-calendar"));
+    m.onMappingSyncFinished(QStringLiteral("m-cal"), 3, 2, 1, true);
+    QCOMPARE(m.conduits()[0].state, SyncStatusModel::ChipState::Done);
+    QCOMPARE(m.conduits()[0].created, 3);
+    QCOMPARE(m.conduits()[0].modified, 2);
+    QCOMPARE(m.conduits()[0].deleted, 1);
+    SyncStatusModel m2;
+    m2.seedConduits(twoSeeds());
+    m2.onRunStarted(QStringLiteral("HotSync"));
+    m2.onMappingSyncFinished(QStringLiteral("m-con"), 0, 0, 0, false);
+    QCOMPARE(m2.conduits()[1].state, SyncStatusModel::ChipState::Error);
+}
+
+void TestSyncStatusModel::unplugMidSyncInterruptsActiveChip()
+{
+    SyncStatusModel m;
+    m.seedConduits(twoSeeds());
+    m.onDeviceDetected();
+    m.onConnectionStarted();
+    m.onConnectionComplete(true, QString());
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onMappingSyncStarted(QStringLiteral("m-cal"), QStringLiteral("Calendar"), QStringLiteral("office-calendar"));
+    m.onDeviceLost();
+    QCOMPARE(m.linkState(), SyncStatusModel::LinkState::Disconnected);
+    QCOMPARE(m.conduits()[0].state, SyncStatusModel::ChipState::Interrupted);
 }
 
 QTEST_GUILESS_MAIN(TestSyncStatusModel)

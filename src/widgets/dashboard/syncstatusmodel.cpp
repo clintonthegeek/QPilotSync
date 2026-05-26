@@ -160,6 +160,50 @@ void SyncStatusModel::onRunStarted(const QString &modeLabel)
 
 void SyncStatusModel::onRunProgress(int, int, const QString &) {}
 void SyncStatusModel::onRunFinished(const WildPalms::Runtime::PalmRunResult &) {}
-void SyncStatusModel::onMappingSyncStarted(const QString &, const QString &, const QString &) {}
-void SyncStatusModel::onMappingSyncProgress(const QString &, int, int, int) {}
-void SyncStatusModel::onMappingSyncFinished(const QString &, int, int, int, bool) {}
+
+void SyncStatusModel::onMappingSyncStarted(const QString &mappingId,
+                                           const QString &label,
+                                           const QString &iconName)
+{
+    // Auto-complete any still-active conduit (engine runs sequentially).
+    for (auto &c : m_conduits)
+        if (c.state == ChipState::Active && c.mappingId != mappingId)
+            c.state = ChipState::Done;
+
+    Conduit *c = findConduit(mappingId);
+    if (!c) {
+        Conduit nc;
+        nc.mappingId = mappingId;
+        nc.label = label;
+        nc.iconName = iconName;
+        m_conduits.append(nc);
+        c = &m_conduits.last();
+    }
+    c->state = ChipState::Active;
+    if (!label.isEmpty())    c->label = label;
+    if (!iconName.isEmpty()) c->iconName = iconName;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::onMappingSyncProgress(const QString &mappingId, int /*phase*/,
+                                            int current, int total)
+{
+    if (Conduit *c = findConduit(mappingId)) {
+        c->current = current;
+        c->total = total;
+        Q_EMIT changed();
+    }
+}
+
+void SyncStatusModel::onMappingSyncFinished(const QString &mappingId, int created,
+                                            int modified, int deleted, bool ok)
+{
+    if (Conduit *c = findConduit(mappingId)) {
+        c->created = created;
+        c->modified = modified;
+        c->deleted = deleted;
+        c->state = ok ? ChipState::Done : ChipState::Error;
+        m_runChanges += created + modified + deleted;
+        Q_EMIT changed();
+    }
+}
