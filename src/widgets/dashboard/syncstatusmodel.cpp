@@ -79,7 +79,10 @@ void SyncStatusModel::onConnectionComplete(bool success, const QString &error)
         m_errorText.clear();
         setState(LinkState::Connected);
     } else {
-        m_errorText = error;
+        if (m_errorText != error) {
+            m_errorText = error;
+            Q_EMIT changed();
+        }
         setState(LinkState::Listening);
     }
 }

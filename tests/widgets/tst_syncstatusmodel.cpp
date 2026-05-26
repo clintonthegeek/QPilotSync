@@ -13,6 +13,7 @@ private slots:
     void unplugFromConnectedGoesDisconnected();
     void primaryActionLabelTracksState();
     void changedSignalFiresOnTransition();
+    void repeatedFailureUpdatesErrorText();
 };
 
 void TestSyncStatusModel::initialStateIsListening()
@@ -71,6 +72,19 @@ void TestSyncStatusModel::changedSignalFiresOnTransition()
     SyncStatusModel m;
     QSignalSpy spy(&m, &SyncStatusModel::changed);
     m.onDeviceDetected();
+    QVERIFY(spy.count() >= 1);
+}
+
+void TestSyncStatusModel::repeatedFailureUpdatesErrorText()
+{
+    SyncStatusModel m;
+    m.onDeviceDetected();
+    m.onConnectionStarted();
+    m.onConnectionComplete(false, QStringLiteral("port busy"));
+    QCOMPARE(m.linkState(), SyncStatusModel::LinkState::Listening);
+    QSignalSpy spy(&m, &SyncStatusModel::changed);
+    m.onConnectionComplete(false, QStringLiteral("permission denied"));
+    QCOMPARE(m.errorText(), QStringLiteral("permission denied"));
     QVERIFY(spy.count() >= 1);
 }
 
