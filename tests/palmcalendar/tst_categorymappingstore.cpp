@@ -16,6 +16,7 @@ private slots:
     void populatedSlotsIsSortedAndExcludesZero();
     void outOfRangeSlotRejected();
     void sixteenSlotNamesProducesFixedShape();
+    void slotForName_resolvesAndFallsBack();
 };
 
 void TestCategoryMappingStore::slotZeroAlwaysReturnsUnfiled()
@@ -119,6 +120,16 @@ void TestCategoryMappingStore::sixteenSlotNamesProducesFixedShape()
     QCOMPARE(empty.at(0), QStringLiteral("Unfiled"));
     for (int i = 1; i < 16; ++i)
         QCOMPARE(empty.at(i), QString());
+}
+
+void TestCategoryMappingStore::slotForName_resolvesAndFallsBack()
+{
+    WildPalms::PalmCalendar::CategoryMappingStore s;
+    s.setSlotName(QStringLiteral("DatebookDB"), 3, QStringLiteral("Work"));
+    QCOMPARE(s.slotForName(QStringLiteral("DatebookDB"), QStringLiteral("Work")), 3);
+    QCOMPARE(s.slotForName(QStringLiteral("DatebookDB"), QStringLiteral("Nope")), 0);   // unknown -> Unfiled
+    QCOMPARE(s.slotForName(QStringLiteral("DatebookDB"), QStringLiteral("Unfiled")), 0);
+    QCOMPARE(s.slotForName(QStringLiteral("DatebookDB"), QString()), 0);                // empty -> Unfiled
 }
 
 QTEST_MAIN(TestCategoryMappingStore)

@@ -63,4 +63,17 @@ QStringList CategoryMappingStore::sixteenSlotNames(const QString &dbName) const
     return out;
 }
 
+int CategoryMappingStore::slotForName(const QString &dbName, const QString &name) const
+{
+    if (name.isEmpty() || name == QLatin1String(UnfiledName))
+        return UnfiledSlot;
+    const auto db = m_slots.constFind(dbName);
+    if (db != m_slots.constEnd()) {
+        for (auto it = db->constBegin(); it != db->constEnd(); ++it)
+            if (it.value() == name)
+                return it.key();
+    }
+    return UnfiledSlot;
+}
+
 } // namespace WildPalms::PalmCalendar

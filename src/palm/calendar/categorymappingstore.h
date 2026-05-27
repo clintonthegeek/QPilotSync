@@ -51,6 +51,10 @@ public:
     /// unknown dbName, slot 0 will read "Unfiled" and 1..15 will be empty.
     QStringList sixteenSlotNames(const QString &dbName) const;
 
+    /// Reverse of slotName: the slot whose stored name equals `name`
+    /// (exact match) for dbName. "Unfiled"/empty/unknown -> 0 (Unfiled).
+    int slotForName(const QString &dbName, const QString &name) const;
+
 private:
     // dbName → (slot → name). slot keys only ever in 1..15.
     QHash<QString, QHash<int, QString>> m_slots;
