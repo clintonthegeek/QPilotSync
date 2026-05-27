@@ -688,6 +688,10 @@ void KF6MainWindow::loadProfile(const QString &path)
     updateWindowTitle();
     updateMenuState(connected);
     pushProfileInfoToStatusModel();
+    // If a device is already connected when this profile loads (e.g. switching
+    // profiles with the Palm attached), no fresh connectionComplete signal will
+    // arrive, so tell the model we are connected. setState() is idempotent if a
+    // real signal also fires later.
     if (connected)
         m_syncStatusModel->onConnectionComplete(true, QString());
 
