@@ -271,6 +271,16 @@ void PalmRuntime::cancelSync()
     }
 }
 
+// P4 Investigation finding (2026-05-27):
+// DAV mappings ARE persisted in mappings.conf and ARE loaded into m_mappings by
+// loadMappingsFromProfile() at the top of finishConnect(). This is Branch B, not A:
+// the mapping rows reference CalDAV backend IDs (e.g. "<uuid>:TBS") that are only
+// registered into BackendRegistry after AccountController's async ProviderManager
+// connectAll() completes — which happens long after finishConnect() emits readyForSync.
+// Result: the first auto-sync runs with the mapping list intact but the DAV SyncBackend
+// pointers unresolvable, so the engine silently skips those mappings and only syncs
+// the rawfiles fallbacks. Fix = gate readyForSync (or auto-sync) until all provider
+// connections have completed (i.e. until BackendRegistry holds the DAV backend entries).
 void PalmRuntime::finishConnect()
 {
     if (!m_device) return;
@@ -747,6 +757,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
 
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
+            if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
             if (m_device) m_device->resumeTickle();
             m_activeMappingId.clear();
             Q_EMIT runFinished(r);
@@ -831,6 +842,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         // Resume tickle on the main thread (this callback runs on the
         // engine worker thread).
         QMetaObject::invokeMethod(this, [this, r]() {
+            if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
             if (m_device) m_device->resumeTickle();
             Q_EMIT runFinished(r);
         });
