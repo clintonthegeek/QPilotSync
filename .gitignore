@@ -1,7 +1,6 @@
 # Build directories
 build/
-build-appimage/
-build-dev/
+build-*/
 cmake-build-*/
 Testing/
 pilot-link-install/

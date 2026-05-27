@@ -128,38 +128,48 @@ demotion are not implemented; WP's live path uses none of the role model.
   - A writable remote spoke owns a domain → the hub demotes to
     read-only-*to-the-user* (still records inbound changes and buffers
     Palm-side edits while offline); WildPalms becomes a passive conduit.
-  - Enforced as a **role semantic in the engine**, surfaced via an authority
-    query the UI consumes to gate editing.
+  - Surfaced via an authority query the UI consumes to gate editing. **Where
+    this is enforced is an open question** (see §5 + the libkalburator proposal).
 
 ### Data flow
 
-`Star` execution in one engine run: Palm → hub (apply device changes to canon),
-then hub → each enabled spoke ordered by `syncOrder`. Shape routing
+`Star` means: Palm → hub (apply device changes to canon), then hub → each
+enabled spoke ordered by `syncOrder`. Shape routing
 (`palm-encoding → canon → spoke-encoding`) is already handled by the shape
-graph; what changes is that all spokes route *through* the Primary hub rather
-than pairwise against the device.
+graph; all spokes route *through* the Primary hub rather than pairwise against
+the device.
+
+**Mechanism note (corrected after boundary audit):** libkalburator's
+`SyncEngine` already runs *any* `SyncMapping` list — it does **not** consume
+`LogicalCalendar`/`BackendRole`, which are inert types today. So `Star` is **not
+an engine change**; it is a *generator* (`bindings + topology → SyncMapping set`)
+plus an authority/demotion policy. Whether that generator + policy lives in
+libkalburator (shared) or in WildPalms (consumer) is the subject of
+`docs/2026-05-27-libkalburator-topology-authority-proposal.md` and gates §5.
 
 ---
 
-## 5. libkalburator Changes (delivered via handoff + PlanStan-green)
+## 5. libkalburator Changes — PENDING A DECISION
 
-> Per standing policy, libkalburator changes are proposed via a handoff doc and
-> must pass PlanStan's ctest baseline before landing. The user has explicitly
-> sanctioned semantic changes/generalizations to libkalburator classes for this
-> work.
+> **This section is gated by `docs/2026-05-27-libkalburator-topology-authority-
+> proposal.md`.** The boundary audit showed `SyncEngine` consumes `SyncMapping`
+> only and that `BackendRole`/`LogicalCalendar`/`SyncTopology` are inert. So the
+> "Star generator + authority policy" can live either in libkalburator (shared
+> with PlanStan) or in WildPalms (consumer). The proposal asks libkalburator to
+> pick a side. Per standing policy, any libkalburator change is delivered via
+> handoff + PlanStan-green; the user has sanctioned proposing semantic changes.
 
-1. **Generalize `LogicalCalendar` into a domain-agnostic logical collection**
-   carrying a `DomainId`, so contacts/todo/note reuse the same `BackendRole`
-   bindings instead of a calendar-named/typed structure. (Calendar remains a
-   consumer; the rename/generalization preserves existing behavior.)
-2. **Implement `SyncTopology::Star`** in `SyncEngine`: route every `Sync`
-   binding through the `Primary` hub, ordered by `syncOrder`, within a single
-   run (Palm → hub, then hub → spokes), replacing the flat pairwise queue for
-   star-configured collections.
-3. **Role-driven read-only / demotion semantic**: when a writable remote `Sync`
-   binding is present for a collection, the engine treats the hub as conduit and
-   exposes an authority query (e.g. "is the local Primary user-writable for this
-   collection?") that the UI consumes to gate editing.
+**If libkalburator "owns it" (proposal §4):**
+1. Generalize `LogicalCalendar` → a domain-agnostic `LogicalCollection`
+   (`DomainId` + `collectionId`), so all domains reuse `BackendRole` bindings.
+2. Add a shared mapping **generator** (`bindings + SyncTopology → SyncMapping`),
+   in a coordinator layer **above `SyncEngine`** (the engine loop is unchanged).
+3. Add an authority gate: consult `discoveredWritable()` in the write path
+   (a standalone correctness fix), plus a demotion query the UI consumes.
+
+**If libkalburator "disowns it":** the generator + authority policy move to §6
+(WildPalms), using `BackendRole` only as inert data; we still request the
+`discoveredWritable()` enforcement fix.
 
 ---
 
