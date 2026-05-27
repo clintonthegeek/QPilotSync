@@ -149,14 +149,12 @@ void TstRuntimeCalDavE2E::palm_to_caldav_propagates()
     QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);
     QVERIFY(future.resultAt(0).success);
 
-    // Phase K.4 gate: the palm event lands on the CalDAV server. This
-    // is the core "palm -> caldav direction" assertion — what
-    // `CalendarPluginWriter` blocked on pre-K.4 because of its
-    // `m_collection != nullptr` guard. With K.4's `prepareForApply`
-    // null-collection blob fallback, the writer parses the iCal from
-    // BackendRecord::data and pushes through CalDAV's IBlobBackend
-    // surface (createRecord -> RemoteCalendarBackend::createRecord ->
-    // network PUT).
+    // The palm event lands on the CalDAV server — the core "palm ->
+    // caldav direction" assertion. Post-O15, calendar writes go through
+    // the uniform DefaultBlobWriter: the iCal is parsed from
+    // BackendRecord::data and pushed through CalDAV's IBlobBackend surface
+    // (createRecord -> RemoteCalendarBackend::createRecord -> network PUT).
+    // Writes are best-effort and retry-safe (no transactional rollback).
     QVERIFY(server.hasEvent(QStringLiteral("/calendars/testuser/personal/"),
                             QStringLiteral("event-palm-001@palm")));
 }
