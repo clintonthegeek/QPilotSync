@@ -1,6 +1,7 @@
 #include "settingsdialog.h"
 #include "kf6/kf6settings.h"
 #include "profile.h"
+#include "runtime/profileregistry.h"
 #include "app/accounts/accountspage.h"
 #include "app/mapping/syncmappingspage.h"
 
@@ -17,6 +18,9 @@
 #include <QComboBox>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QTreeWidget>
+#include <QHeaderView>
+#include <QDateTime>
 #include <QPushButton>
 #include <QLabel>
 #include <QSpinBox>
@@ -63,6 +67,11 @@ SettingsDialog::SettingsDialog(QWidget *parent, Profile *profile)
     // Wire buttons
     connect(this, &QDialog::accepted, this, [this]() {
         saveSettings();
+        // OK must persist the per-profile Accounts + Sync Mappings too —
+        // previously only the Apply button did, so wiring an edge and clicking
+        // OK silently discarded it (empty mappings.conf, sync fell back to
+        // rawfiles defaults).
+        onApplyAccountsAndMappings();
     });
     connect(button(QDialogButtonBox::Apply), &QPushButton::clicked,
             this, &SettingsDialog::onApply);
@@ -87,12 +96,18 @@ QWidget* SettingsDialog::createProfilesPage()
     info->setTextFormat(Qt::RichText);
     profilesLayout->addWidget(info);
 
-    m_recentProfilesList = new QListWidget();
-    m_recentProfilesList->setAlternatingRowColors(true);
-    m_recentProfilesList->setSelectionMode(QAbstractItemView::SingleSelection);
-    connect(m_recentProfilesList, &QListWidget::itemDoubleClicked,
+    m_profilesTree = new QTreeWidget();
+    m_profilesTree->setColumnCount(3);
+    m_profilesTree->setHeaderLabels(
+        {i18n("Name"), i18n("Last used"), i18n("Path")});
+    m_profilesTree->setRootIsDecorated(false);
+    m_profilesTree->setAlternatingRowColors(true);
+    m_profilesTree->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_profilesTree->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_profilesTree->header()->setStretchLastSection(true);
+    connect(m_profilesTree, &QTreeWidget::itemDoubleClicked,
             this, &SettingsDialog::onSetDefaultProfile);
-    profilesLayout->addWidget(m_recentProfilesList);
+    profilesLayout->addWidget(m_profilesTree);
 
     auto *btnLayout = new QHBoxLayout();
     m_setDefaultBtn = new QPushButton(i18n("Set as Default"));
@@ -348,36 +363,54 @@ void SettingsDialog::loadSettings()
     m_defaultProfileEdit->setToolTip(defaultProfile);
     m_clearProfileBtn->setEnabled(!defaultProfile.isEmpty());
 
-    // Recent profiles list
-    m_recentProfilesList->clear();
-    QStringList recent = s.recentProfiles();
-
-    for (const QString &path : recent) {
-        QFileInfo fi(path);
-        QString displayText = fi.fileName();
-        bool isDefault = (path == defaultProfile);
-        if (isDefault) {
-            displayText += i18n(" (Default)");
+    // Known profiles. Source from the app ProfileRegistry, which holds the
+    // real display name, stable id and last-used time \u2014 so distinctly-named
+    // profiles are recognizable and don't all collapse to their folder
+    // basename ("profileN"). Falls back to the legacy KF6Settings recent-paths
+    // list (basenames only) when no registry was supplied.
+    m_profilesTree->clear();
+    int profileRows = 0;
+    if (m_profileRegistry) {
+        for (const auto &e : m_profileRegistry->entries()) {
+            const bool isDefault = (e.path == defaultProfile);
+            const QString lastUsed = e.lastOpened.isValid()
+                ? e.lastOpened.toString(QStringLiteral("yyyy-MM-dd hh:mm"))
+                : i18n("Never");
+            QString name = e.name.isEmpty() ? e.id : e.name;
+            if (isDefault) name += i18n(" (Default)");
+            auto *item = new QTreeWidgetItem(
+                m_profilesTree, QStringList{ name, lastUsed, e.path });
+            item->setData(0, Qt::UserRole, e.path);
+            item->setData(0, Qt::UserRole + 1, e.id);
+            item->setToolTip(0, i18n("id: %1\npath: %2", e.id, e.path));
+            if (isDefault) {
+                QFont f = item->font(0);
+                f.setBold(true);
+                for (int c = 0; c < 3; ++c) item->setFont(c, f);
+            }
+            ++profileRows;
         }
-
-        auto *item = new QListWidgetItem(displayText);
-        item->setData(Qt::UserRole, path);
-        item->setToolTip(path);
-        if (isDefault) {
-            QFont font = item->font();
-            font.setBold(true);
-            item->setFont(font);
+    } else {
+        for (const QString &path : s.recentProfiles()) {
+            const bool isDefault = (path == defaultProfile);
+            QString name = QFileInfo(path).fileName();
+            if (isDefault) name += i18n(" (Default)");
+            auto *item = new QTreeWidgetItem(
+                m_profilesTree, QStringList{ name, QString(), path });
+            item->setData(0, Qt::UserRole, path);
+            item->setToolTip(0, path);
+            ++profileRows;
         }
-        m_recentProfilesList->addItem(item);
     }
 
-    if (recent.isEmpty()) {
-        auto *item = new QListWidgetItem(
-            i18n("(No profiles yet \u2014 create one via File \u2192 New Profile)"));
+    if (profileRows == 0) {
+        auto *item = new QTreeWidgetItem(
+            m_profilesTree,
+            QStringList{ i18n("(No profiles yet \u2014 create one via File \u2192 New Profile)") });
         item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-        item->setForeground(Qt::gray);
-        m_recentProfilesList->addItem(item);
     }
+    m_profilesTree->resizeColumnToContents(0);
+    m_profilesTree->resizeColumnToContents(1);
 
     // Registered devices (by USB serial \u2014 Phase L Task 0.B consolidated
     // the previous fingerprint-keyed DeviceRegistry into DeviceSerials).
@@ -427,9 +460,9 @@ void SettingsDialog::saveSettings()
 
 void SettingsDialog::onSetDefaultProfile()
 {
-    QListWidgetItem *item = m_recentProfilesList->currentItem();
+    QTreeWidgetItem *item = m_profilesTree->currentItem();
     if (!item) return;
-    QString path = item->data(Qt::UserRole).toString();
+    QString path = item->data(0, Qt::UserRole).toString();
     if (path.isEmpty()) return;
 
     KF6Settings::instance().setDefaultProfilePath(path);
@@ -463,17 +496,24 @@ void SettingsDialog::onClearDefaultProfile()
 
 void SettingsDialog::onRemoveRecentProfile()
 {
-    QListWidgetItem *item = m_recentProfilesList->currentItem();
+    QTreeWidgetItem *item = m_profilesTree->currentItem();
     if (!item) return;
-    QString path = item->data(Qt::UserRole).toString();
-    if (path.isEmpty()) return;
+    const QString path = item->data(0, Qt::UserRole).toString();
+    const QString id   = item->data(0, Qt::UserRole + 1).toString();
+    if (path.isEmpty() && id.isEmpty()) return;
 
     KF6Settings &s = KF6Settings::instance();
-    s.removeRecentProfile(path);
-    if (path == s.defaultProfilePath()) {
-        s.setDefaultProfilePath(QString());
+    if (!path.isEmpty()) {
+        s.removeRecentProfile(path);
+        if (path == s.defaultProfilePath())
+            s.setDefaultProfilePath(QString());
+        s.sync();
     }
-    s.sync();
+    // Forget it from the app registry too, so it doesn't reappear in the
+    // list. This drops the registry entry only; the on-disk profile folder
+    // is left intact.
+    if (m_profileRegistry && !id.isEmpty())
+        m_profileRegistry->unregister(id);
     loadSettings();
 }
 
@@ -516,6 +556,14 @@ void SettingsDialog::setPalmRuntime(WildPalms::Runtime::PalmRuntime *palmRuntime
 {
     m_palmRuntime = palmRuntime;
     buildAccountsAndMappingsPagesIfReady();
+}
+
+void SettingsDialog::setProfileRegistry(WildPalms::Runtime::ProfileRegistry *registry)
+{
+    m_profileRegistry = registry;
+    // Repaint the Profiles page from the richer source if it's already built.
+    if (m_profilesTree)
+        loadSettings();
 }
 
 void SettingsDialog::buildAccountsAndMappingsPagesIfReady()

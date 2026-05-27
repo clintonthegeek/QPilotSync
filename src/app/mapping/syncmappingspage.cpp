@@ -38,6 +38,12 @@ SyncMappingsPage::SyncMappingsPage(Profile *profile,
     if (m_accounts) {
         connect(m_accounts, &WildPalms::Runtime::AccountController::providersChanged,
                 this, &SyncMappingsPage::reloadGraph);
+        // Providers connect asynchronously; their collections only arrive when
+        // discovery finishes. Without this, opening the page before connect
+        // completes shows providers stuck on "Connecting…" with no calendars
+        // to wire. Refresh the graph as each provider's state changes.
+        connect(m_accounts, &WildPalms::Runtime::AccountController::connectStateChanged,
+                this, &SyncMappingsPage::reloadGraph);
     }
 }
 

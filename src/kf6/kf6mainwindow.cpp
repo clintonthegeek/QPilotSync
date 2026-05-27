@@ -2045,6 +2045,7 @@ void KF6MainWindow::onConfigureMappings()
     }
 
     SettingsDialog dialog(this, m_currentProfile.get());
+    dialog.setProfileRegistry(m_profileRegistry.get());
     dialog.setAccountController(m_accountController.get());
     dialog.setPalmRuntime(m_palmRuntime.get());
     dialog.navigateToSyncMappings();
@@ -2159,6 +2160,7 @@ void KF6MainWindow::onAbout()
 void KF6MainWindow::onSettings()
 {
     SettingsDialog dialog(this, m_currentProfile.get());
+    dialog.setProfileRegistry(m_profileRegistry.get());
     // F.3: feed AC + PalmRuntime so the dialog can show the
     // Accounts + Sync Mappings pages.
     dialog.setAccountController(m_accountController.get());

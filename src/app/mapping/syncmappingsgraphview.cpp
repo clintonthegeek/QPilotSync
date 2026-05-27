@@ -156,7 +156,12 @@ void SyncMappingGraphView::rebuild()
         const QString sourceBackend = obj.value(QStringLiteral("sourceBackend")).toString();
         const QString sourceCalendar = obj.value(QStringLiteral("sourceCalendar")).toString();
         const QString targetCollection = obj.value(QStringLiteral("targetCalendar")).toString();
-        const QString targetProviderId = obj.value(QStringLiteral("targetBackend")).toString();
+        // targetBackend is "<providerId>:<collectionId>"; recover the bare
+        // providerId for the node lookup (providerId is a colon-free UUID, so
+        // section on the first ':' is safe — and a legacy bare-id mapping with
+        // no colon still resolves to itself).
+        const QString targetProviderId =
+            obj.value(QStringLiteral("targetBackend")).toString().section(QLatin1Char(':'), 0, 0);
 
         // Find the Palm DB whose backendId == sourceBackend and parse slot.
         QString dbName;
@@ -237,7 +242,8 @@ bool SyncMappingGraphView::isDuplicate(const QString &dbName, int slot,
         const QJsonObject j = e->mappingJson();
         if (j.value(QStringLiteral("sourceBackend")).toString()  == srcBackend &&
             j.value(QStringLiteral("sourceCalendar")).toString() == srcCalendar &&
-            j.value(QStringLiteral("targetBackend")).toString()  == providerId &&
+            j.value(QStringLiteral("targetBackend")).toString()  ==
+                QStringLiteral("%1:%2").arg(providerId, collectionId) &&
             j.value(QStringLiteral("targetCalendar")).toString() == collectionId) {
             return true;
         }
@@ -253,7 +259,12 @@ QJsonObject SyncMappingGraphView::defaultMappingJson(
     m.id              = QUuid::createUuid().toString(QUuid::WithoutBraces);
     m.sourceBackend   = palmBackendIdForDb(dbName);
     m.sourceCalendar  = palmCollectionIdForSlot(dbName, slot);
-    m.targetBackend   = providerId;
+    // The engine resolves the target by the backend-instance id that
+    // ProviderManager registers each collection under: "<providerId>:<collectionId>"
+    // (see libkalburator providermanager.cpp). Storing the bare providerId here
+    // made SyncEngine::dispatchSync fail backendById() and silently abort the
+    // mapping ("backend not found") — no Palm read, no remote fetch.
+    m.targetBackend   = QStringLiteral("%1:%2").arg(providerId, collectionId);
     m.targetCalendar  = collectionId;
     m.mode            = Kalburator::Sync::SyncMode::TwoWay;
     m.conflictPolicy  = Kalburator::Sync::ConflictResolution::AskUser;

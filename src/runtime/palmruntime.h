@@ -196,6 +196,14 @@ private:
     /// none exist, sets up the engine. Emits deviceConnected + readyForSync.
     void finishConnect();
 
+    /// Repopulate m_mappings from the borrowed Profile's persisted
+    /// syncMappingsJson(). The Profile is the source of truth for
+    /// user-configured (incl. remote DAV) mappings; without this the runtime
+    /// starts empty and finishConnect() generates rawfiles defaults for every
+    /// slot, silently discarding the user's wiring. No-op when m_profile is
+    /// null (test/no-profile paths keep their injected mappings).
+    void loadMappingsFromProfile();
+
     // Mirror direction — local enum avoids pulling synctypes.h into this header.
     enum class MirrorDir { PalmToPC, PCToPalm };
 

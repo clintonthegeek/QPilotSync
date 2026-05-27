@@ -7,6 +7,7 @@ class QCheckBox;
 class QComboBox;
 class QLineEdit;
 class QListWidget;
+class QTreeWidget;
 class QPushButton;
 class QLabel;
 class QSpinBox;
@@ -15,6 +16,7 @@ class Profile;
 namespace WildPalms::Runtime {
     class AccountController;
     class PalmRuntime;
+    class ProfileRegistry;
 }
 namespace WildPalms::AppMapping {
     class SyncMappingsPage;
@@ -55,6 +57,12 @@ public:
     /// the Sync Mappings page unbuilt.
     void setPalmRuntime(WildPalms::Runtime::PalmRuntime *palmRuntime);
 
+    /// Borrow the app-level ProfileRegistry so the Profiles page can show
+    /// real display names, ids/paths and last-used times (instead of folder
+    /// basenames read from the KF6Settings "recent paths" list). Non-owning;
+    /// must outlive the dialog. Call before exec().
+    void setProfileRegistry(WildPalms::Runtime::ProfileRegistry *registry);
+
     /// F.3: navigate to the Sync Mappings page (no-op if not present).
     /// Used by KF6MainWindow::onConfigureMappings to deep-link.
     void navigateToSyncMappings();
@@ -88,7 +96,7 @@ private:
     QLineEdit *m_defaultProfileEdit;
     QPushButton *m_browseProfileBtn;
     QPushButton *m_clearProfileBtn;
-    QListWidget *m_recentProfilesList;
+    QTreeWidget *m_profilesTree;
     QPushButton *m_setDefaultBtn;
     QPushButton *m_removeRecentBtn;
     QPushButton *m_clearRecentBtn;
@@ -113,6 +121,7 @@ private:
     // F.3: Accounts + Sync Mappings pages (added when controllers supplied)
     WildPalms::Runtime::AccountController *m_accountController = nullptr;
     WildPalms::Runtime::PalmRuntime       *m_palmRuntime = nullptr;
+    WildPalms::Runtime::ProfileRegistry   *m_profileRegistry = nullptr;
     WildPalms::App::Accounts::AccountsPage *m_accountsPage = nullptr;
     WildPalms::AppMapping::SyncMappingsPage *m_syncMappingsPage = nullptr;
     KPageWidgetItem                       *m_syncMappingsPageItem = nullptr;

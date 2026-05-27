@@ -252,6 +252,13 @@ void PalmRuntime::finishConnect()
 {
     if (!m_device) return;
 
+    // Load the user's persisted mappings from the Profile FIRST, so the
+    // per-slot "already covered" check below sees them and we only add
+    // rawfiles defaults for genuinely uncovered slots. Without this every
+    // connect rebuilt all-defaults and discarded remote (CalDAV/CardDAV)
+    // mappings the user wired in the graph.
+    loadMappingsFromProfile();
+
     // K.8b T6: iterate the five statically-loaded Palm plugins registered
     // by registerPalmPlugins(). Replaces the old KPluginMetaData .so
     // discovery loop.
@@ -471,6 +478,23 @@ void PalmRuntime::setMappingsForTest(QList<Kalburator::Sync::SyncMapping> mappin
 void PalmRuntime::setProfile(Profile *profile)
 {
     m_profile = profile;
+    // Make saved mappings available immediately (before device connect), so
+    // palmMappings() and any pre-connect logic reflect the persisted set.
+    // finishConnect() reloads again to stay authoritative across reconnects.
+    loadMappingsFromProfile();
+}
+
+void PalmRuntime::loadMappingsFromProfile()
+{
+    if (!m_profile) return;   // test/no-profile: keep injected mappings as-is
+    m_mappings.clear();
+    const QJsonArray saved = m_profile->syncMappingsJson();
+    for (const auto &v : saved) {
+        if (v.isObject())
+            m_mappings.append(Kalburator::Sync::syncMappingFromJson(v.toObject()));
+    }
+    if (m_engine)
+        m_engine->setSyncMappings(m_mappings);
 }
 
 void PalmRuntime::setConflictHandler(

@@ -3,6 +3,7 @@
 #include <backendregistry.h>
 #include <backendcontribution.h>
 #include <iprovider.h>
+#include <iproviderconfigwidget.h>
 #include <backendconfiguration.h>
 
 #include <QComboBox>
@@ -111,12 +112,35 @@ void AccountFormWidget::onTestConnection() {
     IProvider *p = m_providers.at(static_cast<std::size_t>(idx)).get();
     if (!p) return;
 
+    // Bridge: widget -> provider, before connect(). Without this the provider
+    // is empty and connect() fails its "no server URL" guard immediately.
+    if (auto *cw = dynamic_cast<Kalburator::Sync::IProviderConfigWidget *>(
+                       m_configStack->currentWidget()))
+        p->load(cw->configuration());
+
     m_statusLabel->setText(tr("Testing..."));
+
+    // Capture the provider's error() reason so the label can say more than
+    // "Failed". Torn down once the test resolves.
+    m_lastTestError.clear();
+    QObject::disconnect(m_errorConn);
+    m_errorConn = connect(p, &IProvider::error, this,
+                          [this](const QString &msg) { m_lastTestError = msg; });
+
     auto fut = p->connect();
     auto *w = new QFutureWatcher<bool>(this);
     connect(w, &QFutureWatcher<bool>::finished, this, [this, w, p]() {
         const bool ok = w->result();
-        m_statusLabel->setText(ok ? tr("Connected") : tr("Failed"));
+        QObject::disconnect(m_errorConn);
+        if (ok) {
+            QString msg = tr("Connected");
+            const QString warn = p->lastWarning();  // partial-protocol failure
+            if (!warn.isEmpty()) msg += tr(" — %1").arg(warn);
+            m_statusLabel->setText(msg);
+        } else {
+            m_statusLabel->setText(m_lastTestError.isEmpty()
+                ? tr("Failed") : tr("Failed: %1").arg(m_lastTestError));
+        }
         p->disconnect();
         w->deleteLater();
     });
@@ -128,6 +152,11 @@ BackendConfiguration AccountFormWidget::configuration() const {
     if (idx < 0 || static_cast<std::size_t>(idx) >= m_providers.size()) return {};
     IProvider *p = m_providers.at(static_cast<std::size_t>(idx)).get();
     if (!p) return {};
+    // Bridge: widget -> provider before serializing, so Save persists the
+    // user's typed URL/credentials rather than an empty provider.
+    if (auto *cw = dynamic_cast<Kalburator::Sync::IProviderConfigWidget *>(
+                       m_configStack->currentWidget()))
+        p->load(cw->configuration());
     return p->save();
 }
 

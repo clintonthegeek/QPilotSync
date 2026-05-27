@@ -53,6 +53,9 @@ private:
     QPushButton    *m_testButton {nullptr};
     QLabel         *m_statusLabel {nullptr};
 
+    QString                 m_lastTestError;
+    QMetaObject::Connection m_errorConn;
+
     std::vector<std::unique_ptr<Kalburator::Sync::IProvider>> m_providers;
 };
 
