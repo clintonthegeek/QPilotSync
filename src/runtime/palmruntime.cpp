@@ -687,9 +687,24 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     if (ids.isEmpty())
         return makeSuccessFuture();
 
-    // Pause the TickleWorker before the engine starts issuing DLP calls.
-    // readAllRecords() for 500+ records takes > 5 s; the tickle fires
-    // mid-stream and corrupts the DLP session.
+    // P2 Investigation (2026-05-27): pauseTickle() rationale
+    // Historical context (May 2, 2026, commit 0fefb6b): The original TickleWorker
+    // ran on a separate thread and interleaved dlp_GetSysDateTime() with DLP calls
+    // from QtConcurrent pool threads, corrupting the DLP session state. The fix was
+    // to synchronize by pausing the tickle before bulk DLP work.
+    //
+    // Current architecture: PalmDeviceAccess owns m_linkThread (a QThread). All
+    // DLP calls marshal to m_implOwner on m_linkThread via BlockingQueuedConnection,
+    // and PalmTickle is parented to m_implOwner, so both tickle timer and DLP calls
+    // run on m_linkThread's event loop. BlockingQueuedConnection blocks the caller
+    // until the link thread finishes, guaranteeing serialization — the tickle timer
+    // can ONLY fire between (or outside) DLP operations, never during them.
+    //
+    // Hazard assessment: Cross-thread race (the original issue) is eliminated.
+    // However, if dlp_GetSysDateTime and in-progress DLP operations have protocol-level
+    // conflicts on the Palm wire (independent of thread safety), the pause is still
+    // necessary. Task 2.2 can safely narrow this to apply-phase only; the serialization
+    // guarantee ensures no read-phase interleaving.
     if (m_device) m_device->pauseTickle();
 
     auto engineFuture = m_engine->runSyncFuture(
