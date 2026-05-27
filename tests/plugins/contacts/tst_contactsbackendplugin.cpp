@@ -8,6 +8,8 @@
 #include "plugins/contacts/palmcontactsbackend.h"
 #include "plugins/contacts/contactsconflicthandler.h"
 
+#include <shapecontribution.h>  // O7: complete type for shapeContributions() peerShapes()
+
 #include "palm/calendar/categorymappingstore.h"
 #include "palm/sync/mockpalmdatabaseaccess.h"
 #include "runtime/palmdeviceaccess.h"
@@ -81,18 +83,10 @@ private slots:
 
 void TestContactsBackendPlugin::cleanup()
 {
-    // The plugin constructor mutates the process-wide TransformationRegistry.
-    // Reset all four registries between slots so re-seeding via
-    // registerStockPlugins succeeds (no CanonicalConflict / DoubleBinding
-    // from prior slot). K.7: ContactsDomainPlugin removed;
-    // registerStockPlugins() is the canonical re-seed path.
-    Kalburator::Shape::TransformationRegistry::instance().clear();
-    Kalburator::Shape::DomainRegistry::instance().clear();
-    Kalburator::Shape::DomainOperationsRegistry::instance().clear();
-    // Phase Q.1: BackendRegistry singleton removed; use a local registry.
-    Kalburator::Sync::BackendRegistry registry;
-    Kalburator::PluginManager pm(&registry);
-    Kalburator::registerStockPlugins(pm);
+    // O7: nothing to reset. The plugin no longer mutates any process-global
+    // registry at construction (shape registration moved to shapeContributions(),
+    // applied by PluginManager into an injected ShapeRegistries). The ambient
+    // ::instance() registries were deleted in libkalburator v0.57.
 }
 
 void TestContactsBackendPlugin::pluginIdentity()
@@ -194,18 +188,22 @@ void TestContactsBackendPlugin::formatConflictRecordHtml_includesTitleAndPre()
 
 void TestContactsBackendPlugin::constructorRegistersPalmShape()
 {
-    // The previous slot's cleanup() left both registries seeded via
-    // registerStockPlugins() (which registers vcard4 via ContactsPlugin).
-    // Constructing a ContactsBackendPlugin must additionally register the
-    // palm peer shape and palm <-> vcard4 edges.
-    auto& reg = Kalburator::Shape::TransformationRegistry::instance();
-
+    // O7: the plugin no longer registers shapes in its ctor; it exposes them
+    // via shapeContributions(), which PluginManager applies into the injected
+    // ShapeRegistries. Verify the contribution yields the (contacts, palm) peer.
     ContactsBackendPlugin plugin;
+
+    const auto contribs = plugin.shapeContributions();
+    QCOMPARE(contribs.size(), 1);
 
     const Kalburator::Shape::Shape palm{
         Kalburator::Shape::DomainId{"contacts"},
         Kalburator::Shape::EncodingId{"palm"} };
-    QVERIFY(reg.catalogueFor(palm) != nullptr);
+
+    bool foundPalm = false;
+    for (const auto &[shape, cat] : contribs.first()->peerShapes())
+        if (shape == palm) foundPalm = true;
+    QVERIFY(foundPalm);
 }
 
 QTEST_MAIN(TestContactsBackendPlugin)

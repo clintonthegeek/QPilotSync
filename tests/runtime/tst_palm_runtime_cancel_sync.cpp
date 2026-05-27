@@ -28,11 +28,8 @@ class TstPalmRuntimeCancelSync : public QObject {
 private slots:
     void initTestCase()
     {
-        // Seed DomainRegistry with stock plugins (same as tst_palm_runtime_hotsync).
-        // Phase Q.1: PluginManager ctor now requires a BackendRegistry*.
-        Kalburator::Sync::BackendRegistry registry;
-        Kalburator::PluginManager pm(&registry);
-        Kalburator::registerStockPlugins(pm);
+        // O7: no global seeding needed — each PalmRuntime self-loads stock + WP
+        // plugins into its own ShapeRegistries (see PalmRuntime::registerPalmPlugins).
     }
 
     void cancelSync_noSync_nocrash()

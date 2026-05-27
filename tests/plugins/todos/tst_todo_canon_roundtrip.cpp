@@ -15,7 +15,7 @@
 #include "todostockshapes.h"
 
 using namespace Kalburator::Shape;
-using WildPalms::TodoPlugin::TodoDomainExtension;
+using WildPalms::TodoPlugin::TodoPalmShapes;
 using WildPalms::PalmSync::PalmRecord;
 using WildPalms::PalmCodecs::Todo;
 using WildPalms::PalmCodecs::encodeTodo;
@@ -48,8 +48,12 @@ ShapeRegistries makeTodoRegistries()
         reg.registerEdge(edge);
 
     // WildPalms: (todo, palm) + palm<->ical-vtodo edges. Not part of stock; the
-    // palm->ical-vtodo->canon path only compiles once this runs.
-    TodoDomainExtension::registerWith(reg);
+    // palm->ical-vtodo->canon path only compiles once these run.
+    TodoPalmShapes wpShapes;
+    for (const auto &[shape, cat] : wpShapes.peerShapes())
+        reg.registerShape(shape, cat);
+    for (const auto &edge : wpShapes.edges())
+        reg.registerEdge(edge);
 
     return regs;
 }

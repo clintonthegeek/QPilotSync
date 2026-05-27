@@ -15,7 +15,7 @@
 #include "contactsstockshapes.h"
 
 using namespace Kalburator::Shape;
-using WildPalms::ContactsPlugin::ContactsDomainExtension;
+using WildPalms::ContactsPlugin::ContactsPalmShapes;
 using WildPalms::PalmSync::PalmRecord;
 
 namespace {
@@ -46,9 +46,13 @@ ShapeRegistries makeContactsRegistries()
     for (const auto &edge : stock.edges())
         reg.registerEdge(edge);
 
-    // Register the WildPalms palm<->vcard4 edge; not part of libkalburator's
-    // stock shapes, so the palm->vcard4->canon path only compiles once this runs.
-    ContactsDomainExtension::registerWith(reg);
+    // Register the WildPalms palm<->vcard4 edges; not part of libkalburator's
+    // stock shapes, so the palm->vcard4->canon path only compiles once these run.
+    ContactsPalmShapes wpShapes;
+    for (const auto &[shape, cat] : wpShapes.peerShapes())
+        reg.registerShape(shape, cat);
+    for (const auto &edge : wpShapes.edges())
+        reg.registerEdge(edge);
 
     return regs;
 }

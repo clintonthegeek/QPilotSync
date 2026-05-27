@@ -2,32 +2,40 @@
 
 #include "contactsdomainextension.h"
 
-#include "domainregistry.h"
 #include "transformationregistry.h"
 
-using WildPalms::ContactsPlugin::ContactsDomainExtension;
+using WildPalms::ContactsPlugin::ContactsPalmShapes;
 using namespace Kalburator::Shape;
+
+namespace {
+
+// O7: apply the plugin's ShapeContribution into a registry the way
+// PluginManager::applyPlugin does — register peer shapes, then edges.
+void applyPalmShapes(TransformationRegistry &reg)
+{
+    ContactsPalmShapes c;
+    for (const auto &[shape, cat] : c.peerShapes())
+        reg.registerShape(shape, cat);
+    for (const auto &edge : c.edges())
+        reg.registerEdge(edge);
+}
+
+} // namespace
 
 class TestContactsDomainExtension : public QObject {
     Q_OBJECT
 private slots:
-    void cleanup()
-    {
-        DomainRegistry::instance().clear();
-        TransformationRegistry::instance().clear();
-    }
-
     void registersPalmShape()
     {
-        auto& reg = TransformationRegistry::instance();
-        // vcard4 endpoint must exist before edge registration (the
-        // libkalburator contacts plugin does this at runtime; in tests
-        // we stub it). Without this, registerEdge asserts "to-shape
-        // not registered".
+        // O7: use a local registry instead of the deleted ::instance() global.
+        TransformationRegistry reg;
+        // vcard4 endpoint must exist before edge registration (the libkalburator
+        // contacts plugin registers it; here we stub it). Without it, registerEdge
+        // asserts "to-shape not registered".
         const Shape v4{ DomainId{"contacts"}, EncodingId{"vcard4"} };
         reg.registerShape(v4, {});
 
-        ContactsDomainExtension::registerWith(reg);
+        applyPalmShapes(reg);
 
         const Shape palm{ DomainId{"contacts"}, EncodingId{"palm"} };
         QVERIFY(reg.catalogueFor(palm) != nullptr);
@@ -35,15 +43,11 @@ private slots:
 
     void registersBothEdges()
     {
-        auto& reg = TransformationRegistry::instance();
-        // We need vcard4 registered for the v4 endpoint. The libkalburator
-        // contacts plugin does this; in tests we register it ourselves
-        // BEFORE calling extension's registerWith (extension creates edges
-        // which require both endpoints to already be registered).
-        const Shape v4  { DomainId{"contacts"}, EncodingId{"vcard4"} };
+        TransformationRegistry reg;
+        const Shape v4{ DomainId{"contacts"}, EncodingId{"vcard4"} };
         reg.registerShape(v4, {});
 
-        ContactsDomainExtension::registerWith(reg);
+        applyPalmShapes(reg);
 
         const Shape palm{ DomainId{"contacts"}, EncodingId{"palm"} };
 
@@ -60,11 +64,11 @@ private slots:
 
     void idempotentReregister()
     {
-        auto& reg = TransformationRegistry::instance();
+        TransformationRegistry reg;
         const Shape v4{ DomainId{"contacts"}, EncodingId{"vcard4"} };
         reg.registerShape(v4, {});
-        ContactsDomainExtension::registerWith(reg);
-        ContactsDomainExtension::registerWith(reg);   // must not assert
+        applyPalmShapes(reg);
+        applyPalmShapes(reg);   // identical re-registration must not assert
     }
 };
 

@@ -19,7 +19,7 @@
 #include <KCalendarCore/MemoryCalendar>
 
 using namespace Kalburator::Shape;
-using WildPalms::CalendarPlugin::CalendarDomainExtension;
+using WildPalms::CalendarPlugin::CalendarPalmShapes;
 using WildPalms::PalmSync::PalmRecord;
 
 namespace {
@@ -49,8 +49,12 @@ ShapeRegistries makeCalendarRegistries()
         reg.registerEdge(edge);
 
     // WildPalms: (calendar, palm) + palm<->ical edges. Not part of stock; the
-    // palm->ical->canon path only compiles once this runs.
-    CalendarDomainExtension::registerWith(reg);
+    // palm->ical->canon path only compiles once these are registered.
+    CalendarPalmShapes wpShapes;
+    for (const auto &[shape, cat] : wpShapes.peerShapes())
+        reg.registerShape(shape, cat);
+    for (const auto &edge : wpShapes.edges())
+        reg.registerEdge(edge);
 
     return regs;
 }

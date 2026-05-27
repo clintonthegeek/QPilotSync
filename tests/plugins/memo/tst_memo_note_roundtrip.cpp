@@ -15,7 +15,7 @@
 #include "notestockshapes.h"
 
 using namespace Kalburator::Shape;
-using WildPalms::Memo::NoteDomainExtension;
+using WildPalms::Memo::NotePalmShapes;
 using WildPalms::PalmSync::PalmRecord;
 
 namespace {
@@ -44,9 +44,13 @@ ShapeRegistries makeNoteRegistries()
     for (const auto &edge : stock.edges())
         reg.registerEdge(edge);
 
-    // WildPalms: (note, palm) + palm<->markdown edges. Not part of stock; the
-    // palm->markdown->canon path only compiles once this runs.
-    NoteDomainExtension::registerWith(reg);
+    // WildPalms: (note, palm) + palm<->canon edges. Not part of stock; the
+    // palm->canon path only compiles once these run.
+    NotePalmShapes wpShapes;
+    for (const auto &[shape, cat] : wpShapes.peerShapes())
+        reg.registerShape(shape, cat);
+    for (const auto &edge : wpShapes.edges())
+        reg.registerEdge(edge);
 
     return regs;
 }

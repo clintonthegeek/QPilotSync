@@ -142,11 +142,8 @@ private slots:
 
 void TstPalmMassDeleteGuardE2E::initTestCase()
 {
-    // Seed DomainRegistry with the blob + contacts + calendar stock plugins so
-    // dispatchSync finds the blob domain definition. Same as tst_palm_runtime_hotsync.
-    Kalburator::Sync::BackendRegistry reg;
-    Kalburator::PluginManager pm(&reg);
-    Kalburator::registerStockPlugins(pm);
+    // O7: no global seeding — each PalmRuntime loads stock + WP plugins into
+    // its own ShapeRegistries (see PalmRuntime::registerPalmPlugins).
 }
 
 // ---------------------------------------------------------------------------

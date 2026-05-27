@@ -107,12 +107,8 @@ class TestPalmRuntimeModes : public QObject {
 private slots:
     void initTestCase()
     {
-        // K.7: seed DomainRegistry with stock plugins so dispatchSync
-        // finds the blob domain definition (BlobPlugin).
-        // Phase Q.1: PluginManager ctor now requires a BackendRegistry*.
-        Kalburator::Sync::BackendRegistry registry;
-        Kalburator::PluginManager pm(&registry);
-        Kalburator::registerStockPlugins(pm);
+        // O7: no global seeding — each PalmRuntime loads stock + WP plugins into
+        // its own ShapeRegistries (see PalmRuntime::registerPalmPlugins).
     }
 
     void fullSync_clearsBaselinesThenCopiesPalmToPC() {

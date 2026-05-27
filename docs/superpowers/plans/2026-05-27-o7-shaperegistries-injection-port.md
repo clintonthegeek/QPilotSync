@@ -56,30 +56,69 @@ with:
         m_pluginManager = std::make_unique<Kalburator::PluginManager>(m_registry.get(), m_shape);
 ```
 
-- [ ] **Step 4: Replace the global domain check + drop the global guard (palmruntime.cpp:243-272)**
+- [ ] **Step 4: Replace registerStockPlugins + the global guard with ONE combined batch (palmruntime.cpp:234-272)**
 
-The `s_globalRegistrationDone` static guard and the `DomainRegistry::instance()` presence-check existed because the old singletons were process-global and rejected duplicates. With a per-`PalmRuntime` `m_shape`, each instance owns fresh registries, so register unconditionally into `m_shape`. Replace the guarded block (from `static bool s_globalRegistrationDone = false;` through the `s_globalRegistrationDone = true;` line) with an unconditional version:
+> **Corrected after verifying v0.57 `PluginManager::resolve()`** (`pluginmanager.cpp:20-53`): `resolve()` builds its `definedBy` map **only from the current batch**, and `loadInProcess` calls `reset()` each time. So the old approach (call `registerStockPlugins` as batch 1, then load WP plugins as batch 2 with `requiresDomains`) fails with `MissingDependency` — exactly what the legacy `mkPalmManifest` comment warned about. The authoritative consumer pattern is **PlanStan's** (`PlanStan/src/app/appcontroller.cpp:40-79`): build ONE items list — stock domain/infra plugins (with `definesDomains`) + the consumer's own plugins (with `requiresDomains`) — and call `loadInProcess` ONCE, so `resolve()` topologically orders the consumer plugins after their definers.
+
+Do **not** call `registerStockPlugins` (it hides its items and is a separate batch). Instead include the stock **domain/infra** plugins WP needs directly. Exclude the stock DAV *provider* plugins — WP already seeds CalDav/CardDav/Akonadi **backend contributions** via `registerStandardContributions` (called in the ctor), and the stock domain plugins return empty `backendContributions()`, so there is no double-registration. The `s_globalRegistrationDone` guard and `DomainRegistry::instance()` check are deleted: per-instance `m_shape` makes them unnecessary.
+
+Add includes near the top of `palmruntime.cpp` (angle-bracket — libkalburator headers): `universalstorageplugin.h`, `blobplugin.h`, `noteplugin.h`, `todoplugin.h`, `contactsplugin.h`, `calendarplugin.h`. Replace the guarded load block with:
 ```cpp
     m_pluginManager = std::make_unique<Kalburator::PluginManager>(m_registry.get(), m_shape);
 
-    // Stock plugins own the canonical DomainDefinitions (blob/calendar/
-    // contacts/note/todo) + their peer shapes (ical/vcard4/canon/ical-vtodo).
-    // They MUST load before the WP plugins below, whose shape contributions
-    // declare palm<->peer edges whose peer endpoint the stock plugins register.
-    Kalburator::registerStockPlugins(*m_pluginManager);
+    // v0.57 composition (mirrors PlanStan/src/app/appcontroller.cpp): ONE batch
+    // of stock domain/infra plugins (which DEFINE the canonical domains + peer
+    // shapes ical/vcard4/canon/ical-vtodo) plus WP's four plugins (which REQUIRE
+    // those domains and contribute the (domain,palm) peer + palm<->peer edges).
+    // resolve() orders requirers after definers within the batch. DAV *provider*
+    // plugins are intentionally omitted — registerStandardContributions() (ctor)
+    // already seeds the CalDav/CardDav/Akonadi backend contributions.
+    static Kalburator::UniversalStoragePlugin s_universal;
+    static Kalburator::Blob::BlobPlugin       s_blob;
+    static Kalburator::Note::NotePlugin       s_note;
+    static Kalburator::Todo::TodoPlugin       s_todo;
+    static Kalburator::Contacts::ContactsPlugin s_contacts;
+    static Kalburator::Calendar::CalendarPlugin s_calendar;
 
     QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
-        { cal.get(),  mkPalmManifest(QStringLiteral("wildpalms.calendar"), QStringLiteral("calendar")) },
-        { con.get(),  mkPalmManifest(QStringLiteral("wildpalms.contacts"), QStringLiteral("contacts")) },
-        { memo.get(), mkPalmManifest(QStringLiteral("wildpalms.memo"),     QStringLiteral("note"))     },
-        { todo.get(), mkPalmManifest(QStringLiteral("wildpalms.todo"),     QStringLiteral("todo"))     },
+        { &s_universal, mkStockManifest(QStringLiteral("kalburator.universal-storage")) },
+        { &s_blob,      mkStockManifest(QStringLiteral("kalburator.blob"),     {QStringLiteral("blob")}) },
+        { &s_note,      mkStockManifest(QStringLiteral("kalburator.note"),     {QStringLiteral("note")}) },
+        { &s_todo,      mkStockManifest(QStringLiteral("kalburator.todo"),     {QStringLiteral("todo")}) },
+        { &s_contacts,  mkStockManifest(QStringLiteral("kalburator.contacts"), {QStringLiteral("contacts")}) },
+        { &s_calendar,  mkStockManifest(QStringLiteral("kalburator.calendar"), {QStringLiteral("calendar")}) },
+        { cal.get(),    mkPalmManifest(QStringLiteral("wildpalms.calendar"), QStringLiteral("calendar")) },
+        { con.get(),    mkPalmManifest(QStringLiteral("wildpalms.contacts"), QStringLiteral("contacts")) },
+        { memo.get(),   mkPalmManifest(QStringLiteral("wildpalms.memo"),     QStringLiteral("note"))     },
+        { todo.get(),   mkPalmManifest(QStringLiteral("wildpalms.todo"),     QStringLiteral("todo"))     },
     };
     if (!m_pluginManager->loadInProcess(items)) {
-        qWarning() << "[PalmRuntime] Failed to load Palm plugins via PluginManager";
+        qWarning() << "[PalmRuntime] plugin load rejected:"
+                   << m_pluginManager->rejected().size();
         return;
     }
 ```
-**Note the domain fix:** the memo plugin's domain is `note` (its shapes are `(note, palm)`/`(note, canon)`), not `memo`. The old `mkPalmManifest("wildpalms.memo", "memo")` passed `"memo"` but it was unused (requiresDomains was empty); now the second arg becomes `requiresDomains` (Step 5), so it must be the real domain `"note"`.
+**Domain fix:** memo's domain is `note` (shapes `(note,palm)`/`(note,canon)`), not `memo`.
+
+**Multi-instance note:** the stock plugin instances are `static` (shared, stateless contribution providers — matches `stock_plugins.cpp`); WP's `cal/con/memo/todo` are per-`PalmRuntime`. Each `PalmRuntime` has its own `m_shape`, so a second instance re-runs `loadInProcess` into its own fresh registries — no cross-instance conflict (this is what the old `s_globalRegistrationDone` guard worked around).
+
+- [ ] **Step 5: Add mkStockManifest helper; make mkPalmManifest declare requiresDomains (palmruntime.cpp:85-105)**
+
+Add a stock-manifest helper alongside `mkPalmManifest` (a stock plugin DEFINES its domain):
+```cpp
+static Kalburator::PluginManifest mkStockManifest(const QString &id,
+                                                  QStringList defines = {})
+{
+    Kalburator::PluginManifest m;
+    m.id = id;
+    m.version = QStringLiteral("1.0");
+    m.displayName = id;
+    m.kalburatorPluginVersion = QStringLiteral("1.0");
+    m.definesDomains = std::move(defines);
+    return m;
+}
+```
+And update `mkPalmManifest` so its second parameter populates `requiresDomains`:
 
 - [ ] **Step 5: Make mkPalmManifest declare the required domain (palmruntime.cpp:93-105)**
 
