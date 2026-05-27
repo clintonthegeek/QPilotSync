@@ -340,10 +340,13 @@ private slots:
         WildPalms::Runtime::PalmRuntime rt(tmpProfile);
         Kalburator::Sync::BackendRegistry &reg = rt.backendRegistry();
 
-        // Sanity: the registry is initially empty (no plugins loaded yet).
-        // Calling registeredInstanceIds() exercises the borrowed reference;
-        // a use-after-free would crash here rather than passing.
-        QCOMPARE(reg.registeredInstanceIds().size(), 0);
+        // C: the canonical hub ("wp-hub") is registered at construction; Palm
+        // backends are registered later at finishConnect (device connect), so
+        // before connecting the only instance is the hub. Calling
+        // registeredInstanceIds() exercises the borrowed reference; a
+        // use-after-free would crash here rather than passing.
+        QCOMPARE(reg.registeredInstanceIds().size(), 1);
+        QVERIFY(reg.registeredInstanceIds().contains(QStringLiteral("wp-hub")));
     }
 };
 
