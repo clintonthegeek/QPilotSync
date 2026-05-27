@@ -1,4 +1,5 @@
 #include "palmruntime.h"
+#include "palmticklephase.h"
 #include "palmdeviceaccess.h"
 #include "palm/kpilotlink.h"
 #include "palm/kpilotdevicelink.h"
@@ -144,7 +145,50 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
         m_activeMappingId = mappingId;
         QString label, icon;
         resolveMappingIdentity(mappingId, label, icon);
+
+        // P2: Determine whether Palm is source, target, or both in this
+        // mapping.  Palm backend IDs match plugin->pluginId() values
+        // ("calendar", "contacts", "memo", "todo") — collect them once
+        // from m_palmPlugins, then compare against the mapping's backends.
+        using namespace WildPalms::CalendarPlugin;
+        using namespace WildPalms::ContactsPlugin;
+        using namespace WildPalms::Memo;
+        using namespace WildPalms::TodoPlugin;
+        QSet<QString> palmIds;
+        for (const auto &plugin : m_palmPlugins) {
+            if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get()))
+                palmIds.insert(p->pluginId());
+            else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get()))
+                palmIds.insert(p->pluginId());
+            else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get()))
+                palmIds.insert(p->pluginId());
+            else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get()))
+                palmIds.insert(p->pluginId());
+        }
+        m_currentPalmIsSource = false;
+        m_currentPalmIsTarget = false;
+        for (const auto &m : m_mappings) {
+            if (m.id == mappingId) {
+                m_currentPalmIsSource = palmIds.contains(m.sourceBackend);
+                m_currentPalmIsTarget = palmIds.contains(m.targetBackend);
+                break;
+            }
+        }
+
         Q_EMIT mappingSyncStarted(mappingId, label, icon);
+    });
+
+    QObject::connect(m_engine.get(), &Kalburator::Sync::SyncEngine::phaseChanged,
+                     this, [this](Kalburator::Engine::SyncEngine::SyncPhase phase) {
+        // P2: Pause tickle only during phases that issue DLP calls to the
+        // Palm device. CalDAV / network fetch phases keep the tickle alive
+        // so the Palm doesn't think the connection dropped.
+        if (m_device) {
+            if (shouldPauseTickle(phase, m_currentPalmIsSource, m_currentPalmIsTarget))
+                m_device->pauseTickle();
+            else
+                m_device->resumeTickle();
+        }
     });
     QObject::connect(m_engine.get(), &Kalburator::Sync::SyncEngine::progressUpdated,
                      this, [this](int current, int total, const QString &message) {
@@ -703,9 +747,9 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     // Hazard assessment: Cross-thread race (the original issue) is eliminated.
     // However, if dlp_GetSysDateTime and in-progress DLP operations have protocol-level
     // conflicts on the Palm wire (independent of thread safety), the pause is still
-    // necessary. Task 2.2 can safely narrow this to apply-phase only; the serialization
-    // guarantee ensures no read-phase interleaving.
-    if (m_device) m_device->pauseTickle();
+    // necessary. Task 2.2 narrowed this to apply-phase only via phaseChanged signal;
+    // the blanket pre-run pause is removed — the tickle is now paused/resumed per
+    // phase via setTicklePausedForPhase() in the phaseChanged lambda above.
 
     auto engineFuture = m_engine->runSyncFuture(
         ids, Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored);
@@ -813,9 +857,10 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
     ov.direction = (dir == MirrorDir::PalmToPC) ? Direction::MirrorAToB
                                                  : Direction::MirrorBToA;
 
-    // Pause the TickleWorker before the engine starts issuing DLP calls —
-    // same race as runAllMappings().
-    if (m_device) m_device->pauseTickle();
+    // P2: Blanket pauseTickle() removed here (same as runAllMappings).
+    // Tickle is now paused/resumed per phase via the phaseChanged lambda
+    // in the constructor (setTicklePausedForPhase). The resumeTickle() in
+    // the then() lambda below remains as a safety net.
 
     // For M3: calendar-only, single mapping. Dispatch only the first enabled
     // mapping; Plan 3 (M4) will add multi-mapping iteration once other plugins

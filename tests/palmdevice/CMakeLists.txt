@@ -43,5 +43,20 @@ add_palm_device_test(tst_pilotlinkbatching
     mockkpilotlink.cpp
 )
 
+# P2: shouldPauseTickle() truth-table tests — pure function, no device needed.
+# Links PalmDeviceAccessLib for the src/runtime/ include path + Kalburator::Sync
+# (which supplies SyncPhase via syncengine.h).
+add_executable(tst_tickle_phase tst_tickle_phase.cpp)
+target_link_libraries(tst_tickle_phase
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+)
+add_test(NAME tst_tickle_phase COMMAND tst_tickle_phase)
+set_tests_properties(tst_tickle_phase PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # tst_palmdevice_roundtrip was deleted in M5c — its source used the
 # F1-facade APIs (BlobSyncResult / runBlobTwoWay) deleted in Plan 1.

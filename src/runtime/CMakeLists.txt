@@ -97,6 +97,7 @@ add_library(PalmDeviceAccessLib STATIC
     palmrunresult.h
     palmruntime.h
     palmruntime.cpp
+    palmticklephase.h   # P2: phase-scoped tickle pause helper (header-only)
     accountcontroller.h
     accountcontroller.cpp
     palmtickle.h

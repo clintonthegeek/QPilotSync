@@ -230,6 +230,12 @@ private:
     /// (matches plugin->pluginId() against mapping.sourceBackend).
     void resolveMappingIdentity(const QString &mappingId,
                                 QString &outLabel, QString &outIconName) const;
+    // P2: track whether Palm device is source or target in the current mapping.
+    // Set in the syncStarted lambda; used by the phaseChanged lambda in the
+    // constructor to decide whether to pause or resume the keep-alive tickle.
+    bool m_currentPalmIsSource = false;
+    bool m_currentPalmIsTarget = false;
+
     QString m_activeMappingId;   // mapping currently emitting fetch/write progress
 
     Kalburator::Conflict::ConflictHandler                *m_conflictHandler = nullptr;

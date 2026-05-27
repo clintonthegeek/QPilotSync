@@ -91,6 +91,11 @@ public:
     void pauseTickle();
     void resumeTickle();
 
+    /// Flush the device DB write handle (close it). Marshals to the link
+    /// thread. Call at end-of-sync so the last mapping's DB is closed before
+    /// dlp_EndOfSync.
+    void flushWrites();
+
     // Test seam: replace the link factory used by connectDevice().
     // Default factory: new KPilotDeviceLink(paths, nullptr).
     // Tests inject a factory that returns a mock subclass.

@@ -223,6 +223,17 @@ void PalmDeviceAccess::resumeTickle() {
     if (m_tickle) m_tickle->start();
 }
 
+void PalmDeviceAccess::flushWrites() {
+    if (!m_impl) return;
+    if (QThread::currentThread() != m_linkThread.get()) {
+        QMetaObject::invokeMethod(m_implOwner,
+            [this]() { m_impl->flushPendingWrites(); },
+            Qt::BlockingQueuedConnection);
+        return;
+    }
+    m_impl->flushPendingWrites();
+}
+
 void PalmDeviceAccess::cancelConnect()
 {
     QMetaObject::invokeMethod(m_implOwner,
