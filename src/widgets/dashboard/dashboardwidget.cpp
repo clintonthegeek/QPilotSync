@@ -112,8 +112,11 @@ void DashboardWidget::setupUI()
 
 void DashboardWidget::setModel(SyncStatusModel *model)
 {
-    if (m_model)
+    if (m_model) {
         m_model->disconnect(this);
+        disconnect(m_primaryButton, nullptr, m_model, nullptr);
+        disconnect(m_conflictButton, nullptr, m_model, nullptr);
+    }
     m_model = model;
     if (m_model) {
         connect(m_model, &SyncStatusModel::changed, this, &DashboardWidget::render);

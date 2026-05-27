@@ -1,5 +1,6 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
+#include <QPushButton>
 #include "dashboardwidget.h"
 #include "syncstatusmodel.h"
 
@@ -37,8 +38,18 @@ void TestDashboardWidget::primaryButtonForwardsToModel()
     QSignalSpy spy(&model, &SyncStatusModel::syncRequested);
     model.onDeviceDetected();
     model.onConnectionStarted();
-    model.onConnectionComplete(true, QString());      // Connected -> "Sync Now"
-    model.triggerPrimaryAction();
+    model.onConnectionComplete(true, QString());      // Connected -> primary button "Sync Now"
+
+    QPushButton *primary = nullptr;
+    const auto buttons = w.findChildren<QPushButton *>();
+    for (QPushButton *b : buttons) {
+        if (b->text() == QStringLiteral("Sync Now")) {
+            primary = b;
+            break;
+        }
+    }
+    QVERIFY(primary != nullptr);
+    primary->click();
     QCOMPARE(spy.count(), 1);
 }
 
