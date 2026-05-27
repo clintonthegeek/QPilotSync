@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QList>
 #include <QString>
+#include <QVector>
 #include <memory>
 #include <vector>
 
@@ -162,11 +163,26 @@ public:
     /// closeProfile() / loadProfile().
     Kalburator::Sync::BackendRegistry &backendRegistry() { return *m_registry; }
 
+    struct ConduitDescriptor {
+        QString mappingId;
+        QString label;
+        QString iconName;
+    };
+    /// Identity (id/label/icon) for each enabled mapping, resolved via the
+    /// loaded plugins. Used to seed the dashboard conduit row before a sync.
+    QVector<ConduitDescriptor> conduitDescriptors() const;
+
 signals:
     void deviceConnected();
     void deviceDisconnected();
     void runStarted(QString modeLabel);
     void runProgress(int current, int total, QString message);
+    void mappingSyncStarted(const QString &mappingId, const QString &label,
+                            const QString &iconName);
+    void mappingSyncProgress(const QString &mappingId, int phase,
+                             int current, int total);
+    void mappingSyncFinished(const QString &mappingId, int created,
+                             int modified, int deleted, bool ok);
     void runLog(QString message);
     void runFinished(PalmRunResult);
 
@@ -201,6 +217,12 @@ private:
 
     QFuture<PalmRunResult> runAllMappings();
     QFuture<PalmRunResult> runMirror(MirrorDir dir, const QString &modeLabel);
+
+    /// Resolve a mapping's display label + theme icon name from m_palmPlugins
+    /// (matches plugin->pluginId() against mapping.sourceBackend).
+    void resolveMappingIdentity(const QString &mappingId,
+                                QString &outLabel, QString &outIconName) const;
+    QString m_activeMappingId;   // mapping currently emitting fetch/write progress
 
     Kalburator::Conflict::ConflictHandler                *m_conflictHandler = nullptr;
     Profile                                              *m_profile = nullptr;   // borrowed; see setProfile
