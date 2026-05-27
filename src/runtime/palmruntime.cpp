@@ -749,7 +749,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     // conflicts on the Palm wire (independent of thread safety), the pause is still
     // necessary. Task 2.2 narrowed this to apply-phase only via phaseChanged signal;
     // the blanket pre-run pause is removed — the tickle is now paused/resumed per
-    // phase via setTicklePausedForPhase() in the phaseChanged lambda above.
+    // phase via the phaseChanged lambda in the constructor.
 
     auto engineFuture = m_engine->runSyncFuture(
         ids, Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored);
@@ -859,7 +859,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
 
     // P2: Blanket pauseTickle() removed here (same as runAllMappings).
     // Tickle is now paused/resumed per phase via the phaseChanged lambda
-    // in the constructor (setTicklePausedForPhase). The resumeTickle() in
+    // in the constructor. The resumeTickle() in
     // the then() lambda below remains as a safety net.
 
     // For M3: calendar-only, single mapping. Dispatch only the first enabled
