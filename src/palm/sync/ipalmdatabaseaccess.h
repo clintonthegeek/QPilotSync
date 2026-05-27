@@ -92,6 +92,12 @@ public:
     /// distinguish "0 records" from "couldn't read."
     /// Layer B silent-success fix (2026-05-16).
     virtual bool isConnected() const = 0;
+
+    /// Flush any cached write handle (close the open DLP database). Default
+    /// no-op. Real DLP impls that batch writes override this; the runtime
+    /// calls it at end-of-sync so the final mapping's DB is closed before
+    /// dlp_EndOfSync.
+    virtual void flushPendingWrites() {}
 };
 
 } // namespace WildPalms::PalmSync

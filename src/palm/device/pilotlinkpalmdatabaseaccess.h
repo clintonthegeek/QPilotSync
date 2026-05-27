@@ -41,7 +41,7 @@ class PilotLinkPalmDatabaseAccess
 {
 public:
     explicit PilotLinkPalmDatabaseAccess(KPilotLink *link);
-    ~PilotLinkPalmDatabaseAccess() override = default;
+    ~PilotLinkPalmDatabaseAccess() override;
 
     QStringList availableDatabases() const override;
     bool hasDatabase(const QString &dbName) const override;
@@ -70,6 +70,7 @@ public:
                             const QDateTime &since) const override;
     bool supportsDeleteTracking() const override { return false; }
     bool isConnected() const override;
+    void flushPendingWrites() override;
 
     QByteArray readAppBlock(const QString &dbName) const override;
 
@@ -88,6 +89,15 @@ private:
     };
 
     KPilotLink *m_link = nullptr;
+
+    // Problem 1: cached write handle to avoid per-record open/close.
+    // Single-entry — the engine writes all of one mapping's records to one
+    // DB consecutively. Touched only on the link thread (race-free).
+    // mutable so const read methods can flush before reading.
+    mutable int     m_writeHandle = -1;
+    mutable QString m_writeDbName;
+    int  ensureWriteHandle(const QString &dbName);  // open+cache or reuse
+    void flushWriteHandle() const;                  // close cached handle if open
 };
 
 } // namespace WildPalms::PalmDevice

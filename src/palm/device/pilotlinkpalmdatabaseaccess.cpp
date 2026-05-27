@@ -28,6 +28,38 @@ PilotLinkPalmDatabaseAccess::PilotLinkPalmDatabaseAccess(KPilotLink *link)
 {
 }
 
+PilotLinkPalmDatabaseAccess::~PilotLinkPalmDatabaseAccess()
+{
+    flushWriteHandle();
+}
+
+int PilotLinkPalmDatabaseAccess::ensureWriteHandle(const QString &dbName)
+{
+    if (m_writeHandle >= 0 && m_writeDbName == dbName)
+        return m_writeHandle;
+    flushWriteHandle();
+    if (!m_link) return -1;
+    const int h = m_link->openDatabase(dbName, /*rw=*/true);
+    if (h >= 0) {
+        m_writeHandle = h;
+        m_writeDbName = dbName;
+    }
+    return h;
+}
+
+void PilotLinkPalmDatabaseAccess::flushWriteHandle() const
+{
+    if (m_link && m_writeHandle >= 0)
+        m_link->closeDatabase(m_writeHandle);
+    m_writeHandle = -1;
+    m_writeDbName.clear();
+}
+
+void PilotLinkPalmDatabaseAccess::flushPendingWrites()
+{
+    flushWriteHandle();
+}
+
 bool PilotLinkPalmDatabaseAccess::isConnected() const
 {
     return m_link && m_link->isConnected();
@@ -36,12 +68,14 @@ bool PilotLinkPalmDatabaseAccess::isConnected() const
 QStringList PilotLinkPalmDatabaseAccess::availableDatabases() const
 {
     if (!m_link) return {};
+    flushWriteHandle();
     return m_link->listDatabases();
 }
 
 bool PilotLinkPalmDatabaseAccess::hasDatabase(const QString &dbName) const
 {
     if (!m_link) return false;
+    flushWriteHandle();
     return m_link->listDatabases().contains(dbName);
 }
 
@@ -56,6 +90,7 @@ QList<WildPalms::PalmSync::PalmRecord>
 PilotLinkPalmDatabaseAccess::readAllRecords(const QString &dbName) const
 {
     if (!m_link) return {};
+    flushWriteHandle();
     DbScope scope(m_link, dbName, /*rw=*/false);
     if (!scope.ok()) return {};
 
@@ -74,6 +109,7 @@ PilotLinkPalmDatabaseAccess::readRecord(const QString &dbName,
                                         std::uint32_t recordId) const
 {
     if (!m_link) return std::nullopt;
+    flushWriteHandle();
     DbScope scope(m_link, dbName, /*rw=*/false);
     if (!scope.ok()) return std::nullopt;
 
@@ -89,11 +125,10 @@ std::uint32_t PilotLinkPalmDatabaseAccess::createRecord(
     const WildPalms::PalmSync::PalmRecord &record)
 {
     if (!m_link) return 0;
-    DbScope scope(m_link, dbName, /*rw=*/true);
-    if (!scope.ok()) return 0;
-
+    const int handle = ensureWriteHandle(dbName);
+    if (handle < 0) return 0;
     PilotRecord bridged = toPilotRecord(record);
-    if (!m_link->writeRecord(scope.handle(), &bridged)) return 0;
+    if (!m_link->writeRecord(handle, &bridged)) return 0;
     return static_cast<std::uint32_t>(bridged.recordId());
 }
 
@@ -103,21 +138,19 @@ bool PilotLinkPalmDatabaseAccess::updateRecord(
 {
     if (!m_link) return false;
     if (record.recordId == 0) return false;
-    DbScope scope(m_link, dbName, /*rw=*/true);
-    if (!scope.ok()) return false;
-
+    const int handle = ensureWriteHandle(dbName);
+    if (handle < 0) return false;
     PilotRecord bridged = toPilotRecord(record);
-    return m_link->writeRecord(scope.handle(), &bridged);
+    return m_link->writeRecord(handle, &bridged);
 }
 
 bool PilotLinkPalmDatabaseAccess::deleteRecord(const QString &dbName,
                                                std::uint32_t recordId)
 {
     if (!m_link) return false;
-    DbScope scope(m_link, dbName, /*rw=*/true);
-    if (!scope.ok()) return false;
-    return m_link->deleteRecord(scope.handle(),
-                                static_cast<int>(recordId));
+    const int handle = ensureWriteHandle(dbName);
+    if (handle < 0) return false;
+    return m_link->deleteRecord(handle, static_cast<int>(recordId));
 }
 
 QList<WildPalms::PalmSync::PalmRecord>
@@ -127,6 +160,7 @@ PilotLinkPalmDatabaseAccess::recordsModifiedSince(const QString &dbName,
     // `since` is ignored; DLP lacks per-record timestamps. The engine
     // falls back to baseline-based diff.
     if (!m_link) return {};
+    flushWriteHandle();
     DbScope scope(m_link, dbName, /*rw=*/false);
     if (!scope.ok()) return {};
 
@@ -151,6 +185,7 @@ PilotLinkPalmDatabaseAccess::recordsDeletedSince(const QString &,
 QByteArray PilotLinkPalmDatabaseAccess::readAppBlock(const QString &dbName) const
 {
     if (!m_link) return {};
+    flushWriteHandle();
     DbScope scope(m_link, dbName, /*rw=*/false);
     if (!scope.ok()) return {};
 

@@ -50,7 +50,7 @@ void TestPilotLinkBatching::readBetweenWritesFlushes()
     QCOMPARE(link.closeDatabaseCalls, 0);
 
     dev.readAllRecords(QStringLiteral("DatebookDB"));   // read flushes the write handle
-    QCOMPARE(link.closeDatabaseCalls, 1);               // write handle closed
+    QCOMPARE(link.closeDatabaseCalls, 2);               // write handle closed + read's own RO handle closed
     // (read opens its own RO handle; that is allowed to open/close as before)
 
     dev.createRecord(QStringLiteral("DatebookDB"), makeRec("b"));
