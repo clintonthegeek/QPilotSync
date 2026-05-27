@@ -80,6 +80,11 @@ public:
     bool hasRecord(const QString &dbName, int recordId) const;
     QByteArray recordData(const QString &dbName, int recordId) const;
 
+    // Call counters for batching assertions (Problem 1).
+    int openDatabaseCalls = 0;
+    int closeDatabaseCalls = 0;
+    int writeRecordCalls = 0;
+
 private:
     struct Row {
         int         recordId;

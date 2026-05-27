@@ -29,6 +29,7 @@ bool MockKPilotLink::readStorageInfo(int, struct CardInfo &) { return false; }
 
 int MockKPilotLink::openDatabase(const QString &dbName, bool /*readWrite*/)
 {
+    ++openDatabaseCalls;
     if (!m_dbs.contains(dbName)) return -1;
     const int h = m_nextHandle++;
     m_handles.insert(h, dbName);
@@ -37,6 +38,7 @@ int MockKPilotLink::openDatabase(const QString &dbName, bool /*readWrite*/)
 
 bool MockKPilotLink::closeDatabase(int handle)
 {
+    ++closeDatabaseCalls;
     return m_handles.remove(handle) > 0;
 }
 
@@ -97,6 +99,7 @@ PilotRecord *MockKPilotLink::readRecordById(int dbHandle, int recordId)
 
 bool MockKPilotLink::writeRecord(int dbHandle, PilotRecord *record)
 {
+    ++writeRecordCalls;
     Database *db = dbForHandle(dbHandle);
     if (!db || !record) return false;
 
