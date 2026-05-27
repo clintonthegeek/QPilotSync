@@ -49,6 +49,10 @@ private slots:
     void deleteRecordForwards();
     void deletedSinceReturnsAllSlots();
     void slotParsingHelpers();
+    // C: domain-level collection
+    void domainCollection_availableCollectionsIncludesDomainId();
+    void domainCollection_loadRecordsReturnsAllCategories();
+    void domainCollection_nativeShapeIsCalendarPalm();
 };
 
 void TestPalmCalendarBackend::backendIdAndDisplayName()
@@ -96,7 +100,9 @@ void TestPalmCalendarBackend::availableCollectionsReflectsStore()
     auto cols = backend.availableCollections();
     QStringList ids;
     for (const auto &c : cols) ids << c.id;
-    QCOMPARE(ids.size(), 3);
+    // domain-level + unfiled + 2 named slots
+    QCOMPARE(ids.size(), 4);
+    QVERIFY(ids.contains(QStringLiteral("palm:calendar")));
     QVERIFY(ids.contains(QStringLiteral("palm:calendar/0")));
     QVERIFY(ids.contains(QStringLiteral("palm:calendar/1")));
     QVERIFY(ids.contains(QStringLiteral("palm:calendar/3")));
@@ -110,8 +116,12 @@ void TestPalmCalendarBackend::availableCollectionsAlwaysIncludesUnfiled()
     PalmCalendarBackend backend(&pb, &store);
 
     auto cols = backend.availableCollections();
-    QCOMPARE(cols.size(), 1);
-    QCOMPARE(cols.first().id, QStringLiteral("palm:calendar/0"));
+    // Always includes domain-level + unfiled
+    QCOMPARE(cols.size(), 2);
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY(ids.contains(QStringLiteral("palm:calendar")));
+    QVERIFY(ids.contains(QStringLiteral("palm:calendar/0")));
 }
 
 void TestPalmCalendarBackend::loadRecordsFiltersBySlot()
@@ -262,6 +272,55 @@ void TestPalmCalendarBackend::slotParsingHelpers()
         QStringLiteral("not-a-calendar-id")), -1);
     QCOMPARE(PalmCalendarBackend::collectionIdForSlot(7),
              QStringLiteral("palm:calendar/7"));
+}
+
+// C: domain-level collection tests
+
+void TestPalmCalendarBackend::domainCollection_availableCollectionsIncludesDomainId()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("DatebookDB"), 1, QStringLiteral("Work"));
+    PalmCalendarBackend backend(&pb, &store);
+
+    auto cols = backend.availableCollections();
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY2(ids.contains(QStringLiteral("palm:calendar")),
+             qPrintable("domain-level id missing; collections: " + ids.join(", ")));
+}
+
+void TestPalmCalendarBackend::domainCollection_loadRecordsReturnsAllCategories()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("DatebookDB"));
+    dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("x1", 0));
+    dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("x2", 3));
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("DatebookDB"), 3, QStringLiteral("Personal"));
+    PalmCalendarBackend backend(&pb, &store);
+
+    auto all = backend.loadRecords(QStringLiteral("palm:calendar"));
+    QCOMPARE(all.size(), 2);
+    for (const auto &br : all) {
+        QCOMPARE(br.type, QStringLiteral("calendar"));
+        QVERIFY(!br.data.isEmpty());
+    }
+}
+
+void TestPalmCalendarBackend::domainCollection_nativeShapeIsCalendarPalm()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&pb, &store);
+
+    auto shapes = backend.nativeShapes();
+    QVERIFY(!shapes.isEmpty());
+    QCOMPARE(shapes.first().domain.toString(), QStringLiteral("calendar"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
 }
 
 QTEST_MAIN(TestPalmCalendarBackend)

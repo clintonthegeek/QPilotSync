@@ -50,6 +50,10 @@ private slots:
     void createRecordStampsSlotFromCollectionId();
     void updateRecordPreservesRecordId();
     void deleteRecordForwardsToPalmBackend();
+    // C: domain-level collection
+    void domainCollection_availableCollectionsIncludesDomainId();
+    void domainCollection_loadRecordsReturnsAllCategories();
+    void domainCollection_nativeShapeIsTodoPalm();
 };
 
 void TestTodoBlobBackend::backendIdentity()
@@ -69,9 +73,16 @@ void TestTodoBlobBackend::emptyStoreEmitsUnfiledOnly()
     CategoryMappingStore store;
     TodoBlobBackend be(&palm, &store);
     auto cols = be.availableCollections();
-    QCOMPARE(cols.size(), 1);
-    QCOMPARE(cols[0].id, QStringLiteral("palm:todo/0"));
-    QCOMPARE(cols[0].name, QStringLiteral("Unfiled"));
+    // Always includes domain-level + unfiled
+    QCOMPARE(cols.size(), 2);
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY(ids.contains(QStringLiteral("palm:todo")));
+    QVERIFY(ids.contains(QStringLiteral("palm:todo/0")));
+    for (const auto &c : cols) {
+        if (c.id == QStringLiteral("palm:todo/0"))
+            QCOMPARE(c.name, QStringLiteral("Unfiled"));
+    }
 }
 
 void TestTodoBlobBackend::populatedStoreEmitsNamedSlots()
@@ -86,7 +97,9 @@ void TestTodoBlobBackend::populatedStoreEmitsNamedSlots()
     auto cols = be.availableCollections();
     QStringList ids;
     for (const auto &c : cols) ids << c.id;
-    QCOMPARE(cols.size(), 3);
+    // domain-level + unfiled + 2 named slots
+    QCOMPARE(cols.size(), 4);
+    QVERIFY(ids.contains(QStringLiteral("palm:todo")));
     QVERIFY(ids.contains(QStringLiteral("palm:todo/0")));
     QVERIFY(ids.contains(QStringLiteral("palm:todo/1")));
     QVERIFY(ids.contains(QStringLiteral("palm:todo/2")));
@@ -109,8 +122,12 @@ void TestTodoBlobBackend::slotZeroNamedDoesNotShadowUnfiled()
 
     TodoBlobBackend be(&palm, &store);
     auto cols = be.availableCollections();
-    QCOMPARE(cols.size(), 1);
-    QCOMPARE(cols[0].name, QStringLiteral("Unfiled"));
+    // domain-level + unfiled
+    QCOMPARE(cols.size(), 2);
+    for (const auto &c : cols) {
+        if (c.id == QStringLiteral("palm:todo/0"))
+            QCOMPARE(c.name, QStringLiteral("Unfiled"));
+    }
 }
 
 void TestTodoBlobBackend::loadRecordsRoutesByCategory()
@@ -234,6 +251,56 @@ void TestTodoBlobBackend::deleteRecordForwardsToPalmBackend()
     // Mock semantics: deletion removes the record outright.
     QVERIFY(!device.readRecord(QStringLiteral("ToDoDB"), seedId).has_value());
     QCOMPARE(be.loadRecords(QStringLiteral("palm:todo/0")).size(), 0);
+}
+
+// C: domain-level collection tests
+
+void TestTodoBlobBackend::domainCollection_availableCollectionsIncludesDomainId()
+{
+    MockPalmDatabaseAccess device;
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("ToDoDB"), 1, QStringLiteral("Personal"));
+    TodoBlobBackend be(&palm, &store);
+
+    auto cols = be.availableCollections();
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY2(ids.contains(QStringLiteral("palm:todo")),
+             qPrintable("domain-level id missing; collections: " + ids.join(", ")));
+}
+
+void TestTodoBlobBackend::domainCollection_loadRecordsReturnsAllCategories()
+{
+    MockPalmDatabaseAccess device;
+    device.createDatabase(QStringLiteral("ToDoDB"));
+    device.createRecord(QStringLiteral("ToDoDB"), makeTodo(0, 0, QStringLiteral("Unfiled thing")));
+    device.createRecord(QStringLiteral("ToDoDB"), makeTodo(0, 3, QStringLiteral("Work thing")));
+
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("ToDoDB"), 3, QStringLiteral("Work"));
+    TodoBlobBackend be(&palm, &store);
+
+    auto all = be.loadRecords(QStringLiteral("palm:todo"));
+    QCOMPARE(all.size(), 2);
+    for (const auto &br : all) {
+        QCOMPARE(br.type, QStringLiteral("todo"));
+        QVERIFY(!br.data.isEmpty());
+    }
+}
+
+void TestTodoBlobBackend::domainCollection_nativeShapeIsTodoPalm()
+{
+    MockPalmDatabaseAccess device;
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    TodoBlobBackend be(&palm, &store);
+
+    auto shapes = be.nativeShapes();
+    QVERIFY(!shapes.isEmpty());
+    QCOMPARE(shapes.first().domain.toString(), QStringLiteral("todo"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
 }
 
 QTEST_MAIN(TestTodoBlobBackend)

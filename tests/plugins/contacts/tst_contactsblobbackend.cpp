@@ -58,6 +58,10 @@ private slots:
     void modifiedSince_filtersByTimestampAndSlot();
     void loadRecordsEmitsPalmNativeBytes();
     void createRecordAcceptsPalmNativeBytes();
+    // C: domain-level collection
+    void domainCollection_availableCollectionsIncludesDomainId();
+    void domainCollection_loadRecordsReturnsAllCategories();
+    void domainCollection_nativeShapeIsContactsPalm();
 };
 
 void TestPalmContactsBackend::nativeShapes_returnsContactsPalm()
@@ -118,10 +122,18 @@ void TestPalmContactsBackend::availableCollections_includesUnfiledAlways()
     PalmContactsBackend be(&palm, &store);
 
     auto cols = be.availableCollections();
-    QCOMPARE(cols.size(), 1);
-    QCOMPARE(cols[0].id,   QStringLiteral("palm:contact/0"));
-    QCOMPARE(cols[0].name, QStringLiteral("Unfiled"));
-    QCOMPARE(cols[0].type, QStringLiteral("contacts"));
+    // Always includes domain-level + unfiled
+    QCOMPARE(cols.size(), 2);
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY(ids.contains(QStringLiteral("palm:contacts")));
+    QVERIFY(ids.contains(QStringLiteral("palm:contact/0")));
+    for (const auto &c : cols) {
+        if (c.id == QStringLiteral("palm:contact/0")) {
+            QCOMPARE(c.name, QStringLiteral("Unfiled"));
+            QCOMPARE(c.type, QStringLiteral("contacts"));
+        }
+    }
 }
 
 void TestPalmContactsBackend::availableCollections_includesPopulatedSlots()
@@ -137,7 +149,9 @@ void TestPalmContactsBackend::availableCollections_includesPopulatedSlots()
 
     QStringList ids;
     for (const auto &c : cols) ids << c.id;
-    QCOMPARE(cols.size(), 3);
+    // domain-level + unfiled + 2 named slots
+    QCOMPARE(cols.size(), 4);
+    QVERIFY(ids.contains(QStringLiteral("palm:contacts")));
     QVERIFY(ids.contains(QStringLiteral("palm:contact/0")));
     QVERIFY(ids.contains(QStringLiteral("palm:contact/1")));
     QVERIFY(ids.contains(QStringLiteral("palm:contact/4")));
@@ -377,6 +391,58 @@ void TestPalmContactsBackend::createRecordAcceptsPalmNativeBytes()
     QCOMPARE(stored.size(), 1);
     QCOMPARE(static_cast<int>(stored.first().category), 0);
     QVERIFY(stored.first().data.contains("Wirecreator"));
+}
+
+// C: domain-level collection tests
+
+void TestPalmContactsBackend::domainCollection_availableCollectionsIncludesDomainId()
+{
+    MockPalmDatabaseAccess device;
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("AddressDB"), 1, QStringLiteral("Personal"));
+    PalmContactsBackend be(&palm, &store);
+
+    auto cols = be.availableCollections();
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY2(ids.contains(QStringLiteral("palm:contacts")),
+             qPrintable("domain-level id missing; collections: " + ids.join(", ")));
+}
+
+void TestPalmContactsBackend::domainCollection_loadRecordsReturnsAllCategories()
+{
+    MockPalmDatabaseAccess device;
+    device.createDatabase(QStringLiteral("AddressDB"));
+    device.createRecord(QStringLiteral("AddressDB"),
+                        makeContact(0, 0, QStringLiteral("Alpha")));
+    device.createRecord(QStringLiteral("AddressDB"),
+                        makeContact(0, 3, QStringLiteral("Beta")));
+
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    store.setSlotName(QStringLiteral("AddressDB"), 3, QStringLiteral("Work"));
+    PalmContactsBackend be(&palm, &store);
+
+    auto all = be.loadRecords(QStringLiteral("palm:contacts"));
+    QCOMPARE(all.size(), 2);
+    for (const auto &br : all) {
+        QCOMPARE(br.type, QStringLiteral("contacts"));
+        QVERIFY(!br.data.isEmpty());
+    }
+}
+
+void TestPalmContactsBackend::domainCollection_nativeShapeIsContactsPalm()
+{
+    MockPalmDatabaseAccess device;
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    PalmContactsBackend be(&palm, &store);
+
+    auto shapes = be.nativeShapes();
+    QVERIFY(!shapes.isEmpty());
+    QCOMPARE(shapes.first().domain.toString(), QStringLiteral("contacts"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
 }
 
 QTEST_MAIN(TestPalmContactsBackend)

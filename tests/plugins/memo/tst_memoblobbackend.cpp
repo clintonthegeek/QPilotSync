@@ -28,6 +28,10 @@ private slots:
     void modifiedSinceDelegates();
     void privateFlagPreservedBothDirections();
     void categorySlotCarriedInWireBytes();
+    // C: domain-level collection
+    void domainCollection_availableCollectionsIncludesDomainId();
+    void domainCollection_loadRecordsReturnsAllCategories();
+    void domainCollection_nativeShapeIsNotePalm();
 
 private:
     std::uint32_t seedMemo(MockPalmDatabaseAccess *dev,
@@ -60,9 +64,18 @@ void TestMemoBlobBackend::availableCollectionsExposesOnlyPalmMemo()
     MemoBlobBackend mb(&pb);
 
     const auto cols = mb.availableCollections();
-    QCOMPARE(cols.size(), 1);
-    QCOMPARE(cols.first().id, QStringLiteral("palm:memo"));
-    QCOMPARE(cols.first().type, QStringLiteral("memos"));
+    // Now exposes domain-level "palm:note" plus legacy "palm:memo"
+    QCOMPARE(cols.size(), 2);
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY(ids.contains(QStringLiteral("palm:note")));
+    QVERIFY(ids.contains(QStringLiteral("palm:memo")));
+    for (const auto &c : cols) {
+        if (c.id == QStringLiteral("palm:memo"))
+            QCOMPARE(c.type, QStringLiteral("memos"));
+        if (c.id == QStringLiteral("palm:note"))
+            QCOMPARE(c.type, QStringLiteral("note"));
+    }
 }
 
 // --- read path ---
@@ -229,6 +242,51 @@ void TestMemoBlobBackend::deleteRecord_usesMemoDBCanonicalName()
 
     const auto remaining = dev.readAllRecords("MemoDB");
     QCOMPARE(remaining.size(), 0);
+}
+
+// C: domain-level collection tests
+
+void TestMemoBlobBackend::domainCollection_availableCollectionsIncludesDomainId()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase("MemoDB");
+    PalmBackend pb(&dev);
+    MemoBlobBackend mb(&pb);
+
+    auto cols = mb.availableCollections();
+    QStringList ids;
+    for (const auto &c : cols) ids << c.id;
+    QVERIFY2(ids.contains(QStringLiteral("palm:note")),
+             qPrintable("domain-level id missing; collections: " + ids.join(", ")));
+}
+
+void TestMemoBlobBackend::domainCollection_loadRecordsReturnsAllCategories()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase("MemoDB");
+    seedMemo(&dev, QStringLiteral("Unfiled memo"), 0, false);
+    seedMemo(&dev, QStringLiteral("Category memo"), 3, false);
+    PalmBackend pb(&dev);
+    MemoBlobBackend mb(&pb);
+
+    auto all = mb.loadRecords(QStringLiteral("palm:note"));
+    QCOMPARE(all.size(), 2);
+    for (const auto &br : all) {
+        QCOMPARE(br.type, QStringLiteral("note"));
+        QVERIFY(!br.data.isEmpty());
+    }
+}
+
+void TestMemoBlobBackend::domainCollection_nativeShapeIsNotePalm()
+{
+    MockPalmDatabaseAccess dev;
+    PalmBackend pb(&dev);
+    MemoBlobBackend mb(&pb);
+
+    auto shapes = mb.nativeShapes();
+    QVERIFY(!shapes.isEmpty());
+    QCOMPARE(shapes.first().domain.toString(), QStringLiteral("note"));
+    QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
 }
 
 QTEST_MAIN(TestMemoBlobBackend)
