@@ -16,6 +16,7 @@ namespace Kalburator { class PluginManager; class Plugin; }
 class Profile;
 
 #include "palmrunresult.h"
+#include <shaperegistries.h>
 
 class KPilotDeviceLink;
 
@@ -248,6 +249,10 @@ private:
     QFutureWatcher<void>                                        *m_activeSyncWatcher = nullptr;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
+    // O7: per-PalmRuntime shape registries, injected into m_pluginManager
+    // (which populates them) and m_engine (which reads them). Declared before
+    // both so it is constructed first and destroyed last.
+    Kalburator::Shape::ShapeRegistries                           m_shape;
     std::unique_ptr<Kalburator::Sync::ISyncHost>                 m_syncHost;
     std::unique_ptr<Kalburator::Engine::SyncEngine>              m_engine;
     std::unique_ptr<Kalburator::Storage::BaselineStore>          m_baselineStore;

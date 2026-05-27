@@ -28,6 +28,16 @@
 // K.8b T13: ibackendplugin_v2.h include removed — V2 plugin ABI deleted.
 #include "palm/device/pilotlinkpalmdatabaseaccess.h"
 
+// O7: stock domain/infra plugins, loaded in one batch with WP's plugins
+// (mirrors PlanStan's composition root). DAV provider plugins are omitted —
+// registerStandardContributions() seeds those backend contributions.
+#include <universalstorageplugin.h>
+#include <blobplugin.h>
+#include <noteplugin.h>
+#include <todoplugin.h>
+#include <contactsplugin.h>
+#include <calendarplugin.h>
+
 // K.8b T6: in-process plugin loading via PluginManager.
 // Kalburator::Sync exposes src/plugin/ on its PUBLIC include path,
 // so headers are reachable without a path prefix.
@@ -82,24 +92,33 @@ private:
     Kalburator::Sync::BackendRegistry *m_registry = nullptr;
 };
 
-// K.8b T6: helper for building PluginManifests for the static Palm plugins.
-// K.8b T6 fix: Palm plugins have no definesDomains / shapeContributions /
-// domainOperations — applyPlugin() is a no-op for them.  requiresDomains
-// must NOT be set here: PluginManager::resolve() only checks within the
-// same batch, so a "calendar" requirement would fail with MissingDependency
-// whenever stock plugins are already loaded from a prior loadInProcess()
-// call (common in tests).  The domain parameter is kept for callers that
-// may need it in future, but ignored in the manifest.
-static Kalburator::PluginManifest mkPalmManifest(const QString &id,
-                                                  const QString & /*domain*/)
+// O7: stock domain/infra plugins DEFINE their canonical domain.
+static Kalburator::PluginManifest mkStockManifest(const QString &id,
+                                                  QStringList defines = {})
 {
     Kalburator::PluginManifest m;
-    m.id                    = id;
-    m.version               = QStringLiteral("1.0");
-    m.displayName           = id;
+    m.id                      = id;
+    m.version                 = QStringLiteral("1.0");
+    m.displayName             = id;
     m.kalburatorPluginVersion = QStringLiteral("1.0");
-    // definesDomains and requiresDomains intentionally empty: Palm plugins
-    // do not participate in the libkalburator domain/shape system.
+    m.definesDomains          = std::move(defines);
+    return m;
+}
+
+// O7: WP Palm plugins contribute a (domain,palm) peer shape + palm<->peer edges
+// via shapeContributions(); applyPlugin requires the augmented domain to be in
+// the manifest, so each REQUIRES its canonical domain. The stock definer must be
+// in the SAME loadInProcess batch (resolve() only sees the current batch and
+// orders requirers after definers) — see registerPalmPlugins().
+static Kalburator::PluginManifest mkPalmManifest(const QString &id,
+                                                 const QString &domain)
+{
+    Kalburator::PluginManifest m;
+    m.id                      = id;
+    m.version                 = QStringLiteral("1.0");
+    m.displayName             = id;
+    m.kalburatorPluginVersion = QStringLiteral("1.0");
+    m.requiresDomains         = { domain };
     return m;
 }
 
@@ -129,7 +148,7 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
 
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
-        m_registry.get(), m_syncHost.get());
+        m_registry.get(), m_syncHost.get(), m_shape);
     m_engine->setBaselineStore(m_baselineStore.get());
     // No-op today (handler set after construction), but keeps this consistent
     // with the re-install pattern required at every engine-construction site.
@@ -231,44 +250,44 @@ void PalmRuntime::registerPalmPlugins()
     auto memo = std::make_unique<MemoPlugin>();
     auto todo = std::make_unique<TodoBackendPlugin>();
 
-    // K.8b T6: loadInProcess registers the plugins into the process-wide
-    // singletons (DomainRegistry, TransformationRegistry, BackendRegistry).
-    // These singletons live for the process lifetime, so a second PalmRuntime
-    // in the same process (common in tests) must NOT call loadInProcess()
-    // again — the singletons reject duplicate ids with CanonicalConflict /
-    // DoubleBinding.  Guard with a process-level flag; registrations from
-    // the first instance remain valid for all subsequent instances.
-    static bool s_globalRegistrationDone = false;
-    if (!s_globalRegistrationDone) {
-        m_pluginManager = std::make_unique<Kalburator::PluginManager>(m_registry.get());
+    // O7 (v0.57): one PluginManager + ONE loadInProcess batch, populating this
+    // PalmRuntime's own m_shape (no process-global singletons). The batch holds
+    // the stock domain/infra plugins (which DEFINE the canonical domains + peer
+    // shapes ical/vcard4/canon/ical-vtodo) plus WP's four plugins (which REQUIRE
+    // those domains and contribute the (domain,palm) peer + palm<->peer edges).
+    // resolve() orders requirers after definers within the batch. Mirrors
+    // PlanStan/src/app/appcontroller.cpp. DAV provider plugins are intentionally
+    // omitted — registerStandardContributions() (above) already seeds the
+    // CalDav/CardDav/Akonadi backend contributions. Per-instance m_shape means a
+    // second PalmRuntime re-runs this into its own fresh registries (the old
+    // s_globalRegistrationDone guard is no longer needed).
+    m_pluginManager =
+        std::make_unique<Kalburator::PluginManager>(m_registry.get(), m_shape);
 
-        // Stock plugins own the DomainDefinitions (blob/calendar/contacts/
-        // memo/todo). Without this, SyncEngine::dispatchSync() bails with
-        // "no definition for domain '<X>'" on every mapping because the
-        // process-wide DomainRegistry is empty. Tests already seed the
-        // registry themselves in initTestCase(); calling registerStockPlugins
-        // a second time exercises a stock-plugin re-registration path that
-        // intermittently corrupts the heap at teardown. Guard with a presence
-        // check on the calendar definition — cheap, and sidesteps the path
-        // entirely when tests have pre-loaded the stock plugins.
-        using Kalburator::Shape::DomainId;
-        if (!Kalburator::Shape::DomainRegistry::instance().definitionFor(
-                DomainId{QStringLiteral("calendar")})) {
-            Kalburator::registerStockPlugins(*m_pluginManager);
-        }
+    static Kalburator::UniversalStoragePlugin  s_universal;
+    static Kalburator::Blob::BlobPlugin        s_blob;
+    static Kalburator::Note::NotePlugin        s_note;
+    static Kalburator::Todo::TodoPlugin        s_todo;
+    static Kalburator::Contacts::ContactsPlugin s_contacts;
+    static Kalburator::Calendar::CalendarPlugin s_calendar;
 
-        QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
-            { cal.get(),  mkPalmManifest(QStringLiteral("wildpalms.calendar"),    QStringLiteral("calendar")) },
-            { con.get(),  mkPalmManifest(QStringLiteral("wildpalms.contacts"),    QStringLiteral("contacts")) },
-            { memo.get(), mkPalmManifest(QStringLiteral("wildpalms.memo"),        QStringLiteral("memo"))     },
-            { todo.get(), mkPalmManifest(QStringLiteral("wildpalms.todo"),        QStringLiteral("todo"))     },
-        };
+    QList<QPair<Kalburator::Plugin *, Kalburator::PluginManifest>> items{
+        { &s_universal, mkStockManifest(QStringLiteral("kalburator.universal-storage")) },
+        { &s_blob,      mkStockManifest(QStringLiteral("kalburator.blob"),     {QStringLiteral("blob")}) },
+        { &s_note,      mkStockManifest(QStringLiteral("kalburator.note"),     {QStringLiteral("note")}) },
+        { &s_todo,      mkStockManifest(QStringLiteral("kalburator.todo"),     {QStringLiteral("todo")}) },
+        { &s_contacts,  mkStockManifest(QStringLiteral("kalburator.contacts"), {QStringLiteral("contacts")}) },
+        { &s_calendar,  mkStockManifest(QStringLiteral("kalburator.calendar"), {QStringLiteral("calendar")}) },
+        { cal.get(),    mkPalmManifest(QStringLiteral("wildpalms.calendar"), QStringLiteral("calendar")) },
+        { con.get(),    mkPalmManifest(QStringLiteral("wildpalms.contacts"), QStringLiteral("contacts")) },
+        { memo.get(),   mkPalmManifest(QStringLiteral("wildpalms.memo"),     QStringLiteral("note"))     },
+        { todo.get(),   mkPalmManifest(QStringLiteral("wildpalms.todo"),     QStringLiteral("todo"))     },
+    };
 
-        if (!m_pluginManager->loadInProcess(items)) {
-            qWarning() << "[PalmRuntime] Failed to load Palm plugins via PluginManager";
-            return;
-        }
-        s_globalRegistrationDone = true;
+    if (!m_pluginManager->loadInProcess(items)) {
+        qWarning() << "[PalmRuntime] plugin load rejected:"
+                   << m_pluginManager->rejected().size();
+        return;
     }
 
     m_palmPlugins.push_back(std::move(cal));
