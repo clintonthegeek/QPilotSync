@@ -108,6 +108,13 @@ void DashboardWidget::setupUI()
     m_relativeTimer->setInterval(60 * 1000);
     connect(m_relativeTimer, &QTimer::timeout, this, &DashboardWidget::render);
     m_relativeTimer->start();
+
+    m_spinTimer = new QTimer(this);
+    m_spinTimer->setInterval(150);
+    connect(m_spinTimer, &QTimer::timeout, this, [this]() {
+        m_spinPhase = (m_spinPhase + 1) % 4;
+        applyHeadline();
+    });
 }
 
 void DashboardWidget::setModel(SyncStatusModel *model)
@@ -137,6 +144,19 @@ static QString relativeTime(const QDateTime &t)
     if (secs < 3600)      return i18n("Synced %1 min ago", secs / 60);
     if (secs < 86400)     return i18n("Synced %1 h ago", secs / 3600);
     return i18n("Last sync: %1", QLocale().toString(t, QLocale::ShortFormat));
+}
+
+void DashboardWidget::applyHeadline()
+{
+    if (!m_model)
+        return;
+    static const char *kFrames[4] = { "◐", "◓", "◑", "◒" };
+    if (m_model->linkState() == SyncStatusModel::LinkState::Syncing) {
+        m_headlineLabel->setText(QStringLiteral("%1  %2")
+            .arg(QString::fromUtf8(kFrames[m_spinPhase]), m_model->headline()));
+    } else {
+        m_headlineLabel->setText(m_model->headline());
+    }
 }
 
 void DashboardWidget::render()
@@ -170,7 +190,11 @@ void DashboardWidget::render()
     m_autoSyncLabel->setVisible(!m_model->autoSyncPlan().isEmpty());
 
     // now zone
-    m_headlineLabel->setText(m_model->headline());
+    if (state == LS::Syncing)
+        m_spinTimer->start();
+    else
+        m_spinTimer->stop();
+    applyHeadline();
     if (state == LS::Syncing && m_model->progressTotal() > 0) {
         m_progressBar->setRange(0, m_model->progressTotal());
         m_progressBar->setValue(m_model->progressCurrent());

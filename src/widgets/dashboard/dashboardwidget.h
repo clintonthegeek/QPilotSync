@@ -31,6 +31,7 @@ private slots:
 private:
     void setupUI();
     void renderConduits();
+    void applyHeadline();   // sets headline text, with spinner prefix while syncing
 
     SyncStatusModel *m_model = nullptr;
 
@@ -47,6 +48,8 @@ private:
     QPushButton *m_conflictButton = nullptr;
     QHBoxLayout *m_conduitRow = nullptr;
     QTimer *m_relativeTimer = nullptr;   // refreshes "synced N ago"
+    QTimer *m_spinTimer = nullptr;
+    int m_spinPhase = 0;
 };
 
 #endif // DASHBOARDWIDGET_H
