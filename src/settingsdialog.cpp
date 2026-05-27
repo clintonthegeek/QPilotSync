@@ -568,8 +568,11 @@ void SettingsDialog::setProfileRegistry(WildPalms::Runtime::ProfileRegistry *reg
 
 void SettingsDialog::buildAccountsAndMappingsPagesIfReady()
 {
-    // Accounts page only needs AccountController.
-    if (m_accountController && !m_accountsPage) {
+    // Accounts page needs BOTH the controller and the runtime (it connects to
+    // PalmRuntime signals in buildUi). Requiring both avoids constructing it
+    // with a null runtime (which produced connect(nullptr,...) warnings and a
+    // page that never received run signals).
+    if (m_accountController && m_palmRuntime && !m_accountsPage) {
         m_accountsPage = new WildPalms::App::Accounts::AccountsPage(
             m_accountController, m_palmRuntime, this);
         auto *item = new KPageWidgetItem(m_accountsPage, i18n("Accounts"));

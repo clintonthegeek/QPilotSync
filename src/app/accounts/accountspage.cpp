@@ -66,10 +66,12 @@ void AccountsPage::buildUi() {
                      this, &AccountsPage::refreshList);
     QObject::connect(m_accounts, &AC::mappingsChanged,
                      this, &AccountsPage::refreshList);
-    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runStarted,
-                     this, &AccountsPage::onPalmRunStarted);
-    QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runFinished,
-                     this, &AccountsPage::onPalmRunFinished);
+    if (m_palmRuntime) {
+        QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runStarted,
+                         this, &AccountsPage::onPalmRunStarted);
+        QObject::connect(m_palmRuntime, &WildPalms::Runtime::PalmRuntime::runFinished,
+                         this, &AccountsPage::onPalmRunFinished);
+    }
 }
 
 void AccountsPage::refreshList() {
