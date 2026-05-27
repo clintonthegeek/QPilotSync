@@ -15,6 +15,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUuid>
+#include <QFutureWatcher>
 
 #include <algorithm>
 
@@ -79,13 +80,23 @@ void AccountController::loadAndConnect() {
         m_states.insert(cfg.id, ConnectionState::Connecting);
         m_providerManager->addProvider(std::move(provider));
     }
-    m_providerManager->connectAll();
+    QFuture<void> future = m_providerManager->connectAll();
 
     // Re-apply disabled provider states so mappings start in the right state.
     for (const auto &cfg : m_profile->accounts()) {
         if (!cfg.enabled)
             setProviderEnabled(cfg.id, false);
     }
+
+    // Emit accountsReady() once all providers have finished connecting (or if
+    // there are none). The watcher posts the signal on the GUI thread so it is
+    // safe to use directly from slots that interact with the UI.
+    auto *watcher = new QFutureWatcher<void>(this);
+    connect(watcher, &QFutureWatcher<void>::finished, this, [this, watcher]() {
+        watcher->deleteLater();
+        Q_EMIT accountsReady();
+    });
+    watcher->setFuture(future);
 }
 
 bool AccountController::providerEnabled(const QString &id) const {

@@ -98,6 +98,10 @@ signals:
     void mappingsChanged();   // emitted on cascade-delete (Task 6)
     void providerEnabledChanged(QString providerId, bool enabled);
     void mappingEnabledChanged(QString mappingId, bool enabled);
+    /// Emitted once after the initial loadAndConnect() completes — i.e. after
+    /// all configured providers have either connected or failed. Guaranteed to
+    /// fire on the GUI thread. Profiles with no providers fire this immediately.
+    void accountsReady();
 
 private:
     void loadAndConnect();

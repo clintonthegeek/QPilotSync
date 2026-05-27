@@ -316,6 +316,11 @@ private:
     PalmDeviceMonitor *m_deviceMonitor = nullptr;
     AutoSyncOrchestrator *m_autoSync = nullptr;
 
+    // Gate for auto-sync-on-connect: both device and accounts must be ready
+    // before the first auto-sync fires. Reset on every loadProfile().
+    bool m_deviceReadyForSync = false;
+    bool m_accountsReadyForSync = false;
+
     // System tray
     KStatusNotifierItem *m_trayIcon = nullptr;
     bool m_minimizeToTray = true;

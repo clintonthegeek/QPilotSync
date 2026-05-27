@@ -597,12 +597,30 @@ void KF6MainWindow::loadProfile(const QString &path)
             m_syncStatusModel, &SyncStatusModel::onMappingSyncFinished);
 
     // Phase Ic: AccountController borrows registry + profile + runtime.
+    m_deviceReadyForSync = false;
+    m_accountsReadyForSync = false;
     m_accountController = std::make_unique<WildPalms::Runtime::AccountController>(
         m_currentProfile->syncFolderPath(),
         &m_palmRuntime->backendRegistry(),
         m_currentProfile.get(),
         m_palmRuntime.get(),
         this);
+    // Gate auto-sync until accounts have finished their async connections.
+    // accountsReady() fires on the GUI thread once all providers are done
+    // (or immediately if there are none). At that point, if the device
+    // signalled readyForSync first we fire the deferred auto-sync.
+    connect(m_accountController.get(),
+            &WildPalms::Runtime::AccountController::accountsReady,
+            this, [this]() {
+                m_accountsReadyForSync = true;
+                if (m_deviceReadyForSync
+                    && m_currentProfile
+                    && m_currentProfile->autoSyncOnConnect()) {
+                    m_logWidget->logInfo(
+                        i18n("Accounts ready — starting deferred auto-sync"));
+                    QTimer::singleShot(0, this, &KF6MainWindow::onHotSync);
+                }
+            });
 
     // Construct and install the libkalburator-side conflict handler.
     // Recreate per profile so it points at the new engine. Direct construction
@@ -1377,10 +1395,20 @@ void KF6MainWindow::onDeviceReady(const QString &userName, const QString &device
 
 void KF6MainWindow::onReadyForSync()
 {
-    // Auto-sync if profile is configured for it
-    if (m_currentProfile && m_currentProfile->autoSyncOnConnect()) {
+    m_deviceReadyForSync = true;
+
+    if (!m_currentProfile || !m_currentProfile->autoSyncOnConnect())
+        return;
+
+    // If AccountController has already finished its async provider connections,
+    // start the sync immediately. Otherwise record that the device is ready and
+    // let the accountsReady() handler fire the sync once accounts catch up.
+    if (m_accountsReadyForSync) {
         m_logWidget->logInfo(i18n("Auto-sync enabled — starting HotSync"));
         QTimer::singleShot(0, this, &KF6MainWindow::onHotSync);
+    } else {
+        m_logWidget->logInfo(
+            i18n("Auto-sync enabled — waiting for account connections"));
     }
 }
 
