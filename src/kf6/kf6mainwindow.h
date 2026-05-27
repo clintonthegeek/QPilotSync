@@ -8,6 +8,7 @@
 #include "runtime/palmrunresult.h"
 #include "runtime/profileregistry.h"
 #include "profilemenucontroller.h"
+#include "../widgets/dashboard/syncstatusmodel.h"
 
 // Forward declarations
 struct DeviceFingerprint;
@@ -137,7 +138,6 @@ private Q_SLOTS:
     void startListening(const QString &devicePath);
     void stopListening();
     void startConnection(const QString &devicePath);
-    void onDeviceStatusChanged(int status);
     void onDeviceReady(const QString &userName, const QString &deviceName);
     void onReadyForSync();
     void onListDatabases();
@@ -224,6 +224,9 @@ private:
     // F.2 sub-project D — conflict badge helper
     void refreshConflictBadge();
 
+    // Dashboard redesign — push device/profile/conduit state into the model.
+    void pushProfileInfoToStatusModel();
+
     // F.1c.1 — NewProfileWizard integration. runProfileWizard() is the
     // test seam: production exec()s the real wizard; tests set
     // m_runWizardOverride to inject a pre-built Result. Returns an
@@ -239,6 +242,7 @@ private:
 
     // Status header strip (above plugin pages)
     DashboardWidget *m_dashboardWidget;
+    SyncStatusModel *m_syncStatusModel = nullptr;
 
     // Dynamic plugin pages (keyed by plugin id), populated synchronously in loadProfile()
     QMap<QString, KPageWidgetItem *> m_palmPluginPages;

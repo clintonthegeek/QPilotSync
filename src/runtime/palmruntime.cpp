@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <algorithm>
 #include <QDateTime>
+#include <QHash>
 #include <QSet>
 #include <QtConcurrent>
 
@@ -137,6 +138,28 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     QObject::connect(m_engine.get(),
                      &Kalburator::Sync::SyncEngine::conflictDetected,
                      this, &PalmRuntime::conflictDetected);
+
+    QObject::connect(m_engine.get(), &Kalburator::Sync::SyncEngine::syncStarted,
+                     this, [this](const QString &mappingId) {
+        m_activeMappingId = mappingId;
+        QString label, icon;
+        resolveMappingIdentity(mappingId, label, icon);
+        Q_EMIT mappingSyncStarted(mappingId, label, icon);
+    });
+    QObject::connect(m_engine.get(), &Kalburator::Sync::SyncEngine::progressUpdated,
+                     this, [this](int current, int total, const QString &message) {
+        Q_EMIT runProgress(current, total, message);
+    });
+    QObject::connect(m_engine.get(), &Kalburator::Sync::SyncEngine::fetchProgress,
+                     this, [this](const QString &, int current, int total) {
+        if (!m_activeMappingId.isEmpty())
+            Q_EMIT mappingSyncProgress(m_activeMappingId, /*phase=*/0, current, total);
+    });
+    QObject::connect(m_engine.get(), &Kalburator::Sync::SyncEngine::writeProgress,
+                     this, [this](const QString &, int current, int total) {
+        if (!m_activeMappingId.isEmpty())
+            Q_EMIT mappingSyncProgress(m_activeMappingId, /*phase=*/1, current, total);
+    });
 
     // K.8b T6: load the five static Palm plugins in-process.
     registerPalmPlugins();
@@ -568,6 +591,70 @@ QList<Kalburator::Sync::SyncMapping> PalmRuntime::palmMappings() const {
     return m_mappings;
 }
 
+void PalmRuntime::resolveMappingIdentity(const QString &mappingId,
+                                         QString &outLabel,
+                                         QString &outIconName) const
+{
+    using namespace WildPalms::CalendarPlugin;
+    using namespace WildPalms::ContactsPlugin;
+    using namespace WildPalms::Memo;
+    using namespace WildPalms::TodoPlugin;
+
+    outLabel = mappingId;
+    outIconName = QStringLiteral("view-list-details");
+    static const QHash<QString, QString> kIcons = {
+        { QStringLiteral("calendar"), QStringLiteral("office-calendar") },
+        { QStringLiteral("contacts"), QStringLiteral("x-office-address-book") },
+        { QStringLiteral("memo"),     QStringLiteral("text-x-generic") },
+        { QStringLiteral("todo"),     QStringLiteral("view-task") },
+        { QStringLiteral("plucker"),  QStringLiteral("text-html") },
+    };
+    for (const auto &m : m_mappings) {
+        if (m.id != mappingId)
+            continue;
+        // Base Kalburator::Plugin has no pluginId()/displayName(); the concrete
+        // Palm plugin subclasses do. Match m.sourceBackend (a bare plugin id
+        // like "calendar") against each plugin's pluginId() via dynamic_cast,
+        // mirroring the dispatch pattern in finishConnect().
+        for (const auto &plugin : m_palmPlugins) {
+            QString pid;
+            QString name;
+            if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
+                pid = p->pluginId(); name = p->displayName();
+            } else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get())) {
+                pid = p->pluginId(); name = p->displayName();
+            } else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get())) {
+                pid = p->pluginId(); name = p->displayName();
+            } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
+                pid = p->pluginId(); name = p->displayName();
+            } else {
+                continue;
+            }
+            if (pid == m.sourceBackend) {
+                outLabel = name;
+                outIconName = kIcons.value(m.sourceBackend,
+                                           QStringLiteral("view-list-details"));
+                return;
+            }
+        }
+        return;
+    }
+}
+
+QVector<PalmRuntime::ConduitDescriptor> PalmRuntime::conduitDescriptors() const
+{
+    QVector<ConduitDescriptor> out;
+    for (const auto &m : m_mappings) {
+        if (!m.enabled)
+            continue;
+        ConduitDescriptor d;
+        d.mappingId = m.id;
+        resolveMappingIdentity(m.id, d.label, d.iconName);
+        out.append(d);
+    }
+    return out;
+}
+
 static QFuture<WildPalms::Runtime::PalmRunResult> makeSuccessFuture() {
     QPromise<WildPalms::Runtime::PalmRunResult> p;
     auto f = p.future();
@@ -614,7 +701,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
             });
     m_activeSyncWatcher->setFuture(engineFuture);
 
-    return engineFuture.then([this](QList<Kalburator::Sync::SyncResult> results) {
+    return engineFuture.then([this, ids](QList<Kalburator::Sync::SyncResult> results) {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
         r.success   = true;
@@ -647,9 +734,21 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         if (!results.isEmpty())
             r.perPluginStats.insert(QStringLiteral("calendar"), stats);
 
+        // Per-mapping finished — chips fill their counts here (run-end only;
+        // the engine has no per-mapping completion signal).
+        for (int i = 0; i < results.size() && i < ids.size(); ++i) {
+            const auto &sr = results[i];
+            const auto &ts = sr.targetStats;
+            QMetaObject::invokeMethod(this, [this, id = ids[i], ts, sr]() {
+                Q_EMIT mappingSyncFinished(id, ts.created, ts.updated, ts.deleted,
+                                           sr.success && !sr.cancelled);
+            });
+        }
+
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
+            m_activeMappingId.clear();
             Q_EMIT runFinished(r);
         });
         return r;

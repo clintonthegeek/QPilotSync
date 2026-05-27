@@ -92,6 +92,7 @@ add_library(WildPalmsCore SHARED
     # Widgets - Dashboard
     widgets/dashboard/dashboardwidget.cpp
     widgets/dashboard/dashboardwidget.h
+    widgets/dashboard/syncstatusmodel.cpp
 
     # Widgets - Dialogs
     widgets/dialogs/categoryeditordialog.cpp

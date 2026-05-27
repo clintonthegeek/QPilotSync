@@ -273,6 +273,27 @@ void KF6MainWindow::createCentralLayout()
     // Status header strip (120 px, sits between toolbar and plugin pages)
     m_dashboardWidget = new DashboardWidget(this);
 
+    m_syncStatusModel = new SyncStatusModel(this);
+    m_dashboardWidget->setModel(m_syncStatusModel);
+
+    // Live udev presence (independent of any profile/runtime).
+    connect(m_deviceMonitor, &PalmDeviceMonitor::palmDetected,
+            this, [this](const QStringList &, const QString &) {
+                m_syncStatusModel->onDeviceDetected();
+            });
+    connect(m_deviceMonitor, &PalmDeviceMonitor::palmDisconnected,
+            this, [this](const QString &) {
+                m_syncStatusModel->onDeviceLost();
+            });
+
+    // Panel action requests.
+    connect(m_syncStatusModel, &SyncStatusModel::syncRequested,
+            this, &KF6MainWindow::onHotSync);
+    connect(m_syncStatusModel, &SyncStatusModel::cancelRequested,
+            this, [this]() { if (m_palmRuntime) m_palmRuntime->cancelSync(); });
+    connect(m_syncStatusModel, &SyncStatusModel::resolveConflictsRequested,
+            this, &KF6MainWindow::onConflictBadgeClicked);
+
     // Plugin page area with icon sidebar
     m_pageWidget = new KPageWidget(this);
     m_pageWidget->setFaceType(KPageWidget::List);
@@ -555,6 +576,26 @@ void KF6MainWindow::loadProfile(const QString &path)
     connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
             this, &KF6MainWindow::onPalmRunFinished);
 
+    // Dashboard redesign — feed the SyncStatusModel from this profile's runtime.
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::connectionStarted,
+            m_syncStatusModel, &SyncStatusModel::onConnectionStarted);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::connectionComplete,
+            m_syncStatusModel, &SyncStatusModel::onConnectionComplete);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::deviceDisconnected,
+            m_syncStatusModel, &SyncStatusModel::onDeviceLost);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runStarted,
+            m_syncStatusModel, &SyncStatusModel::onRunStarted);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runProgress,
+            m_syncStatusModel, &SyncStatusModel::onRunProgress);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::runFinished,
+            m_syncStatusModel, &SyncStatusModel::onRunFinished);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::mappingSyncStarted,
+            m_syncStatusModel, &SyncStatusModel::onMappingSyncStarted);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::mappingSyncProgress,
+            m_syncStatusModel, &SyncStatusModel::onMappingSyncProgress);
+    connect(m_palmRuntime.get(), &WildPalms::Runtime::PalmRuntime::mappingSyncFinished,
+            m_syncStatusModel, &SyncStatusModel::onMappingSyncFinished);
+
     // Phase Ic: AccountController borrows registry + profile + runtime.
     m_accountController = std::make_unique<WildPalms::Runtime::AccountController>(
         m_currentProfile->syncFolderPath(),
@@ -646,7 +687,13 @@ void KF6MainWindow::loadProfile(const QString &path)
     bool connected = m_palmRuntime && m_palmRuntime->isDeviceConnected();
     updateWindowTitle();
     updateMenuState(connected);
-    m_dashboardWidget->updateStatus(m_currentProfile.get(), connected);
+    pushProfileInfoToStatusModel();
+    // If a device is already connected when this profile loads (e.g. switching
+    // profiles with the Palm attached), no fresh connectionComplete signal will
+    // arrive, so tell the model we are connected. setState() is idempotent if a
+    // real signal also fires later.
+    if (connected)
+        m_syncStatusModel->onConnectionComplete(true, QString());
 
     m_logWidget->logInfo(i18n("Loaded profile: %1", m_currentProfile->name()));
     m_logWidget->logInfo(i18n("Sync folder: %1", m_syncPath));
@@ -1034,7 +1081,7 @@ void KF6MainWindow::onConnectionComplete(bool success, const QString &error)
     }
 
     updateMenuState(true);
-    m_dashboardWidget->updateStatus(m_currentProfile.get(), true);
+    pushProfileInfoToStatusModel();
 }
 
 bool KF6MainWindow::handleDeviceFingerprint(const DeviceFingerprint &connectedDevice)
@@ -1234,37 +1281,6 @@ void KF6MainWindow::onCancelConnection()
         }
     }
     m_actionManager->cancelConnectionAction()->setEnabled(false);
-}
-
-void KF6MainWindow::onDeviceStatusChanged(int status)
-{
-    KPilotLink::LinkStatus linkStatus = static_cast<KPilotLink::LinkStatus>(status);
-    switch (linkStatus) {
-        case KPilotLink::LinkStatus::Init:
-            statusBar()->showMessage(i18n("Initializing..."));
-            break;
-        case KPilotLink::LinkStatus::WaitingForDevice:
-            statusBar()->showMessage(i18n("Waiting for device..."));
-            break;
-        case KPilotLink::LinkStatus::FoundDevice:
-            statusBar()->showMessage(i18n("Device found"));
-            break;
-        case KPilotLink::LinkStatus::CreatedSocket:
-            statusBar()->showMessage(i18n("Creating connection..."));
-            break;
-        case KPilotLink::LinkStatus::DeviceOpen:
-            statusBar()->showMessage(i18n("Device open"));
-            break;
-        case KPilotLink::LinkStatus::AcceptedDevice:
-            statusBar()->showMessage(i18n("Connected"));
-            break;
-        case KPilotLink::LinkStatus::SyncDone:
-            statusBar()->showMessage(i18n("Sync complete"));
-            break;
-        case KPilotLink::LinkStatus::PilotLinkError:
-            statusBar()->showMessage(i18n("Error"));
-            break;
-    }
 }
 
 void KF6MainWindow::onAutoDeviceDetected(Profile *profile, const QStringList &ports)
@@ -2096,6 +2112,9 @@ void KF6MainWindow::onConflictBadgeClicked()
 
 void KF6MainWindow::refreshConflictBadge()
 {
+    if (m_syncStatusModel)
+        m_syncStatusModel->onConflictCountChanged(m_pendingConflictCount);
+
     if (!m_conflictBadge) return;
     if (m_pendingConflictCount > 0) {
         m_conflictBadge->setText(
@@ -2103,6 +2122,45 @@ void KF6MainWindow::refreshConflictBadge()
         m_conflictBadge->setVisible(true);
     } else {
         m_conflictBadge->setVisible(false);
+    }
+}
+
+void KF6MainWindow::pushProfileInfoToStatusModel()
+{
+    if (!m_syncStatusModel) return;
+    if (m_currentProfile) {
+        const DeviceFingerprint fp = m_currentProfile->deviceFingerprint();
+        QString name = fp.isValid() ? fp.displayString() : i18n("No device registered");
+        QString details;
+        if (fp.isValid() && fp.hasExtendedInfo()) {
+            QStringList parts;
+            const QString os = fp.palmOSVersionString();
+            if (!os.isEmpty()) parts << i18n("Palm OS %1", os);
+            if (fp.ramFree != 0) parts << i18n("%1 free", DeviceFingerprint::formatMemorySize(fp.ramFree));
+            details = parts.join(QStringLiteral(" · "));
+        }
+        m_syncStatusModel->setDeviceInfo(name, details);
+
+        QString plan;
+        if (m_currentProfile->autoSyncOnConnect()) {
+            plan = (m_currentProfile->defaultSyncType() == QStringLiteral("fullsync"))
+                ? i18n("Auto-sync (FullSync) on connect")
+                : i18n("Auto-sync (HotSync) on connect");
+        }
+        m_syncStatusModel->setProfileInfo(m_currentProfile->name(),
+                                          m_currentProfile->lastSyncTime(), plan);
+    } else {
+        m_syncStatusModel->setDeviceInfo(QString(), QString());
+        m_syncStatusModel->setProfileInfo(QString(), QDateTime(), QString());
+    }
+
+    // Seed the conduit chip row from the runtime's enabled mappings.
+    if (m_palmRuntime) {
+        const auto descs = m_palmRuntime->conduitDescriptors();
+        QVector<SyncStatusModel::ConduitSeed> seeds;
+        for (const auto &d : descs)
+            seeds.append({ d.mappingId, d.label, d.iconName });
+        m_syncStatusModel->seedConduits(seeds);
     }
 }
 

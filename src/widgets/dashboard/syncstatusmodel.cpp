@@ -1,0 +1,239 @@
+#include "syncstatusmodel.h"
+
+SyncStatusModel::SyncStatusModel(QObject *parent)
+    : QObject(parent)
+{
+}
+
+void SyncStatusModel::setState(LinkState s)
+{
+    if (m_linkState == s)
+        return;
+    m_linkState = s;
+    Q_EMIT changed();
+}
+
+SyncStatusModel::Conduit *SyncStatusModel::findConduit(const QString &mappingId)
+{
+    for (auto &c : m_conduits)
+        if (c.mappingId == mappingId)
+            return &c;
+    return nullptr;
+}
+
+void SyncStatusModel::setDeviceInfo(const QString &name, const QString &details)
+{
+    m_deviceName = name;
+    m_deviceDetails = details;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::setProfileInfo(const QString &profileName,
+                                     const QDateTime &lastSync,
+                                     const QString &autoSyncPlan)
+{
+    m_profileName = profileName;
+    m_lastSyncTime = lastSync;
+    m_autoSyncPlan = autoSyncPlan;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::seedConduits(const QVector<ConduitSeed> &conduits)
+{
+    m_conduits.clear();
+    for (const auto &s : conduits) {
+        Conduit c;
+        c.mappingId = s.mappingId;
+        c.label = s.label;
+        c.iconName = s.iconName;
+        c.state = ChipState::Pending;
+        m_conduits.append(c);
+    }
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::onDeviceDetected()
+{
+    if (m_linkState == LinkState::Listening || m_linkState == LinkState::Disconnected)
+        setState(LinkState::Detected);
+}
+
+void SyncStatusModel::onDeviceLost()
+{
+    if (m_linkState == LinkState::Syncing) {
+        for (auto &c : m_conduits)
+            if (c.state == ChipState::Active)
+                c.state = ChipState::Interrupted;
+    }
+    setState(LinkState::Disconnected);
+}
+
+void SyncStatusModel::onConnectionStarted()
+{
+    setState(LinkState::Handshaking);
+}
+
+void SyncStatusModel::onConnectionComplete(bool success, const QString &error)
+{
+    if (success) {
+        m_errorText.clear();
+        setState(LinkState::Connected);
+    } else {
+        if (m_errorText != error) {
+            m_errorText = error;
+            Q_EMIT changed();
+        }
+        setState(LinkState::Listening);
+    }
+}
+
+void SyncStatusModel::onConflictCountChanged(int count)
+{
+    if (m_conflictCount == count)
+        return;
+    m_conflictCount = count;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::triggerPrimaryAction()
+{
+    if (m_linkState == LinkState::Connected)
+        Q_EMIT syncRequested();
+    else if (m_linkState == LinkState::Syncing)
+        Q_EMIT cancelRequested();
+}
+
+void SyncStatusModel::triggerResolveConflicts()
+{
+    Q_EMIT resolveConflictsRequested();
+}
+
+QString SyncStatusModel::primaryActionLabel() const
+{
+    switch (m_linkState) {
+    case LinkState::Connected: return QStringLiteral("Sync Now");
+    case LinkState::Syncing:   return QStringLiteral("Cancel");
+    default:                   return QString();
+    }
+}
+
+QString SyncStatusModel::headline() const
+{
+    switch (m_linkState) {
+    case LinkState::Listening:
+        return m_errorText.isEmpty()
+            ? QStringLiteral("Listening for Palm devices…\nPress HotSync on your Palm.")
+            : m_errorText;
+    case LinkState::Detected:    return QStringLiteral("Palm device detected…");
+    case LinkState::Handshaking: return QStringLiteral("Connecting…");
+    case LinkState::Connected:
+        if (m_digest.valid)
+            return m_digest.success
+                ? QStringLiteral("%1 complete").arg(m_digest.modeLabel)
+                : QStringLiteral("%1 finished with errors").arg(m_digest.modeLabel);
+        return QStringLiteral("Ready to sync");
+    case LinkState::Syncing:
+        return m_progressMessage.isEmpty()
+            ? QStringLiteral("Syncing…") : m_progressMessage;
+    case LinkState::Disconnected:
+        return m_errorText.isEmpty()
+            ? QStringLiteral("Disconnected")
+            : QStringLiteral("Disconnected — %1").arg(m_errorText);
+    }
+    return QString();
+}
+
+void SyncStatusModel::onRunStarted(const QString &modeLabel)
+{
+    m_currentRunLabel = modeLabel;
+    m_errorText.clear();
+    m_runChanges = 0;
+    m_progressCurrent = m_progressTotal = 0;
+    m_progressMessage.clear();
+    for (auto &c : m_conduits) {
+        c.state = ChipState::Pending;
+        c.current = c.total = c.created = c.modified = c.deleted = 0;
+    }
+    m_digest.valid = false;
+    setState(LinkState::Syncing);
+}
+
+void SyncStatusModel::onRunProgress(int current, int total, const QString &message)
+{
+    m_progressCurrent = current;
+    m_progressTotal = total;
+    m_progressMessage = message;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::onRunFinished(const WildPalms::Runtime::PalmRunResult &result)
+{
+    // Any conduit left Active completes now.
+    for (auto &c : m_conduits)
+        if (c.state == ChipState::Active)
+            c.state = result.success ? ChipState::Done : ChipState::Error;
+
+    m_digest.valid = true;
+    m_digest.modeLabel = m_currentRunLabel.isEmpty()
+        ? QStringLiteral("Sync") : m_currentRunLabel;
+    m_digest.totalChanges = m_runChanges;
+    m_digest.conflicts = m_conflictCount;
+    m_digest.durationMs = result.durationMs();
+    m_digest.success = result.success;
+
+    if (!result.success && m_errorText.isEmpty())
+        m_errorText = result.errorMessage;
+
+    // Only return to Connected if we did not lose the link mid-sync.
+    if (m_linkState == LinkState::Syncing)
+        setState(LinkState::Connected);
+    else
+        Q_EMIT changed();
+}
+
+void SyncStatusModel::onMappingSyncStarted(const QString &mappingId,
+                                           const QString &label,
+                                           const QString &iconName)
+{
+    // Auto-complete any still-active conduit (engine runs sequentially).
+    for (auto &c : m_conduits)
+        if (c.state == ChipState::Active && c.mappingId != mappingId)
+            c.state = ChipState::Done;
+
+    Conduit *c = findConduit(mappingId);
+    if (!c) {
+        Conduit nc;
+        nc.mappingId = mappingId;
+        nc.label = label;
+        nc.iconName = iconName;
+        m_conduits.append(nc);
+        c = &m_conduits.last();
+    }
+    c->state = ChipState::Active;
+    if (!label.isEmpty())    c->label = label;
+    if (!iconName.isEmpty()) c->iconName = iconName;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::onMappingSyncProgress(const QString &mappingId, int /*phase*/,
+                                            int current, int total)
+{
+    if (Conduit *c = findConduit(mappingId)) {
+        c->current = current;
+        c->total = total;
+        Q_EMIT changed();
+    }
+}
+
+void SyncStatusModel::onMappingSyncFinished(const QString &mappingId, int created,
+                                            int modified, int deleted, bool ok)
+{
+    if (Conduit *c = findConduit(mappingId)) {
+        c->created = created;
+        c->modified = modified;
+        c->deleted = deleted;
+        c->state = ok ? ChipState::Done : ChipState::Error;
+        m_runChanges += created + modified + deleted;
+        Q_EMIT changed();
+    }
+}
