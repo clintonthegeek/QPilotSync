@@ -701,11 +701,11 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
                                            sr.success && !sr.cancelled);
             });
         }
-        m_activeMappingId.clear();
 
         r.endTime = QDateTime::currentDateTimeUtc();
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
+            m_activeMappingId.clear();
             Q_EMIT runFinished(r);
         });
         return r;
