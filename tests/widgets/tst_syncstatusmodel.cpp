@@ -1,5 +1,6 @@
 #include <QtTest/QtTest>
 #include <QSignalSpy>
+#include <QDateTime>
 
 #include "syncstatusmodel.h"
 
@@ -19,6 +20,9 @@ private slots:
     void mappingProgressUpdatesCounts();
     void mappingFinishedFillsCountsAndState();
     void unplugMidSyncInterruptsActiveChip();
+    void runProgressUpdatesProgressFields();
+    void runFinishedBuildsDigestAndReturnsToConnected();
+    void runFinishedAfterUnplugStaysDisconnected();
 };
 
 void TestSyncStatusModel::initialStateIsListening()
@@ -163,6 +167,55 @@ void TestSyncStatusModel::unplugMidSyncInterruptsActiveChip()
     m.onDeviceLost();
     QCOMPARE(m.linkState(), SyncStatusModel::LinkState::Disconnected);
     QCOMPARE(m.conduits()[0].state, SyncStatusModel::ChipState::Interrupted);
+}
+
+void TestSyncStatusModel::runProgressUpdatesProgressFields()
+{
+    SyncStatusModel m;
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onRunProgress(2, 6, QStringLiteral("Syncing Contacts"));
+    QCOMPARE(m.progressCurrent(), 2);
+    QCOMPARE(m.progressTotal(), 6);
+    QCOMPARE(m.progressMessage(), QStringLiteral("Syncing Contacts"));
+    QCOMPARE(m.headline(), QStringLiteral("Syncing Contacts"));
+}
+
+void TestSyncStatusModel::runFinishedBuildsDigestAndReturnsToConnected()
+{
+    SyncStatusModel m;
+    m.onDeviceDetected();
+    m.onConnectionStarted();
+    m.onConnectionComplete(true, QString());
+    m.seedConduits(twoSeeds());
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onMappingSyncFinished(QStringLiteral("m-cal"), 3, 2, 1, true);
+    m.onMappingSyncFinished(QStringLiteral("m-con"), 1, 0, 0, true);
+
+    WildPalms::Runtime::PalmRunResult r;
+    r.success = true;
+    r.startTime = QDateTime::currentDateTime().addSecs(-8);
+    r.endTime = QDateTime::currentDateTime();
+    m.onRunFinished(r);
+
+    QCOMPARE(m.linkState(), SyncStatusModel::LinkState::Connected);
+    QVERIFY(m.lastDigest().valid);
+    QCOMPARE(m.lastDigest().totalChanges, 7);          // 3+2+1 + 1
+    QVERIFY(m.lastDigest().success);
+}
+
+void TestSyncStatusModel::runFinishedAfterUnplugStaysDisconnected()
+{
+    SyncStatusModel m;
+    m.onDeviceDetected();
+    m.onConnectionStarted();
+    m.onConnectionComplete(true, QString());
+    m.onRunStarted(QStringLiteral("HotSync"));
+    m.onDeviceLost();                                   // unplugged mid-sync
+    WildPalms::Runtime::PalmRunResult r;
+    r.success = false;
+    r.errorMessage = QStringLiteral("link lost");
+    m.onRunFinished(r);
+    QCOMPARE(m.linkState(), SyncStatusModel::LinkState::Disconnected);
 }
 
 QTEST_GUILESS_MAIN(TestSyncStatusModel)

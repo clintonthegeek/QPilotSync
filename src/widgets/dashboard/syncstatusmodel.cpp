@@ -158,8 +158,38 @@ void SyncStatusModel::onRunStarted(const QString &modeLabel)
     setState(LinkState::Syncing);
 }
 
-void SyncStatusModel::onRunProgress(int, int, const QString &) {}
-void SyncStatusModel::onRunFinished(const WildPalms::Runtime::PalmRunResult &) {}
+void SyncStatusModel::onRunProgress(int current, int total, const QString &message)
+{
+    m_progressCurrent = current;
+    m_progressTotal = total;
+    m_progressMessage = message;
+    Q_EMIT changed();
+}
+
+void SyncStatusModel::onRunFinished(const WildPalms::Runtime::PalmRunResult &result)
+{
+    // Any conduit left Active completes now.
+    for (auto &c : m_conduits)
+        if (c.state == ChipState::Active)
+            c.state = result.success ? ChipState::Done : ChipState::Error;
+
+    m_digest.valid = true;
+    m_digest.modeLabel = m_currentRunLabel.isEmpty()
+        ? QStringLiteral("Sync") : m_currentRunLabel;
+    m_digest.totalChanges = m_runChanges;
+    m_digest.conflicts = m_conflictCount;
+    m_digest.durationMs = result.durationMs();
+    m_digest.success = result.success;
+
+    if (!result.success && m_errorText.isEmpty())
+        m_errorText = result.errorMessage;
+
+    // Only return to Connected if we did not lose the link mid-sync.
+    if (m_linkState == LinkState::Syncing)
+        setState(LinkState::Connected);
+    else
+        Q_EMIT changed();
+}
 
 void SyncStatusModel::onMappingSyncStarted(const QString &mappingId,
                                            const QString &label,
