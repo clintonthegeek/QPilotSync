@@ -53,6 +53,10 @@ namespace Kalburator::Shape {
     struct Shape;
 }
 
+namespace Kalburator::Sinks {
+    class GenericSqliteBackend;
+}
+
 // K.8b T13: IBackendPluginV2 forward-decl dropped — the V2 plugin ABI is
 // gone. registerPluginForTest overloads removed below (they had no live
 // callers after K.8b T6 turned them into no-ops).
@@ -212,6 +216,7 @@ private:
     /// Loads plugins, registers backends, sets up default mappings if
     /// none exist, sets up the engine. Emits deviceConnected + readyForSync.
     void finishConnect();
+    void ensureHubCollections();
 
     /// Repopulate m_mappings from the borrowed Profile's persisted
     /// syncMappingsJson(). The Profile is the source of truth for
@@ -249,6 +254,10 @@ private:
     QFutureWatcher<void>                                        *m_activeSyncWatcher = nullptr;
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
+    // C: canonical local hub. Declared right after m_registry (and before
+    // m_engine) so it is destroyed AFTER the engine — the engine's registry
+    // holds a borrowed "wp-hub" pointer, so the hub must outlive the engine.
+    std::unique_ptr<Kalburator::Sinks::GenericSqliteBackend>     m_hub;
     // O7: per-PalmRuntime shape registries, injected into m_pluginManager
     // (which populates them) and m_engine (which reads them). Declared before
     // both so it is constructed first and destroyed last.

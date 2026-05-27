@@ -54,6 +54,7 @@
 
 #include <rawfilesbackend.h>
 #include <markdownfilesbackend.h>
+#include <genericsqlitebackend.h>
 
 #include "standardcontributions.h"
 
@@ -146,6 +147,12 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     // discovery), so the calls live in a shared free function.
     WildPalms::Runtime::registerStandardContributions(m_registry.get());
 
+    // C Task 2: stand up the per-profile SQLite hub. The .state/ dir already
+    // exists because BaselineStore uses it (.state/.wildpalms-blob-baselines.db).
+    m_hub = std::make_unique<Kalburator::Sinks::GenericSqliteBackend>(
+        QDir(profilePath).filePath(QStringLiteral(".state/hub.db")));
+    m_registry->registerBackendInstance(QStringLiteral("wp-hub"), m_hub.get());
+
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
     m_engine = std::make_unique<Kalburator::Sync::SyncEngine>(
         m_registry.get(), m_syncHost.get(), m_shape);
@@ -227,6 +234,9 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     // K.8b T6: load the five static Palm plugins in-process.
     registerPalmPlugins();
 
+    // C Task 2: create per-domain canon collections in the hub.
+    ensureHubCollections();
+
     QObject::connect(this, &PalmRuntime::runStarted,
             this, [this]() { m_running = true; });
     QObject::connect(this, &PalmRuntime::runFinished,
@@ -294,6 +304,29 @@ void PalmRuntime::registerPalmPlugins()
     m_palmPlugins.push_back(std::move(con));
     m_palmPlugins.push_back(std::move(memo));
     m_palmPlugins.push_back(std::move(todo));
+}
+
+void PalmRuntime::ensureHubCollections()
+{
+    using Kalburator::Shape::Shape;
+    using Kalburator::Shape::DomainId;
+    using Kalburator::Shape::EncodingId;
+
+    const std::pair<const char *, const char *> domains[] = {
+        { "calendar", "calendar" }, { "contacts", "contacts" },
+        { "todo",     "todo"     }, { "note",     "note"     },
+    };
+
+    for (const auto &[colId, dom] : domains) {
+        Kalburator::Sync::CollectionInfo info;
+        info.id   = QString::fromLatin1(colId);
+        info.name = QString::fromLatin1(colId);
+        info.type = QString::fromLatin1(dom);
+        m_hub->createCollection(
+            info,
+            Shape{ DomainId{QString::fromLatin1(dom)},
+                   EncodingId{QStringLiteral("canon")} });
+    }
 }
 
 void PalmRuntime::connectDevice(const QStringList &devicePaths)
