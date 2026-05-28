@@ -699,6 +699,33 @@ set_tests_properties(tst_palm_runtime_modes PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# hub↔remote routing Task 4: per-route LC mapping assertions.
+# Verifies that filtered routes (palm:<domain>/<slot>) materialize a
+# wp-route-<id> FilteredCollectionBackend and pair route-<slotName>
+# with the remote; wildcard routes bind Primary to wp-hub directly
+# with no wrapper backend registered.
+add_executable(tst_palm_runtime_routes tst_palm_runtime_routes.cpp)
+target_link_libraries(tst_palm_runtime_routes
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime  # Phase J Task 7: palmruntime.cpp uses CalendarCollection_WP
+        # Phase Ia.5: WHOLE_ARCHIVE pulls in libkalburator's static
+        # DomainPlugin registrars so dispatchSync's
+        # DomainRegistry::findByDomain() finds a plugin at sync time.
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_routes COMMAND tst_palm_runtime_routes)
+set_tests_properties(tst_palm_runtime_routes PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M6b Task 3: PalmDeviceAccess connect lifecycle test
 # Uses MockKPilotDeviceLink (subclass) injected via
 # PalmDeviceAccess::setLinkFactoryForTest to drive
