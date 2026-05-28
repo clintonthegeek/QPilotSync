@@ -177,6 +177,10 @@ private slots:
                  "canon->palm must report loss (Palm cannot hold most calendar fields)");
         QCOMPARE(down.affected.value(PropertyId{QStringLiteral("attendees")}),
                  LossKind::Dropped);
+        // C: `categories` is NO LONGER dropped — the Palm category slot now
+        // round-trips via the canonical CATEGORIES field. Guard the invariant.
+        QVERIFY2(!down.affected.contains(PropertyId{QStringLiteral("categories")}),
+                 "categories must no longer be in the canon->palm loss profile");
     }
 };
 
