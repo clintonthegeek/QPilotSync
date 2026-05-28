@@ -32,6 +32,7 @@ private slots:
     void domainCollection_availableCollectionsIncludesDomainId();
     void domainCollection_loadRecordsReturnsAllCategories();
     void domainCollection_nativeShapeIsNotePalm();
+    void collectionInfo_returnsRequestedId();
 
 private:
     std::uint32_t seedMemo(MockPalmDatabaseAccess *dev,
@@ -258,6 +259,19 @@ void TestMemoBlobBackend::domainCollection_availableCollectionsIncludesDomainId(
     for (const auto &c : cols) ids << c.id;
     QVERIFY2(ids.contains(QStringLiteral("palm:note")),
              qPrintable("domain-level id missing; collections: " + ids.join(", ")));
+}
+
+void TestMemoBlobBackend::collectionInfo_returnsRequestedId()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase("MemoDB");
+    PalmBackend pb(&dev);
+    MemoBlobBackend mb(&pb);
+
+    // C: collectionInfo must echo back the requested id (both the domain id and
+    // the legacy alias resolve to the full MemoDB, but the returned id must match).
+    QCOMPARE(mb.collectionInfo(QStringLiteral("palm:note")).id, QStringLiteral("palm:note"));
+    QCOMPARE(mb.collectionInfo(QStringLiteral("palm:memo")).id, QStringLiteral("palm:memo"));
 }
 
 void TestMemoBlobBackend::domainCollection_loadRecordsReturnsAllCategories()
