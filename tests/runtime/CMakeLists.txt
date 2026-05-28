@@ -750,6 +750,32 @@ set_tests_properties(tst_palm_runtime_route_first_sync PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# hub↔remote routing Task 6: recategorization — record moves between route
+# remotes when the hub canon categories field changes between hotSyncs.
+# Two routes (Work slot 3, Home slot 4); first sync lands on WorkCal;
+# mutating hub canon categories to ["Home"] + second sync moves it to HomeCal.
+add_executable(tst_palm_runtime_route_recategorization
+    tst_palm_runtime_route_recategorization.cpp)
+target_link_libraries(tst_palm_runtime_route_recategorization
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        WildPalmsPalmCalendar
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_route_recategorization
+    COMMAND tst_palm_runtime_route_recategorization)
+set_tests_properties(tst_palm_runtime_route_recategorization PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M6b Task 3: PalmDeviceAccess connect lifecycle test
 # Uses MockKPilotDeviceLink (subclass) injected via
 # PalmDeviceAccess::setLinkFactoryForTest to drive
