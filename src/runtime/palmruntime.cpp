@@ -56,6 +56,11 @@
 #include <logicalcalendar.h>
 #include <syncmappinggenerator.h>
 
+#include <filteredcollectionbackend.h>
+#include <recordfilter.h>
+
+#include "routemapping.h"
+
 #include "standardcontributions.h"
 
 namespace {
@@ -329,6 +334,95 @@ void PalmRuntime::ensureHubCollections()
     }
 }
 
+void PalmRuntime::buildRouteLogicalCalendars(
+    QList<Kalburator::Sync::LogicalCalendar> &lcs)
+{
+    using namespace WildPalms::CalendarPlugin;
+    using namespace WildPalms::ContactsPlugin;
+    using namespace WildPalms::Memo;
+    using namespace WildPalms::TodoPlugin;
+    using Kalburator::Sync::LogicalCalendar;
+    using Kalburator::Sync::CalendarBackendBinding;
+    using Kalburator::Sync::BackendRole;
+
+    if (m_mappings.isEmpty()) return;
+
+    // Collect the per-domain CategoryMappingStore pointers from the loaded
+    // plugins. The plugin owns its store; we borrow it for translation.
+    QHash<QString, WildPalms::PalmCalendar::CategoryMappingStore*> stores;
+    for (const auto &plugin : m_palmPlugins) {
+        if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get()))
+            stores.insert(QStringLiteral("calendar"), p->categoryStore());
+        else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get()))
+            stores.insert(QStringLiteral("contacts"), p->categoryStore());
+        else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get()))
+            stores.insert(QStringLiteral("note"), p->categoryStore());
+        else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get()))
+            stores.insert(QStringLiteral("todo"), p->categoryStore());
+    }
+
+    for (const auto &persisted : m_mappings) {
+        const auto specOpt =
+            WildPalms::Runtime::translateRouteSpec(persisted, stores);
+        if (!specOpt) continue;
+        const auto &s = *specOpt;
+
+        QString primaryBackendId = QStringLiteral("wp-hub");
+        QString primaryColId     = s.hubCollectionId;
+
+        if (s.kind == WildPalms::Runtime::RouteSpec::Kind::Filtered) {
+            Kalburator::Shape::RecordFilter filter;
+            filter.property = Kalburator::Shape::PropertyId{QStringLiteral("categories")};
+            filter.op       = Kalburator::Shape::RecordFilter::Op::Contains;
+            filter.value    = s.categoryName;
+
+            const QString virtualColId =
+                QStringLiteral("route-") + s.categoryName;
+
+            // v0.59 ctor: parentBackend, parentBackendId ("wp-hub" matches how
+            // the hub was registered in the PalmRuntime ctor), parentCollectionId,
+            // virtualCollectionId, filter, optional registry (passed so the FCB
+            // auto-nulls its parent on BackendRegistry::backendInstanceUnregistered
+            // — clean failure instead of UB if the hub is ever unregistered).
+            auto view = std::make_unique<Kalburator::Sinks::FilteredCollectionBackend>(
+                m_hub.get(),
+                QStringLiteral("wp-hub"),
+                s.hubCollectionId,
+                virtualColId,
+                filter,
+                m_registry.get());
+
+            m_registry->registerBackendInstance(s.lcId, view.get());
+            m_routeViews.push_back(std::move(view));
+
+            primaryBackendId = s.lcId;
+            primaryColId     = virtualColId;
+        }
+        // else Kind::Direct: Primary stays wp-hub:<domain>. No wrapper needed.
+
+        LogicalCalendar lc;
+        lc.id          = s.lcId;
+        lc.domain      = Kalburator::Shape::DomainId{s.domain};
+        lc.displayName = s.lcId;
+        lc.syncEnabled = true;
+
+        CalendarBackendBinding primary;
+        primary.backendId  = primaryBackendId;
+        primary.calendarId = primaryColId;
+        primary.role       = BackendRole::Primary;
+        lc.bindings.append(primary);
+
+        CalendarBackendBinding sync;
+        sync.backendId  = s.remoteBackendId;
+        sync.calendarId = s.remoteCollectionId;
+        sync.role       = BackendRole::Sync1;
+        sync.syncOrder  = 1;
+        lc.bindings.append(sync);
+
+        lcs.append(lc);
+    }
+}
+
 void PalmRuntime::connectDevice(const QStringList &devicePaths)
 {
     if (!m_device) {
@@ -495,6 +589,12 @@ void PalmRuntime::finishConnect()
     // (LastWriteWins): on the hub topology, Palm<->hub conflicts surface to
     // WildPalms' existing conflict handlers / deferred conflict store for review
     // rather than silently auto-resolving and risking data loss.
+    // Translate persisted user mappings into per-route LCs. Each Filtered
+    // route materializes a FilteredCollectionBackend wrapping the hub; each
+    // Direct route binds the LC's Primary to wp-hub directly. lcs is appended
+    // to in place.
+    buildRouteLogicalCalendars(lcs);
+
     m_mappings = Kalburator::Sync::generateMappings(lcs, Kalburator::Sync::SyncTopology::Star);
     m_engine->setSyncMappings(m_mappings);
 

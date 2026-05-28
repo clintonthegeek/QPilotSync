@@ -24,6 +24,7 @@ namespace Kalburator::Sync {
     class BackendRegistry;
     class ISyncHost;
     struct SyncMapping;
+    struct LogicalCalendar;
     class SyncBackend;
 }
 
@@ -55,6 +56,7 @@ namespace Kalburator::Shape {
 
 namespace Kalburator::Sinks {
     class GenericSqliteBackend;
+    class FilteredCollectionBackend;
 }
 
 // K.8b T13: IBackendPluginV2 forward-decl dropped — the V2 plugin ABI is
@@ -218,6 +220,12 @@ private:
     void finishConnect();
     void ensureHubCollections();
 
+    /// Append one LogicalCalendar per category-route (translated from the
+    /// persisted user mappings) to `lcs`. Owned FilteredCollectionBackend
+    /// instances land in m_routeViews and are registered with m_registry
+    /// under the id "wp-route-<lcId>". No-op when m_mappings is empty.
+    void buildRouteLogicalCalendars(QList<Kalburator::Sync::LogicalCalendar> &lcs);
+
     /// Repopulate m_mappings from the borrowed Profile's persisted
     /// syncMappingsJson(). The Profile is the source of truth for
     /// user-configured (incl. remote DAV) mappings; without this the runtime
@@ -258,6 +266,11 @@ private:
     // m_engine) so it is destroyed AFTER the engine — the engine's registry
     // holds a borrowed "wp-hub" pointer, so the hub must outlive the engine.
     std::unique_ptr<Kalburator::Sinks::GenericSqliteBackend>     m_hub;
+    // Hub<->remote routing: one FilteredCollectionBackend per category-route.
+    // Declared right after m_hub (which it borrows) and BEFORE m_engine so the
+    // engine's registered borrowed pointers are still valid at destruction.
+    std::vector<std::unique_ptr<Kalburator::Sinks::FilteredCollectionBackend>>
+        m_routeViews;
     // O7: per-PalmRuntime shape registries, injected into m_pluginManager
     // (which populates them) and m_engine (which reads them). Declared before
     // both so it is constructed first and destroyed last.
