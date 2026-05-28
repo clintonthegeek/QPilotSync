@@ -96,9 +96,18 @@ void TestTodoBackendPlugin::createBackendsPopulatesCategoryStoreFromAppInfo()
     auto *blob = static_cast<TodoBlobBackend *>(blobPtr.get());
     QVERIFY(blob);
     auto cols = blob->availableCollections();
-    QCOMPARE(cols.size(), 3);  // Unfiled + Personal + Business
-    QCOMPARE(cols[1].name, QStringLiteral("Personal"));
-    QCOMPARE(cols[2].name, QStringLiteral("Business"));
+    QCOMPARE(cols.size(), 4);  // palm:todo (domain) + Unfiled + Personal + Business
+
+    // The domain-level collection must be present (C, Task 9).
+    const QStringList ids = [&] {
+        QStringList l;
+        for (const auto &c : cols) l << c.id;
+        return l;
+    }();
+    QVERIFY(ids.contains(QStringLiteral("palm:todo")));
+
+    QCOMPARE(cols[2].name, QStringLiteral("Personal"));
+    QCOMPARE(cols[3].name, QStringLiteral("Business"));
 }
 
 void TestTodoBackendPlugin::createConflictHandlerReturnsTodoHandler()

@@ -131,7 +131,15 @@ void TestContactsBackendPlugin::createBackends_populatesCategoryStoreFromAppInfo
     auto *blob = static_cast<PalmContactsBackend *>(blobPtr.get());
     QVERIFY(blob);
     auto cols = blob->availableCollections();
-    QCOMPARE(cols.size(), 3);  // Unfiled (slot 0) + Family (slot 1) + Customers (slot 5)
+    QCOMPARE(cols.size(), 4);  // palm:contacts (domain) + Unfiled (slot 0) + Family (slot 1) + Customers (slot 5)
+
+    // The domain-level collection must be present (C, Task 9).
+    const QStringList ids = [&] {
+        QStringList l;
+        for (const auto &c : cols) l << c.id;
+        return l;
+    }();
+    QVERIFY(ids.contains(QStringLiteral("palm:contacts")));
 }
 
 void TestContactsBackendPlugin::createConflictHandler_requiresPriorCreateBackends()

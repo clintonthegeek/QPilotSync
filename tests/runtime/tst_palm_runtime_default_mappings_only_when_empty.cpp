@@ -51,49 +51,56 @@ void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaults_skipped_if_user_mappin
 
 void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaultsOnlyForUncoveredSlots()
 {
-    // Per-slot F1 fix: a pre-existing user mapping for slot 0 must not
-    // suppress default creation for slot 1. Full acceptance via
-    // tst_runtime_caldav_e2e::default_mappings_per_slot_when_calendar_bound.
-    QSKIP("Implement after reviewing existing test patterns in this file; "
-          "F1 logic is already exercised by tst_runtime_caldav_e2e::default_mappings_per_slot_when_calendar_bound");
+    // C Task 9: repurposed from an old per-slot F1 test (now retired).
+    // Verifies that finishConnect() produces exactly one Star mapping per
+    // connected domain (hub-and-spoke topology) — i.e. one mapping per Palm
+    // backend, not one per category slot.
+    auto mockDb = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
+    QTemporaryDir tmp; QVERIFY(tmp.isValid());
+    WildPalms::Runtime::PalmRuntime runtime(tmp.path());
+
+    auto deviceAccess = std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(
+        std::move(mockDb), nullptr);
+    runtime.setDeviceAccessForTest(std::move(deviceAccess));
+
+    const auto mappings = runtime.palmMappings();
+
+    // With all 4 Palm backends registering successfully, there should be
+    // exactly 4 domain-level Star mappings (calendar, contacts, memo, todo).
+    QCOMPARE(mappings.size(), 4);
+
+    // Every mapping must have wp-hub as source (Primary) and a palm:<domain>
+    // collection as target — confirming hub-and-spoke structure.
+    for (const auto &m : mappings) {
+        QCOMPARE(m.sourceBackend, QStringLiteral("wp-hub"));
+        QVERIFY(m.targetCalendar.startsWith(QStringLiteral("palm:")));
+    }
 }
 
 void TstPalmRuntimeDefaultMappingsOnlyWhenEmpty::defaultMappings_useLastWriteWinsPolicy()
 {
-    // Seed mock device with a Calendar database to trigger default mapping
-    // creation. finishConnect iterates plugins, creates backends, gets
-    // available collections, and creates a default mapping for each
-    // collection not already covered by a user mapping.
+    // C Task 9: renamed assertion — new behavior uses AskUser, not LastWriteWins.
+    // finishConnect() builds domain-level Star mappings via generateMappings()
+    // with conflictPolicy=AskUser so Palm<->hub conflicts surface for review
+    // rather than silently auto-resolving (see comment in palmruntime.cpp).
     auto mockDb = std::make_unique<WildPalms::PalmSync::MockPalmDatabaseAccess>();
-
-    // Create a Calendar database with at least one record so the plugin
-    // can observe it and advertise a collection.
-    mockDb->createDatabase(QStringLiteral("CalendarDB-PDat"));
-    WildPalms::PalmSync::PalmRecord pr;
-    pr.recordId = 1;
-    pr.category = 0;
-    pr.data     = QByteArrayLiteral("seed event data");
-    mockDb->createRecord(QStringLiteral("CalendarDB-PDat"), pr);
-
     QTemporaryDir tmp;
     QVERIFY(tmp.isValid());
 
     WildPalms::Runtime::PalmRuntime runtime(tmp.path());
 
-    // Wrap the mock in a PalmDeviceAccess and inject it. This triggers
-    // finishConnect(), which creates default mappings.
     auto deviceAccess = std::make_unique<WildPalms::Runtime::PalmDeviceAccess>(
         std::move(mockDb), nullptr);
     runtime.setDeviceAccessForTest(std::move(deviceAccess));
 
-    // Verify at least one mapping was created (the default for Calendar).
     const auto mappings = runtime.palmMappings();
     QVERIFY(!mappings.isEmpty());
 
-    // All auto-created mappings must use LastWriteWins conflict policy.
+    // All auto-generated Star mappings must use AskUser conflict policy
+    // (deliberate change from the retired per-slot RawFiles LastWriteWins default).
     for (const auto &m : mappings) {
         QCOMPARE(m.conflictPolicy,
-                 Kalburator::Sync::ConflictResolution::LastWriteWins);
+                 Kalburator::Sync::ConflictResolution::AskUser);
     }
 }
 
