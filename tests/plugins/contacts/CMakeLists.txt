@@ -17,6 +17,7 @@ target_include_directories(tst_contactsvcardtranscoder
 )
 target_link_libraries(tst_contactsvcardtranscoder
     PRIVATE
+        WildPalmsPalmCalendar # CategoryMappingStore (cats + dbName thread)
         WildPalmsPalmCodecs   # Contact POD, encodeContact/decodeContact, toAddressee/fromAddressee
         WildPalmsPalmSync     # PalmRecord
         KF6::Contacts
@@ -63,6 +64,7 @@ target_include_directories(tst_contactsconflicthandler
 )
 target_link_libraries(tst_contactsconflicthandler
     PRIVATE
+        WildPalmsPalmCalendar   # CategoryMappingStore (transcoder dependency)
         WildPalmsPalmConflict   # PalmConflictHandler
         WildPalmsPalmCodecs     # decodeContact / encodeContact
         WildPalmsPalmSync       # PalmRecord, MockPalmDatabaseAccess
@@ -137,6 +139,7 @@ target_include_directories(tst_contacts_canon_roundtrip BEFORE
 )
 target_link_libraries(tst_contacts_canon_roundtrip
     PRIVATE
+        WildPalmsPalmCalendar   # CategoryMappingStore (cats + dbName thread)
         WildPalmsPalmCodecs
         WildPalmsPalmSync
         Kalburator::Sync
@@ -161,6 +164,7 @@ target_include_directories(tst_contactsdomainextension
 )
 target_link_libraries(tst_contactsdomainextension
     PRIVATE
+        WildPalmsPalmCalendar # CategoryMappingStore (transcoder dependency)
         WildPalmsPalmCodecs   # encodeContact / decodeContact / Contact
         WildPalmsPalmSync     # PalmRecord
         Kalburator::Sync      # TransformationRegistry / DomainRegistry / Shape

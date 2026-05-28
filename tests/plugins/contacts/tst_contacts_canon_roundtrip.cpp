@@ -1,9 +1,10 @@
 #include <QTest>
 
 // WildPalms contacts plugin
-#include "contactsdomainextension.h"          // ContactsDomainExtension::registerWith
-#include "palm/sync/palmrecord.h"              // WildPalms::PalmSync::PalmRecord
-#include "palm/codecs/contactcodec.h"          // WildPalms::PalmCodecs::Contact, encodeContact, decodeContact
+#include "contactsdomainextension.h"
+#include "palm/sync/palmrecord.h"
+#include "palm/codecs/contactcodec.h"
+#include "palm/calendar/categorymappingstore.h"
 
 // libkalburator shape graph + contacts canon (via Kalburator::Sync)
 #include "shaperegistries.h"
@@ -20,7 +21,8 @@ using WildPalms::PalmSync::PalmRecord;
 
 namespace {
 
-ShapeRegistries makeContactsRegistries()
+ShapeRegistries makeContactsRegistries(
+    const WildPalms::PalmCalendar::CategoryMappingStore *cats = nullptr)
 {
     ShapeRegistries regs;
     auto &reg = regs.transformation;
@@ -48,7 +50,7 @@ ShapeRegistries makeContactsRegistries()
 
     // Register the WildPalms palm<->vcard4 edges; not part of libkalburator's
     // stock shapes, so the palm->vcard4->canon path only compiles once these run.
-    ContactsPalmShapes wpShapes;
+    ContactsPalmShapes wpShapes{cats};
     for (const auto &[shape, cat] : wpShapes.peerShapes())
         reg.registerShape(shape, cat);
     for (const auto &edge : wpShapes.edges())
@@ -110,6 +112,44 @@ private slots:
         QCOMPARE(c2->firstName, QStringLiteral("Ada"));
     }
 
+    void palmCategorySlotCarriedAsCanonCategory()
+    {
+        WildPalms::PalmCalendar::CategoryMappingStore cats;
+        QVERIFY(cats.setSlotName(QStringLiteral("AddressDB"), 3,
+                                 QStringLiteral("Work")));
+
+        const auto regs = makeContactsRegistries(&cats);
+        const Shape palm  { DomainId{"contacts"}, EncodingId{"palm"}   };
+        const Shape canon { DomainId{"contacts"}, EncodingId{"canon"}  };
+        const Shape vcard4{ DomainId{"contacts"}, EncodingId{"vcard4"} };
+
+        const QByteArray palmBytes =
+            makePalmRecordBytes(/*slot*/ 3, /*recordId*/ 88, /*secret*/ false,
+                                QStringLiteral("Turing"), QStringLiteral("Alan"));
+
+        // palm -> vcard4: the slot-3 name "Work" should land in CATEGORIES.
+        const auto toVcard = regs.transformation.compile(palm, vcard4);
+        QVERIFY2(toVcard.has_value(), "no palm->vcard4 pipeline");
+        const QByteArray vcardBytes = toVcard->apply(palmBytes);
+        QVERIFY2(vcardBytes.contains("CATEGORIES:Work"),
+                 "palm slot 3 ('Work') did not surface as CATEGORIES:Work in vCard");
+
+        // palm -> canon: canon path also compiles and is non-empty.
+        const auto toCanon = regs.transformation.compile(palm, canon);
+        QVERIFY2(toCanon.has_value(), "no palm->canon pipeline");
+        const QByteArray canonBytes = toCanon->apply(palmBytes);
+        QVERIFY2(!canonBytes.isEmpty(), "palm->canon produced empty bytes");
+
+        // canon -> palm: CATEGORIES "Work" should map back to slot 3.
+        const auto rev = regs.transformation.compile(canon, palm);
+        QVERIFY2(rev.has_value(), "no canon->palm pipeline");
+        const QByteArray palmBytes2 = rev->apply(canonBytes);
+        QVERIFY2(!palmBytes2.isEmpty(), "canon->palm produced empty bytes");
+
+        const PalmRecord pr2 = PalmRecord::fromWireBytes(palmBytes2);
+        QCOMPARE(static_cast<int>(pr2.category), 3);
+    }
+
     void lossProfileIsHonest()
     {
         const auto regs = makeContactsRegistries();
@@ -121,6 +161,10 @@ private slots:
 
         const LossProfile down = regs.transformation.inspect(canon, palm);
         QVERIFY2(!down.isLossless(), "canon->palm must report loss (Palm cannot hold most canon fields)");
+        // C: `categories` is NO LONGER dropped — the Palm category slot now
+        // round-trips via the canonical CATEGORIES field. Guard the invariant.
+        QVERIFY2(!down.affected.contains(PropertyId{QStringLiteral("categories")}),
+                 "categories must no longer be in the canon->palm loss profile");
     }
 };
 

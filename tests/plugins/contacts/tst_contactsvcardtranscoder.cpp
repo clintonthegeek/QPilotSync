@@ -50,7 +50,7 @@ class TstContactsVcardTranscoder : public QObject
 private slots:
     void roundTripPreservesCoreFields();
     void emptyRecordYieldsEmptyVcard();
-    void slotHintOverridesEmbeddedSlot();
+    void noCatsYieldsSlotZero();
     void recordIdRoundTrips();
     void secretBitRoundTrips();
     void emptyVcardYieldsNullopt();
@@ -62,14 +62,14 @@ void TstContactsVcardTranscoder::roundTripPreservesCoreFields()
     const Contact c = sampleContact();
     const auto pr = makeRecord(c, /*slot*/ 3, /*id*/ 0x42);
 
-    const QByteArray vcard = encodePalmToVcard(pr);
+    const QByteArray vcard = encodePalmToVcard(pr, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(!vcard.isEmpty());
     QVERIFY(vcard.contains("BEGIN:VCARD"));
     QVERIFY(vcard.contains("END:VCARD"));
 
-    auto decoded = decodeVcardToPalm(vcard, /*slotHint*/ 3);
+    // No store — slot 0 (Unfiled) is returned; record ID still round-trips.
+    auto decoded = decodeVcardToPalm(vcard, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(decoded.has_value());
-    QCOMPARE(int(decoded->category), 3);
     QCOMPARE(decoded->recordId, 0x42u);
 
     auto roundTrip = decodeContact(QByteArrayView(decoded->data));
@@ -86,24 +86,26 @@ void TstContactsVcardTranscoder::roundTripPreservesCoreFields()
 void TstContactsVcardTranscoder::emptyRecordYieldsEmptyVcard()
 {
     PalmRecord pr;   // pr.data is empty
-    QVERIFY(encodePalmToVcard(pr).isEmpty());
+    QVERIFY(encodePalmToVcard(pr, nullptr, {}).isEmpty());
 }
 
-void TstContactsVcardTranscoder::slotHintOverridesEmbeddedSlot()
+void TstContactsVcardTranscoder::noCatsYieldsSlotZero()
 {
+    // Without a CategoryMappingStore, no CATEGORIES is emitted on encode
+    // and decode returns slot 0 (Unfiled) regardless of the Palm record's slot.
     const auto pr = makeRecord(sampleContact(), /*slot*/ 5, /*id*/ 1);
-    const QByteArray vcard = encodePalmToVcard(pr);
+    const QByteArray vcard = encodePalmToVcard(pr, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(!vcard.isEmpty());
 
-    auto decoded = decodeVcardToPalm(vcard, /*slotHint*/ 9);
+    auto decoded = decodeVcardToPalm(vcard, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(decoded.has_value());
-    QCOMPARE(int(decoded->category), 9);   // hint wins, embedded ignored
+    QCOMPARE(int(decoded->category), 0);   // no store -> Unfiled
 }
 
 void TstContactsVcardTranscoder::recordIdRoundTrips()
 {
     const auto pr = makeRecord(sampleContact(), 0, 0xABCDEFu);
-    auto decoded = decodeVcardToPalm(encodePalmToVcard(pr), 0);
+    auto decoded = decodeVcardToPalm(encodePalmToVcard(pr, nullptr, {}), nullptr, {});
     QVERIFY(decoded.has_value());
     QCOMPARE(decoded->recordId, 0xABCDEFu);
 }
@@ -111,19 +113,19 @@ void TstContactsVcardTranscoder::recordIdRoundTrips()
 void TstContactsVcardTranscoder::secretBitRoundTrips()
 {
     const auto pr = makeRecord(sampleContact(), 2, 7, /*secret*/ true);
-    auto decoded = decodeVcardToPalm(encodePalmToVcard(pr), 2);
+    auto decoded = decodeVcardToPalm(encodePalmToVcard(pr, nullptr, {}), nullptr, {});
     QVERIFY(decoded.has_value());
     QVERIFY(decoded->isSecret());
 }
 
 void TstContactsVcardTranscoder::emptyVcardYieldsNullopt()
 {
-    QVERIFY(!decodeVcardToPalm({}, 0).has_value());
+    QVERIFY(!decodeVcardToPalm({}, nullptr, {}).has_value());
 }
 
 void TstContactsVcardTranscoder::garbageVcardYieldsNullopt()
 {
-    QVERIFY(!decodeVcardToPalm("not a vcard at all", 0).has_value());
+    QVERIFY(!decodeVcardToPalm("not a vcard at all", nullptr, {}).has_value());
 }
 
 QTEST_GUILESS_MAIN(TstContactsVcardTranscoder)

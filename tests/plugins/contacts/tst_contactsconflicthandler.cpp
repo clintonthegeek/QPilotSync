@@ -35,7 +35,7 @@ QByteArray makeContactVcard(const Contact &c,
     pr.category = static_cast<std::uint8_t>(slot);
     pr.data = encodeContact(c);
     if (secret) pr.attributes |= PalmRecord::AttrSecret;
-    return WildPalms::ContactsPlugin::encodePalmToVcard(pr);
+    return WildPalms::ContactsPlugin::encodePalmToVcard(pr, /*cats*/ nullptr, /*dbName*/ {});
 }
 
 ConflictRecord makeConflict(const QByteArray &sourceBytes,
@@ -108,7 +108,7 @@ void TestContactsConflictHandler::mergesPhoneSlotUnion_whenNoSingleFieldsDiffer(
     QCOMPARE(d, ConflictDecision::Merge);
     QCOMPARE(h.lastOverlay(), QStringLiteral("field-union"));
 
-    auto merged = WildPalms::ContactsPlugin::decodeVcardToPalm(c.mergedContent, 0);
+    auto merged = WildPalms::ContactsPlugin::decodeVcardToPalm(c.mergedContent, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(merged.has_value());
     auto mc = decodeContact(QByteArrayView(merged->data));
     QVERIFY(mc.has_value());
@@ -138,7 +138,7 @@ void TestContactsConflictHandler::mergesCustomSlotUnion()
     QCOMPARE(d, ConflictDecision::Merge);
     QCOMPARE(h.lastOverlay(), QStringLiteral("field-union"));
 
-    auto merged = WildPalms::ContactsPlugin::decodeVcardToPalm(c.mergedContent, 0);
+    auto merged = WildPalms::ContactsPlugin::decodeVcardToPalm(c.mergedContent, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(merged.has_value());
     auto mc = decodeContact(QByteArrayView(merged->data));
     QVERIFY(mc.has_value());
@@ -175,7 +175,7 @@ void TestContactsConflictHandler::mergesPhoneAndCustom_inOneCall()
     QCOMPARE(d, ConflictDecision::Merge);
     QCOMPARE(h.lastOverlay(), QStringLiteral("field-union"));
 
-    auto merged = WildPalms::ContactsPlugin::decodeVcardToPalm(c.mergedContent, 0);
+    auto merged = WildPalms::ContactsPlugin::decodeVcardToPalm(c.mergedContent, /*cats*/ nullptr, /*dbName*/ {});
     QVERIFY(merged.has_value());
     auto mc = decodeContact(QByteArrayView(merged->data));
     QVERIFY(mc.has_value());
