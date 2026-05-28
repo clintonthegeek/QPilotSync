@@ -45,6 +45,9 @@ add_library(WildPalmsRuntime STATIC
     # impl compiled into WildPalmsCore where the device-side
     # libraries can be linked without an AUTOMOC cycle).
     pilotlinkconnectionfactory.h
+    # hub↔remote routing Task 2 — pure translator: persisted SyncMapping → RouteSpec
+    routemapping.h
+    routemapping.cpp
 )
 
 target_sources(WildPalmsRuntime PRIVATE

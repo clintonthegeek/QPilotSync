@@ -899,3 +899,30 @@ add_test(NAME tst_syncmappingsgraphview COMMAND tst_syncmappingsgraphview)
 set_tests_properties(tst_syncmappingsgraphview PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# hub↔remote routing Task 2: translateRouteSpec — pure translator + unit tests.
+# Links WildPalmsRuntime + Kalburator::Sync directly (not WildPalmsCore) so
+# that #include "synctypes.h" resolves to libkalburator's Kalburator::Sync
+# header rather than the WP-local src/core/synctypes.h (which WildPalmsCore's
+# PUBLIC include path would shadow it with).
+add_executable(tst_route_mapping tst_route_mapping.cpp)
+target_link_libraries(tst_route_mapping
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        WildPalmsRuntime
+        Kalburator::Sync
+        WildPalmsPalmCalendar
+)
+# Add src/ so that #include "palm/calendar/..." and "runtime/..." resolve.
+# Prepend libkalburator/src/types so that #include "synctypes.h" finds
+# Kalburator::Sync::SyncMapping before the WP-local src/core/synctypes.h
+# that WildPalmsCore's PUBLIC include path would otherwise win with.
+target_include_directories(tst_route_mapping BEFORE PRIVATE
+    ${CMAKE_SOURCE_DIR}/../libkalburator/src/types
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME tst_route_mapping COMMAND tst_route_mapping)
+set_tests_properties(tst_route_mapping PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
