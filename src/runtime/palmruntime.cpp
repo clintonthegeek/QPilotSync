@@ -52,9 +52,9 @@
 
 #include "profile.h"
 
-#include <rawfilesbackend.h>
-#include <markdownfilesbackend.h>
 #include <genericsqlitebackend.h>
+#include <logicalcalendar.h>
+#include <syncmappinggenerator.h>
 
 #include "standardcontributions.h"
 
@@ -381,11 +381,11 @@ void PalmRuntime::finishConnect()
 {
     if (!m_device) return;
 
-    // Load the user's persisted mappings from the Profile FIRST, so the
-    // per-slot "already covered" check below sees them and we only add
-    // rawfiles defaults for genuinely uncovered slots. Without this every
-    // connect rebuilt all-defaults and discarded remote (CalDAV/CardDAV)
-    // mappings the user wired in the graph.
+    // TODO(C-remote): in sub-project C the Star-mapping block below REPLACES
+    // m_mappings unconditionally, so the user's persisted remote (CalDAV/etc.)
+    // mappings are intentionally superseded by Palm<->hub for now. The next
+    // sub-project reintroduces them as hub<->remote bindings; this load call is
+    // kept as the seam where that merge will happen.
     loadMappingsFromProfile();
 
     // K.8b T6: iterate the five statically-loaded Palm plugins registered
@@ -449,93 +449,53 @@ void PalmRuntime::finishConnect()
             }
         }
 
-        // Read available collections before any ownership transfer.
-        const auto palmCollections = ownedBackend->availableCollections();
-
         m_registry->registerBackendInstance(id, ownedBackend.get());
         m_ownedBackends.push_back(std::move(ownedBackend));
 
         qDebug() << "[PalmRuntime::finishConnect] Registered backend plugin:" << id;
-
-        // Per-slot default: only create a RawFiles mapping for slots not
-        // already covered by a user-configured mapping.
-        //
-        // K.9: the RawFiles mirror declares the source's shape per
-        // collection. Pre-K.9 it declared Shape::Any(), which made
-        // SyncEngine::dispatchSync bail with "cross-domain mappings
-        // not supported" on the first real sync.
-        auto *registeredSrc = m_registry->backendInstance(id);
-        for (const auto &palmCol : palmCollections) {
-            const bool alreadyCovered = std::any_of(
-                m_mappings.cbegin(), m_mappings.cend(),
-                [&](const Kalburator::Sync::SyncMapping &m) {
-                    // F.1c.1 T1: empty sourceCalendar is a wildcard meaning
-                    // "this target covers every Palm slot for sourceBackend".
-                    // The NewProfileWizard writes such rows for per-domain
-                    // remote-target picks; finishConnect honors them by
-                    // skipping per-slot RawFiles auto-mapping.
-                    return m.sourceBackend == id
-                        && (m.sourceCalendar.isEmpty()
-                            || m.sourceCalendar == palmCol.id);
-                });
-            if (alreadyCovered)
-                continue;
-
-            QString safeColId = palmCol.id;
-            safeColId.replace(QLatin1Char(':'), QLatin1Char('_'))
-                     .replace(QLatin1Char('/'), QLatin1Char('_'));
-
-            const QString pcId = QStringLiteral("rawfiles-%1-%2").arg(id, safeColId);
-            const QString rootPath = QDir(m_profilePath).filePath(
-                QStringLiteral("rawfiles/%1/%2").arg(id, safeColId));
-
-            const auto palmShape = registeredSrc
-                ? registeredSrc->shapeFor(palmCol.id)
-                : Kalburator::Shape::Shape::Any();
-
-            // Phase 5: the note domain keeps human-readable Markdown on disk, so
-            // its peer is a MarkdownFilesBackend declaring (note, markdown) — the
-            // engine then routes palm->markdown->canon into it. Every other domain
-            // keeps the generic RawFilesBackend mirroring the source shape.
-            const bool isNote = palmShape.domain
-                == Kalburator::Shape::DomainId{QStringLiteral("note")};
-
-            std::unique_ptr<Kalburator::Sinks::RawFilesBackend> pcBackend;
-            Kalburator::Shape::Shape peerShape;
-            if (isNote) {
-                pcBackend = std::make_unique<Kalburator::Sinks::MarkdownFilesBackend>(rootPath);
-                peerShape = Kalburator::Shape::Shape{
-                    Kalburator::Shape::DomainId{QStringLiteral("note")},
-                    Kalburator::Shape::EncodingId{QStringLiteral("markdown")} };
-            } else {
-                pcBackend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(rootPath);
-                peerShape = palmShape;
-            }
-
-            Kalburator::Sync::CollectionInfo pcCol;
-            pcCol.id   = safeColId;
-            pcCol.name = palmCol.name;
-            pcBackend->createCollection(pcCol, peerShape);
-
-            m_registry->registerBackendInstance(pcId, pcBackend.get());
-            m_ownedBackends.push_back(std::move(pcBackend));
-
-            Kalburator::Sync::SyncMapping m;
-            m.id             = QStringLiteral("default-%1-%2").arg(id, safeColId);
-            m.sourceBackend  = id;
-            m.targetBackend  = pcId;
-            m.sourceCalendar = palmCol.id;
-            m.targetCalendar = safeColId;
-            m.mode           = Kalburator::Sync::SyncMode::TwoWay;
-            m.conflictPolicy = Kalburator::Sync::ConflictResolution::LastWriteWins;
-            m.enabled        = true;
-            m_mappings.append(m);
-
-            qDebug() << "[PalmRuntime::finishConnect] Default mapping:"
-                     << palmCol.id << "->" << rootPath;
-        }
     }
 
+    // C Task 4: build domain-level Palm<->hub Star mappings via generateMappings.
+    // Each connected Palm backend is wired to its corresponding hub collection
+    // using LogicalCalendar/generateMappings (Star topology = hub-and-spoke).
+    // The hub (wp-hub) is Primary; each Palm backend collection is Sync1.
+    using Kalburator::Sync::LogicalCalendar;
+    using Kalburator::Sync::CalendarBackendBinding;
+    using Kalburator::Sync::BackendRole;
+    QList<LogicalCalendar> lcs;
+    // (palmBackendId, hubCollectionId, palmDomainCollectionId)
+    const std::tuple<QString, QString, QString> wiring[] = {
+        { QStringLiteral("calendar"), QStringLiteral("calendar"), QStringLiteral("palm:calendar") },
+        { QStringLiteral("contacts"), QStringLiteral("contacts"), QStringLiteral("palm:contacts") },
+        { QStringLiteral("memo"),     QStringLiteral("note"),     QStringLiteral("palm:note")     },
+        { QStringLiteral("todo"),     QStringLiteral("todo"),     QStringLiteral("palm:todo")     },
+    };
+    for (const auto &[palmId, hubCol, palmCol] : wiring) {
+        if (!m_registry->backendInstance(palmId)) continue;   // backend not connected this session
+        LogicalCalendar lc;
+        lc.id = QStringLiteral("wp-%1").arg(hubCol);
+        lc.domain = Kalburator::Shape::DomainId{hubCol};
+        lc.displayName = hubCol;
+        lc.syncEnabled = true;
+        CalendarBackendBinding hubB;
+        hubB.backendId = QStringLiteral("wp-hub");
+        hubB.calendarId = hubCol;
+        hubB.role = BackendRole::Primary;
+        lc.bindings.append(hubB);
+        CalendarBackendBinding palmB;
+        palmB.backendId = palmId;
+        palmB.calendarId = palmCol;
+        palmB.role = BackendRole::Sync1;
+        palmB.syncOrder = 1;
+        lc.bindings.append(palmB);
+        lcs.append(lc);
+    }
+    // generateMappings emits TwoWay mappings with conflictPolicy=AskUser. This
+    // is a deliberate change from the old per-slot RawFiles default
+    // (LastWriteWins): on the hub topology, Palm<->hub conflicts surface to
+    // WildPalms' existing conflict handlers / deferred conflict store for review
+    // rather than silently auto-resolving and risking data loss.
+    m_mappings = Kalburator::Sync::generateMappings(lcs, Kalburator::Sync::SyncTopology::Star);
     m_engine->setSyncMappings(m_mappings);
 
     Q_EMIT deviceConnected();
