@@ -15,6 +15,7 @@ target_include_directories(tst_todoicstranscoder
 )
 target_link_libraries(tst_todoicstranscoder
     PRIVATE
+        WildPalmsPalmCalendar # CategoryMappingStore (now threaded through transcoder)
         WildPalmsPalmCodecs   # decodeTodo / encodeTodo
         WildPalmsPalmSync     # PalmRecord
         KF6::CalendarCore
@@ -58,6 +59,7 @@ target_include_directories(tst_todoconflicthandler
 )
 target_link_libraries(tst_todoconflicthandler
     PRIVATE
+        WildPalmsPalmCalendar   # CategoryMappingStore (now threaded through transcoder)
         WildPalmsPalmConflict   # PalmConflictHandler
         WildPalmsPalmCodecs     # decodeTodo / encodeTodo
         WildPalmsPalmSync       # PalmRecord, MockPalmDatabaseAccess
@@ -132,6 +134,7 @@ target_include_directories(tst_todo_canon_roundtrip BEFORE
 )
 target_link_libraries(tst_todo_canon_roundtrip
     PRIVATE
+        WildPalmsPalmCalendar   # CategoryMappingStore (carried through transcoder stages)
         WildPalmsPalmCodecs     # encodeTodo / decodeTodo
         WildPalmsPalmSync       # PalmRecord
         Kalburator::Sync

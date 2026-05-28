@@ -40,7 +40,7 @@ QByteArray makeTodoIcs(const QString &description,
     pr.recordId = 1;
     pr.category = 0;
     pr.data = encodeTodo(t);
-    return WildPalms::TodoPlugin::encodePalmToIcs(pr);
+    return WildPalms::TodoPlugin::encodePalmToIcs(pr, nullptr, {});
 }
 
 ConflictRecord makeConflict(const QByteArray &sourceBytes,
@@ -118,7 +118,7 @@ void TestTodoConflictHandler::completionAsymmetricMergeIsApplied()
     QCOMPARE(d, ConflictDecision::Merge);
 
     // Merged content must reflect: complete=true AND note="Edited note".
-    auto merged = WildPalms::TodoPlugin::decodeIcsToPalm(c.mergedContent, 0);
+    auto merged = WildPalms::TodoPlugin::decodeIcsToPalm(c.mergedContent, nullptr, {});
     QVERIFY(merged.has_value());
     auto t = decodeTodo(QByteArrayView(merged->data));
     QVERIFY(t.has_value());

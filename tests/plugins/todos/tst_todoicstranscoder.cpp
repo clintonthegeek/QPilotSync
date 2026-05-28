@@ -5,17 +5,21 @@
 #include <KCalendarCore/MemoryCalendar>
 
 #include "plugins/todos/todoicstranscoder.h"
+#include "palm/calendar/categorymappingstore.h"
 #include "palm/codecs/todocodec.h"
 #include "palm/sync/palmrecord.h"
 
 using WildPalms::TodoPlugin::encodePalmToIcs;
 using WildPalms::TodoPlugin::decodeIcsToPalm;
+using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCodecs::Todo;
 using WildPalms::PalmCodecs::encodeTodo;
 using WildPalms::PalmCodecs::decodeTodo;
 using WildPalms::PalmSync::PalmRecord;
 
 namespace {
+
+const QString kDb = QStringLiteral("ToDoDB");
 
 PalmRecord makeTodoRecord(const QString &description,
                           int slot,
@@ -71,14 +75,14 @@ private slots:
     void roundTripPreservesAllFields();
     void decodeWithEmptyBytesReturnsNullopt();
     void decodeWithGarbageReturnsNullopt();
-    void decodeSlotHintOverridesEmbeddedSlot();
+    void decodeCategoryViaNameMapping();
     void decodePreservesRecordIdWhenPresent();
 };
 
 void TestTodoIcsTranscoder::encodeProducesParseableVtodo()
 {
     PalmRecord pr = makeTodoRecordFull();
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(!ics.isEmpty());
     QVERIFY(ics.contains("BEGIN:VCALENDAR"));
     QVERIFY(ics.contains("BEGIN:VTODO"));
@@ -88,7 +92,7 @@ void TestTodoIcsTranscoder::encodeProducesParseableVtodo()
 void TestTodoIcsTranscoder::encodePreservesSummaryAndDescription()
 {
     PalmRecord pr = makeTodoRecordFull();
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(ics.contains("SUMMARY:Buy groceries"));
     // RFC 5545 escapes commas in TEXT-typed properties; KCal emits
     // "Milk\, bread\, eggs" inside DESCRIPTION:.
@@ -98,7 +102,7 @@ void TestTodoIcsTranscoder::encodePreservesSummaryAndDescription()
 void TestTodoIcsTranscoder::encodeStampsCategoryAndRecordIdProperties()
 {
     PalmRecord pr = makeTodoRecordFull();   // category = 3, recordId = 17
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(ics.contains("X-WP-PALM-CATEGORY-SLOT:3"));
     QVERIFY(ics.contains("X-WP-PALM-RECORDID:17"));
 }
@@ -106,7 +110,7 @@ void TestTodoIcsTranscoder::encodeStampsCategoryAndRecordIdProperties()
 void TestTodoIcsTranscoder::encodeIndefiniteDueOmitsDtDue()
 {
     PalmRecord pr = makeTodoRecord(QStringLiteral("No due"), 0);
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(!ics.contains("DUE:"));
     QVERIFY(!ics.contains("DUE;"));
 }
@@ -114,7 +118,7 @@ void TestTodoIcsTranscoder::encodeIndefiniteDueOmitsDtDue()
 void TestTodoIcsTranscoder::encodeCompletedTodoSetsCompleted()
 {
     PalmRecord pr = makeTodoRecord(QStringLiteral("Done"), 0, /*complete=*/true);
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     // VTODO completion shows up as STATUS:COMPLETED + COMPLETED:<timestamp>.
     QVERIFY(ics.contains("STATUS:COMPLETED"));
     QVERIFY(ics.contains("COMPLETED:"));
@@ -123,17 +127,22 @@ void TestTodoIcsTranscoder::encodeCompletedTodoSetsCompleted()
 void TestTodoIcsTranscoder::encodePrivateSetsClassification()
 {
     PalmRecord pr = makeTodoRecordFull();   // isPrivate = true
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(ics.contains("CLASS:PRIVATE"));
 }
 
 void TestTodoIcsTranscoder::roundTripPreservesAllFields()
 {
+    // Round-trip without a category store: slot propagates via slotHint=0
+    // (no name mapping). The category in pr is 3 but without a store the
+    // decode side returns slot 0 (Unfiled) — that is the expected behaviour
+    // when no store is threaded.
     PalmRecord pr = makeTodoRecordFull();
-    QByteArray ics = encodePalmToIcs(pr);
-    auto roundTripped = decodeIcsToPalm(ics, 3);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
+    auto roundTripped = decodeIcsToPalm(ics, nullptr, kDb);
     QVERIFY(roundTripped.has_value());
-    QCOMPARE(static_cast<int>(roundTripped->category), 3);
+    // Without a store, categories are not set, so slot resolves to 0.
+    QCOMPARE(static_cast<int>(roundTripped->category), 0);
     QCOMPARE(roundTripped->recordId, 17u);
 
     auto rtTodo = decodeTodo(QByteArrayView(roundTripped->data));
@@ -151,28 +160,35 @@ void TestTodoIcsTranscoder::roundTripPreservesAllFields()
 
 void TestTodoIcsTranscoder::decodeWithEmptyBytesReturnsNullopt()
 {
-    QVERIFY(!decodeIcsToPalm(QByteArray(), 0).has_value());
+    QVERIFY(!decodeIcsToPalm(QByteArray(), nullptr, kDb).has_value());
 }
 
 void TestTodoIcsTranscoder::decodeWithGarbageReturnsNullopt()
 {
-    QVERIFY(!decodeIcsToPalm(QByteArray("not a vcalendar"), 0).has_value());
+    QVERIFY(!decodeIcsToPalm(QByteArray("not a vcalendar"), nullptr, kDb).has_value());
 }
 
-void TestTodoIcsTranscoder::decodeSlotHintOverridesEmbeddedSlot()
+void TestTodoIcsTranscoder::decodeCategoryViaNameMapping()
 {
+    // The slot now round-trips via the category NAME (CategoryMappingStore),
+    // not a raw slotHint: slot 5 -> "Project X" -> CATEGORIES -> slot 5.
+    CategoryMappingStore cats;
+    QVERIFY(cats.setSlotName(kDb, 5, QStringLiteral("Project X")));
+
     PalmRecord pr = makeTodoRecord(QStringLiteral("Slot test"), 5);
-    QByteArray ics = encodePalmToIcs(pr);
-    auto rt = decodeIcsToPalm(ics, /*slotHint=*/9);
+    QByteArray ics = encodePalmToIcs(pr, &cats, kDb);
+    QVERIFY(ics.contains("CATEGORIES:Project X"));
+
+    auto rt = decodeIcsToPalm(ics, &cats, kDb);
     QVERIFY(rt.has_value());
-    QCOMPARE(static_cast<int>(rt->category), 9);
+    QCOMPARE(static_cast<int>(rt->category), 5);
 }
 
 void TestTodoIcsTranscoder::decodePreservesRecordIdWhenPresent()
 {
     PalmRecord pr = makeTodoRecord(QStringLiteral("With id"), 0);   // recordId = 42
-    QByteArray ics = encodePalmToIcs(pr);
-    auto rt = decodeIcsToPalm(ics, 0);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
+    auto rt = decodeIcsToPalm(ics, nullptr, kDb);
     QVERIFY(rt.has_value());
     QCOMPARE(rt->recordId, 42u);
 }
