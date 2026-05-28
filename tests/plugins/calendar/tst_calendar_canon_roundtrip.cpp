@@ -4,6 +4,7 @@
 #include "calendardomainextension.h"
 #include "palm/sync/palmrecord.h"
 #include "palm/calendar/datebookcodec.h"      // DatebookCodec, X-WP-PALM-* property names
+#include "palm/calendar/categorymappingstore.h"
 
 // libkalburator shape graph + calendar canon (via Kalburator::Sync)
 #include "shaperegistries.h"
@@ -24,7 +25,8 @@ using WildPalms::PalmSync::PalmRecord;
 
 namespace {
 
-ShapeRegistries makeCalendarRegistries()
+ShapeRegistries makeCalendarRegistries(
+    const WildPalms::PalmCalendar::CategoryMappingStore *cats = nullptr)
 {
     ShapeRegistries regs;
     auto &reg = regs.transformation;
@@ -50,7 +52,7 @@ ShapeRegistries makeCalendarRegistries()
 
     // WildPalms: (calendar, palm) + palm<->ical edges. Not part of stock; the
     // palm->ical->canon path only compiles once these are registered.
-    CalendarPalmShapes wpShapes;
+    CalendarPalmShapes wpShapes{cats};
     for (const auto &[shape, cat] : wpShapes.peerShapes())
         reg.registerShape(shape, cat);
     for (const auto &edge : wpShapes.edges())
@@ -121,6 +123,44 @@ private slots:
             "KCalendarCore",
             QByteArray(WildPalms::PalmCalendar::DatebookCodec::RecordIdProperty));
         QCOMPARE(rid, QStringLiteral("77"));
+    }
+
+    void palmCategorySlotCarriedAsCanonCategory()
+    {
+        WildPalms::PalmCalendar::CategoryMappingStore cats;
+        QVERIFY(cats.setSlotName(QStringLiteral("DatebookDB"), 3,
+                                 QStringLiteral("Work")));
+
+        const auto regs = makeCalendarRegistries(&cats);
+        const Shape palm { DomainId{"calendar"}, EncodingId{"palm"}  };
+        const Shape canon{ DomainId{"calendar"}, EncodingId{"canon"} };
+        const Shape ical { DomainId{"calendar"}, EncodingId{"ical"}  };
+
+        const QByteArray palmBytes =
+            makePalmRecordBytes(/*slot*/ 3, /*recordId*/ 88,
+                                QStringLiteral("Sprint planning"));
+
+        // palm -> ical: the slot-3 name "Work" should land in CATEGORIES.
+        const auto toIcal = regs.transformation.compile(palm, ical);
+        QVERIFY2(toIcal.has_value(), "no palm->ical pipeline");
+        const QByteArray icalBytes = toIcal->apply(palmBytes);
+        QVERIFY2(icalBytes.contains("CATEGORIES:Work"),
+                 "palm slot 3 ('Work') did not surface as CATEGORIES:Work");
+
+        // palm -> canon: canon path also compiles and is non-empty.
+        const auto toCanon = regs.transformation.compile(palm, canon);
+        QVERIFY2(toCanon.has_value(), "no palm->canon pipeline");
+        const QByteArray canonBytes = toCanon->apply(palmBytes);
+        QVERIFY2(!canonBytes.isEmpty(), "palm->canon produced empty bytes");
+
+        // canon -> palm: CATEGORIES "Work" should map back to slot 3.
+        const auto rev = regs.transformation.compile(canon, palm);
+        QVERIFY2(rev.has_value(), "no canon->palm pipeline");
+        const QByteArray palmBytes2 = rev->apply(canonBytes);
+        QVERIFY2(!palmBytes2.isEmpty(), "canon->palm produced empty bytes");
+
+        const PalmRecord pr2 = PalmRecord::fromWireBytes(palmBytes2);
+        QCOMPARE(static_cast<int>(pr2.category), 3);
     }
 
     void lossProfileIsHonest()

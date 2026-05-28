@@ -6,12 +6,18 @@
 
 #include "plugins/calendar/icstranscoder.h"
 #include "palm/calendar/datebookcodec.h"
+#include "palm/calendar/categorymappingstore.h"
 #include "palm/sync/palmrecord.h"
 
 using WildPalms::CalendarPlugin::encodePalmToIcs;
 using WildPalms::CalendarPlugin::decodeIcsToPalm;
+using WildPalms::PalmCalendar::CategoryMappingStore;
 using WildPalms::PalmCalendar::DatebookCodec;
 using WildPalms::PalmSync::PalmRecord;
+
+namespace {
+const QString kDb = QStringLiteral("DatebookDB");
+}
 
 namespace {
 
@@ -42,7 +48,7 @@ private slots:
 void TestIcsTranscoder::encodeProducesParseableIcs()
 {
     PalmRecord pr = makeMeetingRecord(0);
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(!ics.isEmpty());
     QVERIFY(ics.contains("BEGIN:VCALENDAR"));
     QVERIFY(ics.contains("BEGIN:VEVENT"));
@@ -52,27 +58,34 @@ void TestIcsTranscoder::encodeProducesParseableIcs()
 void TestIcsTranscoder::encodePreservesSummary()
 {
     PalmRecord pr = makeMeetingRecord(2);
-    QByteArray ics = encodePalmToIcs(pr);
+    QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
     QVERIFY(ics.contains("SUMMARY:Standup"));
 }
 
 void TestIcsTranscoder::roundTripPreservesSlot()
 {
+    // The slot now round-trips via the category NAME (CategoryMappingStore),
+    // not a raw slotHint: slot 7 -> "Project X" -> CATEGORIES -> slot 7.
+    CategoryMappingStore cats;
+    QVERIFY(cats.setSlotName(kDb, 7, QStringLiteral("Project X")));
+
     PalmRecord pr1 = makeMeetingRecord(7);
-    QByteArray ics = encodePalmToIcs(pr1);
-    auto pr2opt = decodeIcsToPalm(ics, 7);
+    QByteArray ics = encodePalmToIcs(pr1, &cats, kDb);
+    QVERIFY(ics.contains("CATEGORIES:Project X"));
+
+    auto pr2opt = decodeIcsToPalm(ics, &cats, kDb);
     QVERIFY(pr2opt.has_value());
     QCOMPARE(static_cast<int>(pr2opt->category), 7);
 }
 
 void TestIcsTranscoder::decodeWithEmptyBytesReturnsNullopt()
 {
-    QVERIFY(!decodeIcsToPalm(QByteArray(), 0).has_value());
+    QVERIFY(!decodeIcsToPalm(QByteArray(), nullptr, kDb).has_value());
 }
 
 void TestIcsTranscoder::decodeWithGarbageReturnsNullopt()
 {
-    QVERIFY(!decodeIcsToPalm(QByteArray("not an ics"), 0).has_value());
+    QVERIFY(!decodeIcsToPalm(QByteArray("not an ics"), nullptr, kDb).has_value());
 }
 
 void TestIcsTranscoder::decodePreservesRecordIdWhenPresent()
@@ -91,7 +104,7 @@ void TestIcsTranscoder::decodePreservesRecordIdWhenPresent()
     cal->addEvent(decoded.event);
     QByteArray ics = fmt.toString(cal).toUtf8();
 
-    auto pr2opt = decodeIcsToPalm(ics, 0);
+    auto pr2opt = decodeIcsToPalm(ics, nullptr, kDb);
     QVERIFY(pr2opt.has_value());
     QCOMPARE(pr2opt->recordId, static_cast<std::uint32_t>(42));
 }
