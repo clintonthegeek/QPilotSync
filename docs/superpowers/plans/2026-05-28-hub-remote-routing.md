@@ -37,21 +37,21 @@
 
 - [ ] **Step 1: Confirm the new release tag exists on Codeberg.**
 
-The libkalburator RFC at `docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` proposes the addition. Before this plan can proceed, libkalburator must have landed the API in a tagged release (call it `<TARGET_TAG>` — likely `v0.58` or a successor of `v0.57`).
+The libkalburator RFC at `docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` was accepted and landed; the release is tagged **`v0.59`** (it carries `Kalburator::Shape::RecordFilter` + `Kalburator::Sinks::FilteredCollectionBackend`).
 
 Run:
 ```bash
 git -C /home/clinton/dev/libkalburator fetch --tags origin 2>&1 | tail
 git -C /home/clinton/dev/libkalburator ls-remote --tags origin | grep -E "v0\.5[89]|v0\.6" | head
 ```
-Pick the lowest tag that includes `FilteredCollectionBackend`. If no such tag exists yet, STOP — this plan blocks until the lib has shipped it. Record the chosen tag as `<TARGET_TAG>` for the rest of this plan.
+Pick the lowest tag that includes `FilteredCollectionBackend`. If no such tag exists yet, STOP — this plan blocks until the lib has shipped it. Record the chosen tag as `v0.59` for the rest of this plan.
 
 - [ ] **Step 2: Verify the actual exports match the RFC.**
 
 Check that the symbols the plan depends on exist in the chosen tag:
 ```bash
-git -C /home/clinton/dev/libkalburator show <TARGET_TAG>:src/types/recordfilter.h | head -40
-git -C /home/clinton/dev/libkalburator show <TARGET_TAG>:src/universal/filteredcollectionbackend.h | head -40
+git -C /home/clinton/dev/libkalburator show v0.59:src/types/recordfilter.h | head -40
+git -C /home/clinton/dev/libkalburator show v0.59:src/universal/filteredcollectionbackend.h | head -40
 ```
 Both must be present. Note the EXACT namespace (the RFC proposes `Kalburator::Shape::RecordFilter` and `Kalburator::Sinks::FilteredCollectionBackend`) and adjust later tasks' includes/usings if the implementation chose a different namespace.
 
@@ -59,10 +59,10 @@ Both must be present. Note the EXACT namespace (the RFC proposes `Kalburator::Sh
 
 In `CMakeLists.txt:63`:
 ```cmake
-set(WILDPALMS_LIBKALBURATOR_GIT_TAG "<TARGET_TAG>" CACHE STRING
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v0.59" CACHE STRING
     "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
 ```
-(Replace `<TARGET_TAG>` with the actual tag string from Step 1.)
+(Replace `v0.59` with the actual tag string from Step 1.)
 
 - [ ] **Step 4: Configure + build against the new pin.**
 
@@ -83,7 +83,7 @@ Expected: 103/103 (or whatever count the branch currently has — same as after 
 
 ```bash
 git add CMakeLists.txt
-git commit -m "build(deps): re-pin libkalburator to <TARGET_TAG> (FilteredCollectionBackend)
+git commit -m "build(deps): re-pin libkalburator to v0.59 (FilteredCollectionBackend)
 
 Required by hub<->remote routing (sub-project after C). Spec:
 docs/superpowers/specs/2026-05-28-subproject-hub-remote-routing-design.md
@@ -472,11 +472,19 @@ void PalmRuntime::buildRouteLogicalCalendars(
             const QString virtualColId =
                 QStringLiteral("route-") + s.categoryName;
 
+            // v0.59 ctor: parentBackend, parentBackendId (registry key —
+            // "wp-hub" matches how the hub was registered in the PalmRuntime
+            // ctor), parentCollectionId, virtualCollectionId, filter,
+            // optional registry (passed so the FCB auto-nulls its parent on
+            // BackendRegistry::backendInstanceUnregistered — clean failure
+            // instead of UB if the hub is ever unregistered).
             auto view = std::make_unique<Kalburator::Sinks::FilteredCollectionBackend>(
                 m_hub.get(),
+                QStringLiteral("wp-hub"),
                 s.hubCollectionId,
                 virtualColId,
-                filter);
+                filter,
+                m_registry.get());
 
             m_registry->registerBackendInstance(s.lcId, view.get());
             m_routeViews.push_back(std::move(view));
@@ -853,7 +861,7 @@ Use the same skeleton as Task 5; share the codec/encoding helpers.
 ```bash
 cd /home/clinton/dev/WildPalms
 rm -rf build-rcheck
-cmake -S . -B build-rcheck -DCMAKE_BUILD_TYPE=Debug 2>&1 | grep -iE "fetching <TARGET_TAG>|Configuring done|CMake Error"
+cmake -S . -B build-rcheck -DCMAKE_BUILD_TYPE=Debug 2>&1 | grep -iE "fetching v0.59|Configuring done|CMake Error"
 cmake --build build-rcheck -j"$(nproc)" 2>&1 | grep -cE "error:" | xargs echo "errors:"
 ctest --test-dir build-rcheck 2>&1 | tail -4
 ```
@@ -890,7 +898,7 @@ rm -rf build-rcheck
   - §6.3 lifetime (`m_routeViews` declared after `m_hub` before `m_engine`) → Task 3 Step 1.
   - §7 data flow → exercised by Tasks 5 / 6.
   - §9 success criteria → each criterion is the literal assertion of Tasks 4 / 5 / 6.
-- **Placeholder scan:** `<TARGET_TAG>` is a deliberate run-time-resolved value with the exact discovery commands in Task 1 — not a vague placeholder. `MockBlobBackend` is referenced from libkalburator's test fixtures (the existing runtime tests use it; the include path follows their pattern). Step 6 of Task 3 instructs "investigate before continuing" for non-route runtime tests — that is a real verification step, not a stand-in for missing content. The Task 6 step 1 shares the skeleton with Task 5 by reference (skeleton fully shown in Task 5; the only deltas are the second persisted mapping + the hub-mutation step + the assertion deltas — those are explicit in the body of Task 6's step 1).
+- **Placeholder scan:** `v0.59` is a deliberate run-time-resolved value with the exact discovery commands in Task 1 — not a vague placeholder. `MockBlobBackend` is referenced from libkalburator's test fixtures (the existing runtime tests use it; the include path follows their pattern). Step 6 of Task 3 instructs "investigate before continuing" for non-route runtime tests — that is a real verification step, not a stand-in for missing content. The Task 6 step 1 shares the skeleton with Task 5 by reference (skeleton fully shown in Task 5; the only deltas are the second persisted mapping + the hub-mutation step + the assertion deltas — those are explicit in the body of Task 6's step 1).
 - **Type / name consistency:** `RouteSpec`, `Kind::{Filtered, Direct}`, `lcId = "wp-route-<id>"`, virtual collection id `"route-<categoryName>"`, hub collection id == canonical domain id, plugin-id↔domain mapping (`memo`→`note`) — consistent across Tasks 2, 3, 4, 5, 6.
 
 If you find issues during execution, prefer surfacing them and fixing inline over forcing a stale plan.
