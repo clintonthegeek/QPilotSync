@@ -2,8 +2,10 @@
 
 // WildPalms memo plugin
 #include "notedomainextension.h"
+#include "memomarkdown.h"
 #include "palm/sync/palmrecord.h"
 #include "palm/codecs/memocodec.h"
+#include "palm/calendar/categorymappingstore.h"
 
 // libkalburator shape graph + note canon (via Kalburator::Sync)
 #include "shaperegistries.h"
@@ -17,12 +19,12 @@
 using namespace Kalburator::Shape;
 using WildPalms::Memo::NotePalmShapes;
 using WildPalms::PalmSync::PalmRecord;
+using WildPalms::PalmCalendar::CategoryMappingStore;
 
 namespace {
 
-ShapeRegistries makeNoteRegistries()
+void registerNoteSpineAndStock(ShapeRegistries &regs)
 {
-    ShapeRegistries regs;
     auto &reg = regs.transformation;
 
     Kalburator::Note::NoteDomainDefinition def;
@@ -43,14 +45,36 @@ ShapeRegistries makeNoteRegistries()
         reg.registerShape(shape, cat);
     for (const auto &edge : stock.edges())
         reg.registerEdge(edge);
+}
+
+ShapeRegistries makeNoteRegistries()
+{
+    ShapeRegistries regs;
+    registerNoteSpineAndStock(regs);
 
     // WildPalms: (note, palm) + palm<->canon edges. Not part of stock; the
     // palm->canon path only compiles once these run.
     NotePalmShapes wpShapes;
     for (const auto &[shape, cat] : wpShapes.peerShapes())
-        reg.registerShape(shape, cat);
+        regs.transformation.registerShape(shape, cat);
     for (const auto &edge : wpShapes.edges())
-        reg.registerEdge(edge);
+        regs.transformation.registerEdge(edge);
+
+    return regs;
+}
+
+ShapeRegistries makeNoteRegistriesWithStore(const CategoryMappingStore *store)
+{
+    ShapeRegistries regs;
+    registerNoteSpineAndStock(regs);
+
+    // WildPalms: (note, palm) + palm<->canon edges, with a CategoryMappingStore
+    // so the Palm category slot travels as a name in the YAML frontmatter.
+    NotePalmShapes wpShapes(store);
+    for (const auto &[shape, cat] : wpShapes.peerShapes())
+        regs.transformation.registerShape(shape, cat);
+    for (const auto &edge : wpShapes.edges())
+        regs.transformation.registerEdge(edge);
 
     return regs;
 }
@@ -123,6 +147,67 @@ private slots:
                  "canon->palm must report loss (Palm holds plain text only)");
         QCOMPARE(down.affected.value(PropertyId{QStringLiteral("body")}),
                  LossKind::Simplified);
+    }
+
+    // Task 8: Palm category slot travels as a NAME in the YAML frontmatter when
+    // a CategoryMappingStore is threaded through the stages. On the return path,
+    // the name resolves back to the original slot.
+    void categoryNameRoundTripViaFrontmatter()
+    {
+        // Seed MemoDB: slot 3 = "Work".
+        CategoryMappingStore store;
+        store.setSlotName(QStringLiteral("MemoDB"), 3, QStringLiteral("Work"));
+
+        const auto regs = makeNoteRegistriesWithStore(&store);
+        const Shape palm { DomainId{"note"}, EncodingId{"palm"}  };
+        const Shape canon{ DomainId{"note"}, EncodingId{"canon"} };
+
+        const QByteArray palmBytes =
+            makePalmMemoBytes(/*slot*/ 3, /*recordId*/ 77,
+                              QStringLiteral("Work memo"));
+
+        // palm -> canon: the intermediate markdown must contain the NAME not the
+        // raw slot number so that cross-domain category routing works.
+        const auto fwd = regs.transformation.compile(palm, canon);
+        QVERIFY2(fwd.has_value(), "no palm->canon pipeline with store");
+
+        // Intercept the markdown to verify the frontmatter key carries the name.
+        // We do this by re-running the palm->markdown half directly via encode().
+        // (The full pipeline goes palm->markdown->canon, so we inspect via decode
+        //  after running canon->palm to confirm round-trip.)
+
+        const QByteArray canonBytes = fwd->apply(palmBytes);
+        QVERIFY2(!canonBytes.isEmpty(), "palm->canon with store produced empty bytes");
+
+        // canon -> palm: the name in frontmatter must resolve back to slot 3.
+        const auto rev = regs.transformation.compile(canon, palm);
+        QVERIFY2(rev.has_value(), "no canon->palm pipeline with store");
+        const QByteArray palmBytes2 = rev->apply(canonBytes);
+        QVERIFY2(!palmBytes2.isEmpty(), "canon->palm with store produced empty bytes");
+
+        const PalmRecord pr2 = PalmRecord::fromWireBytes(palmBytes2);
+        QCOMPARE(pr2.recordId, 77u);
+        QCOMPARE(static_cast<int>(pr2.category), 3);
+
+        // Also verify that the intermediate markdown uses the NAME "Work" as the
+        // category: value by directly exercising the encode/decode seam.
+        // memomarkdown::encode() with the store writes `category: Work` (not 3).
+        {
+            using namespace WildPalms::Memo;
+            MarkdownMemo mm;
+            mm.recordId     = 77;
+            mm.categorySlot = 3;
+            mm.content.text = QStringLiteral("Work memo");
+            const QString md = encode(mm, &store, QStringLiteral("MemoDB"));
+            QVERIFY2(md.contains(QStringLiteral("category: Work")),
+                     "encode() with store must write category NAME not slot number");
+            QVERIFY2(!md.contains(QStringLiteral("category: 3")),
+                     "encode() with store must NOT write the numeric slot");
+
+            // decode() with the store resolves the name back to slot 3.
+            const MarkdownMemo back = decode(md, &store, QStringLiteral("MemoDB"));
+            QCOMPARE(back.categorySlot, 3);
+        }
     }
 };
 

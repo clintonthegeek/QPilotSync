@@ -15,6 +15,7 @@ target_include_directories(tst_memomarkdown
 target_link_libraries(tst_memomarkdown
     PRIVATE
         WildPalmsPalmCodecs   # MemoCodec provides PalmCodecs::Memo POD
+        WildPalmsPalmCalendar # CategoryMappingStore (memomarkdown.cpp now uses it)
         Qt::Test
         Qt::Core
 )
@@ -101,6 +102,7 @@ target_link_libraries(tst_memo_note_roundtrip
     PRIVATE
         WildPalmsPalmCodecs     # encodeMemo / decodeMemo
         WildPalmsPalmSync       # PalmRecord
+        WildPalmsPalmCalendar   # CategoryMappingStore (Task 8: name-based category)
         Kalburator::Sync
         Qt::Test
         Qt::Core
