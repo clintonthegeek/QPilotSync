@@ -726,6 +726,30 @@ set_tests_properties(tst_palm_runtime_routes PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# hub↔remote routing Task 5: end-to-end first-sync — Palm slot 3 record lands
+# on mock remote WorkCal via Palm<->hub Star + hub-route<->remote Star.
+add_executable(tst_palm_runtime_route_first_sync
+    tst_palm_runtime_route_first_sync.cpp)
+target_link_libraries(tst_palm_runtime_route_first_sync
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        WildPalmsPalmCalendar
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_route_first_sync
+    COMMAND tst_palm_runtime_route_first_sync)
+set_tests_properties(tst_palm_runtime_route_first_sync PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M6b Task 3: PalmDeviceAccess connect lifecycle test
 # Uses MockKPilotDeviceLink (subclass) injected via
 # PalmDeviceAccess::setLinkFactoryForTest to drive
