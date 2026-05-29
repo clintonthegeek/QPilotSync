@@ -121,6 +121,28 @@ set_tests_properties(tst_contactsbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PL
 # with IBackendPluginV2 + SyncEngine. Contract is covered end-to-end via
 # tst_palm_runtime_* (in-process Kalburator::Plugin path).
 
+# --- Sub-project D Task 2: HubContactsReader facade ---
+add_executable(tst_hubcontactsreader
+    tst_hubcontactsreader.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/hubcontactsreader.cpp
+)
+target_include_directories(tst_hubcontactsreader
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_hubcontactsreader BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_hubcontactsreader
+    PRIVATE
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_hubcontactsreader COMMAND tst_hubcontactsreader)
+set_tests_properties(tst_hubcontactsreader PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- Phase 2: contacts canon round-trip (verify-and-lock) ---
 add_executable(tst_contacts_canon_roundtrip
     tst_contacts_canon_roundtrip.cpp

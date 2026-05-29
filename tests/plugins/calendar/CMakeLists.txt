@@ -146,6 +146,28 @@ set_tests_properties(tst_calendarbackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PL
 # integration is covered by libkalburator's tests/calendar contract suite
 # plus the V2-style tst_memo_v2 / tst_contacts_v2 / tst_todo_v2 / tst_webcal_v2_e2e.
 
+# --- Sub-project D Task 2: HubCalendarReader facade ---
+add_executable(tst_hubcalendarreader
+    tst_hubcalendarreader.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/hubcalendarreader.cpp
+)
+target_include_directories(tst_hubcalendarreader
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_hubcalendarreader BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_hubcalendarreader
+    PRIVATE
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_hubcalendarreader COMMAND tst_hubcalendarreader)
+set_tests_properties(tst_hubcalendarreader PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- Phase 3: calendar canon round-trip ---
 add_executable(tst_calendar_canon_roundtrip
     tst_calendar_canon_roundtrip.cpp

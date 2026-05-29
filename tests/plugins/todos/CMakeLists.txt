@@ -116,6 +116,28 @@ set_tests_properties(tst_todobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFO
 # K.8b T13: tst_todo_v2 deleted along with IBackendPluginV2 + SyncEngine
 # (replaced by the in-process PalmRuntime plugin path).
 
+# --- Sub-project D Task 2: HubTodoReader facade ---
+add_executable(tst_hubtodoreader
+    tst_hubtodoreader.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/hubtodoreader.cpp
+)
+target_include_directories(tst_hubtodoreader
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_hubtodoreader BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_hubtodoreader
+    PRIVATE
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_hubtodoreader COMMAND tst_hubtodoreader)
+set_tests_properties(tst_hubtodoreader PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- Phase 4: todo canon round-trip ---
 add_executable(tst_todo_canon_roundtrip
     tst_todo_canon_roundtrip.cpp

@@ -82,6 +82,28 @@ target_link_libraries(tst_memobackendplugin
 add_test(NAME tst_memobackendplugin COMMAND tst_memobackendplugin)
 set_tests_properties(tst_memobackendplugin PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# --- Sub-project D Task 2: HubMemoReader facade ---
+add_executable(tst_hubmemoreader
+    tst_hubmemoreader.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/hubmemoreader.cpp
+)
+target_include_directories(tst_hubmemoreader
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_hubmemoreader BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_hubmemoreader
+    PRIVATE
+        Kalburator::Sync
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_hubmemoreader COMMAND tst_hubmemoreader)
+set_tests_properties(tst_hubmemoreader PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- Phase 5: memo (note) canon round-trip ---
 add_executable(tst_memo_note_roundtrip
     tst_memo_note_roundtrip.cpp
