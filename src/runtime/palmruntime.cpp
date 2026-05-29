@@ -932,6 +932,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
             if (m_device) m_device->resumeTickle();
             m_activeMappingId.clear();
             Q_EMIT runFinished(r);
+            Q_EMIT syncCompleted();
         });
         return r;
     });
@@ -1017,6 +1018,7 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
             if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
             if (m_device) m_device->resumeTickle();
             Q_EMIT runFinished(r);
+            Q_EMIT syncCompleted();
         });
         return r;
     });
@@ -1043,6 +1045,7 @@ QFuture<PalmRunResult> PalmRuntime::backup()
         r.success = false;
         r.errorMessage = QStringLiteral("backup: no device connected");
         Q_EMIT runFinished(r);
+        Q_EMIT syncCompleted();
         return QtFuture::makeReadyValueFuture(r);
     }
 
@@ -1084,6 +1087,7 @@ QFuture<PalmRunResult> PalmRuntime::backup()
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
             Q_EMIT runFinished(r);
+            Q_EMIT syncCompleted();
         });
         return r;
     });
@@ -1100,6 +1104,7 @@ QFuture<PalmRunResult> PalmRuntime::restore()
         r.success = false;
         r.errorMessage = QStringLiteral("restore: no device connected");
         Q_EMIT runFinished(r);
+        Q_EMIT syncCompleted();
         return QtFuture::makeReadyValueFuture(r);
     }
 
@@ -1132,6 +1137,7 @@ QFuture<PalmRunResult> PalmRuntime::restore()
         QMetaObject::invokeMethod(this, [this, r]() {
             if (m_device) m_device->resumeTickle();
             Q_EMIT runFinished(r);
+            Q_EMIT syncCompleted();
         });
         return r;
     });

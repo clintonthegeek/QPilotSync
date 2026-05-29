@@ -977,6 +977,28 @@ set_tests_properties(tst_syncmappingsgraphview PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Sub-project D Task 3: PalmRuntime::syncCompleted signal fires once per sync run.
+add_executable(tst_palm_runtime_emits_sync_completed
+    tst_palm_runtime_emits_sync_completed.cpp)
+target_link_libraries(tst_palm_runtime_emits_sync_completed
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_emits_sync_completed
+    COMMAND tst_palm_runtime_emits_sync_completed)
+set_tests_properties(tst_palm_runtime_emits_sync_completed PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # hub↔remote routing Task 2: translateRouteSpec — pure translator + unit tests.
 # Links WildPalmsRuntime + Kalburator::Sync directly (not WildPalmsCore) so
 # that #include "synctypes.h" resolves to libkalburator's Kalburator::Sync

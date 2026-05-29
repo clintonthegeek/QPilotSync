@@ -213,6 +213,13 @@ signals:
     /// time without polling.
     void conflictDetected(const Kalburator::Sync::ConflictInfo &info);
 
+    /// Emitted after every sync run (hotSync / fullSync /
+    /// copyPalmToPC / copyPCToPalm / backup / restore). Sub-project D
+    /// views connect to this in createMainView to drive
+    /// view->refresh(). Fires once per QFuture returned by the public
+    /// sync methods.
+    void syncCompleted();
+
 private:
     /// Run after PalmDeviceAccess emits connectionComplete(true, "").
     /// Loads plugins, registers backends, sets up default mappings if
