@@ -4,7 +4,7 @@
 
 #include "plugin.h"   // Kalburator::Plugin (libkalburator)
 
-namespace Kalburator::Sync { class SyncBackend; }
+namespace Kalburator::Sync { class SyncBackendBase; }
 namespace WildPalms::Runtime { class PalmRuntime; }
 
 namespace WildPalms::Plugins {
@@ -25,8 +25,12 @@ class PimPlugin : public Kalburator::Plugin {
 public:
     /// Called once per PalmRuntime instance, after m_hub is constructed
     /// and registered. The plugin builds any HubFooReader it needs.
-    /// hub is borrowed; lifetime is the PalmRuntime's.
-    virtual void setHub(Kalburator::Sync::SyncBackend *hub) { Q_UNUSED(hub); }
+    /// hub is borrowed; lifetime is the PalmRuntime's. Takes
+    /// SyncBackendBase (not SyncBackend) so the same API works for the
+    /// calendar-typed SyncBackend descendants and for non-calendar
+    /// backends (GenericSqliteBackend, RawFilesBackend, ...) that
+    /// inherit SyncBackendBase directly post-P3 neutralization.
+    virtual void setHub(Kalburator::Sync::SyncBackendBase *hub) { Q_UNUSED(hub); }
 
     /// Called once per PalmRuntime instance, alongside setHub. The
     /// plugin caches the pointer so createMainView can connect
