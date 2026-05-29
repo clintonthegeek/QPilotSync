@@ -49,6 +49,7 @@
 #include "plugins/contacts/contactsbackendplugin.h"
 #include "plugins/memo/memobackendplugin.h"
 #include "plugins/todos/todobackendplugin.h"
+#include "plugins/pimplugin.h"
 
 #include "profile.h"
 
@@ -241,6 +242,16 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
 
     // C Task 2: create per-domain canon collections in the hub.
     ensureHubCollections();
+
+    // Sub-project D: dispatch setHub/setRuntime to every PimPlugin.
+    // Non-PIM plugins (plucker) inherit Kalburator::Plugin directly
+    // and dynamic_cast to nullptr — they are skipped naturally.
+    for (auto &p : m_palmPlugins) {
+        if (auto *pim = dynamic_cast<WildPalms::Plugins::PimPlugin*>(p.get())) {
+            pim->setHub(m_hub.get());
+            pim->setRuntime(this);
+        }
+    }
 
     QObject::connect(this, &PalmRuntime::runStarted,
             this, [this]() { m_running = true; });
