@@ -97,7 +97,8 @@ void TestContactsBackendPlugin::pluginIdentity()
     auto claims = p.claimedDatabases();
     QCOMPARE(claims.size(), 1);
     QCOMPARE(claims[0], QStringLiteral("AddressDB"));
-    QVERIFY(!p.hasMainView());
+    // Sub-project D: contacts joined the V2 sidebar.
+    QVERIFY(p.hasMainView());
 }
 
 void TestContactsBackendPlugin::createBackends_returnsBlobOnly()

@@ -85,6 +85,10 @@ add_executable(tst_contactsbackendplugin
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
     ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
+    # Sub-project D: contactsbackendplugin.cpp now references ContactView
+    # and HubContactsReader for createMainView wiring.
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactview.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/hubcontactsreader.cpp
 )
 target_include_directories(tst_contactsbackendplugin
     PRIVATE
@@ -196,3 +200,75 @@ target_link_libraries(tst_contactsdomainextension
 )
 add_test(NAME tst_contactsdomainextension COMMAND tst_contactsdomainextension)
 set_tests_properties(tst_contactsdomainextension PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# --- Sub-project D Task 6: ContactView reads from HubContactsReader ---
+add_executable(tst_contact_view_reads_hub
+    tst_contact_view_reads_hub.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactview.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/hubcontactsreader.cpp
+)
+target_include_directories(tst_contact_view_reads_hub
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CONTACTS_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_contact_view_reads_hub BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_contact_view_reads_hub
+    PRIVATE
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::Contacts
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_contact_view_reads_hub COMMAND tst_contact_view_reads_hub)
+set_tests_properties(tst_contact_view_reads_hub PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# --- Sub-project D Task 5: Contacts joins the V2 sidebar ---
+add_executable(tst_contacts_in_sidebar
+    tst_contacts_in_sidebar.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsbackendplugin.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmcontactsbackend.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsconflicthandler.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsdomainextension.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactsvcardtranscoder.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/palmtovcardtransformation.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/contactview.cpp
+    ${CONTACTS_PLUGIN_SRC_DIR}/hubcontactsreader.cpp
+)
+target_include_directories(tst_contacts_in_sidebar
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${PILOT_LINK_INCLUDE_DIR}
+)
+target_include_directories(tst_contacts_in_sidebar BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_contacts_in_sidebar
+    PRIVATE
+        WildPalmsPalmCalendar
+        WildPalmsPalmConflict
+        WildPalmsPalmCodecs
+        WildPalmsPalmSync
+        WildPalmsCore
+        PalmDeviceAccessLib
+        Kalburator::Sync
+        KF6::CoreAddons
+        KF6::Contacts
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        ${PILOT_LINK_LIBRARIES}
+)
+add_test(NAME tst_contacts_in_sidebar COMMAND tst_contacts_in_sidebar)
+set_tests_properties(tst_contacts_in_sidebar PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

@@ -81,6 +81,8 @@ add_executable(tst_todobackendplugin
     ${TODOS_PLUGIN_SRC_DIR}/palmtovtodotransformation.cpp
     ${TODOS_PLUGIN_SRC_DIR}/tododomainextension.cpp
     ${TODOS_PLUGIN_SRC_DIR}/taskview.cpp
+    # Sub-project D: createMainView references HubTodoReader.
+    ${TODOS_PLUGIN_SRC_DIR}/hubtodoreader.cpp
 )
 target_include_directories(tst_todobackendplugin
     PRIVATE
@@ -166,3 +168,33 @@ target_link_libraries(tst_todo_canon_roundtrip
 )
 add_test(NAME tst_todo_canon_roundtrip COMMAND tst_todo_canon_roundtrip)
 set_tests_properties(tst_todo_canon_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# --- Sub-project D Task 6: TaskView reads from HubTodoReader ---
+add_executable(tst_task_view_reads_hub
+    tst_task_view_reads_hub.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/taskview.cpp
+    ${TODOS_PLUGIN_SRC_DIR}/hubtodoreader.cpp
+)
+target_include_directories(tst_task_view_reads_hub
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${TODOS_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_task_view_reads_hub BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_task_view_reads_hub
+    PRIVATE
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CalendarCore
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_task_view_reads_hub COMMAND tst_task_view_reads_hub)
+set_tests_properties(tst_task_view_reads_hub PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

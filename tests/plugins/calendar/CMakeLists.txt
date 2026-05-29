@@ -108,6 +108,8 @@ add_executable(tst_calendarbackendplugin
     ${CALENDAR_PLUGIN_SRC_DIR}/palmtoicstransformation.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendardomainextension.cpp
     ${CALENDAR_PLUGIN_SRC_DIR}/calendarview.cpp
+    # Sub-project D: createMainView references HubCalendarReader.
+    ${CALENDAR_PLUGIN_SRC_DIR}/hubcalendarreader.cpp
 )
 target_include_directories(tst_calendarbackendplugin
     PRIVATE
@@ -195,3 +197,33 @@ target_link_libraries(tst_calendar_canon_roundtrip
 )
 add_test(NAME tst_calendar_canon_roundtrip COMMAND tst_calendar_canon_roundtrip)
 set_tests_properties(tst_calendar_canon_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# --- Sub-project D Task 6: CalendarView reads from HubCalendarReader ---
+add_executable(tst_calendar_view_reads_hub
+    tst_calendar_view_reads_hub.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/calendarview.cpp
+    ${CALENDAR_PLUGIN_SRC_DIR}/hubcalendarreader.cpp
+)
+target_include_directories(tst_calendar_view_reads_hub
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CALENDAR_PLUGIN_SRC_DIR}
+)
+target_include_directories(tst_calendar_view_reads_hub BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_calendar_view_reads_hub
+    PRIVATE
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::CalendarCore
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_calendar_view_reads_hub COMMAND tst_calendar_view_reads_hub)
+set_tests_properties(tst_calendar_view_reads_hub PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

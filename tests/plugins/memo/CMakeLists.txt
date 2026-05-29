@@ -55,6 +55,8 @@ add_executable(tst_memobackendplugin
     ${MEMO_PLUGIN_SRC_DIR}/memoblobbackend.cpp
     ${MEMO_PLUGIN_SRC_DIR}/memobackendplugin.cpp
     ${MEMO_PLUGIN_SRC_DIR}/memoview.cpp
+    # Sub-project D: createMainView references HubMemoReader.
+    ${MEMO_PLUGIN_SRC_DIR}/hubmemoreader.cpp
 )
 target_include_directories(tst_memobackendplugin
     PRIVATE ${CMAKE_SOURCE_DIR}/src
@@ -135,3 +137,30 @@ set_tests_properties(tst_memo_note_roundtrip PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 # K.8b T13: tst_memo_v2 deleted along with IBackendPluginV2 + SyncEngine
 # (replaced by the in-process PalmRuntime plugin path; the contract is
 # exercised by tst_palm_runtime_modes).
+
+# --- Sub-project D Task 6: MemoView reads from HubMemoReader ---
+add_executable(tst_memo_view_reads_hub
+    tst_memo_view_reads_hub.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/memoview.cpp
+    ${MEMO_PLUGIN_SRC_DIR}/hubmemoreader.cpp
+)
+target_include_directories(tst_memo_view_reads_hub
+    PRIVATE ${CMAKE_SOURCE_DIR}/src
+)
+target_include_directories(tst_memo_view_reads_hub BEFORE
+    PRIVATE
+        $<TARGET_PROPERTY:Kalburator::Sync,INTERFACE_INCLUDE_DIRECTORIES>
+)
+target_link_libraries(tst_memo_view_reads_hub
+    PRIVATE
+        WildPalmsCore
+        Kalburator::Sync
+        KF6::I18n
+        KF6::WidgetsAddons
+        Qt::Widgets
+        Qt::Test
+        Qt::Core
+)
+add_test(NAME tst_memo_view_reads_hub COMMAND tst_memo_view_reads_hub)
+set_tests_properties(tst_memo_view_reads_hub PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
