@@ -129,6 +129,7 @@ list) stays visible. Sub-project E re-enables the edit affordances behind
 ### New files
 
 ```
+src/plugins/pimplugin.h                                (new — WP PIM base)
 src/plugins/calendar/hubcalendarreader.{h,cpp}
 src/plugins/contacts/hubcontactsreader.{h,cpp}
 src/plugins/memo/hubmemoreader.{h,cpp}
@@ -223,17 +224,36 @@ Emitted at the end of every sync run from the engine-finish path. After
 creating `m_hub`, the runtime iterates registered plugins and calls
 `plugin->setHub(m_hub.get())` then `plugin->setRuntime(this)`.
 
-### Plugin base interface (`Kalburator::Plugin`)
+### WP-local PIM plugin base (`WildPalms::Plugins::PimPlugin`)
 
-Adds two non-pure virtuals with empty default bodies, so non-PIM-view
-`Kalburator::Plugin` subclasses (e.g. plucker) compile unchanged. The
-install plugin uses `IPluginAction`, a separate hierarchy that is
-unaffected.
+`Kalburator::Plugin` is owned by libkalburator and not editable from WP
+(standing cross-repo rule). Instead, a **new WP-local intermediate class**
+sits between `Kalburator::Plugin` and the four PIM-view plugins:
 
 ```cpp
-virtual void setHub(Kalburator::Sync::SyncBackend *hub) { Q_UNUSED(hub); }
-virtual void setRuntime(WildPalms::Runtime::PalmRuntime *runtime) { Q_UNUSED(runtime); }
+// src/plugins/pimplugin.h  (new)
+namespace WildPalms::Plugins {
+
+class PimPlugin : public Kalburator::Plugin {
+public:
+    virtual void setHub(Kalburator::Sync::SyncBackend *hub) { Q_UNUSED(hub); }
+    virtual void setRuntime(WildPalms::Runtime::PalmRuntime *runtime) {
+        Q_UNUSED(runtime);
+    }
+};
+
+} // namespace WildPalms::Plugins
 ```
+
+The four PIM plugins switch their base from `Kalburator::Plugin` to
+`WildPalms::Plugins::PimPlugin`. Plucker stays on `Kalburator::Plugin`
+directly. Install (`IPluginAction`) is a separate hierarchy and is
+unaffected.
+
+`PalmRuntime` iterates `m_palmPlugins` and uses `dynamic_cast<PimPlugin*>`
+to dispatch `setHub` + `setRuntime` — matches the existing concrete-cast
+dispatch pattern in `palmruntime.cpp`. Non-PIM plugins (plucker) cast to
+nullptr and are skipped naturally.
 
 ### Mainwindow
 
@@ -247,10 +267,11 @@ on the produced view, which keeps the category-manager basepath wiring.
 
 1. Mainwindow constructs `PalmRuntime`.
 2. `PalmRuntime` constructs `m_hub` (`GenericSqliteBackend("wp-hub")`).
-3. `PalmRuntime` calls `plugin->setHub(m_hub.get())` + `plugin->setRuntime(this)`
-   for each registered `Kalburator::Plugin`. The four PIM-view plugins build
-   `HubFooReader(m_hub, "palm:<domain>")` in their `setHub` override; plucker's
-   defaults are no-ops.
+3. `PalmRuntime` iterates `m_palmPlugins`, `dynamic_cast<PimPlugin*>` each, and
+   calls `setHub(m_hub.get())` + `setRuntime(this)` on the cast. The four
+   PIM-view plugins build `HubFooReader(m_hub, "palm:<domain>")` in their
+   `setHub` override. Plucker (`Kalburator::Plugin` directly) casts to nullptr
+   and is skipped.
 4. Mainwindow's sidebar loop iterates plugins where `hasMainView()` is true
    (Calendar, **Contacts**, Memo, ToDo):
    - `createMainView(this)` returns a view pre-wired to its reader and to
