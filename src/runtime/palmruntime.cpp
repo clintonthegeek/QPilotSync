@@ -507,7 +507,7 @@ void PalmRuntime::finishConnect()
     // by registerPalmPlugins(). Replaces the old KPluginMetaData .so
     // discovery loop.
     for (auto &plugin : m_palmPlugins) {
-        std::unique_ptr<Kalburator::Sync::SyncBackend> ownedBackend;
+        std::unique_ptr<Kalburator::Sync::SyncBackendBase> ownedBackend;
         QString id;
 
         // Dynamic dispatch to each concrete plugin type for
@@ -673,7 +673,7 @@ void PalmRuntime::setDeviceAccessForTest(std::unique_ptr<PalmDeviceAccess> devic
 // palmruntime.h). Bodies were no-ops since K.8b T6; no live callers.
 
 void PalmRuntime::registerBackendInstanceForTest(const QString &id,
-                                                  std::unique_ptr<Kalburator::Sync::SyncBackend> backend)
+                                                  std::unique_ptr<Kalburator::Sync::SyncBackendBase> backend)
 {
     if (!backend) return;
     m_registry->registerBackendInstance(id, backend.get());

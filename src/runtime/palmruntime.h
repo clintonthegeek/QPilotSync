@@ -161,7 +161,7 @@ public:
     void setMappingsForTest(QList<Kalburator::Sync::SyncMapping>);
     // K.8b T7: BlobBackendAdapter deleted; tests inject SyncBackend directly.
     void registerBackendInstanceForTest(const QString &id,
-                                        std::unique_ptr<Kalburator::Sync::SyncBackend> backend);
+                                        std::unique_ptr<Kalburator::Sync::SyncBackendBase> backend);
 
     /// Borrowed reference to PalmRuntime's BackendRegistry. Lifetime ==
     /// PalmRuntime's. AccountController borrows this for provider-supplied
@@ -293,7 +293,7 @@ private:
     std::vector<std::unique_ptr<Kalburator::Plugin>>             m_palmPlugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     bool                                                         m_running = false;
-    std::vector<std::unique_ptr<Kalburator::Sync::SyncBackend>>  m_ownedBackends;
+    std::vector<std::unique_ptr<Kalburator::Sync::SyncBackendBase>>  m_ownedBackends;
 };
 
 }  // namespace WildPalms::Runtime
