@@ -2,6 +2,7 @@
 #define WILDPALMS_CALENDAR_PALMCALENDARBACKEND_H
 
 #include "syncbackend.h"
+#include "syncoperation.h"   // Kalburator::Sync::{Fetch,Push,Delete}Operation complete-type for covariant overrides
 
 namespace WildPalms::PalmSync {
 class IPalmDatabaseAccess;

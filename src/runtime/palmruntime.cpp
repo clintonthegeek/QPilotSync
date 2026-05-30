@@ -84,13 +84,23 @@ public:
         : m_registry(registry) {}
 
     Kalburator::Sync::SyncBackend* backendById(const QString &id) override {
-        return m_registry ? m_registry->backendInstance(id) : nullptr;
+        // Lib P3 widened backendInstance() to SyncBackendBase*; ISyncHost is a
+        // calendar-domain interface (lives in calendar/), so dynamic_cast filters
+        // out non-calendar backends. The engine fetches non-calendar backends
+        // directly from BackendRegistry via SyncBackendBase* post-P3.
+        if (!m_registry) return nullptr;
+        return dynamic_cast<Kalburator::Sync::SyncBackend*>(
+            m_registry->backendInstance(id));
     }
     QHash<QString, Kalburator::Sync::SyncBackend*> backends() override {
         QHash<QString, Kalburator::Sync::SyncBackend*> result;
         if (!m_registry) return result;
-        for (const QString &id : m_registry->registeredInstanceIds())
-            result.insert(id, m_registry->backendInstance(id));
+        for (const QString &id : m_registry->registeredInstanceIds()) {
+            if (auto *cb = dynamic_cast<Kalburator::Sync::SyncBackend*>(
+                    m_registry->backendInstance(id))) {
+                result.insert(id, cb);
+            }
+        }
         return result;
     }
     Kalburator::Sync::ISyncConfigStore* configStore() override { return nullptr; }
