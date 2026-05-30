@@ -1,7 +1,7 @@
 #ifndef WILDPALMS_PALM_TODO_PALMTODOBACKEND_H
 #define WILDPALMS_PALM_TODO_PALMTODOBACKEND_H
 
-#include "syncbackend.h"
+#include "syncbackendbase.h"
 
 namespace WildPalms::PalmSync {
 class IPalmDatabaseAccess;
@@ -15,7 +15,7 @@ namespace WildPalms::PalmToDo {
  * Native shape: (todo, palm-todo). Records are stored as raw Palm DLP bytes.
  * G.7 Task 52.
  */
-class PalmToDoBackend : public Kalburator::Sync::SyncBackend
+class PalmToDoBackend : public Kalburator::Sync::SyncBackendBase
 {
     Q_OBJECT
 public:
@@ -45,14 +45,6 @@ public:
     bool deleteRecord(const QString &recordId) override;
     QList<Kalburator::Sync::CollectionInfo> availableCollections() override;
 
-    void loadCalendars(const QString &collectionId) override;
-    void storeCalendars(const QString &,
-                        const QList<KCalendarCore::MemoryCalendar *> &) override;
-    void startSync(const QString &, KCalendarCore::MemoryCalendar *,
-                   const QList<KCalendarCore::Incidence::Ptr> &,
-                   const QList<KCalendarCore::Incidence::Ptr> &,
-                   const QMap<QString, QString> &) override;
-    void removeItem(const QString &, const QString &) override;
 
 private:
     static QString encodeRecordId(std::uint32_t palmId);

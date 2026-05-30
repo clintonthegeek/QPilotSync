@@ -19,7 +19,7 @@ using WildPalms::PalmSync::PalmRecord;
 PalmToDoBackend::PalmToDoBackend(IPalmDatabaseAccess *device,
                                  const QString &deviceId,
                                  QObject *parent)
-    : Kalburator::Sync::SyncBackend(parent)
+    : Kalburator::Sync::SyncBackendBase(parent)
     , m_device(device)
     , m_deviceId(deviceId)
 {
@@ -175,19 +175,5 @@ QList<CollectionInfo> PalmToDoBackend::availableCollections()
     info.type = QStringLiteral("todos");
     return { info };
 }
-
-void PalmToDoBackend::loadCalendars(const QString &collectionId)
-{
-    emit loadCalendarsFinished(collectionId, false,
-        QStringLiteral("PalmToDoBackend: not a calendar backend"));
-}
-
-void PalmToDoBackend::storeCalendars(const QString &,
-                                     const QList<KCalendarCore::MemoryCalendar *> &) {}
-void PalmToDoBackend::startSync(const QString &, KCalendarCore::MemoryCalendar *,
-                                const QList<KCalendarCore::Incidence::Ptr> &,
-                                const QList<KCalendarCore::Incidence::Ptr> &,
-                                const QMap<QString, QString> &) {}
-void PalmToDoBackend::removeItem(const QString &, const QString &) {}
 
 } // namespace WildPalms::PalmToDo
