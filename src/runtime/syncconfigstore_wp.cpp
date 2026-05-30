@@ -6,6 +6,8 @@
 #include <QSettings>
 #include <QStringList>
 
+#include <logicalcalendarjson.h>
+
 namespace {
 
 constexpr auto kLogicalCalendarsGroup = "fullsync/logicalCalendars";
