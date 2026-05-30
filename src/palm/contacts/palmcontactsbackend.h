@@ -1,7 +1,7 @@
 #ifndef WILDPALMS_PALM_CONTACTS_PALMCONTACTSBACKEND_H
 #define WILDPALMS_PALM_CONTACTS_PALMCONTACTSBACKEND_H
 
-#include "syncbackend.h"
+#include "syncbackendbase.h"
 
 namespace WildPalms::PalmSync {
 class IPalmDatabaseAccess;
@@ -23,7 +23,7 @@ namespace WildPalms::PalmContacts {
  *
  * G.7 Task 50.
  */
-class PalmContactsBackend : public Kalburator::Sync::SyncBackend
+class PalmContactsBackend : public Kalburator::Sync::SyncBackendBase
 {
     Q_OBJECT
 public:
@@ -55,18 +55,6 @@ public:
     bool deleteRecord(const QString &recordId) override;
     QList<Kalburator::Sync::CollectionInfo> availableCollections() override;
 
-    // --- Calendar discovery (stubs) ---
-    void loadCalendars(const QString &collectionId) override;
-    void storeCalendars(
-        const QString &collectionId,
-        const QList<KCalendarCore::MemoryCalendar *> &calendars) override;
-    void startSync(
-        const QString &collectionId,
-        KCalendarCore::MemoryCalendar *calendar,
-        const QList<KCalendarCore::Incidence::Ptr> &stagedCreations,
-        const QList<KCalendarCore::Incidence::Ptr> &stagedUpdates,
-        const QMap<QString, QString> &stagedDeletions) override;
-    void removeItem(const QString &calId, const QString &itemUid) override;
 
 private:
     static QString encodeRecordId(std::uint32_t palmId);

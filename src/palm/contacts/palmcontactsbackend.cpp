@@ -19,7 +19,7 @@ using WildPalms::PalmSync::PalmRecord;
 PalmContactsBackend::PalmContactsBackend(IPalmDatabaseAccess *device,
                                          const QString &deviceId,
                                          QObject *parent)
-    : Kalburator::Sync::SyncBackend(parent)
+    : Kalburator::Sync::SyncBackendBase(parent)
     , m_device(device)
     , m_deviceId(deviceId)
 {
@@ -186,23 +186,5 @@ QList<CollectionInfo> PalmContactsBackend::availableCollections()
     return { info };
 }
 
-// --- Calendar-specific stubs ---
-
-void PalmContactsBackend::loadCalendars(const QString &collectionId)
-{
-    emit loadCalendarsFinished(collectionId, false,
-        QStringLiteral("PalmContactsBackend: not a calendar backend"));
-}
-
-void PalmContactsBackend::storeCalendars(
-    const QString &, const QList<KCalendarCore::MemoryCalendar *> &) {}
-
-void PalmContactsBackend::startSync(
-    const QString &, KCalendarCore::MemoryCalendar *,
-    const QList<KCalendarCore::Incidence::Ptr> &,
-    const QList<KCalendarCore::Incidence::Ptr> &,
-    const QMap<QString, QString> &) {}
-
-void PalmContactsBackend::removeItem(const QString &, const QString &) {}
 
 } // namespace WildPalms::PalmContacts
