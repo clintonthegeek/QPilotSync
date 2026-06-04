@@ -23,6 +23,7 @@
 #include "backendconfiguration.h"
 #include "backendregistry.h"
 #include "syncbackend.h"
+#include "syncbackendbase.h"
 #include "pluginmanager.h"
 #include "stock_plugins.h"
 // K.8b T7: BlobBackendAdapter deleted; inject via BlobSyncBackendWrapper.
@@ -108,7 +109,7 @@ void TstRuntimeCardDavE2E::palm_to_carddav_propagates()
     const QString carddavColId = cols.first().id;
     auto carddavBackendOwned = provider.createBackend(carddavColId);
     QVERIFY(carddavBackendOwned);
-    auto *carddavSync = dynamic_cast<SyncBackend *>(carddavBackendOwned.get());
+    auto *carddavSync = dynamic_cast<SyncBackendBase *>(carddavBackendOwned.get());
     QVERIFY(carddavSync);
     runtime.backendRegistry().registerBackendInstance(kCarddavBkId, carddavSync);
 
@@ -169,7 +170,7 @@ void TstRuntimeCardDavE2E::carddav_to_palm_propagates()
     const QString carddavColId = cols.first().id;
     auto carddavBackendOwned = provider.createBackend(carddavColId);
     QVERIFY(carddavBackendOwned);
-    auto *carddavSync = dynamic_cast<SyncBackend *>(carddavBackendOwned.get());
+    auto *carddavSync = dynamic_cast<SyncBackendBase *>(carddavBackendOwned.get());
     QVERIFY(carddavSync);
     runtime.backendRegistry().registerBackendInstance(kCarddavBkId, carddavSync);
 
