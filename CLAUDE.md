@@ -6,9 +6,9 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-05)
+## Current branch and state (as of 2026-06-06)
 
-**Branch:** `feature/three-tier-sync` at origin `270bfa8`.
+**Branch:** `feature/three-tier-sync` at origin `24b0fa5`.
 **libkalburator pin:** `v0.65` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`).
 **ctest:** **117/120 pass.**
@@ -48,20 +48,20 @@ A "Clobber Palm from PC" Tools-menu mode that wipes selected Palm-side PIM datab
 | 10: PalmRuntime::clobberSync | Done | `39247e0` |
 | 11: kf6 menu rewire | Done | `270bfa8` |
 | 12: device-backed hardware verification | **PENDING** | — |
+| Phase B consistency (contacts/memo/todos on `wipePalmDatabase`) | **Done 2026-06-06** | `24b0fa5` |
 
 ### Outstanding work on this feature
 
 **1. Hardware verification (Plan Task 12) — not yet run.**
 The full freshen-Palm loop on a real Palm device (the user's original ask) is unverified. Procedure documented at the end of the plan doc. Until this runs, treat the feature as "lands clean on CI but unverified on hardware."
 
-**2. Phase B consistency pass — deferred.**
-Tasks 5 (calendar) and 6/7/8 (contacts/memo/todos) ship inconsistent implementations:
-- **Calendar** uses the fast path: `PalmBackend::wipePalmDatabase(name)` → `deleteDatabase` + `createDatabase` + `invalidateCache`.
-- **Contacts, Memo, ToDo** use the per-record loop equivalent: `loadPalmRecords(name)` + per-record `deletePalmRecord(name, id)`.
+**2. ~~Phase B consistency pass — deferred.~~ DONE 2026-06-06 at `24b0fa5`.**
+All four PalmBackend conduits now use the `PalmBackend::wipePalmDatabase(name)` fast path (`deleteDatabase` + `createDatabase` + `invalidateCache`). Each conduit submodule also has WP-side `tst_<conduit>blobbackend.cpp::wipeCollection_clears_palm_<conduit>_database` coverage of the contract.
 
-Both are functionally correct (meet `IBlobBackend::wipeCollection`'s contract: collection emptied, still exists), but inconsistency is a smell. The follow-up brings 6/7/8 onto the `wipePalmDatabase` helper.
-
-Also deferred: WP-side `tst_<conduit>blobbackend.cpp` tests for contacts/memo/todos similar to the calendar one that landed in `675aaf7`. The Task 5 agent landed that pattern; the other three agents couldn't because of how I scoped their prompts (they thought they couldn't touch WP `tests/`).
+Submodule gitlink bumps in `24b0fa5`:
+- contacts: `85105f2` → `3944981`
+- memo: `5a95226` → `c7c7f97`
+- todos: `649553e` → `10c4466`
 
 **3. `dlp_DeleteDB` + `dlp_CreateDB` hardware fast path.**
 The `IPalmDatabaseAccess::deleteDatabase` default impl is loop-delete; the pilot-link concrete impl doesn't override it yet. For real-device clobber, wiring true `dlp_DeleteDB`/`dlp_CreateDB` (with correct creator/type IDs — `date`/`DATA`, `addr`/`DATA`, `memo`/`DATA`, `todo`/`DATA`) into `KPilotLink` / `KPilotDeviceLink` is a small follow-up that lets the device avoid N round-trips per wipe.
@@ -101,13 +101,9 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 
 Hardware verification of clobber-sync (Plan Task 12) is the user's bottleneck until they're back at a real Palm. Until then, these are concrete, no-hardware-needed tasks:
 
-### A. Phase B consistency for clobber-sync (small, ~1-2 hours)
+### ~~A. Phase B consistency for clobber-sync~~ — DONE 2026-06-06 at `24b0fa5`
 
-Bring contacts/memo/todos onto the `PalmBackend::wipePalmDatabase` helper that calendar already uses; add WP-side `wipeCollection_clears_palm_<conduit>_database` tests for each, modeled on the one in `tests/plugins/calendar/tst_calendarblobbackend.cpp`. Each conduit needs:
-
-- One submodule commit replacing the per-record loop with `m_palmBackend->wipePalmDatabase(<dbName>)`.
-- One WP-side test in `tests/plugins/<conduit>/tst_<conduit>backendplugin.cpp`.
-- One gitlink bump in the superproject (can batch all three).
+All four conduits now use `PalmBackend::wipePalmDatabase` and have WP-side `wipeCollection_clears_palm_<conduit>_database` tests. See the clobber-sync Plan progress table above.
 
 ### B. Finalize and ship the FilteredCollectionBackend RFC
 
