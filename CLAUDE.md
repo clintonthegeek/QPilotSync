@@ -97,6 +97,50 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 
 ---
 
+## Ready to work on next (no hardware required)
+
+Hardware verification of clobber-sync (Plan Task 12) is the user's bottleneck until they're back at a real Palm. Until then, these are concrete, no-hardware-needed tasks:
+
+### A. Phase B consistency for clobber-sync (small, ~1-2 hours)
+
+Bring contacts/memo/todos onto the `PalmBackend::wipePalmDatabase` helper that calendar already uses; add WP-side `wipeCollection_clears_palm_<conduit>_database` tests for each, modeled on the one in `tests/plugins/calendar/tst_calendarblobbackend.cpp`. Each conduit needs:
+
+- One submodule commit replacing the per-record loop with `m_palmBackend->wipePalmDatabase(<dbName>)`.
+- One WP-side test in `tests/plugins/<conduit>/tst_<conduit>backendplugin.cpp`.
+- One gitlink bump in the superproject (can batch all three).
+
+### B. Finalize and ship the FilteredCollectionBackend RFC
+
+`docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` has been in active editing all session (+177/-48 unstaged on the 354-line file). It's an RFC for libkalburator to add a generic `RecordFilter` + `FilteredCollectionBackend` primitive for property-based slicing of a hub collection — needed for WP's hub-and-spoke remote routing by `categories`. PlanStan benefits too. Status header reads "Proposal / RFC — requesting a small, focused addition." When the user is ready, finishing the edits and shipping as a handoff (same pattern as the clobber-sync RFC) unblocks libkalburator from starting the work.
+
+### C. Triage the three pre-existing v0.63 test failures
+
+`tst_palm_runtime_route_first_sync`, `tst_palm_runtime_route_recategorization`, `tst_runtime_carddav_e2e`. The triage doc at `docs/2026-06-04-v0.63-pin-bump-test-regressions.md` enumerates hypotheses; the leading one (and what the Task 10 clobber agent confirmed by working around it) is that `BlobSyncBackendWrapper::wrap()` doesn't satisfy the post-Plan-3 `SyncBackendBase` contract. Fixing the wrapper would likely fix all three tests in one shot and remove the workaround Task 10 had to do in its own test path.
+
+### D. Brainstorm the hub↔remote-only sync gap
+
+Surfaced during clobber-sync brainstorming, this is the real bug that a user who edits a record in the WildPalms UI cannot propagate that edit to a cloud spoke without connecting a Palm. Three-tier-sync architecture promises "hub buffers Palm edits and propagates to remotes when reachable" — the propagation half is wired only through hot/full-sync today. Worth its own spec → plan flow.
+
+### E. Optional — `dlp_DeleteDB`/`dlp_CreateDB` hardware fast path
+
+`IPalmDatabaseAccess::deleteDatabase` default impl is loop-delete; the pilot-link concrete impl in `src/palm/kpilotlink*.cpp` doesn't override yet. Wiring real DLP calls (with creator IDs `date`/`addr`/`memo`/`todo`, type `DATA`) into `KPilotLink` is implementation work that can ship without device validation, then get validated alongside Task 12. Speeds up real-device clobber from O(N) round-trips to O(1).
+
+---
+
+## Open handoff/RFC docs worth tracking
+
+These either need a libkalburator response or sit on the WP-edit pile:
+
+| Doc | Direction | Status |
+|---|---|---|
+| `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | Open RFC; **actively edited (item B above)**; unstaged +177 lines |
+| `2026-05-27-libkalburator-topology-authority-proposal.md` | WP → lib | Open RFC; the hub editability authority/demotion question. No response yet from lib AFAICT. |
+| `2026-05-26-calendar-writer-palmwire-parse-handoff-libkalburator.md` | WP → lib | Labeled "Blocker for CalDAV→Palm calendar sync"; status not re-verified this session |
+
+The DAV-config-integration handoff (`2026-05-26-dav-config-integration-handoff-from-libkalburator.md`) is closed — `AccountFormWidget` already bridges `IProviderConfigWidget` (verified `src/app/accounts/accountformwidget.cpp:117-119, 157-159`).
+
+---
+
 ## Long-running unstaged file
 
-`docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` carries +177/-48 of WIP edits stashed-and-popped repeatedly throughout this session. Leave it on the working tree; don't accidentally commit it as part of unrelated work.
+`docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` carries +177/-48 of WIP edits (item B above). Leave it on the working tree if not actively shipping; don't accidentally commit it as part of unrelated work.
