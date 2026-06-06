@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <algorithm>
+#include <array>
 #include <QDateTime>
 #include <QHash>
 #include <QSet>
@@ -65,6 +66,10 @@
 #include "standardcontributions.h"
 
 namespace {
+
+constexpr std::array<const char*, 4> kPalmBackendIds = {
+    "calendar", "contacts", "memo", "todo"
+};
 
 static QString sanitizeForFilesystem(const QString &id)
 {
@@ -776,6 +781,29 @@ QList<QString> PalmRuntime::enabledPluginIds() const {
 
 QList<Kalburator::Sync::SyncMapping> PalmRuntime::palmMappings() const {
     return m_mappings;
+}
+
+bool PalmRuntime::isPalmDirectMapping(
+    const Kalburator::Sync::SyncMapping &m) const
+{
+    for (const char *id : kPalmBackendIds) {
+        if (m.targetBackend == QLatin1String(id))
+            return true;
+    }
+    return false;
+}
+
+QList<QString> PalmRuntime::palmDirectMappingsForDomain(
+    const QString &domain) const
+{
+    QList<QString> ids;
+    for (const auto &m : m_mappings) {
+        if (!m.enabled) continue;
+        if (m.targetBackend != domain) continue;
+        if (!isPalmDirectMapping(m)) continue;
+        ids.append(m.id);
+    }
+    return ids;
 }
 
 void PalmRuntime::resolveMappingIdentity(const QString &mappingId,

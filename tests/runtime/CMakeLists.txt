@@ -202,6 +202,30 @@ set_tests_properties(tst_palm_runtime_reload_mappings PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Clobber-sync Task 3: PalmRuntime mapping classification helpers.
+# Pure in-memory unit test on palmDirectMappingsForDomain / isPalmDirectMapping
+# — mirrors tst_palm_runtime_reload_mappings' link set.
+add_executable(tst_palm_mapping_classification
+    tst_palm_mapping_classification.cpp)
+target_link_libraries(tst_palm_mapping_classification
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        Kalburator::Sync
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_mapping_classification
+    COMMAND tst_palm_mapping_classification)
+set_tests_properties(tst_palm_mapping_classification PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # M5b Task 3: defaults guard — connectDevice skips defaults if mappings present
 add_executable(tst_palm_runtime_default_mappings_only_when_empty
     tst_palm_runtime_default_mappings_only_when_empty.cpp)

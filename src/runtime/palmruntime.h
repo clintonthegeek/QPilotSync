@@ -111,6 +111,16 @@ public:
     QList<QString> enabledPluginIds() const;
     QList<Kalburator::Sync::SyncMapping> palmMappings() const;
 
+    /// Returns the IDs of all enabled mappings whose target backend is the
+    /// Palm-side blob backend for the given domain (e.g. "calendar",
+    /// "contacts", "memo", "todo"). Used by ClobberDialog to populate
+    /// per-conduit checkboxes; the engine never consumes this.
+    QList<QString> palmDirectMappingsForDomain(const QString &domain) const;
+
+    /// Returns true iff the given mapping is Palm-direct (targets one of
+    /// the Palm-side blob backends). Exposed mostly for testing.
+    bool isPalmDirectMapping(const Kalburator::Sync::SyncMapping &m) const;
+
     bool isRunning() const { return m_running; }
 
     /// Read-only view of the loaded Palm plugin instances.
