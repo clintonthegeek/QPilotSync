@@ -48,6 +48,10 @@ add_library(WildPalmsRuntime STATIC
     # hub↔remote routing Task 2 — pure translator: persisted SyncMapping → RouteSpec
     routemapping.h
     routemapping.cpp
+    # Clobber-sync Task 4 — modal dialog for per-conduit Palm-clobber
+    # selection. Pure Qt::Widgets; no engine/device knowledge.
+    clobberdialog.h
+    clobberdialog.cpp
 )
 
 target_sources(WildPalmsRuntime PRIVATE

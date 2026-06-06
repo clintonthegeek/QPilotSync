@@ -1023,6 +1023,28 @@ set_tests_properties(tst_palm_runtime_emits_sync_completed PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Clobber-sync Task 4: ClobberDialog modal — per-conduit checkboxes drive
+# selectedMappingIds(). Uses QTEST_MAIN (full QApplication) because the
+# dialog needs Qt::Widgets.
+add_executable(tst_clobber_dialog tst_clobber_dialog.cpp)
+target_link_libraries(tst_clobber_dialog
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_clobber_dialog COMMAND tst_clobber_dialog)
+set_tests_properties(tst_clobber_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # hub↔remote routing Task 2: translateRouteSpec — pure translator + unit tests.
 # Links WildPalmsRuntime + Kalburator::Sync directly (not WildPalmsCore) so
 # that #include "synctypes.h" resolves to libkalburator's Kalburator::Sync
