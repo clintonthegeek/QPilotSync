@@ -13,15 +13,20 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`).
 **ctest:** **117/120 pass.**
 
-### The three known failures (all pre-existing, all deferred)
+### The three known failures (root cause confirmed 2026-06-06; deferred on a libkalburator-side fix)
 
-Same root cause: `dynamic_cast<SyncBackend*>` returns null because Plan 3 reparented non-calendar backends to `SyncBackendBase`. The test harnesses use the older cast.
+**Confirmed root cause:** libkalburator's `dispatchSync` (and four sibling sites) still fetches backends via `m_controller->backendById()` returning `SyncBackend*`. Post-Plan-3 the canonical hub (`GenericSqliteBackend`), CardDAV (`RemoteContactsBackend`), and other backends inherit ONLY `SyncBackendBase`. WP's `PalmSyncHost::backendById` does a type-correct `dynamic_cast<SyncBackend*>` on the registry entry and returns nullptr for those backends — and every WP mapping uses `wp-hub` (the canonical hub) on at least one side. The engine bails with `"dispatchSync: backend not found"` and the future resolves false.
 
 - `tst_palm_runtime_route_first_sync`
 - `tst_palm_runtime_route_recategorization`
 - `tst_runtime_carddav_e2e`
 
-Triage doc: `docs/2026-06-04-v0.63-pin-bump-test-regressions.md`. Do NOT count these as your regressions.
+Same engine error message for all three. The fix is libkalburator-side: switch the five sites (`syncengine.cpp:1526, 1709, 1868, 1931, 2592`) from `m_controller->backendById(id)` to `m_registry->backendInstance(id)` (returning `SyncBackendBase*`), matching the pattern six other engine sites already follow.
+
+Handoff RFC: `docs/2026-06-06-libkalburator-dispatchsync-backendbyid-regression.md`.
+Triage detail: `docs/2026-06-04-v0.63-pin-bump-test-regressions.md` (updated 2026-06-06 with confirmed root cause).
+
+Do NOT count these as your regressions.
 
 ---
 
@@ -109,9 +114,9 @@ All four conduits now use `PalmBackend::wipePalmDatabase` and have WP-side `wipe
 
 `docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` has been in active editing all session (+177/-48 unstaged on the 354-line file). It's an RFC for libkalburator to add a generic `RecordFilter` + `FilteredCollectionBackend` primitive for property-based slicing of a hub collection — needed for WP's hub-and-spoke remote routing by `categories`. PlanStan benefits too. Status header reads "Proposal / RFC — requesting a small, focused addition." When the user is ready, finishing the edits and shipping as a handoff (same pattern as the clobber-sync RFC) unblocks libkalburator from starting the work.
 
-### C. Triage the three pre-existing v0.63 test failures
+### ~~C. Triage the three pre-existing v0.63 test failures~~ — DONE 2026-06-06; handed off to libkalburator
 
-`tst_palm_runtime_route_first_sync`, `tst_palm_runtime_route_recategorization`, `tst_runtime_carddav_e2e`. The triage doc at `docs/2026-06-04-v0.63-pin-bump-test-regressions.md` enumerates hypotheses; the leading one (and what the Task 10 clobber agent confirmed by working around it) is that `BlobSyncBackendWrapper::wrap()` doesn't satisfy the post-Plan-3 `SyncBackendBase` contract. Fixing the wrapper would likely fix all three tests in one shot and remove the workaround Task 10 had to do in its own test path.
+Root cause confirmed and wrong-hypothesis disproved (`BlobSyncBackendWrapper` is fine). Real cause: libkalburator's `dispatchSync` (+ 4 sibling sites) still uses `m_controller->backendById()` returning `SyncBackend*`, which can't satisfy `SyncBackendBase`-only backends like `wp-hub` (`GenericSqliteBackend`) — the engine bails with `"dispatchSync: backend not found"`. See `docs/2026-06-06-libkalburator-dispatchsync-backendbyid-regression.md` for the handoff RFC and `docs/2026-06-04-v0.63-pin-bump-test-regressions.md` for the full triage detail. Once libkalburator lands the five-site `m_registry->backendInstance()` switch and tags, WP pin-bumps and the three tests turn green automatically.
 
 ### D. Brainstorm the hub↔remote-only sync gap
 
