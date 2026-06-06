@@ -34,6 +34,9 @@ private slots:
     void domainCollection_nativeShapeIsNotePalm();
     void collectionInfo_returnsRequestedId();
 
+    // Clobber-sync: wipeCollection override
+    void wipeCollection_clears_palm_memo_database();
+
 private:
     std::uint32_t seedMemo(MockPalmDatabaseAccess *dev,
                            const QString &text,
@@ -301,6 +304,31 @@ void TestMemoBlobBackend::domainCollection_nativeShapeIsNotePalm()
     QVERIFY(!shapes.isEmpty());
     QCOMPARE(shapes.first().domain.toString(), QStringLiteral("note"));
     QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
+}
+
+void TestMemoBlobBackend::wipeCollection_clears_palm_memo_database()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("MemoDB"));
+    // Pre-seed records across multiple category slots — wipe is a
+    // database-level op, so every record should disappear regardless
+    // of slot.
+    seedMemo(&dev, QStringLiteral("first"),  0, /*isPrivate=*/false);
+    seedMemo(&dev, QStringLiteral("second"), 1, /*isPrivate=*/false);
+    seedMemo(&dev, QStringLiteral("third"),  5, /*isPrivate=*/true);
+
+    PalmBackend pb(&dev);
+    MemoBlobBackend mb(&pb);
+
+    QCOMPARE(mb.loadRecords(QStringLiteral("palm:note")).size(), 3);
+
+    QVERIFY(mb.wipeCollection(QStringLiteral("palm:note")));
+
+    // Database recreated empty — distinct from "DB gone" so the next
+    // push has a target.
+    QVERIFY(dev.hasDatabase(QStringLiteral("MemoDB")));
+    QCOMPARE(dev.readAllRecords(QStringLiteral("MemoDB")).size(), 0);
+    QCOMPARE(mb.loadRecords(QStringLiteral("palm:note")).size(), 0);
 }
 
 QTEST_MAIN(TestMemoBlobBackend)

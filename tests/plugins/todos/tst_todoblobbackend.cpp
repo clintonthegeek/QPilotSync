@@ -54,6 +54,9 @@ private slots:
     void domainCollection_availableCollectionsIncludesDomainId();
     void domainCollection_loadRecordsReturnsAllCategories();
     void domainCollection_nativeShapeIsTodoPalm();
+
+    // Clobber-sync: wipeCollection override
+    void wipeCollection_clears_palm_todo_database();
 };
 
 void TestTodoBlobBackend::backendIdentity()
@@ -301,6 +304,32 @@ void TestTodoBlobBackend::domainCollection_nativeShapeIsTodoPalm()
     QVERIFY(!shapes.isEmpty());
     QCOMPARE(shapes.first().domain.toString(), QStringLiteral("todo"));
     QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
+}
+
+void TestTodoBlobBackend::wipeCollection_clears_palm_todo_database()
+{
+    MockPalmDatabaseAccess device;
+    device.createDatabase(QStringLiteral("ToDoDB"));
+    // Pre-seed records across multiple category slots — wipe is a
+    // database-level op, so every record should disappear regardless
+    // of slot.
+    device.createRecord(QStringLiteral("ToDoDB"), makeTodo(1, 0, QStringLiteral("alpha")));
+    device.createRecord(QStringLiteral("ToDoDB"), makeTodo(2, 1, QStringLiteral("beta")));
+    device.createRecord(QStringLiteral("ToDoDB"), makeTodo(3, 5, QStringLiteral("gamma")));
+
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    TodoBlobBackend be(&palm, &store);
+
+    QCOMPARE(be.loadRecords(QStringLiteral("palm:todo")).size(), 3);
+
+    QVERIFY(be.wipeCollection(QStringLiteral("palm:todo/0")));
+
+    // Database recreated empty — distinct from "DB gone" so the next
+    // push has a target.
+    QVERIFY(device.hasDatabase(QStringLiteral("ToDoDB")));
+    QCOMPARE(device.readAllRecords(QStringLiteral("ToDoDB")).size(), 0);
+    QCOMPARE(be.loadRecords(QStringLiteral("palm:todo")).size(), 0);
 }
 
 QTEST_MAIN(TestTodoBlobBackend)

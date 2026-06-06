@@ -62,6 +62,9 @@ private slots:
     void domainCollection_availableCollectionsIncludesDomainId();
     void domainCollection_loadRecordsReturnsAllCategories();
     void domainCollection_nativeShapeIsContactsPalm();
+
+    // Clobber-sync: wipeCollection override
+    void wipeCollection_clears_palm_contacts_database();
 };
 
 void TestPalmContactsBackend::nativeShapes_returnsContactsPalm()
@@ -443,6 +446,32 @@ void TestPalmContactsBackend::domainCollection_nativeShapeIsContactsPalm()
     QVERIFY(!shapes.isEmpty());
     QCOMPARE(shapes.first().domain.toString(), QStringLiteral("contacts"));
     QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
+}
+
+void TestPalmContactsBackend::wipeCollection_clears_palm_contacts_database()
+{
+    MockPalmDatabaseAccess device;
+    device.createDatabase(QStringLiteral("AddressDB"));
+    // Pre-seed records across multiple category slots — wipe is a
+    // database-level op, so every record should disappear regardless
+    // of slot.
+    device.createRecord(QStringLiteral("AddressDB"), makeContact(1, 0, QStringLiteral("Apple")));
+    device.createRecord(QStringLiteral("AddressDB"), makeContact(2, 1, QStringLiteral("Banana")));
+    device.createRecord(QStringLiteral("AddressDB"), makeContact(3, 5, QStringLiteral("Cherry")));
+
+    PalmBackend palm(&device);
+    CategoryMappingStore store;
+    PalmContactsBackend be(&palm, &store);
+
+    QCOMPARE(be.loadRecords(QStringLiteral("palm:contacts")).size(), 3);
+
+    QVERIFY(be.wipeCollection(QStringLiteral("palm:contacts/0")));
+
+    // Database recreated empty — distinct from "DB gone" so the next
+    // push has a target.
+    QVERIFY(device.hasDatabase(QStringLiteral("AddressDB")));
+    QCOMPARE(device.readAllRecords(QStringLiteral("AddressDB")).size(), 0);
+    QCOMPARE(be.loadRecords(QStringLiteral("palm:contacts")).size(), 0);
 }
 
 QTEST_MAIN(TestPalmContactsBackend)
