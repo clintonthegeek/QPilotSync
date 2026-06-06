@@ -1956,14 +1956,15 @@ void KF6MainWindow::onCopyPalmToPC()
 
 void KF6MainWindow::onCopyPCToPalm()
 {
-    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
-        m_logWidget->logError(i18n("CopyPCToPalm: no Palm device connected"));
-        return;
-    }
-    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
-    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
-            watcher, &QObject::deleteLater);
-    watcher->setFuture(m_palmRuntime->copyPCToPalm());
+    // Clobber-sync Task 10: copyPCToPalm() runtime method deleted (subsumed
+    // by clobberSync). Task 11 will rewire this slot to onClobberPalmFromPC
+    // with a ClobberDialog. Until then, this stub keeps the build green
+    // (the action is still registered in ActionManager) and surfaces a
+    // clear log message if the user happens to invoke it.
+    if (m_logWidget)
+        m_logWidget->logError(i18n("Copy PC -> Palm: action retired; "
+                                   "the replacement Clobber Palm from PC "
+                                   "menu item lands with Task 11."));
 }
 
 void KF6MainWindow::onBackup()

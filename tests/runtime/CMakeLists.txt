@@ -1023,6 +1023,29 @@ set_tests_properties(tst_palm_runtime_emits_sync_completed PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Clobber-sync Task 10: PalmRuntime::clobberSync entry point.
+# Smokes the SyncEngine dispatch path with ExecutionOverride::clobber=true.
+# Mirrors tst_palm_runtime_modes' link set (full Palm stack + WHOLE_ARCHIVE
+# Kalburator::Sync so the static DomainPlugin registrars are pulled in).
+add_executable(tst_palm_runtime_clobber_sync tst_palm_runtime_clobber_sync.cpp)
+target_link_libraries(tst_palm_runtime_clobber_sync
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_runtime_clobber_sync COMMAND tst_palm_runtime_clobber_sync)
+set_tests_properties(tst_palm_runtime_clobber_sync PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # Clobber-sync Task 4: ClobberDialog modal — per-conduit checkboxes drive
 # selectedMappingIds(). Uses QTEST_MAIN (full QApplication) because the
 # dialog needs Qt::Widgets.

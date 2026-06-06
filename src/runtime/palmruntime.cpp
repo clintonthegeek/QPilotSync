@@ -16,6 +16,7 @@
 
 #include "backendregistry.h"
 #include "syncengine.h"
+#include "syncrequest.h"
 #include "conflicthandlerregistry.h"
 #include "syncbackend.h"
 #include "synctypes.h"
@@ -1078,9 +1079,88 @@ QFuture<PalmRunResult> PalmRuntime::copyPalmToPC()
     return runMirror(MirrorDir::PalmToPC, QStringLiteral("CopyPalmToPC"));
 }
 
-QFuture<PalmRunResult> PalmRuntime::copyPCToPalm()
+QFuture<PalmRunResult> PalmRuntime::clobberSync(const QList<QString> &mappingIds)
 {
-    return runMirror(MirrorDir::PCToPalm, QStringLiteral("CopyPCToPalm"));
+    const auto kLabel = QStringLiteral("ClobberSync");
+    Q_EMIT runStarted(kLabel);
+
+    if (mappingIds.isEmpty())
+        return makeSuccessFuture();
+
+    Kalburator::Sync::SyncRequest req;
+    req.mappingIds = mappingIds;
+    req.behavior   = Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored;
+
+    Kalburator::Sync::ExecutionOverride ov;
+    ov.clobber = true;
+    req.executionOverride = ov;
+
+    auto engineFuture = m_engine->runSync(req);
+
+    // Same cancellation-watcher pattern as runAllMappings.
+    if (m_activeSyncWatcher) {
+        m_activeSyncWatcher->cancel();
+        m_activeSyncWatcher->deleteLater();
+    }
+    m_activeSyncWatcher = new QFutureWatcher<void>(this);
+    QObject::connect(m_activeSyncWatcher,
+                     &QFutureWatcher<void>::finished, this, [this]() {
+        if (m_activeSyncWatcher) {
+            m_activeSyncWatcher->deleteLater();
+            m_activeSyncWatcher = nullptr;
+        }
+    });
+    m_activeSyncWatcher->setFuture(engineFuture);
+
+    return engineFuture.then(
+        [this, ids = mappingIds](QList<Kalburator::Sync::SyncResult> results) {
+            PalmRunResult r;
+            r.startTime = QDateTime::currentDateTimeUtc();
+            r.success = std::all_of(results.begin(), results.end(),
+                [](const auto &sr){ return sr.success; });
+            if (!r.success) {
+                for (const auto &sr : results) {
+                    if (!sr.success) {
+                        r.errorMessage = sr.errorMessage;
+                        break;
+                    }
+                }
+            }
+            // Multi-domain reporting: aggregate per target backend.
+            // SyncResult does not carry the target backend id directly,
+            // so look it up from the request's mappings (results align
+            // by index with the dispatched ids).
+            for (int i = 0; i < results.size(); ++i) {
+                const auto &sr = results[i];
+                PalmRunResult::PluginStats stats;
+                stats.created   = sr.targetStats.created;
+                stats.updated   = sr.targetStats.updated;
+                stats.deleted   = sr.targetStats.deleted;
+                stats.unchanged = sr.targetStats.unchanged;
+                stats.errors    = sr.success ? 0 : 1;
+                QString key;
+                if (i < ids.size()) {
+                    const QString &mid = ids[i];
+                    for (const auto &m : m_mappings) {
+                        if (m.id == mid) {
+                            key = m.targetBackend;
+                            break;
+                        }
+                    }
+                }
+                if (key.isEmpty())
+                    key = QStringLiteral("clobber");
+                r.perPluginStats.insert(key, stats);
+            }
+            r.endTime = QDateTime::currentDateTimeUtc();
+            QMetaObject::invokeMethod(this, [this, r]() {
+                if (m_device) m_device->flushWrites();
+                if (m_device) m_device->resumeTickle();
+                Q_EMIT runFinished(r);
+                Q_EMIT syncCompleted();
+            });
+            return r;
+        });
 }
 
 QFuture<PalmRunResult> PalmRuntime::backup()

@@ -88,7 +88,7 @@ public:
     /// Cancel an in-progress connect.
     void cancelConnect();
 
-    /// Cancel a running hotSync / fullSync / copyPalmToPC / copyPCToPalm.
+    /// Cancel a running hotSync / fullSync / copyPalmToPC / clobberSync.
     /// Routes QFutureWatcher::cancel() into SyncEngine::onCancelObserved.
     /// No-op if no sync is running.
     void cancelSync();
@@ -104,7 +104,11 @@ public:
     QFuture<PalmRunResult> hotSync();
     QFuture<PalmRunResult> fullSync();
     QFuture<PalmRunResult> copyPalmToPC();
-    QFuture<PalmRunResult> copyPCToPalm();
+    /// Wipe selected Palm-side databases and re-push hub data in one
+    /// operation. mappingIds must reference Palm-direct mappings only;
+    /// callers should filter via palmDirectMappingsForDomain(). Returns
+    /// per-mapping success/stats via the standard PalmRunResult shape.
+    QFuture<PalmRunResult> clobberSync(const QList<QString> &mappingIds);
     QFuture<PalmRunResult> backup();
     QFuture<PalmRunResult> restore();
 
@@ -224,7 +228,7 @@ signals:
     void conflictDetected(const Kalburator::Sync::ConflictInfo &info);
 
     /// Emitted after every sync run (hotSync / fullSync /
-    /// copyPalmToPC / copyPCToPalm / backup / restore). Sub-project D
+    /// copyPalmToPC / clobberSync / backup / restore). Sub-project D
     /// views connect to this in createMainView to drive
     /// view->refresh(). Fires once per QFuture returned by the public
     /// sync methods.
