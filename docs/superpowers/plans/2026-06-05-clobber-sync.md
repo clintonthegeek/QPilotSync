@@ -1,5 +1,7 @@
 # Clobber-Sync Implementation Plan
 
+> **Status (2026-06-05):** Tasks 1–11 LANDED on `feature/three-tier-sync` (tip `270bfa8`). Hardware verification (Task 12) PENDING. Consistency follow-ups noted in `CLAUDE.md`. See `CLAUDE.md` "What just landed: clobber-sync feature" for the current state; this plan stays as authored for historical reference.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a Tools-menu "Clobber Palm from PC" mode that wipes selected Palm-side PIM databases and re-pushes from the hub in one operation, enabling repeatable freshen-Palm test loops and exposing a general "freshen Palm from desktop" capability to end users.
