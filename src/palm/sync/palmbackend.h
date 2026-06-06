@@ -97,6 +97,17 @@ public:
     /// CategoryMappingStore at session start.
     QByteArray readAppBlock(const QString &dbName) const;
 
+    /// Drop+recreate a Palm-side database. The clobber-sync flow uses
+    /// this on the plugin's classic DB name (e.g. "DatebookDB") to
+    /// produce an empty target before re-pushing hub data. Idempotent:
+    /// if the DB doesn't exist, recreates it; if it does, removes all
+    /// records (via IPalmDatabaseAccess::deleteDatabase) and recreates.
+    /// Invalidates the per-DB record cache on success.
+    /// Returns true on success; false on any failure of the underlying
+    /// delete or create call (in which case device state is
+    /// indeterminate — caller should treat the mapping as failed).
+    bool wipePalmDatabase(const QString &dbName);
+
     /// Drop cached records for one database (or all if dbName is empty).
     /// Mutators call this automatically for the affected dbName; callers
     /// that bypass this backend to change device state should call it

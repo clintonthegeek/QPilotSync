@@ -53,6 +53,9 @@ private slots:
     void domainCollection_availableCollectionsIncludesDomainId();
     void domainCollection_loadRecordsReturnsAllCategories();
     void domainCollection_nativeShapeIsCalendarPalm();
+
+    // Clobber-sync: wipeCollection override
+    void wipeCollection_clears_palm_calendar_database();
 };
 
 void TestPalmCalendarBackend::backendIdAndDisplayName()
@@ -321,6 +324,34 @@ void TestPalmCalendarBackend::domainCollection_nativeShapeIsCalendarPalm()
     QVERIFY(!shapes.isEmpty());
     QCOMPARE(shapes.first().domain.toString(), QStringLiteral("calendar"));
     QCOMPARE(shapes.first().encoding.toString(), QStringLiteral("palm"));
+}
+
+void TestPalmCalendarBackend::wipeCollection_clears_palm_calendar_database()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase(QStringLiteral("DatebookDB"));
+    // Pre-seed records across multiple category slots — wipe is a
+    // database-level op, so every record should disappear regardless
+    // of slot.
+    dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("a", 0));
+    dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("b", 1));
+    dev.createRecord(QStringLiteral("DatebookDB"), eventRecord("c", 5));
+
+    PalmBackend pb(&dev);
+    CategoryMappingStore store;
+    PalmCalendarBackend backend(&pb, &store);
+
+    // Sanity: backend currently sees 3 records on the domain collection.
+    QCOMPARE(backend.loadRecords(QStringLiteral("palm:calendar")).size(), 3);
+
+    QVERIFY(backend.wipeCollection(QStringLiteral("palm:calendar/0")));
+
+    // Database recreated empty — distinct from "DB gone" so the next
+    // push has a target.
+    QVERIFY(dev.hasDatabase(QStringLiteral("DatebookDB")));
+    QCOMPARE(dev.readAllRecords(QStringLiteral("DatebookDB")).size(), 0);
+    // Backend agrees — confirms cache invalidation in wipePalmDatabase.
+    QCOMPARE(backend.loadRecords(QStringLiteral("palm:calendar")).size(), 0);
 }
 
 QTEST_MAIN(TestPalmCalendarBackend)

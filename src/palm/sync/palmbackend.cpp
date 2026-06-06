@@ -327,6 +327,15 @@ QByteArray PalmBackend::readAppBlock(const QString &dbName) const
     return m_device ? m_device->readAppBlock(dbName) : QByteArray();
 }
 
+bool PalmBackend::wipePalmDatabase(const QString &dbName)
+{
+    if (!m_device) return false;
+    const bool deleted = m_device->deleteDatabase(dbName);
+    const bool recreated = m_device->createDatabase(dbName);
+    invalidateCache(dbName);
+    return deleted && recreated;
+}
+
 void PalmBackend::invalidateCache(const QString &dbName)
 {
     if (dbName.isEmpty()) m_palmRecordsCache.clear();

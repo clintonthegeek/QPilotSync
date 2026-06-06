@@ -38,6 +38,21 @@ public:
     /// database already exists.
     virtual bool createDatabase(const QString &dbName) = 0;
 
+    /// Delete a database (and all its records) from the device. Returns
+    /// true on success. Returns true if the database did not exist
+    /// (idempotent). Used by the clobber-sync flow: backend
+    /// wipeCollection overrides issue deleteDatabase + createDatabase to
+    /// produce an empty target for re-push. Default implementation is a
+    /// best-effort loop-delete via readAllRecords + deleteRecord so
+    /// existing impls remain conforming without modification.
+    virtual bool deleteDatabase(const QString &dbName) {
+        bool ok = true;
+        for (const auto &rec : readAllRecords(dbName)) {
+            ok = deleteRecord(dbName, rec.recordId) && ok;
+        }
+        return ok;
+    }
+
     /// All records from a database. Order is implementation-defined;
     /// PalmBackend does not rely on ordering.
     virtual QList<PalmRecord> readAllRecords(const QString &dbName) const = 0;

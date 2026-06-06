@@ -20,6 +20,15 @@ bool MockPalmDatabaseAccess::createDatabase(const QString &dbName)
     return true;
 }
 
+bool MockPalmDatabaseAccess::deleteDatabase(const QString &dbName)
+{
+    // Idempotent: absent → success, present → drop everything (records,
+    // deletion log, appInfo). Mirrors DLP dlp_DeleteDB semantics where
+    // the database itself goes away.
+    m_dbs.remove(dbName);
+    return true;
+}
+
 QList<PalmRecord> MockPalmDatabaseAccess::readAllRecords(
     const QString &dbName) const
 {

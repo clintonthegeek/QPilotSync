@@ -28,6 +28,7 @@ public:
     QStringList availableDatabases() const override;
     bool hasDatabase(const QString &dbName) const override;
     bool createDatabase(const QString &dbName) override;
+    bool deleteDatabase(const QString &dbName) override;
 
     QList<PalmRecord> readAllRecords(const QString &dbName) const override;
     std::optional<PalmRecord> readRecord(const QString &dbName,
