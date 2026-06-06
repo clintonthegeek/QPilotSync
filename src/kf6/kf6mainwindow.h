@@ -156,7 +156,7 @@ private Q_SLOTS:
     void onHotSync();
     void onFullSync();
     void onCopyPalmToPC();
-    void onCopyPCToPalm();
+    void onClobberPalmFromPC();
     void onBackup();
     void onRestore();
     void onChangeSyncFolder();

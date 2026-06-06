@@ -47,7 +47,7 @@ public:
     QAction* hotSyncAction() const { return action(QStringLiteral("sync_hotsync")); }
     QAction* fullSyncAction() const { return action(QStringLiteral("sync_fullsync")); }
     QAction* copyPalmToPCAction() const { return action(QStringLiteral("sync_copy_palm_to_pc")); }
-    QAction* copyPCToPalmAction() const { return action(QStringLiteral("sync_copy_pc_to_palm")); }
+    QAction* clobberPalmFromPCAction() const { return action(QStringLiteral("sync_clobber_palm_from_pc")); }
     QAction* backupAction() const { return action(QStringLiteral("sync_backup")); }
     QAction* restoreAction() const { return action(QStringLiteral("sync_restore")); }
     QAction* changeSyncFolderAction() const { return action(QStringLiteral("sync_change_folder")); }
@@ -93,7 +93,7 @@ Q_SIGNALS:
     void hotSyncRequested();
     void fullSyncRequested();
     void copyPalmToPCRequested();
-    void copyPCToPalmRequested();
+    void clobberPalmFromPCRequested();
     void backupRequested();
     void restoreRequested();
     void changeSyncFolderRequested();

@@ -14,6 +14,7 @@
 #include "../profile.h"
 
 #include "../runtime/accountcontroller.h"
+#include "../runtime/clobberdialog.h"
 #include "../runtime/palmruntime.h"
 #include "../runtime/palmrunresult.h"
 #include "../runtime/profileregistry.h"
@@ -355,8 +356,8 @@ void KF6MainWindow::setupConnections()
             this, &KF6MainWindow::onFullSync);
     connect(m_actionManager, &ActionManager::copyPalmToPCRequested,
             this, &KF6MainWindow::onCopyPalmToPC);
-    connect(m_actionManager, &ActionManager::copyPCToPalmRequested,
-            this, &KF6MainWindow::onCopyPCToPalm);
+    connect(m_actionManager, &ActionManager::clobberPalmFromPCRequested,
+            this, &KF6MainWindow::onClobberPalmFromPC);
     connect(m_actionManager, &ActionManager::backupRequested,
             this, &KF6MainWindow::onBackup);
     connect(m_actionManager, &ActionManager::restoreRequested,
@@ -1954,17 +1955,37 @@ void KF6MainWindow::onCopyPalmToPC()
     watcher->setFuture(m_palmRuntime->copyPalmToPC());
 }
 
-void KF6MainWindow::onCopyPCToPalm()
+void KF6MainWindow::onClobberPalmFromPC()
 {
-    // Clobber-sync Task 10: copyPCToPalm() runtime method deleted (subsumed
-    // by clobberSync). Task 11 will rewire this slot to onClobberPalmFromPC
-    // with a ClobberDialog. Until then, this stub keeps the build green
-    // (the action is still registered in ActionManager) and surfaces a
-    // clear log message if the user happens to invoke it.
-    if (m_logWidget)
-        m_logWidget->logError(i18n("Copy PC -> Palm: action retired; "
-                                   "the replacement Clobber Palm from PC "
-                                   "menu item lands with Task 11."));
+    if (!m_palmRuntime || !m_palmRuntime->isDeviceConnected()) {
+        if (m_logWidget)
+            m_logWidget->logError(i18n("Clobber Palm from PC: no Palm device connected"));
+        return;
+    }
+
+    WildPalms::Runtime::ClobberDialog::DomainMappings dm;
+    for (const auto &domain : {QStringLiteral("calendar"),
+                               QStringLiteral("contacts"),
+                               QStringLiteral("memo"),
+                               QStringLiteral("todo")}) {
+        const auto ids = m_palmRuntime->palmDirectMappingsForDomain(domain);
+        if (!ids.isEmpty()) dm.insert(domain, ids);
+    }
+    if (dm.isEmpty()) {
+        if (m_logWidget)
+            m_logWidget->logError(i18n("Clobber Palm from PC: no Palm-direct mappings configured"));
+        return;
+    }
+
+    WildPalms::Runtime::ClobberDialog dlg(dm, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    const auto ids = dlg.selectedMappingIds();
+    if (ids.isEmpty()) return;
+
+    auto *watcher = new QFutureWatcher<WildPalms::Runtime::PalmRunResult>(this);
+    connect(watcher, &QFutureWatcher<WildPalms::Runtime::PalmRunResult>::finished,
+            watcher, &QObject::deleteLater);
+    watcher->setFuture(m_palmRuntime->clobberSync(ids));
 }
 
 void KF6MainWindow::onBackup()

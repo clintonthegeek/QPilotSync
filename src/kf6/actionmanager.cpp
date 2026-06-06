@@ -138,10 +138,10 @@ void ActionManager::setupSyncActions()
     connect(copyPalmToPC, &QAction::triggered, this, &ActionManager::copyPalmToPCRequested);
     m_actionCollection->addAction(QStringLiteral("sync_copy_palm_to_pc"), copyPalmToPC);
 
-    // Copy PC to Palm
-    QAction *copyPCToPalm = new QAction(i18n("Copy PC → Palm"), this);
-    connect(copyPCToPalm, &QAction::triggered, this, &ActionManager::copyPCToPalmRequested);
-    m_actionCollection->addAction(QStringLiteral("sync_copy_pc_to_palm"), copyPCToPalm);
+    // Clobber Palm from PC (subsumes the old Copy PC to Palm mode)
+    QAction *clobberPalmFromPC = new QAction(i18n("Clobber Palm from PC"), this);
+    connect(clobberPalmFromPC, &QAction::triggered, this, &ActionManager::clobberPalmFromPCRequested);
+    m_actionCollection->addAction(QStringLiteral("sync_clobber_palm_from_pc"), clobberPalmFromPC);
 
     // Backup
     QAction *backup = new QAction(QIcon::fromTheme(QStringLiteral("document-save")),
@@ -248,7 +248,7 @@ void ActionManager::updateConnectionState(bool connected, bool hasProfile)
     hotSyncAction()->setEnabled(canSync);
     fullSyncAction()->setEnabled(canSync);
     copyPalmToPCAction()->setEnabled(canSync);
-    copyPCToPalmAction()->setEnabled(canSync);
+    clobberPalmFromPCAction()->setEnabled(canSync);
     backupAction()->setEnabled(canSync);
     restoreAction()->setEnabled(canSync);
 

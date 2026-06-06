@@ -216,61 +216,10 @@ private slots:
         QVERIFY(!pcFinal.contains(QStringLiteral("rec-B")));
     }
 
-    void copyPCToPalm_overwritesPalm() {
-        QTemporaryDir profileDir;
-        QVERIFY(profileDir.isValid());
+    // copyPCToPalm_overwritesPalm: deleted. The copyPCToPalm() mode was
+    // subsumed by clobberSync() (which adds a pre-wipe phase). The replacement
+    // semantic test is tst_palm_runtime_clobber_sync.cpp.
 
-        PalmRuntime runtime(profileDir.path());
-
-        // PC has rec-A; Palm already has rec-B.
-        auto palmBlob = std::make_unique<MockBlobBackend>();
-        MockBlobBackend *palmRaw = palmBlob.get();
-        {
-            CollectionInfo ci;
-            ci.id   = QStringLiteral("palm-col");
-            ci.name = QStringLiteral("Palm");
-            palmBlob->createCollection(ci);
-            palmBlob->createRecord(QStringLiteral("palm-col"),
-                makeRecord(QStringLiteral("rec-B"),
-                    QByteArray("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                               "BEGIN:VEVENT\r\nUID:rec-B\r\nSUMMARY:B\r\n"
-                               "DTSTART:20260502T090000Z\r\nDTEND:20260502T100000Z\r\n"
-                               "END:VEVENT\r\nEND:VCALENDAR\r\n")));
-        }
-        runtime.registerBackendInstanceForTest(QStringLiteral("palm"),
-            WildPalmsTest::BlobSyncBackendWrapper::wrap(
-                std::move(palmBlob), QStringLiteral("palm")));
-
-        auto pcBlob = std::make_unique<MockBlobBackend>();
-        {
-            CollectionInfo ci;
-            ci.id   = QStringLiteral("pc-col");
-            ci.name = QStringLiteral("PC");
-            pcBlob->createCollection(ci);
-            pcBlob->createRecord(QStringLiteral("pc-col"),
-                makeRecord(QStringLiteral("rec-A"),
-                    QByteArray("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                               "BEGIN:VEVENT\r\nUID:rec-A\r\nSUMMARY:A\r\n"
-                               "DTSTART:20260501T090000Z\r\nDTEND:20260501T100000Z\r\n"
-                               "END:VEVENT\r\nEND:VCALENDAR\r\n")));
-        }
-        runtime.registerBackendInstanceForTest(QStringLiteral("pc"),
-            WildPalmsTest::BlobSyncBackendWrapper::wrap(
-                std::move(pcBlob), QStringLiteral("pc")));
-
-        runtime.setMappingsForTest(
-            {makeTwoWayMapping(QStringLiteral("palm"), QStringLiteral("palm-col"),
-                               QStringLiteral("pc"),   QStringLiteral("pc-col"))});
-
-        auto future = runtime.copyPCToPalm();
-        QTRY_VERIFY_WITH_TIMEOUT(future.isFinished(), 5000);
-        QVERIFY(future.resultAt(0).success);
-
-        // Palm should now have PC's record, not its own.
-        const auto palmFinal = palmRaw->recordsIn(QStringLiteral("palm-col"));
-        QVERIFY(palmFinal.contains(QStringLiteral("rec-A")));
-        QVERIFY(!palmFinal.contains(QStringLiteral("rec-B")));
-    }
 
     void backup_dumpsAllDatabasesAsFiles() {
         QTemporaryDir profileDir;
