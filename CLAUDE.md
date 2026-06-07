@@ -8,25 +8,21 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ## Current branch and state (as of 2026-06-06)
 
-**Branch:** `feature/three-tier-sync` at origin `24b0fa5`.
-**libkalburator pin:** `v0.65` (`CMakeLists.txt:63`).
+**Branch:** `feature/three-tier-sync`.
+**libkalburator pin:** `v0.66` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`).
-**ctest:** **117/120 pass.**
+**ctest:** **120/120 pass.**
 
-### The three known failures (root cause confirmed 2026-06-06; deferred on a libkalburator-side fix)
+### Previously deferred failures — RESOLVED at v0.66 (2026-06-06)
 
-**Confirmed root cause:** libkalburator's `dispatchSync` (and four sibling sites) still fetches backends via `m_controller->backendById()` returning `SyncBackend*`. Post-Plan-3 the canonical hub (`GenericSqliteBackend`), CardDAV (`RemoteContactsBackend`), and other backends inherit ONLY `SyncBackendBase`. WP's `PalmSyncHost::backendById` does a type-correct `dynamic_cast<SyncBackend*>` on the registry entry and returns nullptr for those backends — and every WP mapping uses `wp-hub` (the canonical hub) on at least one side. The engine bails with `"dispatchSync: backend not found"` and the future resolves false.
+The three deferred failures (`tst_palm_runtime_route_first_sync`, `tst_palm_runtime_route_recategorization`, `tst_runtime_carddav_e2e`) are all green as of the v0.66 pin bump. libkalburator landed the engine-side fix same-day (their `16afeb0`, tagged `v0.66`) in response to the WP RFC.
 
-- `tst_palm_runtime_route_first_sync`
-- `tst_palm_runtime_route_recategorization`
-- `tst_runtime_carddav_e2e`
+Triage trail (kept for future reference):
+- WP-side analysis: `docs/2026-06-04-v0.63-pin-bump-test-regressions.md`.
+- Handoff RFC: `docs/2026-06-06-libkalburator-dispatchsync-backendbyid-regression.md`.
+- Library response: `~/dev/libkalburator/docs/2026-06-06-dispatchsync-backendbyid-response.md`.
 
-Same engine error message for all three. The fix is libkalburator-side: switch the five sites (`syncengine.cpp:1526, 1709, 1868, 1931, 2592`) from `m_controller->backendById(id)` to `m_registry->backendInstance(id)` (returning `SyncBackendBase*`), matching the pattern six other engine sites already follow.
-
-Handoff RFC: `docs/2026-06-06-libkalburator-dispatchsync-backendbyid-regression.md`.
-Triage detail: `docs/2026-06-04-v0.63-pin-bump-test-regressions.md` (updated 2026-06-06 with confirmed root cause).
-
-Do NOT count these as your regressions.
+`PalmSyncHost::backendById`'s `dynamic_cast<SyncBackend*>` is the type-correct impl and stays as-is; the engine no longer calls it on the dispatch path. Regression test added library-side at `tests/blob/tst_engine_baseonly_backend.cpp`.
 
 ---
 
@@ -76,7 +72,7 @@ The `IPalmDatabaseAccess::deleteDatabase` default impl is loop-delete; the pilot
 ## Build + test
 
 ```bash
-cmake -S . -B build -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR= -DWILDPALMS_LIBKALBURATOR_GIT_TAG=v0.65
+cmake -S . -B build -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR= -DWILDPALMS_LIBKALBURATOR_GIT_TAG=v0.66
 cmake --build build -j 8
 ctest --test-dir build -j 8
 ```
