@@ -1,5 +1,5 @@
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
-<gui name="wildpalms" version="5">
+<gui name="wildpalms" version="6">
     <MenuBar>
         <Menu name="file">
             <text>&amp;File</text>
@@ -35,7 +35,7 @@
             <Action name="sync_fullsync"/>
             <Separator/>
             <Action name="sync_copy_palm_to_pc"/>
-            <Action name="sync_copy_pc_to_palm"/>
+            <Action name="sync_clobber_palm_from_pc"/>
             <Separator/>
             <Action name="sync_backup"/>
             <Action name="sync_restore"/>
