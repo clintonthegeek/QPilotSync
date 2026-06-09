@@ -6,11 +6,11 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-06)
+## Current branch and state (as of 2026-06-09)
 
-**Branch:** `feature/three-tier-sync`.
+**Branch:** `feature/three-tier-sync` at origin `59eac17`.
 **libkalburator pin:** `v0.66` (`CMakeLists.txt:63`).
-**Build dir convention:** legacy `build/` (no `CMakePresets.json`).
+**Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
 **ctest:** **120/120 pass.**
 
 ### Previously deferred failures — RESOLVED at v0.66 (2026-06-06)
@@ -28,7 +28,9 @@ Triage trail (kept for future reference):
 
 ## What just landed: clobber-sync feature
 
-A "Clobber Palm from PC" Tools-menu mode that wipes selected Palm-side PIM databases and re-pushes from the hub in one operation.
+A "Clobber Palm from PC" **Sync**-menu mode (between "Copy Palm → PC" and the Backup separator) that wipes selected Palm-side PIM databases and re-pushes from the hub in one operation. Triggered from `KF6MainWindow::onClobberPalmFromPC` → `ClobberDialog` → `PalmRuntime::clobberSync`.
+
+> Heads-up for fresh sessions: Plan Task 11 (`270bfa8`) renamed the action id but missed `data/wildpalmsui.rc`, so the menu entry was invisible until `59eac17` (2026-06-09) wired it in. The feature itself was correct since `270bfa8`; only the menu placement was broken.
 
 **Key references:**
 - Spec: `docs/superpowers/specs/2026-06-05-clobber-sync-design.md`
@@ -51,21 +53,14 @@ A "Clobber Palm from PC" Tools-menu mode that wipes selected Palm-side PIM datab
 | 12: device-backed hardware verification | **PENDING** | — |
 | Phase B consistency (contacts/memo/todos on `wipePalmDatabase`) | **Done 2026-06-06** | `24b0fa5` |
 
-### Outstanding work on this feature
+### What's left on clobber-sync
 
-**1. Hardware verification (Plan Task 12) — not yet run.**
-The full freshen-Palm loop on a real Palm device (the user's original ask) is unverified. Procedure documented at the end of the plan doc. Until this runs, treat the feature as "lands clean on CI but unverified on hardware."
-
-**2. ~~Phase B consistency pass — deferred.~~ DONE 2026-06-06 at `24b0fa5`.**
-All four PalmBackend conduits now use the `PalmBackend::wipePalmDatabase(name)` fast path (`deleteDatabase` + `createDatabase` + `invalidateCache`). Each conduit submodule also has WP-side `tst_<conduit>blobbackend.cpp::wipeCollection_clears_palm_<conduit>_database` coverage of the contract.
-
-Submodule gitlink bumps in `24b0fa5`:
-- contacts: `85105f2` → `3944981`
-- memo: `5a95226` → `c7c7f97`
-- todos: `649553e` → `10c4466`
-
-**3. `dlp_DeleteDB` + `dlp_CreateDB` hardware fast path.**
-The `IPalmDatabaseAccess::deleteDatabase` default impl is loop-delete; the pilot-link concrete impl doesn't override it yet. For real-device clobber, wiring true `dlp_DeleteDB`/`dlp_CreateDB` (with correct creator/type IDs — `date`/`DATA`, `addr`/`DATA`, `memo`/`DATA`, `todo`/`DATA`) into `KPilotLink` / `KPilotDeviceLink` is a small follow-up that lets the device avoid N round-trips per wipe.
+| Item | State | Notes |
+|---|---|---|
+| Phase B consistency (all conduits on `wipePalmDatabase`) | Done `24b0fa5` (2026-06-06) | Gitlinks contacts→`3944981`, memo→`c7c7f97`, todos→`10c4466` |
+| Menu wire-in (`data/wildpalmsui.rc`) | Done `59eac17` (2026-06-09) | Plan Task 11 only renamed the action id in C++; XML lag fixed |
+| Plan Task 12: device-backed hardware verification | **PENDING** | Needs a real Palm; see plan doc's Task 12 procedure |
+| `dlp_DeleteDB` + `dlp_CreateDB` hardware fast path | Not started | `IPalmDatabaseAccess::deleteDatabase` falls back to loop-delete in `KPilotLink`; wiring true DLP calls (creator IDs `date`/`addr`/`memo`/`todo`, type `DATA`) speeds real-device clobber from O(N) to O(1). Ships without hardware, validated alongside Task 12 |
 
 ---
 
@@ -92,35 +87,44 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 
 ---
 
-## Open architectural gap unrelated to clobber
+## Roadmap — what to work on next
 
-**No hub↔remote-only sync exists.** Today a user editing a record in the WildPalms UI cannot propagate that edit to a cloud spoke (CalDAV/CardDAV) without connecting a Palm — `hotSync` and `fullSync` both require a connected Palm. This is a real gap in the three-tier-sync architecture's "hub buffers Palm edits and propagates to remotes when reachable" promise. Out of scope for clobber-sync but worth its own design pass.
+Hardware verification of clobber-sync (Plan Task 12) is gated on a real Palm. Everything else below ships without hardware. Items roughly ordered by combined urgency / preparedness; user picks.
 
----
+### 1. FilteredCollectionBackend RFC (item B in prior sessions)
 
-## Ready to work on next (no hardware required)
+**State:** WIP. `docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` carries +177/-48 of unstaged WP-side edits on the 354-line file. Status header still reads "Proposal / RFC".
 
-Hardware verification of clobber-sync (Plan Task 12) is the user's bottleneck until they're back at a real Palm. Until then, these are concrete, no-hardware-needed tasks:
+**What it unlocks:** libkalburator gains a generic `RecordFilter` + `FilteredCollectionBackend` primitive for property-based slicing of a hub collection. WP needs it for hub-and-spoke remote routing by `categories` (the route mappings tests currently rely on a hand-rolled `FilteredCollectionBackend` in WP at `src/runtime/`). PlanStan benefits too.
 
-### ~~A. Phase B consistency for clobber-sync~~ — DONE 2026-06-06 at `24b0fa5`
+**Next move:** finish the edits, commit, ship via the standard handoff workflow (same pattern as the clobber-sync RFC + dispatchSync RFC). Single self-contained doc commit.
 
-All four conduits now use `PalmBackend::wipePalmDatabase` and have WP-side `wipeCollection_clears_palm_<conduit>_database` tests. See the clobber-sync Plan progress table above.
+### 2. Hub↔remote-only sync gap (item D in prior sessions)
 
-### B. Finalize and ship the FilteredCollectionBackend RFC
+**State:** scoped only conceptually — no spec, no plan.
 
-`docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` has been in active editing all session (+177/-48 unstaged on the 354-line file). It's an RFC for libkalburator to add a generic `RecordFilter` + `FilteredCollectionBackend` primitive for property-based slicing of a hub collection — needed for WP's hub-and-spoke remote routing by `categories`. PlanStan benefits too. Status header reads "Proposal / RFC — requesting a small, focused addition." When the user is ready, finishing the edits and shipping as a handoff (same pattern as the clobber-sync RFC) unblocks libkalburator from starting the work.
+**The bug:** today a user editing a record in the WildPalms UI cannot propagate that edit to a cloud spoke (CalDAV/CardDAV) without connecting a Palm — `hotSync` and `fullSync` both require a connected Palm. The three-tier-sync architecture promises "hub buffers Palm edits and propagates to remotes when reachable"; the propagation half is wired only through hot/full-sync today.
 
-### ~~C. Triage the three pre-existing v0.63 test failures~~ — DONE 2026-06-06; handed off to libkalburator
+**Next move:** brainstorm → spec → plan flow. Could parallel the clobber-sync flow (RFC for any lib-side primitives needed, then WP-side wiring).
 
-Root cause confirmed and wrong-hypothesis disproved (`BlobSyncBackendWrapper` is fine). Real cause: libkalburator's `dispatchSync` (+ 4 sibling sites) still uses `m_controller->backendById()` returning `SyncBackend*`, which can't satisfy `SyncBackendBase`-only backends like `wp-hub` (`GenericSqliteBackend`) — the engine bails with `"dispatchSync: backend not found"`. See `docs/2026-06-06-libkalburator-dispatchsync-backendbyid-regression.md` for the handoff RFC and `docs/2026-06-04-v0.63-pin-bump-test-regressions.md` for the full triage detail. Once libkalburator lands the five-site `m_registry->backendInstance()` switch and tags, WP pin-bumps and the three tests turn green automatically.
+### 3. `dlp_DeleteDB` + `dlp_CreateDB` hardware fast path (item E in prior sessions)
 
-### D. Brainstorm the hub↔remote-only sync gap
+**State:** small implementation task, ships without device validation, validates alongside Task 12 whenever the user is back at a Palm.
 
-Surfaced during clobber-sync brainstorming, this is the real bug that a user who edits a record in the WildPalms UI cannot propagate that edit to a cloud spoke without connecting a Palm. Three-tier-sync architecture promises "hub buffers Palm edits and propagates to remotes when reachable" — the propagation half is wired only through hot/full-sync today. Worth its own spec → plan flow.
+**What it does:** wire real `dlp_DeleteDB` / `dlp_CreateDB` calls (creator IDs `date`/`addr`/`memo`/`todo`, type `DATA`) into `KPilotLink` / `KPilotDeviceLink`'s `IPalmDatabaseAccess::deleteDatabase` and `createDatabase` overrides. Currently the pilot-link concrete impl falls back to the loop-delete default. Real-device clobber goes from O(N) round-trips to O(1).
 
-### E. Optional — `dlp_DeleteDB`/`dlp_CreateDB` hardware fast path
+### 4. Resolved this session (kept for reference, no work to do)
 
-`IPalmDatabaseAccess::deleteDatabase` default impl is loop-delete; the pilot-link concrete impl in `src/palm/kpilotlink*.cpp` doesn't override yet. Wiring real DLP calls (with creator IDs `date`/`addr`/`memo`/`todo`, type `DATA`) into `KPilotLink` is implementation work that can ship without device validation, then get validated alongside Task 12. Speeds up real-device clobber from O(N) round-trips to O(1).
+- ~~Phase B consistency~~ — done at `24b0fa5`. All four conduits on `wipePalmDatabase`.
+- ~~v0.63 deferred test triage~~ — done at `da91e46`; libkalburator landed the fix at `v0.66`; WP pin-bumped at `d7a3a0d`; ctest 120/120.
+- ~~Clobber menu wire-in~~ — done at `59eac17`; "Sync → Clobber Palm from PC" now visible.
+
+### 5. FYI — small follow-ups from the libkalburator v0.66 response
+
+Not blocking anything, but worth tracking:
+
+- `tst_palm_mass_delete_guard_e2e` has a pre-existing nondeterministic heap-teardown abort (~5/15 isolated-run failures, identical on pre-Plan-6 and Plan-6 libkalburator — so it's a WP-side double-free in fixture/runtime teardown, not a library regression). Worth a debug pass with the systematic-debugging skill someday.
+- `tests/runtime/CMakeLists.txt` hardcodes `${CMAKE_SOURCE_DIR}/../libkalburator/tests/sync/fakecaldavserver.cpp` instead of resolving through `WILDPALMS_LIBKALBURATOR_SOURCE_DIR`. Breaks non-flat-sibling clones. Trivial CMake fix.
 
 ---
 
