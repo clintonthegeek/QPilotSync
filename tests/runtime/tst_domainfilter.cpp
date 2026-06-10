@@ -14,6 +14,7 @@ private slots:
     void matchesByCollectionType();
     void matchesByContentTypesFallback();
     void vtodoCalendarServesBothCalendarAndTodo();
+    void tasksOnlyCalendarExcludedFromCalendarConduit();
     void unknownPluginMatchesNothing();
 };
 
@@ -52,6 +53,18 @@ void TstDomainFilter::vtodoCalendarServesBothCalendarAndTodo()
     c.type = QStringLiteral("calendar");
     c.contentTypes = { QStringLiteral("VEVENT"), QStringLiteral("VTODO") };
     QVERIFY(collectionMatchesDomain(c, QStringLiteral("calendar")));
+    QVERIFY(collectionMatchesDomain(c, QStringLiteral("todo")));
+}
+
+void TstDomainFilter::tasksOnlyCalendarExcludedFromCalendarConduit()
+{
+    // DAV providers type every collection "calendar"; since libkalburator's
+    // contentTypes fix (WP RFC 2026-06-09) the component caps disambiguate.
+    // A tasks-only calendar belongs to the todo conduit, not the datebook.
+    CollectionInfo c;
+    c.type = QStringLiteral("calendar");
+    c.contentTypes = { QStringLiteral("VTODO") };
+    QVERIFY(!collectionMatchesDomain(c, QStringLiteral("calendar")));
     QVERIFY(collectionMatchesDomain(c, QStringLiteral("todo")));
 }
 
