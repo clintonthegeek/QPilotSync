@@ -11,7 +11,7 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 **Branch:** `feature/three-tier-sync` at origin `59eac17`.
 **libkalburator pin:** `v0.66` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **120/120 pass.**
+**ctest:** **120/120 pass.** (accounts-first wizard landed; count unchanged)
 
 ### Previously deferred failures — RESOLVED at v0.66 (2026-06-06)
 
@@ -26,17 +26,23 @@ Triage trail (kept for future reference):
 
 ---
 
-## What just landed: clobber-sync feature
+## What just landed: accounts-first wizard
 
-A "Clobber Palm from PC" **Sync**-menu mode (between "Copy Palm → PC" and the Backup separator) that wipes selected Palm-side PIM databases and re-pushes from the hub in one operation. Triggered from `KF6MainWindow::onClobberPalmFromPC` → `ClobberDialog` → `PalmRuntime::clobberSync`.
+The New Profile wizard now uses an **accounts-first flow** (Name → Accounts → Bindings → Review). Page 2 creates accounts via `AddAccountDialog` and immediately `connect()`s each provider so collections are discovered once per account. Page 3's per-conduit dropdowns list only real `(account, collection)` pairs filtered by domain — no sentinel items, no dropdown self-mutation.
 
-> Heads-up for fresh sessions: Plan Task 11 (`270bfa8`) renamed the action id but missed `data/wildpalmsui.rc`, so the menu entry was invisible until `59eac17` (2026-06-09) wired it in. The feature itself was correct since `270bfa8`; only the menu placement was broken.
+`KALBURATOR_HAVE_AKONADI` now defaults **ON**; Akonadi appears in the Add Account dialog without extra build flags.
+
+**Deleted:** `AddAccountsPage`, `DiscoveryPage`, `DiscoveryRow`, `PendingAccount`, and the `__add_new__:` sentinel machinery.
 
 **Key references:**
-- Spec: `docs/superpowers/specs/2026-06-05-clobber-sync-design.md`
-- Plan: `docs/superpowers/plans/2026-06-05-clobber-sync.md`
-- libkalburator handoff RFC: `docs/2026-06-05-libkalburator-clobber-sync-handoff.md`
-- libkalburator response: `~/dev/libkalburator/docs/2026-06-05-clobber-sync-response.md`
+- Spec: `docs/superpowers/specs/2026-06-09-accounts-first-wizard-design.md`
+- Plan: `docs/superpowers/plans/2026-06-09-accounts-first-wizard.md`
+
+---
+
+## Previous landing: clobber-sync feature (kept for reference)
+
+A "Clobber Palm from PC" **Sync**-menu mode (between "Copy Palm → PC" and the Backup separator) that wipes selected Palm-side PIM databases and re-pushes from the hub in one operation. Triggered from `KF6MainWindow::onClobberPalmFromPC` → `ClobberDialog` → `PalmRuntime::clobberSync`.
 
 **Plan progress:**
 
@@ -53,14 +59,7 @@ A "Clobber Palm from PC" **Sync**-menu mode (between "Copy Palm → PC" and the 
 | 12: device-backed hardware verification | **PENDING** | — |
 | Phase B consistency (contacts/memo/todos on `wipePalmDatabase`) | **Done 2026-06-06** | `24b0fa5` |
 
-### What's left on clobber-sync
-
-| Item | State | Notes |
-|---|---|---|
-| Phase B consistency (all conduits on `wipePalmDatabase`) | Done `24b0fa5` (2026-06-06) | Gitlinks contacts→`3944981`, memo→`c7c7f97`, todos→`10c4466` |
-| Menu wire-in (`data/wildpalmsui.rc`) | Done `59eac17` (2026-06-09) | Plan Task 11 only renamed the action id in C++; XML lag fixed |
-| Plan Task 12: device-backed hardware verification | **PENDING** | Needs a real Palm; see plan doc's Task 12 procedure |
-| `dlp_DeleteDB` + `dlp_CreateDB` hardware fast path | Not started | `IPalmDatabaseAccess::deleteDatabase` falls back to loop-delete in `KPilotLink`; wiring true DLP calls (creator IDs `date`/`addr`/`memo`/`todo`, type `DATA`) speeds real-device clobber from O(N) to O(1). Ships without hardware, validated alongside Task 12 |
+Clobber-sync Task 12 (hardware verification) remains pending — gated on a real Palm device.
 
 ---
 
@@ -89,7 +88,7 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 
 ## Roadmap — what to work on next
 
-Hardware verification of clobber-sync (Plan Task 12) is gated on a real Palm. Everything else below ships without hardware. Items roughly ordered by combined urgency / preparedness; user picks.
+Accounts-first wizard is **done** (landed this session). Hardware verification of clobber-sync (Plan Task 12) remains gated on a real Palm. Everything else below ships without hardware. Items roughly ordered by combined urgency / preparedness; user picks.
 
 ### 1. FilteredCollectionBackend RFC (item B in prior sessions)
 
@@ -115,6 +114,7 @@ Hardware verification of clobber-sync (Plan Task 12) is gated on a real Palm. Ev
 
 ### 4. Resolved this session (kept for reference, no work to do)
 
+- ~~Accounts-first wizard~~ — done (2026-06-09). `AddAccountsPage`/`DiscoveryPage`/`DiscoveryRow`/`PendingAccount`/`__add_new__:` sentinel all deleted; accounts-first flow live; `KALBURATOR_HAVE_AKONADI` defaults ON.
 - ~~Phase B consistency~~ — done at `24b0fa5`. All four conduits on `wipePalmDatabase`.
 - ~~v0.63 deferred test triage~~ — done at `da91e46`; libkalburator landed the fix at `v0.66`; WP pin-bumped at `d7a3a0d`; ctest 120/120.
 - ~~Clobber menu wire-in~~ — done at `59eac17`; "Sync → Clobber Palm from PC" now visible.
