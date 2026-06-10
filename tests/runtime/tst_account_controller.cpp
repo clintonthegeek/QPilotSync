@@ -14,6 +14,39 @@
 
 #include <iprovider.h>
 #include <backendconfiguration.h>
+#include <providermanager.h>
+
+/// Minimal provider whose disconnect() emits connectionStateChanged(false)
+/// while connected — same contract as CalDavProvider::disconnect(). Used to
+/// reproduce the teardown-order crash: ~ProviderManager() calls
+/// disconnectAll() during AccountController member destruction, after
+/// m_states is already gone.
+class TeardownEmittingProvider : public Kalburator::Sync::IProvider {
+    Q_OBJECT
+public:
+    QString id() const override { return QStringLiteral("teardown-fake"); }
+    QString kind() const override { return QStringLiteral("fake"); }
+    QString displayName() const override { return QStringLiteral("Teardown Fake"); }
+    void load(const Kalburator::Sync::BackendConfiguration &) override {}
+    Kalburator::Sync::BackendConfiguration save() const override { return {}; }
+    QWidget *createConfigWidget(QWidget *) override { return nullptr; }
+    QFuture<bool> connect() override {
+        m_connected = true;
+        emit connectionStateChanged(true);
+        return QtFuture::makeReadyValueFuture(true);
+    }
+    void disconnect() override {
+        if (!m_connected) return;
+        m_connected = false;
+        emit connectionStateChanged(false);
+    }
+    bool isConnected() const override { return m_connected; }
+    QList<Kalburator::Sync::CollectionInfo> collections() const override { return {}; }
+    std::unique_ptr<Kalburator::Sync::IBlobBackend>
+        createBackend(const QString &) override { return nullptr; }
+private:
+    bool m_connected = false;
+};
 
 class TstAccountController : public QObject {
     Q_OBJECT
@@ -28,6 +61,7 @@ private slots:
     void mappingDescriptionsFor_returns_first_N();
     void ac_lifetime_matches_profile_switch();
     void appendMappings_writes_and_persists();
+    void destruction_does_not_deliver_provider_signals();
 };
 
 void TstAccountController::constructs_and_destructs_cleanly()
@@ -287,6 +321,32 @@ void TstAccountController::appendMappings_writes_and_persists()
     ac.appendMappings(rows);
     QCOMPARE(spy.count(), 1);
     QCOMPARE(profile.syncMappingsJson().size(), 1);
+}
+
+void TstAccountController::destruction_does_not_deliver_provider_signals()
+{
+    // Regression: destroying an AccountController holding a CONNECTED provider
+    // segfaulted. ~ProviderManager() (a member) calls disconnectAll(), the
+    // provider emits connectionStateChanged(false), ProviderManager re-emits
+    // providerStateChanged, and the constructor lambda wrote into m_states —
+    // which, declared after m_providerManager, was already destroyed.
+    // Observable symptom short of the crash: connectStateChanged fires from a
+    // half-destroyed AccountController. It must not.
+    QTemporaryDir dir;
+    Profile profile(dir.path()); profile.initialize();
+    WildPalms::Runtime::PalmRuntime rt(dir.path() + "/state");
+
+    auto ac = std::make_unique<WildPalms::Runtime::AccountController>(
+        dir.path(), &rt.backendRegistry(), &profile, &rt);
+
+    auto fake = std::make_unique<TeardownEmittingProvider>();
+    auto *raw = fake.get();
+    ac->providerManager()->addProvider(std::move(fake));
+    raw->connect();  // now connected; teardown will emit
+
+    QSignalSpy spy(ac.get(), &WildPalms::Runtime::AccountController::connectStateChanged);
+    ac.reset();
+    QCOMPARE(spy.count(), 0);
 }
 
 WILDPALMS_QTEST_MAIN(TstAccountController)

@@ -68,7 +68,15 @@ AccountController::AccountController(const QString &syncFolderPath,
     loadAndConnect();
 }
 
-AccountController::~AccountController() = default;
+AccountController::~AccountController()
+{
+    // ~ProviderManager() calls disconnectAll(), whose providers emit state
+    // changes that ProviderManager re-emits as providerStateChanged. By then
+    // m_states (declared after m_providerManager, destroyed before it) is
+    // already gone, and context-based disconnection only happens later in
+    // ~QObject. Sever the connections before member destruction begins.
+    disconnect(m_providerManager.get(), nullptr, this, nullptr);
+}
 
 void AccountController::loadAndConnect() {
     for (const auto &cfg : m_profile->accounts()) {
