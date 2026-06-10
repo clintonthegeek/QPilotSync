@@ -8,10 +8,19 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ## Current branch and state (as of 2026-06-09)
 
-**Branch:** `feature/three-tier-sync` at origin `59eac17`.
+**Branch:** local `main` at `1be66a3` — `feature/three-tier-sync` has been merged into
+local main; **~94 commits ahead of `origin/main`, unpushed** (push only at user request).
 **libkalburator pin:** `v0.66` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **120/120 pass.** (accounts-first wizard landed; count unchanged)
+**ctest:** **120/120 pass.** (AccountController teardown regression test added inside the existing `tst_account_controller` binary; count unchanged)
+
+### First live run of the accounts-first wizard (2026-06-09, post-landing)
+
+User exercised the new wizard against a real Nextcloud account (12 calendars). Outcomes:
+
+1. **Teardown segfault — FIXED at `1be66a3`.** `KF6MainWindow::loadProfile` replacing the previous `AccountController` crashed: `~ProviderManager()` (member) calls `disconnectAll()`, provider emits, `providerStateChanged` reached the ctor lambda which wrote into the already-destroyed `m_states` (declared after `m_providerManager`; context disconnect only happens later in `~QObject`). Fix: sever connections in the dtor body. Regression test: `tst_account_controller::destruction_does_not_deliver_provider_signals`.
+2. **Todo conduit unbindable to CalDAV task lists — lib-side, RFC open.** `CalDavProvider`/`MultiProtocolDavProvider` never populate `CollectionInfo.contentTypes`, so the wizard's `collectionMatchesDomain` (`src/app/wizard/domainfilter.cpp`) can't match VTODO collections to the `todo` plugin. WP side is correct and needs no change once the lib fix lands + pin bumps. RFC: `docs/2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md`. Follow-up once landed: consider tightening the calendar filter to require VEVENT so tasks-only calendars stop listing under the calendar conduit.
+3. **UX observations (not bugs, candidate roadmap items):** (a) Bindings page binds ONE collection per conduit — syncing *all* the user's calendars needs the existing category-mapping machinery (or wizard checkboxes to merge several calendars into the datebook); (b) same multi-collection story applies to address books → contact categories.
 
 ### Previously deferred failures — RESOLVED at v0.66 (2026-06-06)
 
@@ -134,6 +143,7 @@ These either need a libkalburator response or sit on the WP-edit pile:
 
 | Doc | Direction | Status |
 |---|---|---|
+| `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **Open RFC (new this session)**; two-line provider fix unblocks todo-conduit CalDAV bindings |
 | `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | Open RFC; **actively edited (item B above)**; unstaged +177 lines |
 | `2026-05-27-libkalburator-topology-authority-proposal.md` | WP → lib | Open RFC; the hub editability authority/demotion question. No response yet from lib AFAICT. |
 | `2026-05-26-calendar-writer-palmwire-parse-handoff-libkalburator.md` | WP → lib | Labeled "Blocker for CalDAV→Palm calendar sync"; status not re-verified this session |
