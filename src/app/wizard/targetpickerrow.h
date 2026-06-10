@@ -2,7 +2,6 @@
 #define WILDPALMS_APP_WIZARD_TARGETPICKERROW_H
 
 #include <QWidget>
-#include <QStringList>
 
 class QComboBox;
 class QLabel;
@@ -11,40 +10,35 @@ namespace WildPalms::Wizard {
 
 struct WizardState;
 
-/// One row on the TargetPickerPage. Knows its pluginId and the list of
-/// account kinds compatible with that pluginId. Renders a label +
-/// QComboBox. The page populates the combo by calling rebuild() with
-/// the current WizardState's accounts.
+/// One row on the Bindings page. Renders a label + QComboBox whose items
+/// are "Local files" plus every domain-matching collection across the
+/// connected WizardAccounts. Item data is QStringList{accountId,
+/// collectionId} — both empty for Local files. Read-only collections are
+/// listed but disabled.
 class TargetPickerRow : public QWidget {
     Q_OBJECT
 public:
     TargetPickerRow(const QString &pluginId,
-                    const QStringList &compatibleKinds,
                     WizardState *state,
                     QWidget *parent = nullptr);
 
     QString pluginId() const { return m_pluginId; }
-    QStringList compatibleKinds() const { return m_compatibleKinds; }
 
-    /// Repopulate the combo from m_state->accounts. Called by the
-    /// page on initializePage() and after addNewAccount/selectExistingAccount.
+    /// Repopulate from state->accounts, restore the current selection from
+    /// the row's MappingSpec, and reset stale bindings to RawFiles.
     void rebuild();
 
 signals:
-    /// Emitted when the user picks "Add new <kind>…" from the dropdown.
-    void addNewRequested(const QString &kind);
-
-    /// Emitted when the user picks an existing WizardAccount by id.
-    /// Empty id == user picked "Local files" (RawFiles).
-    void existingSelected(const QString &accountId);
+    /// Empty ids == user picked "Local files".
+    void bindingSelected(const QString &accountId, const QString &collectionId);
 
 private:
     void onCurrentIndexChanged(int idx);
 
     QString      m_pluginId;
-    QStringList  m_compatibleKinds;
     WizardState *m_state;
     QComboBox   *m_combo {nullptr};
+    QLabel      *m_hint  {nullptr};
 };
 
 }  // namespace WildPalms::Wizard

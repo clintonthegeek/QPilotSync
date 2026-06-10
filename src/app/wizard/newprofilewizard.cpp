@@ -1,8 +1,7 @@
 #include "newprofilewizard.h"
 #include "namepage.h"
+#include "accountssetuppage.h"
 #include "targetpickerpage.h"
-#include "addaccountspage.h"
-#include "discoverypage.h"
 #include "reviewpage.h"
 
 #include "runtime/profileregistry.h"
@@ -19,8 +18,8 @@ NewProfileWizard::NewProfileWizard(WildPalms::Runtime::ProfileRegistry *registry
     setWindowTitle(tr("New Wild Palms Profile"));
     setWizardStyle(QWizard::ModernStyle);
 
-    // Seed mappings with one RawFiles row per Palm plugin. Pages added in
-    // T5–T10 will edit these in place as the user makes selections.
+    // Seed mappings with one RawFiles row per Palm plugin. The Accounts and
+    // Bindings pages edit these in place as the user makes selections.
     for (const auto &pid : {
             QStringLiteral("calendar"),
             QStringLiteral("contacts"),
@@ -33,11 +32,9 @@ NewProfileWizard::NewProfileWizard(WildPalms::Runtime::ProfileRegistry *registry
     }
 
     setPage(NamePageId, new NamePage(m_profileRegistry, &m_state, this));
+    setPage(AccountsPageId,
+            new AccountsSetupPage(m_backendRegistry, &m_state, this));
     setPage(TargetPickerPageId, new TargetPickerPage(&m_state, this));
-    setPage(AddAccountsPageId,
-            new AddAccountsPage(m_backendRegistry, &m_state, this));
-    setPage(DiscoveryPageId,
-            new DiscoveryPage(m_backendRegistry, &m_state, this));
     setPage(ReviewPageId, new ReviewPage(&m_state, this));
     setStartId(NamePageId);
 }

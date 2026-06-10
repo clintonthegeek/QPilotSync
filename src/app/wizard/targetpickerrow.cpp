@@ -1,9 +1,12 @@
 #include "targetpickerrow.h"
+#include "domainfilter.h"
 #include "wizardstate.h"
 
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QStandardItemModel>
+#include <QVBoxLayout>
 
 namespace WildPalms::Wizard {
 
@@ -15,37 +18,31 @@ QString domainLabel(const QString &pluginId) {
     if (pluginId == QStringLiteral("todo"))     return QObject::tr("To-do");
     return pluginId;
 }
-
-QString kindFriendly(const QString &kind) {
-    if (kind == QStringLiteral("caldav"))  return QStringLiteral("CalDAV");
-    if (kind == QStringLiteral("carddav")) return QStringLiteral("CardDAV");
-    if (kind == QStringLiteral("akonadi")) return QStringLiteral("Akonadi");
-    return kind.toUpper();
-}
 } // namespace
 
 TargetPickerRow::TargetPickerRow(const QString &pluginId,
-                                 const QStringList &compatibleKinds,
                                  WizardState *state,
                                  QWidget *parent)
     : QWidget(parent)
     , m_pluginId(pluginId)
-    , m_compatibleKinds(compatibleKinds)
     , m_state(state)
 {
-    auto *layout = new QHBoxLayout(this);
+    auto *outer = new QVBoxLayout(this);
+    outer->setContentsMargins(0, 0, 0, 0);
+
+    auto *top = new QHBoxLayout();
     auto *label = new QLabel(domainLabel(pluginId), this);
     label->setMinimumWidth(120);
     m_combo = new QComboBox(this);
-    layout->addWidget(label);
-    layout->addWidget(m_combo, /*stretch=*/1);
+    top->addWidget(label);
+    top->addWidget(m_combo, /*stretch=*/1);
+    outer->addLayout(top);
 
-    if (m_compatibleKinds.isEmpty() ||
-        (m_compatibleKinds.size() == 1 &&
-         m_compatibleKinds.first() == QStringLiteral("rawfiles"))) {
-        // Memo or any other rawfiles-only domain.
-        m_combo->setEnabled(false);
-    }
+    m_hint = new QLabel(this);
+    m_hint->setObjectName(QStringLiteral("hint"));
+    m_hint->setIndent(124);
+    m_hint->setVisible(false);
+    outer->addWidget(m_hint);
 
     rebuild();
     connect(m_combo, qOverload<int>(&QComboBox::currentIndexChanged),
@@ -59,40 +56,65 @@ void TargetPickerRow::rebuild()
     QSignalBlocker block(m_combo);
     m_combo->clear();
 
-    // 1. Always present: Local files (RawFiles).
+    // Index 0, always present: local files.
     m_combo->addItem(tr("Local files (default)"),
-                     QVariant::fromValue(QString()));   // empty id == rawfiles
+                     QVariant::fromValue(QStringList{QString(), QString()}));
 
-    // 2. Existing pending accounts compatible with this row's kinds.
+    bool anyConnectedAccount = false;
     for (const auto &acc : m_state->accounts) {
-        if (!m_compatibleKinds.contains(acc.kind)) continue;
-        const QString label = QStringLiteral("%1 (%2)")
-            .arg(acc.config.displayName.isEmpty()
-                    ? acc.id
-                    : acc.config.displayName,
-                 kindFriendly(acc.kind));
-        m_combo->addItem(label, QVariant::fromValue(acc.id));
+        if (!acc.connected) continue;
+        anyConnectedAccount = true;
+        const QString accName = acc.config.displayName.isEmpty()
+            ? acc.id : acc.config.displayName;
+        for (const auto &c : acc.collections) {
+            if (!collectionMatchesDomain(c, m_pluginId)) continue;
+            QString label = QStringLiteral("%1 ▸ %2").arg(accName, c.name);
+            if (c.readOnly) label += tr(" (read-only)");
+            m_combo->addItem(label,
+                             QVariant::fromValue(QStringList{acc.id, c.id}));
+            if (c.readOnly) {
+                // Palm→remote writes need a writable target; list it so the
+                // user sees it exists, but make it unselectable.
+                auto *model = qobject_cast<QStandardItemModel*>(m_combo->model());
+                if (model)
+                    if (auto *it = model->item(m_combo->count() - 1))
+                        it->setFlags(it->flags() & ~Qt::ItemIsEnabled);
+            }
+        }
     }
 
-    // 3. "Add new <kind>…" entries, one per compatible kind.
-    for (const auto &kind : m_compatibleKinds) {
-        if (kind == QStringLiteral("rawfiles")) continue;
-        m_combo->addItem(tr("Add new %1 account…").arg(kindFriendly(kind)),
-                         QVariant::fromValue(
-                             QStringLiteral("__add_new__:%1").arg(kind)));
+    // Restore the selection from state; reset stale bindings.
+    int current = 0;
+    int mi = -1;
+    for (int i = 0; i < m_state->mappings.size(); ++i)
+        if (m_state->mappings[i].pluginId == m_pluginId) { mi = i; break; }
+    if (mi >= 0 && m_state->mappings[mi].kind == TargetKind::Account) {
+        for (int i = 1; i < m_combo->count(); ++i) {
+            const auto data = m_combo->itemData(i).toStringList();
+            if (data.value(0) == m_state->mappings[mi].accountRef &&
+                data.value(1) == m_state->mappings[mi].collectionId) {
+                current = i;
+                break;
+            }
+        }
+        if (current == 0) {
+            // Bound target no longer exists (account removed or edited).
+            m_state->mappings[mi].kind = TargetKind::RawFiles;
+            m_state->mappings[mi].accountRef.clear();
+            m_state->mappings[mi].collectionId.clear();
+        }
     }
+    m_combo->setCurrentIndex(current);
+
+    m_hint->setText(tr("No matching collections on your accounts."));
+    m_hint->setVisible(anyConnectedAccount && m_combo->count() == 1);
 }
 
 void TargetPickerRow::onCurrentIndexChanged(int idx)
 {
     if (idx < 0 || !m_combo) return;
-    const QString tag = m_combo->itemData(idx).toString();
-    if (tag.startsWith(QStringLiteral("__add_new__:"))) {
-        const QString kind = tag.section(QLatin1Char(':'), 1);
-        emit addNewRequested(kind);
-        return;
-    }
-    emit existingSelected(tag);   // empty == rawfiles
+    const auto data = m_combo->itemData(idx).toStringList();
+    emit bindingSelected(data.value(0), data.value(1));
 }
 
 }  // namespace WildPalms::Wizard

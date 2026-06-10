@@ -27,12 +27,11 @@ public:
     WizardState *state() { return &m_state; }
     Result result() const;
 
-    // Page ids used for QWizardPage::nextId() skip logic.
+    // Page ids; flow is strictly sequential (QWizard default ordering).
     enum PageId {
         NamePageId = 0,
+        AccountsPageId,
         TargetPickerPageId,
-        AddAccountsPageId,
-        DiscoveryPageId,
         ReviewPageId,
     };
 

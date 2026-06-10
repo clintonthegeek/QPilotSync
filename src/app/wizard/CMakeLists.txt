@@ -17,12 +17,6 @@ add_library(WildPalmsAppWizard STATIC
     targetpickerrow.cpp
     targetpickerpage.h
     targetpickerpage.cpp
-    addaccountspage.h
-    addaccountspage.cpp
-    discoveryrow.h
-    discoveryrow.cpp
-    discoverypage.h
-    discoverypage.cpp
     reviewpage.h
     reviewpage.cpp
 )

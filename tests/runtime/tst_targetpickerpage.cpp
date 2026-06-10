@@ -1,6 +1,8 @@
 // tests/runtime/tst_targetpickerpage.cpp
 #include <QtTest/QtTest>
 #include <QComboBox>
+#include <QLabel>
+#include <QStandardItemModel>
 
 #include "../wildpalms_qtest_main.h"
 
@@ -8,23 +10,18 @@
 #include "app/wizard/targetpickerrow.h"
 #include "app/wizard/wizardstate.h"
 
+#include <collectioninfo.h>
+
 using WildPalms::Wizard::TargetPickerPage;
 using WildPalms::Wizard::TargetPickerRow;
 using WildPalms::Wizard::WizardState;
-using WildPalms::Wizard::MappingSpec;
 using WildPalms::Wizard::WizardAccount;
+using WildPalms::Wizard::MappingSpec;
 using WildPalms::Wizard::TargetKind;
-
-class TstTargetPickerPage : public QObject {
-    Q_OBJECT
-private slots:
-    void seedsRawFilesByDefault();
-    void memoRowDropdownDisabled();
-    void addNewAppendsWizardAccount();
-    void selectingExistingAccountUpdatesMappingRef();
-};
+using Kalburator::Sync::CollectionInfo;
 
 namespace {
+
 WizardState seedState() {
     WizardState s;
     for (const auto &pid : { QStringLiteral("calendar"),
@@ -38,70 +35,154 @@ WizardState seedState() {
     }
     return s;
 }
+
+CollectionInfo col(const QString &id, const QString &name,
+                   const QString &type, bool readOnly = false) {
+    CollectionInfo c;
+    c.id = id; c.name = name; c.type = type; c.readOnly = readOnly;
+    return c;
+}
+
+// One connected account: a writable calendar, a read-only calendar,
+// and a todos collection. No contacts, no memos.
+WizardState stateWithConnectedAccount() {
+    auto s = seedState();
+    WizardAccount acc;
+    acc.id   = QStringLiteral("acc-1");
+    acc.kind = QStringLiteral("caldav");
+    acc.config.displayName = QStringLiteral("Fastmail");
+    acc.connected = true;
+    acc.collections = {
+        col(QStringLiteral("cal-1"),  QStringLiteral("Personal"), QStringLiteral("calendar")),
+        col(QStringLiteral("cal-ro"), QStringLiteral("Holidays"), QStringLiteral("calendar"), true),
+        col(QStringLiteral("todo-1"), QStringLiteral("Tasks"),    QStringLiteral("todos")),
+    };
+    s.accounts.append(acc);
+    return s;
+}
+
+QComboBox *comboFor(TargetPickerPage &page, const QString &pluginId) {
+    for (auto *r : page.findChildren<TargetPickerRow*>())
+        if (r->pluginId() == pluginId)
+            return r->findChild<QComboBox*>();
+    return nullptr;
+}
+
 } // namespace
 
-void TstTargetPickerPage::seedsRawFilesByDefault()
+class TstTargetPickerPage : public QObject {
+    Q_OBJECT
+private slots:
+    void populatesDomainFilteredBindings();
+    void readOnlyCollectionsAreNotSelectable();
+    void selectingBindingWritesMapping();
+    void localFilesResetsMapping();
+    void staleBindingResetsToLocalOnRebuild();
+    void hintShownWhenAccountsHaveNoMatchingCollections();
+};
+
+void TstTargetPickerPage::populatesDomainFilteredBindings()
 {
-    auto s = seedState();
+    auto s = stateWithConnectedAccount();
     TargetPickerPage page(&s);
     page.initializePage();
-    // All four rows default to RawFiles.
-    QCOMPARE(s.mappings.size(), 4);
-    for (const auto &m : s.mappings)
-        QCOMPARE(m.kind, TargetKind::RawFiles);
+
+    auto *cal = comboFor(page, QStringLiteral("calendar"));
+    QVERIFY(cal);
+    QCOMPARE(cal->count(), 3);   // Local files + Personal + Holidays(ro)
+    QCOMPARE(cal->itemText(1), QStringLiteral("Fastmail ▸ Personal"));
+
+    auto *todo = comboFor(page, QStringLiteral("todo"));
+    QVERIFY(todo);
+    QCOMPARE(todo->count(), 2);  // Local files + Tasks
+
+    auto *contacts = comboFor(page, QStringLiteral("contacts"));
+    QVERIFY(contacts);
+    QCOMPARE(contacts->count(), 1);  // Local files only
+
+    auto *memo = comboFor(page, QStringLiteral("memo"));
+    QVERIFY(memo);
+    QCOMPARE(memo->count(), 1);
+    QVERIFY(memo->isEnabled());      // no more hardcoded memo disable
 }
 
-void TstTargetPickerPage::memoRowDropdownDisabled()
+void TstTargetPickerPage::readOnlyCollectionsAreNotSelectable()
 {
-    auto s = seedState();
+    auto s = stateWithConnectedAccount();
     TargetPickerPage page(&s);
     page.initializePage();
 
-    // The memo row exposes a QComboBox; in the memo row's case it's disabled.
-    TargetPickerRow *memoRow = nullptr;
-    for (auto *r : page.findChildren<TargetPickerRow*>()) {
-        if (r->pluginId() == QStringLiteral("memo")) { memoRow = r; break; }
-    }
-    QVERIFY(memoRow);
-    auto *combo = memoRow->findChild<QComboBox*>();
-    QVERIFY(combo);
-    QVERIFY(!combo->isEnabled());
+    auto *cal = comboFor(page, QStringLiteral("calendar"));
+    QVERIFY(cal);
+    auto *model = qobject_cast<QStandardItemModel*>(cal->model());
+    QVERIFY(model);
+    QVERIFY(cal->itemText(2).contains(QStringLiteral("read-only")));
+    QVERIFY(!(model->item(2)->flags() & Qt::ItemIsEnabled));
+    QVERIFY(model->item(1)->flags() & Qt::ItemIsEnabled);
 }
 
-void TstTargetPickerPage::addNewAppendsWizardAccount()
+void TstTargetPickerPage::selectingBindingWritesMapping()
 {
-    auto s = seedState();
+    auto s = stateWithConnectedAccount();
     TargetPickerPage page(&s);
     page.initializePage();
 
-    // Simulate the "Add new caldav" selection on the Calendar row by invoking
-    // the page's slot directly (the row would emit this on dropdown change).
-    page.addNewAccount(QStringLiteral("calendar"), QStringLiteral("caldav"));
+    auto *cal = comboFor(page, QStringLiteral("calendar"));
+    cal->setCurrentIndex(1);   // Fastmail ▸ Personal
 
-    QCOMPARE(s.accounts.size(), 1);
-    QCOMPARE(s.accounts.first().kind, QStringLiteral("caldav"));
-    QVERIFY(!s.accounts.first().id.isEmpty());
-
-    // The calendar mapping now references the new pending account.
     QCOMPARE(s.mappings[0].kind, TargetKind::Account);
-    QCOMPARE(s.mappings[0].accountRef, s.accounts.first().id);
+    QCOMPARE(s.mappings[0].accountRef, QStringLiteral("acc-1"));
+    QCOMPARE(s.mappings[0].collectionId, QStringLiteral("cal-1"));
 }
 
-void TstTargetPickerPage::selectingExistingAccountUpdatesMappingRef()
+void TstTargetPickerPage::localFilesResetsMapping()
 {
-    auto s = seedState();
-    WizardAccount existing;
-    existing.id   = QStringLiteral("preset-caldav");
-    existing.kind = QStringLiteral("caldav");
-    existing.config.displayName = QStringLiteral("Preset");
-    s.accounts.append(existing);
+    auto s = stateWithConnectedAccount();
+    s.mappings[0].kind         = TargetKind::Account;
+    s.mappings[0].accountRef   = QStringLiteral("acc-1");
+    s.mappings[0].collectionId = QStringLiteral("cal-1");
 
     TargetPickerPage page(&s);
     page.initializePage();
 
-    page.selectExistingAccount(QStringLiteral("calendar"), existing.id);
-    QCOMPARE(s.mappings[0].kind, TargetKind::Account);
-    QCOMPARE(s.mappings[0].accountRef, existing.id);
+    auto *cal = comboFor(page, QStringLiteral("calendar"));
+    QCOMPARE(cal->currentIndex(), 1);   // selection restored from state
+    cal->setCurrentIndex(0);            // back to Local files
+
+    QCOMPARE(s.mappings[0].kind, TargetKind::RawFiles);
+    QVERIFY(s.mappings[0].accountRef.isEmpty());
+    QVERIFY(s.mappings[0].collectionId.isEmpty());
+}
+
+void TstTargetPickerPage::staleBindingResetsToLocalOnRebuild()
+{
+    auto s = stateWithConnectedAccount();
+    s.mappings[0].kind         = TargetKind::Account;
+    s.mappings[0].accountRef   = QStringLiteral("gone-account");
+    s.mappings[0].collectionId = QStringLiteral("gone-col");
+
+    TargetPickerPage page(&s);
+    page.initializePage();
+
+    QCOMPARE(s.mappings[0].kind, TargetKind::RawFiles);
+    auto *cal = comboFor(page, QStringLiteral("calendar"));
+    QCOMPARE(cal->currentIndex(), 0);
+}
+
+void TstTargetPickerPage::hintShownWhenAccountsHaveNoMatchingCollections()
+{
+    auto s = stateWithConnectedAccount();
+    TargetPickerPage page(&s);
+    page.initializePage();
+
+    TargetPickerRow *contactsRow = nullptr;
+    for (auto *r : page.findChildren<TargetPickerRow*>())
+        if (r->pluginId() == QStringLiteral("contacts")) { contactsRow = r; break; }
+    QVERIFY(contactsRow);
+    // Account is connected but has no contacts collections -> hint visible flag.
+    auto *hint = contactsRow->findChild<QLabel*>(QStringLiteral("hint"));
+    QVERIFY(hint);
+    QVERIFY(!hint->isHidden());
 }
 
 WILDPALMS_QTEST_MAIN(TstTargetPickerPage)

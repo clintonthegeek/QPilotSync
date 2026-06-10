@@ -1,66 +1,34 @@
 #include "targetpickerpage.h"
 #include "targetpickerrow.h"
 #include "wizardstate.h"
-#include "newprofilewizard.h"
 
-#include <QUuid>
 #include <QVBoxLayout>
 
 namespace WildPalms::Wizard {
-
-int TargetPickerPage::nextId() const
-{
-    if (!m_state) return NewProfileWizard::ReviewPageId;
-    if (!m_state->accounts.isEmpty())
-        return NewProfileWizard::AddAccountsPageId;
-    for (const auto &m : m_state->mappings) {
-        if (m.kind == TargetKind::Account)
-            return NewProfileWizard::DiscoveryPageId;
-    }
-    return NewProfileWizard::ReviewPageId;
-}
 
 TargetPickerPage::TargetPickerPage(WizardState *state, QWidget *parent)
     : QWizardPage(parent)
     , m_state(state)
 {
     setTitle(tr("Sync targets"));
-    setSubTitle(tr("Pick a target for each Palm domain. Use 'Local files' "
-                   "for the simple default or add a remote account."));
+    setSubTitle(tr("Pick where each Palm domain syncs. Go back to the "
+                   "Accounts page if a collection you expect is missing."));
     buildRows();
 }
 
 void TargetPickerPage::buildRows()
 {
     auto *layout = new QVBoxLayout(this);
-    struct DomainSpec { QString pluginId; QStringList compatible; };
-    const QList<DomainSpec> domains = {
-        { QStringLiteral("calendar"),
-          { QStringLiteral("rawfiles"),
-            QStringLiteral("caldav"),
-            QStringLiteral("akonadi") } },
-        { QStringLiteral("contacts"),
-          { QStringLiteral("rawfiles"),
-            QStringLiteral("carddav"),
-            QStringLiteral("akonadi") } },
-        { QStringLiteral("memo"),
-          { QStringLiteral("rawfiles") } },   // disabled in row
-        { QStringLiteral("todo"),
-          { QStringLiteral("rawfiles"),
-            QStringLiteral("caldav"),
-            QStringLiteral("akonadi") } },
-    };
-    for (const auto &d : domains) {
-        auto *row = new TargetPickerRow(d.pluginId, d.compatible, m_state, this);
+    for (const auto &pid : { QStringLiteral("calendar"),
+                              QStringLiteral("contacts"),
+                              QStringLiteral("memo"),
+                              QStringLiteral("todo") }) {
+        auto *row = new TargetPickerRow(pid, m_state, this);
         layout->addWidget(row);
-        m_rows.insert(d.pluginId, row);
-        connect(row, &TargetPickerRow::addNewRequested, this,
-                [this, pid = d.pluginId](const QString &kind) {
-                    addNewAccount(pid, kind);
-                });
-        connect(row, &TargetPickerRow::existingSelected, this,
-                [this, pid = d.pluginId](const QString &accountId) {
-                    selectExistingAccount(pid, accountId);
+        m_rows.insert(pid, row);
+        connect(row, &TargetPickerRow::bindingSelected, this,
+                [this, pid](const QString &accountId, const QString &collectionId) {
+                    selectBinding(pid, accountId, collectionId);
                 });
     }
 }
@@ -79,40 +47,20 @@ int TargetPickerPage::mappingIndex(const QString &pluginId) const
     return -1;
 }
 
-void TargetPickerPage::addNewAccount(const QString &pluginId, const QString &kind)
+void TargetPickerPage::selectBinding(const QString &pluginId,
+                                     const QString &accountId,
+                                     const QString &collectionId)
 {
-    if (!m_state) return;
-    WizardAccount acc;
-    acc.id   = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    acc.kind = kind;
-    m_state->accounts.append(acc);
-
-    const int mi = mappingIndex(pluginId);
-    if (mi >= 0) {
-        m_state->mappings[mi].kind        = TargetKind::Account;
-        m_state->mappings[mi].accountRef  = acc.id;
-        m_state->mappings[mi].collectionId.clear();
-    }
-
-    // Re-populate every row so the new account appears as a selectable
-    // entry (other compatible rows may want to point at the same account).
-    for (auto *row : m_rows.values()) row->rebuild();
-}
-
-void TargetPickerPage::selectExistingAccount(const QString &pluginId,
-                                             const QString &accountId)
-{
-    if (!m_state) return;
     const int mi = mappingIndex(pluginId);
     if (mi < 0) return;
     if (accountId.isEmpty()) {
-        m_state->mappings[mi].kind        = TargetKind::RawFiles;
+        m_state->mappings[mi].kind = TargetKind::RawFiles;
         m_state->mappings[mi].accountRef.clear();
         m_state->mappings[mi].collectionId.clear();
     } else {
-        m_state->mappings[mi].kind        = TargetKind::Account;
-        m_state->mappings[mi].accountRef  = accountId;
-        m_state->mappings[mi].collectionId.clear();
+        m_state->mappings[mi].kind         = TargetKind::Account;
+        m_state->mappings[mi].accountRef   = accountId;
+        m_state->mappings[mi].collectionId = collectionId;
     }
 }
 

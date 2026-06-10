@@ -1,14 +1,16 @@
 #ifndef WILDPALMS_APP_WIZARD_TARGETPICKERPAGE_H
 #define WILDPALMS_APP_WIZARD_TARGETPICKERPAGE_H
 
-#include <QWizardPage>
 #include <QHash>
+#include <QWizardPage>
 
 namespace WildPalms::Wizard {
 
 struct WizardState;
 class TargetPickerRow;
 
+/// Page 3 — Bindings. Four domain rows; each picks (account, collection)
+/// from the accounts created on the AccountsSetupPage, or Local files.
 class TargetPickerPage : public QWizardPage {
     Q_OBJECT
 public:
@@ -16,11 +18,11 @@ public:
 
     void initializePage() override;
     bool isComplete() const override { return true; }
-    int  nextId() const override;
 
-    // Called by rows (and exposed for tests).
-    void addNewAccount(const QString &pluginId, const QString &kind);
-    void selectExistingAccount(const QString &pluginId, const QString &accountId);
+    // Called by rows (and exposed for tests). Empty accountId == Local files.
+    void selectBinding(const QString &pluginId,
+                       const QString &accountId,
+                       const QString &collectionId);
 
 private:
     void buildRows();

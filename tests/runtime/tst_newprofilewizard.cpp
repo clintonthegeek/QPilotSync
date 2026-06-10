@@ -21,7 +21,7 @@ class TstNewProfileWizard : public QObject {
     Q_OBJECT
 private slots:
     void allLocalFlowReturnsAllRawFiles();
-    void skipsAddAccountsAndDiscoveryWhenAllLocal();
+    void pageOrderIsNameAccountsBindingsReview();
     void cancelDoesNotPopulateResult();
 };
 
@@ -59,19 +59,23 @@ void TstNewProfileWizard::allLocalFlowReturnsAllRawFiles()
         QCOMPARE(m.kind, TargetKind::RawFiles);
 }
 
-void TstNewProfileWizard::skipsAddAccountsAndDiscoveryWhenAllLocal()
+void TstNewProfileWizard::pageOrderIsNameAccountsBindingsReview()
 {
     QTemporaryDir d; QVERIFY(d.isValid());
     auto reg = makeRegistry(d);
     BackendRegistry backendReg;
 
     NewProfileWizard w(reg.get(), &backendReg);
-    auto *tpp = w.page(NewProfileWizard::TargetPickerPageId);
-    QVERIFY(tpp);
-    // With no pending accounts and no remote mappings, TargetPickerPage's
-    // nextId() should jump directly to ReviewPageId, skipping
-    // AddAccountsPageId and DiscoveryPageId.
-    QCOMPARE(tpp->nextId(), int(NewProfileWizard::ReviewPageId));
+    QVERIFY(w.page(NewProfileWizard::AccountsPageId));
+    QVERIFY(w.page(NewProfileWizard::TargetPickerPageId));
+    // Strictly sequential: QWizard default ordering, no nextId() overrides.
+    QCOMPARE(w.page(NewProfileWizard::NamePageId)->nextId(),
+             int(NewProfileWizard::AccountsPageId));
+    QCOMPARE(w.page(NewProfileWizard::AccountsPageId)->nextId(),
+             int(NewProfileWizard::TargetPickerPageId));
+    QCOMPARE(w.page(NewProfileWizard::TargetPickerPageId)->nextId(),
+             int(NewProfileWizard::ReviewPageId));
+    QCOMPARE(w.page(NewProfileWizard::ReviewPageId)->nextId(), -1);
 }
 
 void TstNewProfileWizard::cancelDoesNotPopulateResult()
