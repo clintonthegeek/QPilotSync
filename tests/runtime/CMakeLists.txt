@@ -1091,6 +1091,29 @@ set_tests_properties(tst_clobber_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Accounts-first wizard — AccountsSetupPage unit test
+add_executable(tst_accountssetuppage tst_accountssetuppage.cpp)
+target_link_libraries(tst_accountssetuppage
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_accountssetuppage COMMAND tst_accountssetuppage)
+set_tests_properties(tst_accountssetuppage PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # hub↔remote routing Task 2: translateRouteSpec — pure translator + unit tests.
 # Links WildPalmsRuntime + Kalburator::Sync directly (not WildPalmsCore) so
 # that #include "synctypes.h" resolves to libkalburator's Kalburator::Sync

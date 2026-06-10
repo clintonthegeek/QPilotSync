@@ -11,6 +11,8 @@ add_library(WildPalmsAppWizard STATIC
     namepage.cpp
     domainfilter.h
     domainfilter.cpp
+    accountssetuppage.h
+    accountssetuppage.cpp
     targetpickerrow.h
     targetpickerrow.cpp
     targetpickerpage.h
