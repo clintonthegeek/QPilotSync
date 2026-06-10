@@ -892,33 +892,47 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     // the blanket pre-run pause is removed — the tickle is now paused/resumed per
     // phase via the phaseChanged lambda in the constructor.
 
-    auto engineFuture = m_engine->runSyncFuture(
-        ids, Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored);
+    // Plan 8 B.1: canonical subset dispatch (was runSyncFuture(ids, …)).
+    Kalburator::Sync::SyncRequest req;
+    req.mappingIds = ids;
+    req.behavior   = Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored;
+    auto engineFuture = m_engine->runSync(req);
 
-    // K.8b T16: install cancellation watcher on the engine future so
-    // cancelSync() can propagate cancel() into SyncEngine::onCancelObserved.
+    // K.8b T16 + Plan 8 B.3: the watcher both propagates cancelSync() into
+    // SyncEngine::onCancelObserved AND delivers the result. Qt6's
+    // QFuture::then() drops its continuation when the source future is
+    // canceled, so runFinished must be emitted from the watcher's finished
+    // slot — it fires on both completion and cancel, on this object's
+    // thread (no invokeMethod marshalling needed).
+    auto promise = std::make_shared<QPromise<PalmRunResult>>();
+    promise->start();
+    QFuture<PalmRunResult> resultFuture = promise->future();
+
     if (m_activeSyncWatcher) {
         m_activeSyncWatcher->cancel();
         m_activeSyncWatcher->deleteLater();
     }
-    m_activeSyncWatcher = new QFutureWatcher<void>(this);
-    QObject::connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
-            this, [this]() {
-                if (m_activeSyncWatcher) {
-                    m_activeSyncWatcher->deleteLater();
-                    m_activeSyncWatcher = nullptr;
-                }
-            });
-    m_activeSyncWatcher->setFuture(engineFuture);
+    auto *watcher = new QFutureWatcher<void>(this);
+    m_activeSyncWatcher = watcher;
+    QObject::connect(watcher, &QFutureWatcher<void>::finished,
+            this, [this, watcher, engineFuture, promise, ids]() {
+        // B.4: read via resultAt(0), not results() (empty after cancel).
+        // The multi-mapping iface adds cancellation-marker results even
+        // when canceled (setAddResultsIfCanceledEnabled); guard anyway.
+        QList<Kalburator::Sync::SyncResult> results;
+        if (engineFuture.resultCount() > 0)
+            results = engineFuture.resultAt(0);
 
-    return engineFuture.then([this, ids](QList<Kalburator::Sync::SyncResult> results) {
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
         r.success   = true;
 
         PalmRunResult::PluginStats stats;
         int linkLostCount = 0;
+        bool anyCancelled = engineFuture.isCanceled();
         for (const auto &sr : results) {
+            if (sr.cancelled)
+                anyCancelled = true;
             if (!sr.success && !sr.cancelled && !sr.skipped) {
                 r.success = false;
                 if (sr.errorMessage.contains(QLatin1String("Palm link"),
@@ -941,6 +955,13 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
                 "HotSync aborted: Palm device disconnected "
                 "(%1 of %2 mappings affected)").arg(linkLostCount).arg(results.size());
         }
+        // A cancelled run is not a successful one; pre-B.3 the result was
+        // simply never delivered on cancel, so this branch is new surface.
+        if (anyCancelled) {
+            r.success = false;
+            if (r.errorMessage.isEmpty())
+                r.errorMessage = QStringLiteral("Sync cancelled");
+        }
         if (!results.isEmpty())
             r.perPluginStats.insert(QStringLiteral("calendar"), stats);
 
@@ -949,22 +970,26 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         for (int i = 0; i < results.size() && i < ids.size(); ++i) {
             const auto &sr = results[i];
             const auto &ts = sr.targetStats;
-            QMetaObject::invokeMethod(this, [this, id = ids[i], ts, sr]() {
-                Q_EMIT mappingSyncFinished(id, ts.created, ts.updated, ts.deleted,
-                                           sr.success && !sr.cancelled);
-            });
+            Q_EMIT mappingSyncFinished(ids[i], ts.created, ts.updated, ts.deleted,
+                                       sr.success && !sr.cancelled);
         }
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        QMetaObject::invokeMethod(this, [this, r]() {
-            if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
-            if (m_device) m_device->resumeTickle();
-            m_activeMappingId.clear();
-            Q_EMIT runFinished(r);
-            Q_EMIT syncCompleted();
-        });
-        return r;
+        if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
+        if (m_device) m_device->resumeTickle();
+        m_activeMappingId.clear();
+        Q_EMIT runFinished(r);
+        Q_EMIT syncCompleted();
+
+        promise->addResult(r);
+        promise->finish();
+        if (m_activeSyncWatcher == watcher)
+            m_activeSyncWatcher = nullptr;
+        watcher->deleteLater();
     });
+    watcher->setFuture(engineFuture);
+
+    return resultFuture;
 }
 
 QFuture<PalmRunResult> PalmRuntime::hotSync() {
@@ -1007,30 +1032,54 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
     // For M3: calendar-only, single mapping. Dispatch only the first enabled
     // mapping; Plan 3 (M4) will add multi-mapping iteration once other plugins
     // are re-enabled.
-    auto engineFuture = m_engine->runSyncFuture(ids.first(), ov);
+    //
+    // Plan 8 B.2: canonical single-mapping dispatch (was
+    // runSyncFuture(id, ov)). The ==1 shape is the only one that consults
+    // executionOverride.direction in full.
+    Kalburator::Sync::SyncRequest req;
+    req.mappingIds        = { ids.first() };
+    req.executionOverride = ov;
+    auto engineFuture = m_engine->runSync(req);
 
-    // K.8b T16: install cancellation watcher (same pattern as runAllMappings).
+    // K.8b T16 + Plan 8 B.3: watcher-based result delivery (see
+    // runAllMappings). On this path the cancel caveat is acute: the
+    // canonical single-mapping branch .then()-wraps dispatchSingleNative's
+    // future, and the wrapper loses the F2 Task 23 cancellation result —
+    // after a cancel the engine future may carry NO result at all.
+    auto promise = std::make_shared<QPromise<PalmRunResult>>();
+    promise->start();
+    QFuture<PalmRunResult> resultFuture = promise->future();
+
     if (m_activeSyncWatcher) {
         m_activeSyncWatcher->cancel();
         m_activeSyncWatcher->deleteLater();
     }
-    m_activeSyncWatcher = new QFutureWatcher<void>(this);
-    QObject::connect(m_activeSyncWatcher, &QFutureWatcher<void>::finished,
-            this, [this]() {
-                if (m_activeSyncWatcher) {
-                    m_activeSyncWatcher->deleteLater();
-                    m_activeSyncWatcher = nullptr;
-                }
-            });
-    m_activeSyncWatcher->setFuture(engineFuture);
+    auto *watcher = new QFutureWatcher<void>(this);
+    m_activeSyncWatcher = watcher;
+    QObject::connect(watcher, &QFutureWatcher<void>::finished,
+            this, [this, watcher, engineFuture, promise]() {
+        // B.4: resultAt(0), not results() (empty after cancel).
+        QList<Kalburator::Sync::SyncResult> results;
+        if (engineFuture.resultCount() > 0)
+            results = engineFuture.resultAt(0);
 
-    return engineFuture.then([this](Kalburator::Sync::SyncResult sr) {
+        Kalburator::Sync::SyncResult sr;
+        if (!results.isEmpty()) {
+            sr = results.first();
+        } else {
+            sr.success   = false;
+            sr.cancelled = engineFuture.isCanceled();
+            if (!sr.cancelled)
+                sr.errorMessage = QStringLiteral("Sync engine returned no result");
+        }
+
         PalmRunResult r;
         r.startTime = QDateTime::currentDateTimeUtc();
-        r.success   = sr.success;
+        r.success   = sr.success && !sr.cancelled;
         // K.9: propagate engine error message to the UI (see runAllMappings).
-        if (!sr.success)
-            r.errorMessage = sr.errorMessage;
+        if (!r.success)
+            r.errorMessage = sr.cancelled ? QStringLiteral("Sync cancelled")
+                                          : sr.errorMessage;
 
         PalmRunResult::PluginStats stats;
         stats.created   = sr.targetStats.created;
@@ -1041,16 +1090,20 @@ QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &mode
         r.perPluginStats.insert(QStringLiteral("calendar"), stats);
 
         r.endTime = QDateTime::currentDateTimeUtc();
-        // Resume tickle on the main thread (this callback runs on the
-        // engine worker thread).
-        QMetaObject::invokeMethod(this, [this, r]() {
-            if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
-            if (m_device) m_device->resumeTickle();
-            Q_EMIT runFinished(r);
-            Q_EMIT syncCompleted();
-        });
-        return r;
+        if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
+        if (m_device) m_device->resumeTickle();
+        Q_EMIT runFinished(r);
+        Q_EMIT syncCompleted();
+
+        promise->addResult(r);
+        promise->finish();
+        if (m_activeSyncWatcher == watcher)
+            m_activeSyncWatcher = nullptr;
+        watcher->deleteLater();
     });
+    watcher->setFuture(engineFuture);
+
+    return resultFuture;
 }
 
 QFuture<PalmRunResult> PalmRuntime::copyPalmToPC()
