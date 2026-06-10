@@ -24,28 +24,17 @@ AccountFormWidget::AccountFormWidget(BackendRegistry *registry, QWidget *parent)
     : QWidget(parent)
     , m_registry(registry)
 {
-    buildUi(QString());
-}
-
-AccountFormWidget::AccountFormWidget(BackendRegistry *registry,
-                                     const QString &lockedKind,
-                                     QWidget *parent)
-    : QWidget(parent)
-    , m_registry(registry)
-{
-    buildUi(lockedKind);
+    buildUi();
 }
 
 AccountFormWidget::~AccountFormWidget() = default;
 
-void AccountFormWidget::buildUi(const QString &lockedKind) {
+void AccountFormWidget::buildUi() {
     auto *outer = new QVBoxLayout(this);
 
     m_kindCombo  = new QComboBox(this);
     m_configStack = new QStackedWidget(this);
 
-    int lockedIndex = -1;
-    int i = 0;
     for (auto *contribution : m_registry->contributions()) {
         QString label = contribution->backendType();
         if (label == QStringLiteral("caldav"))
@@ -66,10 +55,6 @@ void AccountFormWidget::buildUi(const QString &lockedKind) {
         if (!cfg) cfg = new QWidget(m_configStack);
         m_configStack->addWidget(cfg);
         m_providers.push_back(std::move(provider));
-
-        if (!lockedKind.isEmpty() && contribution->backendType() == lockedKind)
-            lockedIndex = i;
-        ++i;
     }
 
     outer->addWidget(m_kindCombo);
@@ -90,13 +75,8 @@ void AccountFormWidget::buildUi(const QString &lockedKind) {
     const bool hasItems = m_kindCombo->count() > 0;
     m_testButton->setEnabled(hasItems);
 
-    if (!lockedKind.isEmpty() && lockedIndex >= 0) {
-        m_kindCombo->setCurrentIndex(lockedIndex);
-        m_kindCombo->setVisible(false);
-        onKindChanged(lockedIndex);
-    } else if (hasItems) {
+    if (hasItems)
         onKindChanged(0);
-    }
 }
 
 QString AccountFormWidget::selectedKind() const {

@@ -17,23 +17,15 @@ class QLabel;
 
 namespace WildPalms::App::Accounts {
 
-/// Reusable credential form. Populates a kind combo from
+/// Reusable account form. Populates a kind combo from
 /// BackendRegistry::contributions() and stacks each provider's
-/// createConfigWidget(). Used by AddAccountDialog and (F.1c.1)
-/// the NewProfileWizard's AddAccountsPage.
-///
-/// Two construction modes:
-///   - kind-selectable (default ctor): combo visible, user picks
-///   - kind-locked (lockedKind ctor): combo hidden; only the
-///     locked kind's config widget shown
+/// createConfigWidget(). Used by AddAccountDialog (Settings → Accounts
+/// and the NewProfileWizard's AccountsSetupPage).
 class AccountFormWidget : public QWidget {
     Q_OBJECT
 public:
     explicit AccountFormWidget(Kalburator::Sync::BackendRegistry *registry,
                                QWidget *parent = nullptr);
-    AccountFormWidget(Kalburator::Sync::BackendRegistry *registry,
-                      const QString &lockedKind,
-                      QWidget *parent = nullptr);
     ~AccountFormWidget() override;
 
     QString selectedKind() const;
@@ -50,7 +42,7 @@ private slots:
     void onTestConnection();
 
 private:
-    void buildUi(const QString &lockedKind);
+    void buildUi();
 
     Kalburator::Sync::BackendRegistry *m_registry {nullptr};
     QComboBox      *m_kindCombo {nullptr};

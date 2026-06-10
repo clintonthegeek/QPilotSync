@@ -59,7 +59,6 @@ private slots:
     void widgetExposesKindCombo();
     void emptyRegistryYieldsEmptySelectedKind();
     void emptyRegistryYieldsInvalidConfiguration();
-    void lockedKindOnEmptyRegistryDoesNotHideCombo();
     void setConfigurationOnEmptyRegistryIsSafeNoOp();
     void setConfigurationSelectsKindByType();
     void kindComboListsOnlyRegisteredContributions();
@@ -87,23 +86,6 @@ void TstAccountFormWidget::emptyRegistryYieldsInvalidConfiguration()
     QVERIFY(!w.isValid());
     const auto cfg = w.configuration();
     QVERIFY(!cfg.isValid());
-}
-
-void TstAccountFormWidget::lockedKindOnEmptyRegistryDoesNotHideCombo()
-{
-    // With no contributions registered, the locked-kind lookup falls through
-    // (lockedIndex stays -1) and the combo stays visible per the fallback
-    // branch. This documents the contract for the wizard's AddAccountsPage:
-    // a locked kind that isn't in the registry won't silently hide UI.
-    BackendRegistry reg;
-    AccountFormWidget w(&reg, QStringLiteral("caldav"));
-    w.show();
-    QTest::qWait(20);
-    auto *combo = w.findChild<QComboBox*>();
-    QVERIFY(combo);
-    QVERIFY2(combo->isVisible(),
-             "Locked kind not found in registry: combo must remain visible "
-             "as a fallback");
 }
 
 void TstAccountFormWidget::setConfigurationOnEmptyRegistryIsSafeNoOp()
