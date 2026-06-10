@@ -24,6 +24,9 @@ public:
     QString selectedKind() const;
     Kalburator::Sync::BackendConfiguration configuration() const;
 
+    /// Pre-fill the form from an existing account (Edit flows).
+    void setConfiguration(const Kalburator::Sync::BackendConfiguration &cfg);
+
 private:
     AccountFormWidget *m_form {nullptr};
 };

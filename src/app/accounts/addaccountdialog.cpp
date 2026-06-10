@@ -46,4 +46,8 @@ BackendConfiguration AddAccountDialog::configuration() const {
     return m_form ? m_form->configuration() : BackendConfiguration{};
 }
 
+void AddAccountDialog::setConfiguration(const BackendConfiguration &cfg) {
+    if (m_form) m_form->setConfiguration(cfg);
+}
+
 }  // namespace WildPalms::App::Accounts

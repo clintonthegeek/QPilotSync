@@ -6,9 +6,51 @@
 #include "app/accounts/accountformwidget.h"
 #include <backendregistry.h>
 #include <backendconfiguration.h>
+#include <backendcontribution.h>
+#include <iprovider.h>
+#include <collectioninfo.h>
+#include <QPromise>
 
 using WildPalms::App::Accounts::AccountFormWidget;
 using Kalburator::Sync::BackendRegistry;
+
+namespace {
+
+class StubProvider : public Kalburator::Sync::IProvider {
+    Q_OBJECT
+public:
+    explicit StubProvider(QObject *parent = nullptr)
+        : Kalburator::Sync::IProvider(parent) {}
+    QString id() const override { return QStringLiteral("stub-id"); }
+    QString kind() const override { return QStringLiteral("stub"); }
+    QString displayName() const override { return QStringLiteral("Stub"); }
+    void load(const Kalburator::Sync::BackendConfiguration &) override {}
+    Kalburator::Sync::BackendConfiguration save() const override { return {}; }
+    QWidget *createConfigWidget(QWidget *) override { return nullptr; }
+    QFuture<bool> connect() override {
+        QPromise<bool> p; p.start(); p.addResult(true); p.finish();
+        return p.future();
+    }
+    void disconnect() override {}
+    bool isConnected() const override { return false; }
+    QList<Kalburator::Sync::CollectionInfo> collections() const override { return {}; }
+    std::unique_ptr<Kalburator::Sync::IBlobBackend> createBackend(const QString &) override {
+        return nullptr;
+    }
+};
+
+class StubContribution : public Kalburator::Sync::BackendContribution {
+public:
+    QString backendType() const override { return QStringLiteral("stub"); }
+    QString displayName() const override { return QStringLiteral("Stub"); }
+    QList<Kalburator::Shape::Shape> nativeShapes() const override { return {}; }
+    std::unique_ptr<Kalburator::Sync::IProvider>
+    createProvider(QObject *parent = nullptr) const override {
+        return std::make_unique<StubProvider>(parent);
+    }
+};
+
+} // namespace
 
 class TstAccountFormWidget : public QObject
 {
@@ -18,6 +60,9 @@ private slots:
     void emptyRegistryYieldsEmptySelectedKind();
     void emptyRegistryYieldsInvalidConfiguration();
     void lockedKindOnEmptyRegistryDoesNotHideCombo();
+    void setConfigurationOnEmptyRegistryIsSafeNoOp();
+    void setConfigurationSelectsKindByType();
+    void kindComboListsOnlyRegisteredContributions();
 };
 
 void TstAccountFormWidget::widgetExposesKindCombo()
@@ -59,6 +104,42 @@ void TstAccountFormWidget::lockedKindOnEmptyRegistryDoesNotHideCombo()
     QVERIFY2(combo->isVisible(),
              "Locked kind not found in registry: combo must remain visible "
              "as a fallback");
+}
+
+void TstAccountFormWidget::setConfigurationOnEmptyRegistryIsSafeNoOp()
+{
+    BackendRegistry reg;
+    AccountFormWidget w(&reg);
+    Kalburator::Sync::BackendConfiguration cfg;
+    cfg.type = QStringLiteral("caldav");
+    w.setConfiguration(cfg);          // must not crash
+    QCOMPARE(w.selectedKind(), QString());
+}
+
+void TstAccountFormWidget::setConfigurationSelectsKindByType()
+{
+    BackendRegistry reg;
+    // Stub contribution registered under type "stub".
+    reg.registerContribution(std::make_shared<StubContribution>());
+    AccountFormWidget w(&reg);
+    Kalburator::Sync::BackendConfiguration cfg;
+    cfg.type = QStringLiteral("stub");
+    cfg.displayName = QStringLiteral("Edited");
+    w.setConfiguration(cfg);
+    QCOMPARE(w.selectedKind(), QStringLiteral("stub"));
+}
+
+void TstAccountFormWidget::kindComboListsOnlyRegisteredContributions()
+{
+    // Spec §8(a): offered kinds are exactly the registered contributions —
+    // a build without Akonadi never offers Akonadi.
+    BackendRegistry reg;
+    reg.registerContribution(std::make_shared<StubContribution>());
+    AccountFormWidget w(&reg);
+    auto *combo = w.findChild<QComboBox*>();
+    QVERIFY(combo);
+    QCOMPARE(combo->count(), 1);
+    QCOMPARE(combo->itemData(0).toString(), QStringLiteral("stub"));
 }
 
 WILDPALMS_QTEST_MAIN(TstAccountFormWidget)

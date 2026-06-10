@@ -40,6 +40,11 @@ public:
     Kalburator::Sync::BackendConfiguration configuration() const;
     bool isValid() const;
 
+    /// Populate the form from a persisted account (Edit flows). Selects the
+    /// kind matching cfg.type and forwards cfg to that kind's config widget.
+    /// No-op when cfg.type isn't among the registered contributions.
+    void setConfiguration(const Kalburator::Sync::BackendConfiguration &cfg);
+
 private slots:
     void onKindChanged(int index);
     void onTestConnection();

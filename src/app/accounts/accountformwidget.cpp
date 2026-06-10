@@ -52,6 +52,8 @@ void AccountFormWidget::buildUi(const QString &lockedKind) {
             label = tr("CalDAV (calendar)");
         else if (label == QStringLiteral("carddav"))
             label = tr("CardDAV (contacts)");
+        else if (label == QStringLiteral("akonadi"))
+            label = tr("Akonadi (local)");
         else if (label == QStringLiteral("multiproto-dav"))
             label = tr("Multi-protocol DAV (calendar + contacts)");
         else {
@@ -158,6 +160,15 @@ BackendConfiguration AccountFormWidget::configuration() const {
                        m_configStack->currentWidget()))
         p->load(cw->configuration());
     return p->save();
+}
+
+void AccountFormWidget::setConfiguration(const BackendConfiguration &cfg) {
+    const int idx = m_kindCombo->findData(cfg.type);
+    if (idx < 0) return;
+    m_kindCombo->setCurrentIndex(idx);
+    if (auto *cw = dynamic_cast<Kalburator::Sync::IProviderConfigWidget *>(
+                       m_configStack->widget(idx)))
+        cw->setConfiguration(cfg);
 }
 
 bool AccountFormWidget::isValid() const {
