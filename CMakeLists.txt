@@ -55,8 +55,8 @@ pkg_check_modules(UDEV REQUIRED libudev)
 # See docs/LIBKALBURATOR.md and docs/plans/2026-04-20-libkalburator-integration.md
 # for historical context.
 set(KALBURATOR_HAVE_ORG_IO OFF CACHE BOOL "" FORCE)
-# Phase L.8: allow KALBURATOR_HAVE_AKONADI to be set by the caller; default OFF
-option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" OFF)
+# Accounts-first wizard (2026-06-09): Akonadi is a first-class local target.
+option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" ON)
 
 set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
     "Optional path to a local libkalburator checkout (override FetchContent)")
