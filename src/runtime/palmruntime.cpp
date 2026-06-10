@@ -82,37 +82,16 @@ static QString sanitizeForFilesystem(const QString &id)
 
 // ──────────────────────────────────────────────────────────────────────────────
 // PalmSyncHost
-// Minimal ISyncHost backed by BackendRegistry.
+// Minimal ISyncHost backed by BackendRegistry. backendById()/backends() are
+// inherited from the v0.69 registry-backed base defaults (Plan 8 step 1),
+// which match the overrides this class carried before byte-for-byte.
 // ──────────────────────────────────────────────────────────────────────────────
 class PalmSyncHost final : public Kalburator::Sync::ISyncHost {
 public:
-    explicit PalmSyncHost(Kalburator::Sync::BackendRegistry *registry)
-        : m_registry(registry) {}
-
-    Kalburator::Sync::SyncBackend* backendById(const QString &id) override {
-        // Lib P3 widened backendInstance() to SyncBackendBase*; ISyncHost is a
-        // calendar-domain interface (lives in calendar/), so dynamic_cast filters
-        // out non-calendar backends. The engine fetches non-calendar backends
-        // directly from BackendRegistry via SyncBackendBase* post-P3.
-        if (!m_registry) return nullptr;
-        return dynamic_cast<Kalburator::Sync::SyncBackend*>(
-            m_registry->backendInstance(id));
-    }
-    QHash<QString, Kalburator::Sync::SyncBackend*> backends() override {
-        QHash<QString, Kalburator::Sync::SyncBackend*> result;
-        if (!m_registry) return result;
-        for (const QString &id : m_registry->registeredInstanceIds()) {
-            if (auto *cb = dynamic_cast<Kalburator::Sync::SyncBackend*>(
-                    m_registry->backendInstance(id))) {
-                result.insert(id, cb);
-            }
-        }
-        return result;
+    explicit PalmSyncHost(Kalburator::Sync::BackendRegistry *registry) {
+        setBackendRegistry(registry);
     }
     Kalburator::Sync::ISyncConfigStore* configStore() override { return nullptr; }
-
-private:
-    Kalburator::Sync::BackendRegistry *m_registry = nullptr;
 };
 
 // O7: stock domain/infra plugins DEFINE their canonical domain.
