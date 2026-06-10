@@ -1675,11 +1675,11 @@ bool KF6MainWindow::writeWizardResultToProfile(
     p.setName(r.state.profileName);
     p.setSyncFolderPath(path);
 
-    // Accounts — convert PendingAccount → BackendConfiguration. Force id to
+    // Accounts — convert WizardAccount → BackendConfiguration. Force id to
     // the wizard-local UUID so MappingSpec.accountRef matches the on-disk
     // account id (F.1c spec §10.2).
     QList<Kalburator::Sync::BackendConfiguration> accounts;
-    for (const auto &pa : r.state.pendingAccounts) {
+    for (const auto &pa : r.state.accounts) {
         auto cfg = pa.config;
         cfg.id   = pa.id;
         if (cfg.type.isEmpty()) cfg.type = pa.kind;

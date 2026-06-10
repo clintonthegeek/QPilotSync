@@ -9,7 +9,7 @@
 
 using WildPalms::Wizard::ReviewPage;
 using WildPalms::Wizard::WizardState;
-using WildPalms::Wizard::PendingAccount;
+using WildPalms::Wizard::WizardAccount;
 using WildPalms::Wizard::MappingSpec;
 using WildPalms::Wizard::TargetKind;
 
@@ -49,12 +49,12 @@ void TstReviewPage::allLocalRendersBareSummary()
 void TstReviewPage::mixedRendersAccountsAndCollections()
 {
     auto s = seed(QStringLiteral("Mixed"));
-    PendingAccount a;
+    WizardAccount a;
     a.id   = QStringLiteral("a-id");
     a.kind = QStringLiteral("caldav");
     a.config.displayName = QStringLiteral("Fastmail");
-    s.pendingAccounts.append(a);
-    s.mappings[0].kind         = TargetKind::RemoteNew;
+    s.accounts.append(a);
+    s.mappings[0].kind         = TargetKind::Account;
     s.mappings[0].accountRef   = a.id;
     s.mappings[0].collectionId = QStringLiteral("personal");
 

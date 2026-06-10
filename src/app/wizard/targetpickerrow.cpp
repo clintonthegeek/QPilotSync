@@ -64,7 +64,7 @@ void TargetPickerRow::rebuild()
                      QVariant::fromValue(QString()));   // empty id == rawfiles
 
     // 2. Existing pending accounts compatible with this row's kinds.
-    for (const auto &acc : m_state->pendingAccounts) {
+    for (const auto &acc : m_state->accounts) {
         if (!m_compatibleKinds.contains(acc.kind)) continue;
         const QString label = QStringLiteral("%1 (%2)")
             .arg(acc.config.displayName.isEmpty()

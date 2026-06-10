@@ -11,7 +11,7 @@ namespace WildPalms::Wizard {
 struct WizardState;
 class DiscoveryRow;
 
-/// Page 4 (conditional, shown only if any mapping has kind RemoteNew).
+/// Page 4 (conditional, shown only if any mapping has kind Account).
 /// One DiscoveryRow per remote mapping. Block-finish: Next is disabled
 /// until every row reaches Chosen state. (F.1c brainstorm Q5.)
 class DiscoveryPage : public QWizardPage {

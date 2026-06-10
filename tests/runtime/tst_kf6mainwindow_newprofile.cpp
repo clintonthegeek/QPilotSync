@@ -102,17 +102,17 @@ void TstKf6MainWindowNewProfile::remoteWizardWritesOneWildcardRowAndOneAccount()
         WildPalms::Wizard::Result r;
         r.state.profileName = QStringLiteral("Remote");
 
-        WildPalms::Wizard::PendingAccount acc;
+        WildPalms::Wizard::WizardAccount acc;
         acc.id   = QStringLiteral("acc-uuid");
         acc.kind = QStringLiteral("caldav");
         acc.config.displayName = QStringLiteral("Fastmail");
         acc.config.connectionParams.insert(QStringLiteral("url"),
             QStringLiteral("https://caldav.fastmail.com/"));
-        r.state.pendingAccounts.append(acc);
+        r.state.accounts.append(acc);
 
         WildPalms::Wizard::MappingSpec cal;
         cal.pluginId     = QStringLiteral("calendar");
-        cal.kind         = WildPalms::Wizard::TargetKind::RemoteNew;
+        cal.kind         = WildPalms::Wizard::TargetKind::Account;
         cal.accountRef   = acc.id;
         cal.collectionId = QStringLiteral("Personal");
         r.state.mappings.append(cal);

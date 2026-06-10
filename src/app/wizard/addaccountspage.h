@@ -11,10 +11,10 @@ namespace WildPalms::Wizard {
 
 struct WizardState;
 
-/// Page 3 (conditional, shown only if WizardState::pendingAccounts is
-/// non-empty). Stacks one AccountFormWidget per PendingAccount with the
+/// Page 3 (conditional, shown only if WizardState::accounts is
+/// non-empty). Stacks one AccountFormWidget per WizardAccount with the
 /// kind locked. validatePage() writes each widget's configuration() back
-/// into the matching PendingAccount.config.
+/// into the matching WizardAccount.config.
 class AddAccountsPage : public QWizardPage {
     Q_OBJECT
 public:

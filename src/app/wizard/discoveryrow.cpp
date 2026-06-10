@@ -14,7 +14,7 @@
 namespace WildPalms::Wizard {
 
 DiscoveryRow::DiscoveryRow(Kalburator::Sync::BackendRegistry *registry,
-                           const PendingAccount &account,
+                           const WizardAccount &account,
                            QWidget *parent)
     : QWidget(parent)
     , m_registry(registry)

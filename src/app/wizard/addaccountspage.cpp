@@ -44,7 +44,7 @@ void AddAccountsPage::initializePage()
 
     if (!m_state) return;
 
-    for (auto &pa : m_state->pendingAccounts) {
+    for (auto &pa : m_state->accounts) {
         auto *box = new QGroupBox(
             tr("New %1 account").arg(pa.kind.toUpper()), m_container);
         auto *boxLayout = new QVBoxLayout(box);
@@ -62,7 +62,7 @@ void AddAccountsPage::initializePage()
 
 bool AddAccountsPage::isComplete() const
 {
-    // No forms (empty pendingAccounts, defensive — wizard's nextId() skips
+    // No forms (empty accounts, defensive — wizard's nextId() skips
     // this page in that case): the page is trivially complete.
     if (m_forms.isEmpty()) return true;
     for (auto *f : m_forms) {
@@ -75,9 +75,9 @@ bool AddAccountsPage::validatePage()
 {
     if (!isComplete()) return false;
     if (!m_state) return true;
-    for (int i = 0; i < m_forms.size() && i < m_state->pendingAccounts.size(); ++i) {
+    for (int i = 0; i < m_forms.size() && i < m_state->accounts.size(); ++i) {
         if (m_forms[i]) {
-            m_state->pendingAccounts[i].config = m_forms[i]->configuration();
+            m_state->accounts[i].config = m_forms[i]->configuration();
         }
     }
     return true;
@@ -87,7 +87,7 @@ int AddAccountsPage::nextId() const
 {
     if (!m_state) return NewProfileWizard::ReviewPageId;
     for (const auto &m : m_state->mappings) {
-        if (m.kind == TargetKind::RemoteNew)
+        if (m.kind == TargetKind::Account)
             return NewProfileWizard::DiscoveryPageId;
     }
     return NewProfileWizard::ReviewPageId;

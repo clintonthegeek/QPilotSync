@@ -11,39 +11,39 @@
 
 using WildPalms::Wizard::AddAccountsPage;
 using WildPalms::Wizard::WizardState;
-using WildPalms::Wizard::PendingAccount;
+using WildPalms::Wizard::WizardAccount;
 using WildPalms::App::Accounts::AccountFormWidget;
 using Kalburator::Sync::BackendRegistry;
 
 class TstAddAccountsPage : public QObject {
     Q_OBJECT
 private slots:
-    void emptyPendingAccountsRendersNoForms();
-    void pendingAccountsRenderStackedForms();
-    void incompleteWhenNoPendingAccounts();
+    void emptyWizardAccountsRendersNoForms();
+    void accountsRenderStackedForms();
+    void incompleteWhenNoWizardAccounts();
 };
 
-void TstAddAccountsPage::emptyPendingAccountsRendersNoForms()
+void TstAddAccountsPage::emptyWizardAccountsRendersNoForms()
 {
     BackendRegistry reg;
     WizardState s;
     AddAccountsPage page(&reg, &s);
     page.initializePage();
-    // No PendingAccounts → no AccountFormWidgets.
+    // No WizardAccounts → no AccountFormWidgets.
     const auto forms = page.findChildren<AccountFormWidget*>();
     QCOMPARE(forms.size(), 0);
 }
 
-void TstAddAccountsPage::pendingAccountsRenderStackedForms()
+void TstAddAccountsPage::accountsRenderStackedForms()
 {
     BackendRegistry reg;
     WizardState s;
-    PendingAccount a;
+    WizardAccount a;
     a.id = QStringLiteral("a-id"); a.kind = QStringLiteral("caldav");
-    PendingAccount b;
+    WizardAccount b;
     b.id = QStringLiteral("b-id"); b.kind = QStringLiteral("carddav");
-    s.pendingAccounts.append(a);
-    s.pendingAccounts.append(b);
+    s.accounts.append(a);
+    s.accounts.append(b);
 
     AddAccountsPage page(&reg, &s);
     page.initializePage();
@@ -51,9 +51,9 @@ void TstAddAccountsPage::pendingAccountsRenderStackedForms()
     QCOMPARE(forms.size(), 2);
 }
 
-void TstAddAccountsPage::incompleteWhenNoPendingAccounts()
+void TstAddAccountsPage::incompleteWhenNoWizardAccounts()
 {
-    // Defensive: page should never be reached if pendingAccounts is empty,
+    // Defensive: page should never be reached if accounts is empty,
     // but if it is reached, isComplete() returns true (no requirements to
     // satisfy). The wizard's nextId() skip logic handles the normal case.
     BackendRegistry reg;

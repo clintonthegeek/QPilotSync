@@ -35,30 +35,30 @@ void ReviewPage::initializePage()
         if (m.kind == TargetKind::RawFiles) {
             line = tr("%1 → Local files").arg(m.pluginId.toHtmlEscaped());
         } else {
-            // Look up the referenced PendingAccount.
+            // Look up the referenced WizardAccount.
             QString accountDisplay = m.accountRef;
             QString accountKind;
-            for (const auto &a : m_state->pendingAccounts) {
-                if (a.id == m.accountRef) {
-                    accountDisplay = a.config.displayName.isEmpty()
-                        ? a.id : a.config.displayName;
-                    accountKind = a.kind;
-                    break;
-                }
+            QString collectionLabel = m.collectionId;
+            if (const auto *a = m_state->accountById(m.accountRef)) {
+                accountDisplay = a->config.displayName.isEmpty()
+                    ? a->id : a->config.displayName;
+                accountKind = a->kind;
+                for (const auto &c : a->collections)
+                    if (c.id == m.collectionId) { collectionLabel = c.name; break; }
             }
             line = tr("%1 → %2 / \"%3\" (%4)")
                        .arg(m.pluginId.toHtmlEscaped(),
                             accountDisplay.toHtmlEscaped(),
-                            m.collectionId.toHtmlEscaped(),
+                            collectionLabel.toHtmlEscaped(),
                             accountKind.toHtmlEscaped());
         }
         html += QStringLiteral("<li>%1</li>").arg(line);
     }
     html += QStringLiteral("</ul>");
 
-    if (!m_state->pendingAccounts.isEmpty()) {
+    if (!m_state->accounts.isEmpty()) {
         html += QStringLiteral("<p><b>New accounts to be created:</b></p><ul>");
-        for (const auto &a : m_state->pendingAccounts) {
+        for (const auto &a : m_state->accounts) {
             const QString disp = a.config.displayName.isEmpty()
                 ? a.id : a.config.displayName;
             html += QStringLiteral("<li>%1 (%2)</li>")

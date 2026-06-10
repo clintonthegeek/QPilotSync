@@ -12,7 +12,7 @@ using WildPalms::Wizard::TargetPickerPage;
 using WildPalms::Wizard::TargetPickerRow;
 using WildPalms::Wizard::WizardState;
 using WildPalms::Wizard::MappingSpec;
-using WildPalms::Wizard::PendingAccount;
+using WildPalms::Wizard::WizardAccount;
 using WildPalms::Wizard::TargetKind;
 
 class TstTargetPickerPage : public QObject {
@@ -20,7 +20,7 @@ class TstTargetPickerPage : public QObject {
 private slots:
     void seedsRawFilesByDefault();
     void memoRowDropdownDisabled();
-    void addNewAppendsPendingAccount();
+    void addNewAppendsWizardAccount();
     void selectingExistingAccountUpdatesMappingRef();
 };
 
@@ -68,7 +68,7 @@ void TstTargetPickerPage::memoRowDropdownDisabled()
     QVERIFY(!combo->isEnabled());
 }
 
-void TstTargetPickerPage::addNewAppendsPendingAccount()
+void TstTargetPickerPage::addNewAppendsWizardAccount()
 {
     auto s = seedState();
     TargetPickerPage page(&s);
@@ -78,29 +78,29 @@ void TstTargetPickerPage::addNewAppendsPendingAccount()
     // the page's slot directly (the row would emit this on dropdown change).
     page.addNewAccount(QStringLiteral("calendar"), QStringLiteral("caldav"));
 
-    QCOMPARE(s.pendingAccounts.size(), 1);
-    QCOMPARE(s.pendingAccounts.first().kind, QStringLiteral("caldav"));
-    QVERIFY(!s.pendingAccounts.first().id.isEmpty());
+    QCOMPARE(s.accounts.size(), 1);
+    QCOMPARE(s.accounts.first().kind, QStringLiteral("caldav"));
+    QVERIFY(!s.accounts.first().id.isEmpty());
 
     // The calendar mapping now references the new pending account.
-    QCOMPARE(s.mappings[0].kind, TargetKind::RemoteNew);
-    QCOMPARE(s.mappings[0].accountRef, s.pendingAccounts.first().id);
+    QCOMPARE(s.mappings[0].kind, TargetKind::Account);
+    QCOMPARE(s.mappings[0].accountRef, s.accounts.first().id);
 }
 
 void TstTargetPickerPage::selectingExistingAccountUpdatesMappingRef()
 {
     auto s = seedState();
-    PendingAccount existing;
+    WizardAccount existing;
     existing.id   = QStringLiteral("preset-caldav");
     existing.kind = QStringLiteral("caldav");
     existing.config.displayName = QStringLiteral("Preset");
-    s.pendingAccounts.append(existing);
+    s.accounts.append(existing);
 
     TargetPickerPage page(&s);
     page.initializePage();
 
     page.selectExistingAccount(QStringLiteral("calendar"), existing.id);
-    QCOMPARE(s.mappings[0].kind, TargetKind::RemoteNew);
+    QCOMPARE(s.mappings[0].kind, TargetKind::Account);
     QCOMPARE(s.mappings[0].accountRef, existing.id);
 }
 

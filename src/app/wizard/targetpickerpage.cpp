@@ -11,10 +11,10 @@ namespace WildPalms::Wizard {
 int TargetPickerPage::nextId() const
 {
     if (!m_state) return NewProfileWizard::ReviewPageId;
-    if (!m_state->pendingAccounts.isEmpty())
+    if (!m_state->accounts.isEmpty())
         return NewProfileWizard::AddAccountsPageId;
     for (const auto &m : m_state->mappings) {
-        if (m.kind == TargetKind::RemoteNew)
+        if (m.kind == TargetKind::Account)
             return NewProfileWizard::DiscoveryPageId;
     }
     return NewProfileWizard::ReviewPageId;
@@ -82,14 +82,14 @@ int TargetPickerPage::mappingIndex(const QString &pluginId) const
 void TargetPickerPage::addNewAccount(const QString &pluginId, const QString &kind)
 {
     if (!m_state) return;
-    PendingAccount acc;
+    WizardAccount acc;
     acc.id   = QUuid::createUuid().toString(QUuid::WithoutBraces);
     acc.kind = kind;
-    m_state->pendingAccounts.append(acc);
+    m_state->accounts.append(acc);
 
     const int mi = mappingIndex(pluginId);
     if (mi >= 0) {
-        m_state->mappings[mi].kind        = TargetKind::RemoteNew;
+        m_state->mappings[mi].kind        = TargetKind::Account;
         m_state->mappings[mi].accountRef  = acc.id;
         m_state->mappings[mi].collectionId.clear();
     }
@@ -110,7 +110,7 @@ void TargetPickerPage::selectExistingAccount(const QString &pluginId,
         m_state->mappings[mi].accountRef.clear();
         m_state->mappings[mi].collectionId.clear();
     } else {
-        m_state->mappings[mi].kind        = TargetKind::RemoteNew;
+        m_state->mappings[mi].kind        = TargetKind::Account;
         m_state->mappings[mi].accountRef  = accountId;
         m_state->mappings[mi].collectionId.clear();
     }

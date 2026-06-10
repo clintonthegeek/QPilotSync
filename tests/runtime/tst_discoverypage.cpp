@@ -20,7 +20,7 @@ using WildPalms::Wizard::DiscoveryPage;
 using WildPalms::Wizard::DiscoveryRow;
 using WildPalms::Wizard::WizardState;
 using WildPalms::Wizard::MappingSpec;
-using WildPalms::Wizard::PendingAccount;
+using WildPalms::Wizard::WizardAccount;
 using WildPalms::Wizard::TargetKind;
 using Kalburator::Sync::BackendRegistry;
 using Kalburator::Sync::BackendContribution;
@@ -87,17 +87,17 @@ QList<CollectionInfo> StubContribution::s_nextCollections;
 
 WizardState makeStateWithOneRemote() {
     WizardState s;
-    PendingAccount acc;
+    WizardAccount acc;
     acc.id   = QStringLiteral("acc-1");
     acc.kind = QStringLiteral("stub");
     acc.config.id   = QStringLiteral("acc-1");
     acc.config.type = QStringLiteral("stub");
     acc.config.displayName = QStringLiteral("Stub Account");
-    s.pendingAccounts.append(acc);
+    s.accounts.append(acc);
 
     MappingSpec m;
     m.pluginId   = QStringLiteral("calendar");
-    m.kind       = TargetKind::RemoteNew;
+    m.kind       = TargetKind::Account;
     m.accountRef = acc.id;
     s.mappings.append(m);
     return s;

@@ -39,11 +39,11 @@ void DiscoveryPage::initializePage()
 
     for (int i = 0; i < m_state->mappings.size(); ++i) {
         const auto &m = m_state->mappings[i];
-        if (m.kind != TargetKind::RemoteNew) continue;
+        if (m.kind != TargetKind::Account) continue;
 
-        // Find the PendingAccount for accountRef.
-        const PendingAccount *acc = nullptr;
-        for (const auto &a : m_state->pendingAccounts) {
+        // Find the WizardAccount for accountRef.
+        const WizardAccount *acc = nullptr;
+        for (const auto &a : m_state->accounts) {
             if (a.id == m.accountRef) { acc = &a; break; }
         }
         if (!acc) continue;

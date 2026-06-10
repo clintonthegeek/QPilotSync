@@ -17,7 +17,7 @@ namespace Kalburator::Sync {
 
 namespace WildPalms::Wizard {
 
-struct PendingAccount;
+struct WizardAccount;
 
 /// One row on the DiscoveryPage. Builds an IProvider from the
 /// account's BackendConfiguration, calls connect(), surfaces the
@@ -29,7 +29,7 @@ public:
     enum State { Loading, Loaded, Empty, Failed, Chosen };
 
     DiscoveryRow(Kalburator::Sync::BackendRegistry *registry,
-                 const PendingAccount &account,
+                 const WizardAccount &account,
                  QWidget *parent = nullptr);
     ~DiscoveryRow() override;
 
