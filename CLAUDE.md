@@ -6,20 +6,49 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-09)
+## Current branch and state (as of 2026-06-10)
 
-**Branch:** local `main` at `1be66a3` — `feature/three-tier-sync` has been merged into
-local main; **~94 commits ahead of `origin/main`, unpushed** (push only at user request).
-**libkalburator pin:** `v0.66` (`CMakeLists.txt:63`).
+**Branch:** local `main` at `4dc3537`+ — **~100 commits ahead of `origin/main`, unpushed**
+(push only at user request; both the v0.67 response §5 and the Plan 8 handoff §5 ask for a
+push so lib gates can run against WP's real baseline — flagged to user).
+**libkalburator pin:** `v0.69` (`CMakeLists.txt:63`) — bumped from v0.66 this session
+(v0.67 = contentTypes + pre-connected-provider fixes; v0.68 = RemoteCalendarBackend
+decomposition; v0.69 = Plan 8 step 1).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **120/120 pass.** (AccountController teardown regression test added inside the existing `tst_account_controller` binary; count unchanged)
+**ctest:** **120/120 pass.** (two mid-run-cancel regression tests added inside the existing `tst_palm_runtime_cancel_sync` binary; count unchanged)
+
+### Plan 8 consumer wave — DONE this session (2026-06-10)
+
+libkalburator's `docs/2026-06-10-plan8-wildpalms-consumer-wave-handoff.md` executed in full;
+WP response doc: `docs/2026-06-10-plan8-consumer-wave-response-wildpalms.md`. **WP is
+runSyncFuture-clean; lib step 3 (overload deletion) is unblocked from WP's side.**
+
+- A.0 pin v0.66→v0.69 (`d68fa5d`); A.1 `PalmSyncHost` collapsed onto v0.69 registry-backed
+  ISyncHost defaults (`e5d2820`); A.2 `SyncHost_WP` kept per recommendation.
+- B.1/B.2 (`4dc3537`): both `runSyncFuture` call sites migrated to `runSync(SyncRequest)`.
+  Result delivery moved out of `.then()` (Qt6 drops continuations on cancel → runFinished
+  never fired → UI hang) into the cancellation watcher's finished slot; caller futures are
+  promise-backed and always finish; cancelled runs now report success=false /
+  "Sync cancelled". Single-mapping path synthesizes the cancelled result because the
+  canonical wrapper future carries NO result after cancel (lib FINDINGS).
+- New tests: `cancelSync_midRun_{mirror,hotSync}_emitsRunFinished` (slow-loadRecords mock
+  for a deterministic cancel window).
+- **Do NOT bump the pin past the lib's step-3 tag until the lib confirms** — actually WP is
+  clean now, so the step-3 compile break won't bite; but watch for the lib's announcement.
+
+### Heads-up: upcoming lib RFCs aimed at WP (from v0.67 response §Consumer actions)
+
+calendarsOnly mode selection (WP-A1), IProvider failure-signal contract (WP-A7),
+BaselineStore-v2 retirement (WP-C5), recurrenceCapabilities migration (WP-C6, also visible
+as a deprecation warning in our build). Docs live lib-side under
+`docs/campaign/architectural-redress/2026-06-10-audit-follow-up-specs.md`.
 
 ### First live run of the accounts-first wizard (2026-06-09, post-landing)
 
 User exercised the new wizard against a real Nextcloud account (12 calendars). Outcomes:
 
 1. **Teardown segfault — FIXED at `1be66a3`.** `KF6MainWindow::loadProfile` replacing the previous `AccountController` crashed: `~ProviderManager()` (member) calls `disconnectAll()`, provider emits, `providerStateChanged` reached the ctor lambda which wrote into the already-destroyed `m_states` (declared after `m_providerManager`; context disconnect only happens later in `~QObject`). Fix: sever connections in the dtor body. Regression test: `tst_account_controller::destruction_does_not_deliver_provider_signals`.
-2. **Todo conduit unbindable to CalDAV task lists — lib fix MERGED, awaiting tag (2026-06-10).** RFC: `docs/2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md`. libkalburator landed it (`1a48258`) plus a second fix from the same debugging session (`9584f2f`, pre-connected providers stuck at "Connecting" with unregistered backends); both merged to lib `main` at `f170139`, **not yet tagged/pushed** (PlanStan gate presumably next on their side). WP pre-verified **120/120** against `f170139` via scratch build (`-DWILDPALMS_LIBKALBURATOR_SOURCE_DIR=<worktree>`; scratch dir + worktree removed after). The calendar filter follow-up is DONE at `ba481a8` — contentTypes are authoritative for the calendar conduit when reported, bare `type=="calendar"` only as fallback (Akonadi). **Remaining: when the lib tags (v0.67?) and pushes, bump `WILDPALMS_LIBKALBURATOR_GIT_TAG` in `CMakeLists.txt`, reconfigure+build+ctest, commit. Then user smoke-tests the wizard: todo dropdowns should list the 7 VTODO-capable Nextcloud calendars; tasks-only calendars leave the datebook dropdown.**
+2. **Todo conduit unbindable to CalDAV task lists — RESOLVED, shipped at lib v0.67; WP pinned past it (v0.69).** RFC: `docs/2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md`; lib response: `~/dev/libkalburator/docs/2026-06-10-v067-response.md` (CLOSED). The calendar filter follow-up is DONE at `ba481a8` — contentTypes are authoritative for the calendar conduit when reported, bare `type=="calendar"` only as fallback (Akonadi). **Remaining: user smoke-tests the wizard — todo dropdowns should list the 10 VTODO-capable Nextcloud calendars (7 tasks-only + 3 mixed); datebook dropdown shrinks to the 5 VEVENT-capable; accounts no longer stick at "Connecting" (v0.67's second fix).**
 3. **UX observations (not bugs, candidate roadmap items):** (a) Bindings page binds ONE collection per conduit — syncing *all* the user's calendars needs the existing category-mapping machinery (or wizard checkboxes to merge several calendars into the datebook); (b) same multi-collection story applies to address books → contact categories.
 
 ### Previously deferred failures — RESOLVED at v0.66 (2026-06-06)
@@ -143,7 +172,8 @@ These either need a libkalburator response or sit on the WP-edit pile:
 
 | Doc | Direction | Status |
 |---|---|---|
-| `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **Resolved lib-side 2026-06-10** (merged to lib main `f170139`, awaiting tag); WP pin bump pending |
+| `2026-06-10-plan8-consumer-wave-response-wildpalms.md` | WP → lib | **WP wave COMPLETE**; lib step 3 (runSyncFuture deletion) unblocked from WP's side |
+| `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **CLOSED** — shipped lib v0.67 (`2026-06-10-v067-response.md`); WP pinned at v0.69 |
 | `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | Open RFC; **actively edited (item B above)**; unstaged +177 lines |
 | `2026-05-27-libkalburator-topology-authority-proposal.md` | WP → lib | Open RFC; the hub editability authority/demotion question. No response yet from lib AFAICT. |
 | `2026-05-26-calendar-writer-palmwire-parse-handoff-libkalburator.md` | WP → lib | Labeled "Blocker for CalDAV→Palm calendar sync"; status not re-verified this session |
