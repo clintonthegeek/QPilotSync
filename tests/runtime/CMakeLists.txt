@@ -497,6 +497,29 @@ set_tests_properties(tst_namepage PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Accounts-first wizard — domain filter unit test
+add_executable(tst_domainfilter tst_domainfilter.cpp)
+target_link_libraries(tst_domainfilter
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsAppWizard
+        WildPalmsAppAccounts
+        WildPalmsCore
+        WildPalmsPalmDevice
+        KF6::I18n
+        KF6::ConfigCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_domainfilter COMMAND tst_domainfilter)
+set_tests_properties(tst_domainfilter PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # F.1c.0 — AccountFormWidget unit test
 add_executable(tst_accountformwidget tst_accountformwidget.cpp)
 target_link_libraries(tst_accountformwidget
