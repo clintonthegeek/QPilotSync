@@ -37,14 +37,10 @@ void AccountFormWidget::buildUi() {
 
     for (auto *contribution : m_registry->contributions()) {
         QString label = contribution->backendType();
-        if (label == QStringLiteral("caldav"))
-            label = tr("CalDAV (calendar)");
-        else if (label == QStringLiteral("carddav"))
-            label = tr("CardDAV (contacts)");
+        if (label == QStringLiteral("multiproto-dav"))
+            label = tr("DAV server (calendar + contacts)");
         else if (label == QStringLiteral("akonadi"))
             label = tr("Akonadi (local)");
-        else if (label == QStringLiteral("multiproto-dav"))
-            label = tr("Multi-protocol DAV (calendar + contacts)");
         else {
             label[0] = label[0].toUpper();
         }

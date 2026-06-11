@@ -49,7 +49,7 @@ WizardState stateWithConnectedAccount() {
     auto s = seedState();
     WizardAccount acc;
     acc.id   = QStringLiteral("acc-1");
-    acc.kind = QStringLiteral("caldav");
+    acc.kind = QStringLiteral("multiproto-dav");
     acc.config.displayName = QStringLiteral("Fastmail");
     acc.connected = true;
     acc.collections = {

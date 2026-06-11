@@ -95,8 +95,8 @@ void TstAccountController::loadFromProfile_reads_existing_accounts()
         p.initialize();
         Kalburator::Sync::BackendConfiguration cfg;
         cfg.id = QStringLiteral("test-uuid-1");
-        cfg.type = QStringLiteral("carddav");
-        cfg.displayName = QStringLiteral("Personal CardDAV");
+        cfg.type = QStringLiteral("multiproto-dav");
+        cfg.displayName = QStringLiteral("Personal DAV");
         cfg.connectionParams[QStringLiteral("url")] =
             QStringLiteral("https://nonresolvable.example/");
         cfg.connectionParams[QStringLiteral("username")] = QStringLiteral("alice");
@@ -115,9 +115,9 @@ void TstAccountController::loadFromProfile_reads_existing_accounts()
     QCOMPARE(ac.providers().first()->id(),
              QStringLiteral("test-uuid-1"));
     QCOMPARE(ac.providers().first()->kind(),
-             QStringLiteral("carddav"));
+             QStringLiteral("multiproto-dav"));
     QCOMPARE(ac.providers().first()->displayName(),
-             QStringLiteral("Personal CardDAV"));
+             QStringLiteral("Personal DAV"));
 }
 
 void TstAccountController::addProvider_returns_uuid_and_persists_to_profile()
@@ -134,7 +134,7 @@ void TstAccountController::addProvider_returns_uuid_and_persists_to_profile()
     cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://nonresolvable.example/");
     cfg.connectionParams[QStringLiteral("username")] = QStringLiteral("alice");
 
-    QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
+    QString uuid = ac.addProvider(QStringLiteral("multiproto-dav"), cfg);
     QVERIFY(!uuid.isEmpty());
     QCOMPARE(uuid, QStringLiteral("manual-uuid"));
     QCOMPARE(ac.providers().size(), 1);
@@ -143,7 +143,7 @@ void TstAccountController::addProvider_returns_uuid_and_persists_to_profile()
     const auto accts = profile.accounts();
     QCOMPARE(accts.size(), 1);
     QCOMPARE(accts.first().id, QStringLiteral("manual-uuid"));
-    QCOMPARE(accts.first().type, QStringLiteral("carddav"));
+    QCOMPARE(accts.first().type, QStringLiteral("multiproto-dav"));
 }
 
 void TstAccountController::addProvider_refused_for_unsupported_kind()
@@ -171,7 +171,7 @@ void TstAccountController::removeProvider_drops_from_list_and_profile()
 
     Kalburator::Sync::BackendConfiguration cfg;
     cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
-    QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
+    QString uuid = ac.addProvider(QStringLiteral("multiproto-dav"), cfg);
     QCOMPARE(ac.providers().size(), 1);
     QCOMPARE(profile.accounts().size(), 1);
 
@@ -192,7 +192,7 @@ void TstAccountController::loadFromProfile_handlesUnreachableServer()
         p.initialize();
         Kalburator::Sync::BackendConfiguration cfg;
         cfg.id = QStringLiteral("dead-uuid");
-        cfg.type = QStringLiteral("carddav");
+        cfg.type = QStringLiteral("multiproto-dav");
         cfg.connectionParams[QStringLiteral("url")] =
             QStringLiteral("https://this-server-does-not-resolve.invalid/");
         cfg.connectionParams[QStringLiteral("username")] = QStringLiteral("x");
@@ -221,7 +221,7 @@ void TstAccountController::removeProvider_cascadesMappings()
 
     Kalburator::Sync::BackendConfiguration cfg;
     cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
-    const QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
+    const QString uuid = ac.addProvider(QStringLiteral("multiproto-dav"), cfg);
 
     // Seed three mappings: 2 reference the provider, 1 doesn't.
     QJsonArray maps;
@@ -262,7 +262,7 @@ void TstAccountController::mappingDescriptionsFor_returns_first_N()
 
     Kalburator::Sync::BackendConfiguration cfg;
     cfg.connectionParams[QStringLiteral("url")] = QStringLiteral("https://x/");
-    const QString uuid = ac.addProvider(QStringLiteral("carddav"), cfg);
+    const QString uuid = ac.addProvider(QStringLiteral("multiproto-dav"), cfg);
 
     QJsonArray maps;
     for (int i = 0; i < 5; ++i) {

@@ -10,7 +10,7 @@
 #include <QComboBox>
 
 #include <backendregistry.h>
-#include <caldavbackendcontribution.h>
+#include <multiprotocoldavbackendcontribution.h>
 #include <backendconfiguration.h>
 
 #include "../src/app/accounts/addaccountdialog.h"
@@ -41,7 +41,7 @@ void TstAddAccountDialogBaseline::constructsWithEmptyRegistry()
 void TstAddAccountDialogBaseline::comboPopulatedForRegisteredContributions()
 {
     BackendRegistry registry;
-    registry.registerContribution(std::make_shared<CalDavBackendContribution>());
+    registry.registerContribution(std::make_shared<MultiProtocolDavBackendContribution>());
     AddAccountDialog dlg(&registry);
     auto *combo = dlg.findChild<QComboBox *>();
     QVERIFY(combo != nullptr);
@@ -51,9 +51,9 @@ void TstAddAccountDialogBaseline::comboPopulatedForRegisteredContributions()
 void TstAddAccountDialogBaseline::selectedKindReturnsRegisteredType()
 {
     BackendRegistry registry;
-    registry.registerContribution(std::make_shared<CalDavBackendContribution>());
+    registry.registerContribution(std::make_shared<MultiProtocolDavBackendContribution>());
     AddAccountDialog dlg(&registry);
-    QCOMPARE(dlg.selectedKind(), QStringLiteral("caldav"));
+    QCOMPARE(dlg.selectedKind(), QStringLiteral("multiproto-dav"));
 }
 
 QTEST_MAIN(TstAddAccountDialogBaseline)

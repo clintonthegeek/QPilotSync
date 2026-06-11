@@ -51,7 +51,7 @@ void TstReviewPage::mixedRendersAccountsAndCollections()
     auto s = seed(QStringLiteral("Mixed"));
     WizardAccount a;
     a.id   = QStringLiteral("a-id");
-    a.kind = QStringLiteral("caldav");
+    a.kind = QStringLiteral("multiproto-dav");
     a.config.displayName = QStringLiteral("Fastmail");
     s.accounts.append(a);
     s.mappings[0].kind         = TargetKind::Account;
@@ -65,7 +65,7 @@ void TstReviewPage::mixedRendersAccountsAndCollections()
     const QString text = label->text();
     QVERIFY(text.contains(QStringLiteral("Fastmail")));
     QVERIFY(text.contains(QStringLiteral("personal")));
-    QVERIFY(text.contains(QStringLiteral("caldav"), Qt::CaseInsensitive));
+    QVERIFY(text.contains(QStringLiteral("multiproto-dav"), Qt::CaseInsensitive));
 }
 
 WILDPALMS_QTEST_MAIN(TstReviewPage)

@@ -104,7 +104,7 @@ void TstKf6MainWindowNewProfile::remoteWizardWritesOneWildcardRowAndOneAccount()
 
         WildPalms::Wizard::WizardAccount acc;
         acc.id   = QStringLiteral("acc-uuid");
-        acc.kind = QStringLiteral("caldav");
+        acc.kind = QStringLiteral("multiproto-dav");
         acc.config.displayName = QStringLiteral("Fastmail");
         acc.config.connectionParams.insert(QStringLiteral("url"),
             QStringLiteral("https://caldav.fastmail.com/"));

@@ -58,7 +58,7 @@ void TstAccountsPage::afterAdd_listShowsProvider()
     Kalburator::Sync::BackendConfiguration cfg;
     cfg.displayName = "Server X";
     cfg.connectionParams["url"] = "https://x/";
-    ac.addProvider("carddav", cfg);
+    ac.addProvider("multiproto-dav", cfg);
 
     WildPalms::App::Accounts::AccountsPage page(&ac, &rt);
     page.show();

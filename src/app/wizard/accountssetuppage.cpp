@@ -19,9 +19,8 @@ namespace WildPalms::Wizard {
 
 namespace {
 QString kindFriendly(const QString &kind) {
-    if (kind == QStringLiteral("caldav"))  return QStringLiteral("CalDAV");
-    if (kind == QStringLiteral("carddav")) return QStringLiteral("CardDAV");
-    if (kind == QStringLiteral("akonadi")) return QObject::tr("Akonadi (local)");
+    if (kind == QStringLiteral("multiproto-dav")) return QStringLiteral("DAV");
+    if (kind == QStringLiteral("akonadi"))        return QObject::tr("Akonadi (local)");
     return kind.toUpper();
 }
 } // namespace

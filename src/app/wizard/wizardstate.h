@@ -19,7 +19,7 @@ enum class TargetKind {
 /// pages (Bindings, Review) need no live provider.
 struct WizardAccount {
     QString id;       // wizard-local UUID; reused as the on-disk account id
-    QString kind;     // contribution backendType(): "caldav" | "carddav" | "akonadi" | ...
+    QString kind;     // contribution backendType(): "multiproto-dav" | "akonadi" | ...
     Kalburator::Sync::BackendConfiguration config;
 
     // Discovery results, filled by AccountsSetupPage when connect() resolves.
