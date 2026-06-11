@@ -1697,7 +1697,12 @@ bool KF6MainWindow::writeWizardResultToProfile(
             "default-%1-%2-%3").arg(m.pluginId, m.accountRef, m.collectionId);
         row[QStringLiteral("sourceBackend")]  = m.pluginId;
         row[QStringLiteral("sourceCalendar")] = QString();   // wildcard
-        row[QStringLiteral("targetBackend")]  = m.accountRef;
+        // "<providerId>:<collectionId>" — the BackendRegistry instance id
+        // ProviderManager registers provider-collection backends under
+        // (same convention as SyncMappingsGraphView). A bare account uuid
+        // resolves to no backend at dispatch time.
+        row[QStringLiteral("targetBackend")]  =
+            QStringLiteral("%1:%2").arg(m.accountRef, m.collectionId);
         row[QStringLiteral("targetCalendar")] = m.collectionId;
         row[QStringLiteral("mode")]           = QStringLiteral("TwoWay");
         row[QStringLiteral("conflictPolicy")] = QStringLiteral("LastWriteWins");

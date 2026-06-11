@@ -148,8 +148,14 @@ void TstKf6MainWindowNewProfile::remoteWizardWritesOneWildcardRowAndOneAccount()
              QStringLiteral("calendar"));
     QCOMPARE(row[QStringLiteral("sourceCalendar")].toString(),
              QString());                                     // wildcard
+    // targetBackend must be the BackendRegistry instance id,
+    // "<providerId>:<collectionId>" — the id ProviderManager registers
+    // provider-collection backends under, the id the engine's dispatchSync
+    // resolves, and the prefix AccountController's cascade-delete matches.
+    // A bare account uuid resolves to nothing ("dispatchSync: backend not
+    // found" on every account-backed route mapping).
     QCOMPARE(row[QStringLiteral("targetBackend")].toString(),
-             QStringLiteral("acc-uuid"));
+             QStringLiteral("acc-uuid:Personal"));
     QCOMPARE(row[QStringLiteral("targetCalendar")].toString(),
              QStringLiteral("Personal"));
 }
