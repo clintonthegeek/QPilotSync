@@ -15,6 +15,20 @@ push so lib gates can run against WP's real baseline — flagged to user).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
 **ctest:** **120/120 pass.**
 
+### First live HotSync through the wizard profile — route dispatch FIXED (`fa67c83`, 2026-06-11)
+
+User's first device HotSync against a wizard-created profile: the 4 hub↔palm mappings ran;
+all 3 account-backed route mappings (hub→DAV) failed with `dispatchSync: backend not found`.
+Root cause: the wizard persisted `targetBackend = <bare account uuid>`, but
+`ProviderManager::registerProviderBackends` registers provider-collection backends as
+`"<providerId>:<collectionId>"` — the convention SyncMappingsGraphView documents/writes and
+`AccountController::mappingIndicesFor` cascade-matches (`"<uuid>:"` prefix), meaning the bare
+uuid also exempted wizard rows from cascade-delete. Fix at the wizard write site
+(`kf6mainwindow.cpp`); `translateRouteSpec` passes it through verbatim so the composed id
+reaches the engine unchanged. **No migration: profiles created before `fa67c83` carry broken
+rows — recreate via the wizard (user smoke test pending: HotSync should now run all 7
+mappings; todo route correctly targets the VTODO-capable "Next Actions").**
+
 ### Unified DAV account kind — landed 2026-06-11 (`74cb635`)
 
 Add Account previously offered "CalDAV (calendar)" and "CardDAV (contacts)" as separate
