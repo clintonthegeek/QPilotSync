@@ -333,6 +333,10 @@ private:
     /// Substrate A3: per-mapping route status from the last
     /// buildRouteLogicalCalendars(). Keyed by SyncMapping::id.
     QHash<QString, WildPalms::Runtime::RouteStatus>             m_routeStatuses;
+    /// Substrate A3: desired category names the connect-time reconciler could
+    /// not place (device table full), keyed by primary db name. Diagnostics +
+    /// future UI; translateRouteSpec already reports these rows as NoFreeSlot.
+    QHash<QString, QStringList>                                 m_categoryNoFreeSlot;
 };
 
 }  // namespace WildPalms::Runtime

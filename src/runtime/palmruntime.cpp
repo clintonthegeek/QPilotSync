@@ -64,6 +64,7 @@
 
 #include "routemapping.h"
 #include "conduitcatalog.h"
+#include "categoryreconciler.h"
 
 #include "standardcontributions.h"
 
@@ -477,6 +478,45 @@ void PalmRuntime::finishConnect()
     // sub-project reintroduces them as hub<->remote bindings; this load call is
     // kept as the seam where that merge will happen.
     loadMappingsFromProfile();
+
+    // Substrate A3: reconcile desired category names against each device table
+    // BEFORE the backends read AppInfo below, writing new slots when claimed —
+    // so createPalmBackend's AppInfo read sees the final table. Desired set =
+    // the profile's persisted desired names ∪ the category names referenced by
+    // enabled route rows ("palm:<domain>/name:<X>").
+    m_categoryNoFreeSlot.clear();
+    for (auto *c : conduits()) {
+        if (!c->supportsCategories() || !m_profile) continue;
+        const QString db = c->primaryDbName();
+        QStringList desired = m_profile->desiredCategoryNames(db);
+        const QString prefix = QStringLiteral("palm:")
+            + c->domain().toString() + QStringLiteral("/name:");
+        for (const auto &m : m_mappings) {
+            if (!m.enabled || m.sourceBackend != c->conduitId()) continue;
+            if (m.sourceCalendar.startsWith(prefix)) {
+                const QString n = m.sourceCalendar.mid(prefix.size());
+                if (!n.isEmpty() && !desired.contains(n, Qt::CaseInsensitive))
+                    desired.append(n);
+            }
+        }
+        if (desired.isEmpty()) continue;
+
+        const QByteArray block = m_device->readAppBlock(db);
+        if (block.isEmpty()) continue;   // no AppInfo (e.g. fake device) -> no-op
+        const auto r = WildPalms::Runtime::reconcileCategories(block, desired);
+        if (!r.updatedAppInfoBlock.isEmpty()) {
+            if (!m_device->writeAppBlock(db, r.updatedAppInfoBlock))
+                qWarning() << "[PalmRuntime] AppInfo write failed for" << db;
+            else
+                qDebug() << "[PalmRuntime] created" << r.bound.size()
+                         << "category binding(s) on" << db;
+        }
+        if (!r.noFreeSlot.isEmpty()) {
+            m_categoryNoFreeSlot.insert(db, r.noFreeSlot);
+            qWarning() << "[PalmRuntime] no free category slot on" << db
+                       << "for" << r.noFreeSlot;
+        }
+    }
 
     // Substrate A1: enumerate conduit descriptors instead of casting to each
     // concrete plugin type. createPalmBackend populates the plugin's internal
