@@ -9,6 +9,8 @@
 #include "app/wizard/targetpickerpage.h"
 #include "app/wizard/targetpickerrow.h"
 #include "app/wizard/wizardstate.h"
+#include "runtime/conduitcatalog.h"
+#include "plugins/pimplugin.h"   // complete type: vector<unique_ptr<PimPlugin>> destructor
 
 #include <collectioninfo.h>
 
@@ -84,7 +86,8 @@ private slots:
 void TstTargetPickerPage::populatesDomainFilteredBindings()
 {
     auto s = stateWithConnectedAccount();
-    TargetPickerPage page(&s);
+    auto conduits = WildPalms::Runtime::createStockConduits();
+    TargetPickerPage page(&s, &conduits);
     page.initializePage();
 
     auto *cal = comboFor(page, QStringLiteral("calendar"));
@@ -109,7 +112,8 @@ void TstTargetPickerPage::populatesDomainFilteredBindings()
 void TstTargetPickerPage::readOnlyCollectionsAreNotSelectable()
 {
     auto s = stateWithConnectedAccount();
-    TargetPickerPage page(&s);
+    auto conduits = WildPalms::Runtime::createStockConduits();
+    TargetPickerPage page(&s, &conduits);
     page.initializePage();
 
     auto *cal = comboFor(page, QStringLiteral("calendar"));
@@ -124,7 +128,8 @@ void TstTargetPickerPage::readOnlyCollectionsAreNotSelectable()
 void TstTargetPickerPage::selectingBindingWritesMapping()
 {
     auto s = stateWithConnectedAccount();
-    TargetPickerPage page(&s);
+    auto conduits = WildPalms::Runtime::createStockConduits();
+    TargetPickerPage page(&s, &conduits);
     page.initializePage();
 
     auto *cal = comboFor(page, QStringLiteral("calendar"));
@@ -142,7 +147,8 @@ void TstTargetPickerPage::localFilesResetsMapping()
     s.mappings[0].accountRef   = QStringLiteral("acc-1");
     s.mappings[0].collectionId = QStringLiteral("cal-1");
 
-    TargetPickerPage page(&s);
+    auto conduits = WildPalms::Runtime::createStockConduits();
+    TargetPickerPage page(&s, &conduits);
     page.initializePage();
 
     auto *cal = comboFor(page, QStringLiteral("calendar"));
@@ -161,7 +167,8 @@ void TstTargetPickerPage::staleBindingResetsToLocalOnRebuild()
     s.mappings[0].accountRef   = QStringLiteral("gone-account");
     s.mappings[0].collectionId = QStringLiteral("gone-col");
 
-    TargetPickerPage page(&s);
+    auto conduits = WildPalms::Runtime::createStockConduits();
+    TargetPickerPage page(&s, &conduits);
     page.initializePage();
 
     QCOMPARE(s.mappings[0].kind, TargetKind::RawFiles);
@@ -172,7 +179,8 @@ void TstTargetPickerPage::staleBindingResetsToLocalOnRebuild()
 void TstTargetPickerPage::hintShownWhenAccountsHaveNoMatchingCollections()
 {
     auto s = stateWithConnectedAccount();
-    TargetPickerPage page(&s);
+    auto conduits = WildPalms::Runtime::createStockConduits();
+    TargetPickerPage page(&s, &conduits);
     page.initializePage();
 
     TargetPickerRow *contactsRow = nullptr;

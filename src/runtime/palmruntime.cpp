@@ -63,6 +63,7 @@
 #include <recordfilter.h>
 
 #include "routemapping.h"
+#include "conduitcatalog.h"
 
 #include "standardcontributions.h"
 
@@ -245,18 +246,12 @@ PalmRuntime::~PalmRuntime() = default;
 
 void PalmRuntime::registerPalmPlugins()
 {
-    using namespace WildPalms::CalendarPlugin;
-    using namespace WildPalms::ContactsPlugin;
-    using namespace WildPalms::Memo;
-    using namespace WildPalms::TodoPlugin;
-
-    // Always create fresh plugin instances — each PalmRuntime owns its own
-    // set so that createPalmBackend() and createConflictHandler() can hold
-    // per-runtime state (device pointer, category store, etc.).
-    auto cal  = std::make_unique<CalendarBackendPlugin>();
-    auto con  = std::make_unique<ContactsBackendPlugin>();
-    auto memo = std::make_unique<MemoPlugin>();
-    auto todo = std::make_unique<TodoBackendPlugin>();
+    // Substrate A1: fresh conduit instances from the single-source-of-truth
+    // catalog (each PalmRuntime owns its own set so createPalmBackend() /
+    // createConflictHandler() can hold per-runtime state). conduitId()/domain()
+    // drive the manifest entries below — adding a conduit to createStockConduits
+    // is the only edit needed for it to load here.
+    auto conduitPlugins = WildPalms::Runtime::createStockConduits();
 
     // O7 (v0.57): one PluginManager + ONE loadInProcess batch, populating this
     // PalmRuntime's own m_shape (no process-global singletons). The batch holds
@@ -286,11 +281,14 @@ void PalmRuntime::registerPalmPlugins()
         { &s_todo,      mkStockManifest(QStringLiteral("kalburator.todo"),     {QStringLiteral("todo")}) },
         { &s_contacts,  mkStockManifest(QStringLiteral("kalburator.contacts"), {QStringLiteral("contacts")}) },
         { &s_calendar,  mkStockManifest(QStringLiteral("kalburator.calendar"), {QStringLiteral("calendar")}) },
-        { cal.get(),    mkPalmManifest(QStringLiteral("wildpalms.calendar"), QStringLiteral("calendar")) },
-        { con.get(),    mkPalmManifest(QStringLiteral("wildpalms.contacts"), QStringLiteral("contacts")) },
-        { memo.get(),   mkPalmManifest(QStringLiteral("wildpalms.memo"),     QStringLiteral("note"))     },
-        { todo.get(),   mkPalmManifest(QStringLiteral("wildpalms.todo"),     QStringLiteral("todo"))     },
     };
+    // Substrate A1: WP conduit manifests derived from each descriptor —
+    // mkPalmManifest("wildpalms.<conduitId>", <domain>). Reproduces the old
+    // static table (memo: id "memo", domain "note").
+    for (const auto &c : conduitPlugins)
+        items.append({ c.get(),
+            mkPalmManifest(QStringLiteral("wildpalms.") + c->conduitId(),
+                           c->domain().toString()) });
 
     if (!m_pluginManager->loadInProcess(items)) {
         qWarning() << "[PalmRuntime] plugin load rejected:"
@@ -298,10 +296,8 @@ void PalmRuntime::registerPalmPlugins()
         return;
     }
 
-    m_palmPlugins.push_back(std::move(cal));
-    m_palmPlugins.push_back(std::move(con));
-    m_palmPlugins.push_back(std::move(memo));
-    m_palmPlugins.push_back(std::move(todo));
+    for (auto &c : conduitPlugins)
+        m_palmPlugins.push_back(std::move(c));
 }
 
 QList<WildPalms::Plugins::PimPlugin*> PalmRuntime::conduits() const

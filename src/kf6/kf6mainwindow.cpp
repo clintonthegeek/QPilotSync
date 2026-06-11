@@ -660,26 +660,19 @@ void KF6MainWindow::loadProfile(const QString &path)
     }
     m_palmPluginPages.clear();
 
-    // Helper: add a plugin page for plugins that have a main view
-    auto addViewPage = [this](auto *concrete) {
-        if (!concrete || !concrete->hasMainView()) return;
-        QWidget *view = concrete->createMainView(this);
-        if (!view) return;
-        auto *page = new KPageWidgetItem(view, concrete->mainViewName());
-        page->setIcon(concrete->mainViewIcon());
+    // Substrate A1: register a page for every conduit descriptor that declares
+    // a main view, instead of casting to each concrete type. (This also wires
+    // the contacts ContactView, which hasMainView()=true but the old per-type
+    // cast loop silently omitted.) Label/icon come from the descriptor.
+    for (auto *c : m_palmRuntime->conduits()) {
+        if (!c->hasMainView()) continue;
+        QWidget *view = c->createMainView(this);
+        if (!view) continue;
+        auto *page = new KPageWidgetItem(view, c->conduitDisplayName());
+        page->setIcon(QIcon::fromTheme(c->conduitIconName()));
         page->setHeaderVisible(false);
         m_pageWidget->addPage(page);
-        m_palmPluginPages.insert(concrete->pluginId(), page);
-    };
-
-    for (const auto &plugin : m_palmRuntime->palmPlugins()) {
-        if (auto *p = dynamic_cast<WildPalms::CalendarPlugin::CalendarBackendPlugin *>(plugin.get()))
-            addViewPage(p);
-        else if (auto *p = dynamic_cast<WildPalms::Memo::MemoPlugin *>(plugin.get()))
-            addViewPage(p);
-        else if (auto *p = dynamic_cast<WildPalms::TodoPlugin::TodoBackendPlugin *>(plugin.get()))
-            addViewPage(p);
-        // Contacts and WebCal plugins have no main view; see include block above.
+        m_palmPluginPages.insert(c->conduitId(), page);
     }
 
     // Connection mode (USB serial vs network) is now encoded in the

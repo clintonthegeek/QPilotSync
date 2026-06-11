@@ -2,13 +2,19 @@
 #include "targetpickerrow.h"
 #include "wizardstate.h"
 
+#include "plugins/pimplugin.h"
+
 #include <QVBoxLayout>
 
 namespace WildPalms::Wizard {
 
-TargetPickerPage::TargetPickerPage(WizardState *state, QWidget *parent)
+TargetPickerPage::TargetPickerPage(
+    WizardState *state,
+    const std::vector<std::unique_ptr<WildPalms::Plugins::PimPlugin>> *conduits,
+    QWidget *parent)
     : QWizardPage(parent)
     , m_state(state)
+    , m_conduits(conduits)
 {
     setTitle(tr("Sync targets"));
     setSubTitle(tr("Pick where each Palm domain syncs. Go back to the "
@@ -19,11 +25,11 @@ TargetPickerPage::TargetPickerPage(WizardState *state, QWidget *parent)
 void TargetPickerPage::buildRows()
 {
     auto *layout = new QVBoxLayout(this);
-    for (const auto &pid : { QStringLiteral("calendar"),
-                              QStringLiteral("contacts"),
-                              QStringLiteral("memo"),
-                              QStringLiteral("todo") }) {
-        auto *row = new TargetPickerRow(pid, m_state, this);
+    if (!m_conduits) return;
+    // Substrate A1: one row per conduit descriptor (not a hardcoded id list).
+    for (const auto &c : *m_conduits) {
+        const QString pid = c->conduitId();
+        auto *row = new TargetPickerRow(c.get(), m_state, this);
         layout->addWidget(row);
         m_rows.insert(pid, row);
         connect(row, &TargetPickerRow::bindingSelected, this,

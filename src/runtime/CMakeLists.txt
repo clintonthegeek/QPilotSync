@@ -15,6 +15,12 @@ add_library(WildPalmsRuntime STATIC
     # and routemapping.o, which both enumerate descriptors.
     ../plugins/pimplugin.h
     ../plugins/pimplugin.cpp
+    # Substrate A1 — stock-conduit factory: the single source of truth for
+    # "which conduits exist". Consumed by PalmRuntime::registerPalmPlugins()
+    # and by the wizard (transient descriptor-query set). Constructs the four
+    # concrete plugins; their ctors resolve at the WildPalmsCore.so link.
+    conduitcatalog.h
+    conduitcatalog.cpp
     pluginmetadatahelpers.h
     pluginmetadatahelpers.cpp
     # K.8b T13: BackendPluginManager deleted (IBackendPluginV2 also gone;

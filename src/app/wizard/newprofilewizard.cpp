@@ -5,6 +5,8 @@
 #include "reviewpage.h"
 
 #include "runtime/profileregistry.h"
+#include "runtime/conduitcatalog.h"
+#include "plugins/pimplugin.h"
 
 namespace WildPalms::Wizard {
 
@@ -18,15 +20,13 @@ NewProfileWizard::NewProfileWizard(WildPalms::Runtime::ProfileRegistry *registry
     setWindowTitle(tr("New Wild Palms Profile"));
     setWizardStyle(QWizard::ModernStyle);
 
-    // Seed mappings with one RawFiles row per Palm plugin. The Accounts and
-    // Bindings pages edit these in place as the user makes selections.
-    for (const auto &pid : {
-            QStringLiteral("calendar"),
-            QStringLiteral("contacts"),
-            QStringLiteral("memo"),
-            QStringLiteral("todo") }) {
+    // Substrate A1: enumerate the stock conduit descriptors instead of a
+    // hardcoded id list. Seed one RawFiles mapping per conduit; the Accounts
+    // and Bindings pages edit these in place as the user makes selections.
+    m_conduits = WildPalms::Runtime::createStockConduits();
+    for (const auto &c : m_conduits) {
         MappingSpec s;
-        s.pluginId = pid;
+        s.pluginId = c->conduitId();
         s.kind     = TargetKind::RawFiles;
         m_state.mappings.append(s);
     }
@@ -34,7 +34,7 @@ NewProfileWizard::NewProfileWizard(WildPalms::Runtime::ProfileRegistry *registry
     setPage(NamePageId, new NamePage(m_profileRegistry, &m_state, this));
     setPage(AccountsPageId,
             new AccountsSetupPage(m_backendRegistry, &m_state, this));
-    setPage(TargetPickerPageId, new TargetPickerPage(&m_state, this));
+    setPage(TargetPickerPageId, new TargetPickerPage(&m_state, &m_conduits, this));
     setPage(ReviewPageId, new ReviewPage(&m_state, this));
     setStartId(NamePageId);
 }

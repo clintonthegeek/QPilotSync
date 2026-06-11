@@ -1,6 +1,7 @@
 #include "targetpickerrow.h"
-#include "domainfilter.h"
 #include "wizardstate.h"
+
+#include "plugins/pimplugin.h"
 
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -10,28 +11,24 @@
 
 namespace WildPalms::Wizard {
 
-namespace {
-QString domainLabel(const QString &pluginId) {
-    if (pluginId == QStringLiteral("calendar")) return QObject::tr("Calendar");
-    if (pluginId == QStringLiteral("contacts")) return QObject::tr("Contacts");
-    if (pluginId == QStringLiteral("memo"))     return QObject::tr("Memo");
-    if (pluginId == QStringLiteral("todo"))     return QObject::tr("To-do");
-    return pluginId;
+QString TargetPickerRow::pluginId() const
+{
+    return m_conduit ? m_conduit->conduitId() : QString();
 }
-} // namespace
 
-TargetPickerRow::TargetPickerRow(const QString &pluginId,
+TargetPickerRow::TargetPickerRow(const WildPalms::Plugins::PimPlugin *conduit,
                                  WizardState *state,
                                  QWidget *parent)
     : QWidget(parent)
-    , m_pluginId(pluginId)
+    , m_conduit(conduit)
     , m_state(state)
 {
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
 
     auto *top = new QHBoxLayout();
-    auto *label = new QLabel(domainLabel(pluginId), this);
+    auto *label = new QLabel(
+        m_conduit ? m_conduit->conduitDisplayName() : QString(), this);
     label->setMinimumWidth(120);
     m_combo = new QComboBox(this);
     top->addWidget(label);
@@ -51,7 +48,8 @@ TargetPickerRow::TargetPickerRow(const QString &pluginId,
 
 void TargetPickerRow::rebuild()
 {
-    if (!m_combo || !m_state) return;
+    if (!m_combo || !m_state || !m_conduit) return;
+    const QString pid = m_conduit->conduitId();
 
     QSignalBlocker block(m_combo);
     m_combo->clear();
@@ -67,7 +65,7 @@ void TargetPickerRow::rebuild()
         const QString accName = acc.config.displayName.isEmpty()
             ? acc.id : acc.config.displayName;
         for (const auto &c : acc.collections) {
-            if (!collectionMatchesDomain(c, m_pluginId)) continue;
+            if (!m_conduit->matchesCollection(c)) continue;
             QString label = QStringLiteral("%1 ▸ %2").arg(accName, c.name);
             if (c.readOnly) label += tr(" (read-only)");
             m_combo->addItem(label,
@@ -87,7 +85,7 @@ void TargetPickerRow::rebuild()
     int current = 0;
     int mi = -1;
     for (int i = 0; i < m_state->mappings.size(); ++i)
-        if (m_state->mappings[i].pluginId == m_pluginId) { mi = i; break; }
+        if (m_state->mappings[i].pluginId == pid) { mi = i; break; }
     if (mi >= 0 && m_state->mappings[mi].kind == TargetKind::Account) {
         for (int i = 1; i < m_combo->count(); ++i) {
             const auto data = m_combo->itemData(i).toStringList();

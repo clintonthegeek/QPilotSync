@@ -6,23 +6,26 @@
 class QComboBox;
 class QLabel;
 
+namespace WildPalms::Plugins { class PimPlugin; }
+
 namespace WildPalms::Wizard {
 
 struct WizardState;
 
 /// One row on the Bindings page. Renders a label + QComboBox whose items
-/// are "Local files" plus every domain-matching collection across the
-/// connected WizardAccounts. Item data is QStringList{accountId,
-/// collectionId} — both empty for Local files. Read-only collections are
-/// listed but disabled.
+/// are "Local files" plus every collection the conduit descriptor accepts
+/// (PimPlugin::matchesCollection) across the connected WizardAccounts. Item
+/// data is QStringList{accountId, collectionId} — both empty for Local files.
+/// Read-only collections are listed but disabled. The conduit is borrowed
+/// (descriptor queries only) and must outlive this row (substrate A1).
 class TargetPickerRow : public QWidget {
     Q_OBJECT
 public:
-    TargetPickerRow(const QString &pluginId,
+    TargetPickerRow(const WildPalms::Plugins::PimPlugin *conduit,
                     WizardState *state,
                     QWidget *parent = nullptr);
 
-    QString pluginId() const { return m_pluginId; }
+    QString pluginId() const;
 
     /// Repopulate from state->accounts, restore the current selection from
     /// the row's MappingSpec, and reset stale bindings to RawFiles.
@@ -35,7 +38,7 @@ signals:
 private:
     void onCurrentIndexChanged(int idx);
 
-    QString      m_pluginId;
+    const WildPalms::Plugins::PimPlugin *m_conduit;
     WizardState *m_state;
     QComboBox   *m_combo {nullptr};
     QLabel      *m_hint  {nullptr};
