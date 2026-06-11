@@ -6,16 +6,30 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-10)
+## Current branch and state (as of 2026-06-11)
 
-**Branch:** local `main` at `4dc3537`+ — **~100 commits ahead of `origin/main`, unpushed**
+**Branch:** local `main` at `74cb635` — **~100 commits ahead of `origin/main`, unpushed**
 (push only at user request; both the v0.67 response §5 and the Plan 8 handoff §5 ask for a
 push so lib gates can run against WP's real baseline — flagged to user).
-**libkalburator pin:** `v0.69` (`CMakeLists.txt:63`) — bumped from v0.66 this session
-(v0.67 = contentTypes + pre-connected-provider fixes; v0.68 = RemoteCalendarBackend
-decomposition; v0.69 = Plan 8 step 1).
+**libkalburator pin:** `v0.69` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **120/120 pass.** (two mid-run-cancel regression tests added inside the existing `tst_palm_runtime_cancel_sync` binary; count unchanged)
+**ctest:** **120/120 pass.**
+
+### Unified DAV account kind — landed 2026-06-11 (`74cb635`)
+
+Add Account previously offered "CalDAV (calendar)" and "CardDAV (contacts)" as separate
+kinds — same WebDAV credentials split across two accounts, defeating the provider
+abstraction's point. `registerStandardContributions` now registers ONLY
+`multiproto-dav` (lib's `MultiProtocolDavBackendContribution`, full CalDAV+CardDAV
+surface, per-leg graceful degradation for one-protocol servers) + `akonadi`. The
+single-protocol contributions are deliberately unregistered; **no backward compat by
+user decision — account kinds "caldav"/"carddav" no longer resolve.** Dropdown label:
+"DAV server (calendar + contacts)". All account-kind strings in tests swept to
+`multiproto-dav` (the lib's `CalDavProvider`/`CardDavProvider` e2e tests construct
+providers directly and are untouched). **User smoke test pending: re-add the Nextcloud
+account as the unified DAV kind — one credential entry should yield calendar + todo +
+contacts bindings in the wizard.** Related: lib's pending WP-A1 RFC (calendarsOnly
+per-account mode selection) targets this same surface.
 
 ### Plan 8 consumer wave — DONE this session (2026-06-10)
 
