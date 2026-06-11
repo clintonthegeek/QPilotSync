@@ -168,8 +168,8 @@ void PatchbayPage::onWireSelected(const QString &mappingId)
 void PatchbayPage::onAddCategoryRequested(const QString &domain,
                                           const QPointF &scenePos)
 {
-    Q_UNUSED(scenePos);   // Task 15 replaces this with the inline editor
-    Q_UNUSED(domain);
+    Q_UNUSED(scenePos);
+    m_view->openCategoryEditor(domain);
 }
 
 } // namespace WildPalms::AppPatchbay

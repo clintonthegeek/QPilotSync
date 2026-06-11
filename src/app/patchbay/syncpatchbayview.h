@@ -6,6 +6,9 @@
 
 #include "patchbaytypes.h"
 
+class QGraphicsProxyWidget;
+class QContextMenuEvent;
+
 namespace Graffodil {
 class GraphScene;
 class DefaultGraphTool;
@@ -43,9 +46,19 @@ public:
     /// Delete all selected wires (Delete key path; also used by context menu).
     void deleteSelectedWires();
 
+    /// Open an inline "+ category…" editor on the hub band for `domain`.
+    void openCategoryEditor(const QString &domain);
+    // test seams
+    void openCategoryEditorForTest(const QString &domain) { openCategoryEditor(domain); }
+    bool categoryEditorVisible() const;
+    void commitCategoryEditorForTest(const QString &text);
+
 signals:
     void wireSelected(const QString &mappingId);   ///< empty = deselected
     void addCategoryRequested(const QString &domain, const QPointF &scenePos);
+
+protected:
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
     void onEdgeRequested(Graffodil::IGraphNode *source,
@@ -63,6 +76,9 @@ private:
     QHash<QString, SignalPathWire *> m_wireItems;    // mappingId → item
     QList<SignalPathWire *> m_strandItems;
     bool m_didInitialFit = false;
+
+    QGraphicsProxyWidget *m_categoryEditor = nullptr;
+    QString m_categoryEditorDomain;
 };
 
 } // namespace WildPalms::AppPatchbay

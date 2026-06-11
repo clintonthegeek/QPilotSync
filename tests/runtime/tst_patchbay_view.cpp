@@ -83,6 +83,8 @@ private slots:
     void dragConnectCreatesMapping();
     void dragOnPalmTierIgnored();
     void deleteSelectedRemovesMapping();
+    // Task 15
+    void inlineCategoryEditorCommits();
 };
 
 void TstPatchbayView::rebuildPopulatesScene()
@@ -169,6 +171,28 @@ void TstPatchbayView::deleteSelectedRemovesMapping()
     view.deleteSelectedWires();
     QCOMPARE(model.mappings().size(), 0);
     QCOMPARE(view.wireCount(), 0);
+}
+
+void TstPatchbayView::inlineCategoryEditorCommits()
+{
+    PatchbayModel model;
+    model.setInputs(baseInputs());
+    SyncPatchbayView view;
+    view.setModel(&model);
+
+    view.openCategoryEditorForTest("calendar");
+    QVERIFY(view.categoryEditorVisible());
+    view.commitCategoryEditorForTest("Offsite");
+
+    bool found = false;
+    for (const auto &n : model.nodes()) {
+        if (n.id != "hub") continue;
+        for (const auto &b : n.bands)
+            for (const auto &p : b.ports)
+                if (p.id == "cat:calendar/Offsite") found = true;
+    }
+    QVERIFY(found);
+    QVERIFY(!view.categoryEditorVisible());
 }
 
 WILDPALMS_QTEST_MAIN(TstPatchbayView)
