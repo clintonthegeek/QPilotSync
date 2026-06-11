@@ -356,17 +356,150 @@ void PatchbayModel::rebuildWiresAndStrands()
     }
 }
 
-// Edit ops — real bodies land in Task 9; stubs keep the lib linking.
-QString PatchbayModel::addMapping(const QString &, const QString &,
-                                  const QString &)
+QString PatchbayModel::addMapping(const QString &hubPortId,
+                                  const QString &providerId,
+                                  const QString &collectionId)
 {
-    return {};
+    // parse hub port → domain + optional category
+    QString domain, category;
+    if (hubPortId.startsWith(QLatin1String("dom:"))) {
+        domain = hubPortId.mid(4);
+    } else if (hubPortId.startsWith(QLatin1String("cat:"))) {
+        const QString rest = hubPortId.mid(4);
+        const int slash = rest.indexOf(QLatin1Char('/'));
+        if (slash <= 0) return {};
+        domain = rest.left(slash);
+        category = rest.mid(slash + 1);
+    } else {
+        return {};
+    }
+    const ConduitFacts *c = conduitForDomain(domain);
+    if (!c)
+        return {};
+
+    // target must exist and match the conduit's domain rules
+    const Kalburator::Sync::CollectionInfo *col = nullptr;
+    for (const auto &prov : m_inputs.providers) {
+        if (prov.providerId != providerId) continue;
+        for (const auto &x : prov.collections)
+            if (x.id == collectionId) col = &x;
+    }
+    if (!col || !c->matchesCollection || !c->matchesCollection(*col))
+        return {};
+
+    const QString sourceCalendar = category.isEmpty()
+        ? QString()
+        : QStringLiteral("palm:%1/name:%2").arg(domain, category);
+    const QString targetBackend =
+        QStringLiteral("%1:%2").arg(providerId, collectionId);
+
+    // duplicate guard (same source slice → same target)
+    for (const auto &v : m_inputs.mappings) {
+        const QJsonObject r = v.toObject();
+        if (r.value(QLatin1String("sourceBackend")).toString() == c->conduitId
+            && r.value(QLatin1String("sourceCalendar")).toString() == sourceCalendar
+            && r.value(QLatin1String("targetBackend")).toString() == targetBackend
+            && r.value(QLatin1String("targetCalendar")).toString() == collectionId)
+            return {};
+    }
+
+    QJsonObject row;
+    const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    row[QLatin1String("id")] = id;
+    row[QLatin1String("sourceBackend")] = c->conduitId;
+    row[QLatin1String("sourceCalendar")] = sourceCalendar;
+    row[QLatin1String("targetBackend")] = targetBackend;
+    row[QLatin1String("targetCalendar")] = collectionId;
+    row[QLatin1String("mode")] = QStringLiteral("TwoWay");
+    row[QLatin1String("conflictPolicy")] = QStringLiteral("LastWriteWins");
+    row[QLatin1String("enabled")] = true;
+    m_inputs.mappings.append(row);
+
+    rebuild();
+    emit mappingsChanged(m_inputs.mappings);
+    return id;
 }
 
-bool PatchbayModel::removeMapping(const QString &) { return false; }
-bool PatchbayModel::updateMapping(const QString &, const QJsonObject &) { return false; }
-bool PatchbayModel::addCategory(const QString &, const QString &) { return false; }
-bool PatchbayModel::removeCategory(const QString &, const QString &) { return false; }
+bool PatchbayModel::removeMapping(const QString &mappingId)
+{
+    for (int i = 0; i < m_inputs.mappings.size(); ++i) {
+        if (m_inputs.mappings[i].toObject()
+                .value(QLatin1String("id")).toString() != mappingId)
+            continue;
+        m_inputs.mappings.removeAt(i);
+        rebuild();
+        emit mappingsChanged(m_inputs.mappings);
+        return true;
+    }
+    return false;
+}
+
+bool PatchbayModel::updateMapping(const QString &mappingId,
+                                  const QJsonObject &changes)
+{
+    for (int i = 0; i < m_inputs.mappings.size(); ++i) {
+        QJsonObject r = m_inputs.mappings[i].toObject();
+        if (r.value(QLatin1String("id")).toString() != mappingId)
+            continue;
+        for (auto it = changes.begin(); it != changes.end(); ++it)
+            r[it.key()] = it.value();
+        m_inputs.mappings[i] = r;
+        rebuild();
+        emit mappingsChanged(m_inputs.mappings);
+        return true;
+    }
+    return false;
+}
+
+bool PatchbayModel::addCategory(const QString &domain, const QString &name)
+{
+    const ConduitFacts *c = conduitForDomain(domain);
+    const QString trimmed = name.trimmed();
+    if (!c || trimmed.isEmpty()
+        || trimmed.compare(QLatin1String("Unfiled"), Qt::CaseInsensitive) == 0)
+        return false;
+    QStringList names = m_inputs.desiredCategories.value(c->dbName);
+    for (const auto &x : names)
+        if (x.compare(trimmed, Qt::CaseInsensitive) == 0) return false;
+    if (names.size() >= 15)   // 16 slots, Unfiled implicit at 0
+        return false;
+    names << trimmed;
+    m_inputs.desiredCategories[c->dbName] = names;
+    rebuild();
+    emit desiredCategoriesChanged(c->dbName, names);
+    return true;
+}
+
+bool PatchbayModel::removeCategory(const QString &domain, const QString &name)
+{
+    const ConduitFacts *c = conduitForDomain(domain);
+    if (!c)
+        return false;
+    // refuse while any row references the category (spec §7.4)
+    for (const auto &v : m_inputs.mappings) {
+        const QJsonObject r = v.toObject();
+        if (r.value(QLatin1String("sourceBackend")).toString() != c->conduitId)
+            continue;
+        if (categoryFromSourceCalendar(
+                r.value(QLatin1String("sourceCalendar")).toString(), domain)
+                .compare(name, Qt::CaseInsensitive) == 0)
+            return false;
+    }
+    QStringList names = m_inputs.desiredCategories.value(c->dbName);
+    bool removed = false;
+    for (int i = names.size() - 1; i >= 0; --i) {
+        if (names[i].compare(name, Qt::CaseInsensitive) == 0) {
+            names.removeAt(i);
+            removed = true;
+        }
+    }
+    if (!removed)
+        return false;
+    m_inputs.desiredCategories[c->dbName] = names;
+    rebuild();
+    emit desiredCategoriesChanged(c->dbName, names);
+    return true;
+}
 
 QJsonObject PatchbayModel::mappingById(const QString &mappingId) const
 {

@@ -105,6 +105,11 @@ private slots:
     void wireFromCategoryRow();
     void wireStates();
     void strandsSolidGhostAndNoFreeSlot();
+    // Task 9
+    void addMappingCreatesRowAndWire();
+    void addMappingRejectsDuplicateAndMismatch();
+    void removeAndUpdateMapping();
+    void addRemoveCategory();
 };
 
 void TstPatchbayModel::hubHasBandPerConduit()
@@ -315,6 +320,78 @@ void TstPatchbayModel::strandsSolidGhostAndNoFreeSlot()
     const auto *band = bandByDomain(*nodeById(m.nodes(), "hub"), "calendar");
     for (const auto &p : band->ports)
         if (p.id == "cat:calendar/Stuffed") QVERIFY(p.noFreeSlot);
+}
+
+void TstPatchbayModel::addMappingCreatesRowAndWire()
+{
+    PatchbayModel m;
+    m.setInputs(baseInputs());
+    QSignalSpy spy(&m, &PatchbayModel::mappingsChanged);
+
+    const QString id = m.addMapping("cat:calendar/Work", "acc-1", "cal1");
+    QVERIFY(!id.isEmpty());
+    QCOMPARE(spy.count(), 1);
+    const QJsonObject r = m.mappingById(id);
+    QCOMPARE(r["sourceBackend"].toString(), QStringLiteral("calendar"));
+    QCOMPARE(r["sourceCalendar"].toString(),
+             QStringLiteral("palm:calendar/name:Work"));
+    QCOMPARE(r["targetBackend"].toString(), QStringLiteral("acc-1:cal1"));
+    QCOMPARE(r["targetCalendar"].toString(), QStringLiteral("cal1"));
+    QCOMPARE(r["mode"].toString(), QStringLiteral("TwoWay"));
+    QCOMPARE(r["conflictPolicy"].toString(), QStringLiteral("LastWriteWins"));
+    QVERIFY(r["enabled"].toBool());
+    QCOMPARE(m.wires().size(), 1);
+}
+
+void TstPatchbayModel::addMappingRejectsDuplicateAndMismatch()
+{
+    PatchbayModel m;
+    m.setInputs(baseInputs());
+    QVERIFY(!m.addMapping("dom:calendar", "acc-1", "cal1").isEmpty());
+    // exact duplicate
+    QVERIFY(m.addMapping("dom:calendar", "acc-1", "cal1").isEmpty());
+    // domain mismatch: contacts conduit does not match a calendar collection
+    QVERIFY(m.addMapping("dom:contacts", "acc-1", "cal1").isEmpty());
+    // unknown provider/collection
+    QVERIFY(m.addMapping("dom:calendar", "nope", "cal1").isEmpty());
+    QCOMPARE(m.wires().size(), 1);
+}
+
+void TstPatchbayModel::removeAndUpdateMapping()
+{
+    PatchbayModel m;
+    m.setInputs(baseInputs());
+    const QString id = m.addMapping("dom:calendar", "acc-1", "cal1");
+
+    QJsonObject changes;
+    changes["mode"] = "OneWayUpload";
+    changes["enabled"] = true;
+    QVERIFY(m.updateMapping(id, changes));
+    QCOMPARE(m.wires().first().state, WireState::OneWayUpload);
+
+    QVERIFY(m.removeMapping(id));
+    QVERIFY(m.wires().isEmpty());
+    QVERIFY(!m.removeMapping(id));   // already gone
+}
+
+void TstPatchbayModel::addRemoveCategory()
+{
+    PatchbayModel m;
+    m.setInputs(baseInputs());
+    QSignalSpy spy(&m, &PatchbayModel::desiredCategoriesChanged);
+
+    QVERIFY(m.addCategory("calendar", "Offsite"));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.first().at(0).toString(), QStringLiteral("DatebookDB"));
+    QVERIFY(spy.first().at(1).toStringList().contains("Offsite"));
+    QVERIFY(!m.addCategory("calendar", "offsite"));   // case-insensitive dup
+    QVERIFY(!m.addCategory("calendar", ""));
+
+    // removeCategory refuses while a row references it
+    const QString id = m.addMapping("cat:calendar/Offsite", "acc-1", "cal1");
+    QVERIFY(!m.removeCategory("calendar", "Offsite"));
+    QVERIFY(m.removeMapping(id));
+    QVERIFY(m.removeCategory("calendar", "Offsite"));
 }
 
 WILDPALMS_QTEST_MAIN(TstPatchbayModel)
