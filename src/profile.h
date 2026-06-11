@@ -300,6 +300,19 @@ public:
     /// state Profile::save would write).
     void setCategorySlotNames(const QString &dbName, const QStringList &names);
 
+    /// Substrate A3/A4: the category names the configuration WANTS on the
+    /// device for this database (<=15; Unfiled is implicit at slot 0). The
+    /// reconciler binds them to slots at device connect, writing AppInfo for
+    /// missing ones. Distinct from categorySlotNames() (the last-seen on-device
+    /// snapshot). Stored in [desiredCategories/<dbName>] of profile.conf.
+    QStringList desiredCategoryNames(const QString &dbName) const;
+    void setDesiredCategoryNames(const QString &dbName, const QStringList &names);
+
+    /// Substrate A4: set by the wizard (sub-project B) when a freshly created
+    /// profile's first sync must clobber the Palm; cleared after it runs.
+    bool initialSyncPending() const;
+    void setInitialSyncPending(bool pending);
+
     // ========== Accounts (K.8b T9: replaces .wildpalms.providers sidecar) =========
 
     QList<Kalburator::Sync::BackendConfiguration> accounts() const;

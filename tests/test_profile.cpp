@@ -67,6 +67,11 @@ private slots:
     void testDefaultPathForId();
     void testIdFromBasename();
 
+    // ========== Substrate A3/A4: desired categories + initial-sync flag ==========
+    void desiredCategoryNames_roundTrip();
+    void desiredCategoryNames_capsAtFifteen();
+    void initialSyncPending_roundTrip();
+
 private:
     QTemporaryDir *m_tempDir;
 };
@@ -419,6 +424,44 @@ void TestProfile::testIdFromBasename()
     p.setSyncFolderPath(dir);
     // Before load(), id is empty.
     QCOMPARE(p.id(), QString());
+}
+
+void TestProfile::desiredCategoryNames_roundTrip()
+{
+    QTemporaryDir dir;
+    Profile p(dir.path());
+    p.initialize();
+    QCOMPARE(p.desiredCategoryNames(QStringLiteral("DatebookDB")), QStringList{});
+
+    const QStringList names{ QStringLiteral("Work"), QStringLiteral("Personal") };
+    p.setDesiredCategoryNames(QStringLiteral("DatebookDB"), names);
+
+    Profile reloaded(dir.path());
+    QVERIFY(reloaded.load());
+    QCOMPARE(reloaded.desiredCategoryNames(QStringLiteral("DatebookDB")), names);
+}
+
+void TestProfile::desiredCategoryNames_capsAtFifteen()
+{
+    QTemporaryDir dir;
+    Profile p(dir.path());
+    p.initialize();
+    QStringList sixteen;
+    for (int i = 0; i < 16; ++i) sixteen << QStringLiteral("C%1").arg(i);
+    p.setDesiredCategoryNames(QStringLiteral("DatebookDB"), sixteen);
+    QCOMPARE(p.desiredCategoryNames(QStringLiteral("DatebookDB")).size(), 15);
+}
+
+void TestProfile::initialSyncPending_roundTrip()
+{
+    QTemporaryDir dir;
+    Profile p(dir.path());
+    p.initialize();
+    QVERIFY(!p.initialSyncPending());           // default false
+    p.setInitialSyncPending(true);
+    Profile reloaded(dir.path());
+    QVERIFY(reloaded.load());
+    QVERIFY(reloaded.initialSyncPending());
 }
 
 QTEST_MAIN(TestProfile)

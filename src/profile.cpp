@@ -464,6 +464,55 @@ void Profile::setCategorySlotNames(const QString &dbName,
     s.sync();
 }
 
+QStringList Profile::desiredCategoryNames(const QString &dbName) const
+{
+    if (dbName.isEmpty() || m_syncFolderPath.isEmpty()) return {};
+
+    QSettings s(m_syncFolderPath + QStringLiteral("/profile.conf"),
+                QSettings::IniFormat);
+    s.beginGroup(QStringLiteral("desiredCategories/") + dbName);
+    const QStringList names = s.value(QStringLiteral("names")).toStringList();
+    s.endGroup();
+    return names;
+}
+
+void Profile::setDesiredCategoryNames(const QString &dbName,
+                                      const QStringList &names)
+{
+    if (m_syncFolderPath.isEmpty()) return;
+    if (dbName.isEmpty()) {
+        qWarning() << "[Profile] setDesiredCategoryNames: empty dbName";
+        return;
+    }
+    // Palm category tables hold 15 user slots (slot 0 is the implicit Unfiled).
+    QStringList capped = names;
+    while (capped.size() > 15) capped.removeLast();
+
+    QSettings s(m_syncFolderPath + QStringLiteral("/profile.conf"),
+                QSettings::IniFormat);
+    s.beginGroup(QStringLiteral("desiredCategories/") + dbName);
+    s.setValue(QStringLiteral("names"), capped);
+    s.endGroup();
+    s.sync();
+}
+
+bool Profile::initialSyncPending() const
+{
+    if (m_syncFolderPath.isEmpty()) return false;
+    QSettings s(m_syncFolderPath + QStringLiteral("/profile.conf"),
+                QSettings::IniFormat);
+    return s.value(QStringLiteral("initialSync/pending"), false).toBool();
+}
+
+void Profile::setInitialSyncPending(bool pending)
+{
+    if (m_syncFolderPath.isEmpty()) return;
+    QSettings s(m_syncFolderPath + QStringLiteral("/profile.conf"),
+                QSettings::IniFormat);
+    s.setValue(QStringLiteral("initialSync/pending"), pending);
+    s.sync();
+}
+
 // ========== Accounts (K.8b T9) ==========
 
 QList<Kalburator::Sync::BackendConfiguration> Profile::accounts() const
