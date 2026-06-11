@@ -225,7 +225,136 @@ void PatchbayModel::rebuildRemotes()
     }
 }
 
-void PatchbayModel::rebuildWiresAndStrands() {}   // Task 8
+void PatchbayModel::rebuildWiresAndStrands()
+{
+    // ── Wires: one per persisted row ─────────────────────────────────
+    for (const auto &v : m_inputs.mappings) {
+        const QJsonObject r = v.toObject();
+        const QString id = r.value(QLatin1String("id")).toString();
+        const ConduitFacts *c =
+            conduitForId(r.value(QLatin1String("sourceBackend")).toString());
+        if (!c)
+            continue;   // unknown conduit: row is invisible only if we can't
+                        // even determine a domain — covered by NotARoute UI in
+                        // the inspector; ghost nodes need a domain to draw.
+
+        WireDesc w;
+        w.mappingId = id;
+        w.domain = c->domain;
+
+        const QString srcCal =
+            r.value(QLatin1String("sourceCalendar")).toString();
+        const QString cat = categoryFromSourceCalendar(srcCal, c->domain);
+        w.sourcePortId = cat.isEmpty()
+            ? QStringLiteral("dom:%1").arg(c->domain)
+            : QStringLiteral("cat:%1/%2").arg(c->domain, cat);
+
+        const QString target = r.value(QLatin1String("targetBackend")).toString();
+        const int colon = target.indexOf(QLatin1Char(':'));
+        const QString providerId = colon > 0 ? target.left(colon) : QString();
+        const QString collectionId = colon > 0 ? target.mid(colon + 1) : QString();
+        w.targetPortId = QStringLiteral("col:%1|%2").arg(collectionId, c->domain);
+
+        // resolve target node: real remote if the port exists there, else ghost
+        const QString remoteId = QStringLiteral("remote:%1").arg(providerId);
+        const QString ghostId = QStringLiteral("ghost:%1").arg(providerId);
+        bool onRemote = false;
+        for (const auto &n : m_nodes) {
+            if (n.id != remoteId) continue;
+            for (const auto &p : n.bands.first().ports)
+                if (p.id == w.targetPortId) onRemote = true;
+        }
+        w.targetNodeId = onRemote ? remoteId : ghostId;
+
+        // state precedence: disabled > broken > mode
+        const bool enabled = r.value(QLatin1String("enabled")).toBool(true);
+        const QString mode = r.value(QLatin1String("mode")).toString();
+        const RouteStatus st = m_inputs.routeStatuses.value(id, RouteStatus::Active);
+        if (!enabled || mode == QLatin1String("Disabled"))
+            w.state = WireState::Disabled;
+        else if (st == RouteStatus::NotARoute || !onRemote)
+            w.state = WireState::Broken;
+        else if (mode == QLatin1String("OneWayUpload"))
+            w.state = WireState::OneWayUpload;
+        else if (mode == QLatin1String("OneWayDownload"))
+            w.state = WireState::OneWayDownload;
+        else
+            w.state = WireState::TwoWay;
+
+        if (w.state == WireState::Broken)
+            w.beadGlyph = QStringLiteral("✗");
+
+        m_wires << w;
+    }
+
+    // ── Strands: system-drawn palm↔hub legs ──────────────────────────
+    for (const auto &c : m_inputs.conduits) {
+        const QStringList snap = m_inputs.slotSnapshot.value(c.dbName);
+
+        StrandDesc whole;
+        whole.hubPortId = QStringLiteral("dom:%1").arg(c.domain);
+        whole.id = QStringLiteral("strand:%1").arg(whole.hubPortId);
+        whole.palmPortId = QStringLiteral("db:%1").arg(c.dbName);
+        whole.domain = c.domain;
+        whole.state = StrandState::Solid;
+        whole.wholeDomain = true;
+        m_strands << whole;
+
+        for (const QString &cat : hubCategoryNames(c)) {
+            const QString hubPort = QStringLiteral("cat:%1/%2").arg(c.domain, cat);
+
+            // NoFreeSlot: any row on this category reporting it suppresses the
+            // strand and flags the port (set below on the hub NodeDesc).
+            bool noSlot = false;
+            for (const auto &v : m_inputs.mappings) {
+                const QJsonObject r = v.toObject();
+                if (r.value(QLatin1String("sourceBackend")).toString() != c.conduitId)
+                    continue;
+                if (categoryFromSourceCalendar(
+                        r.value(QLatin1String("sourceCalendar")).toString(),
+                        c.domain).compare(cat, Qt::CaseInsensitive) != 0)
+                    continue;
+                const QString id = r.value(QLatin1String("id")).toString();
+                if (m_inputs.routeStatuses.value(id, RouteStatus::Active)
+                    == RouteStatus::NoFreeSlot)
+                    noSlot = true;
+            }
+
+            int slotIdx = -1;
+            for (int i = 0; i < snap.size(); ++i)
+                if (snap[i].compare(cat, Qt::CaseInsensitive) == 0) slotIdx = i;
+
+            if (noSlot) {
+                for (auto &n : m_nodes) {
+                    if (n.kind != NodeKind::Hub) continue;
+                    for (auto &b : n.bands)
+                        for (auto &p : b.ports)
+                            if (p.id == hubPort) p.noFreeSlot = true;
+                }
+                continue;   // no strand
+            }
+
+            StrandDesc s;
+            s.hubPortId = hubPort;
+            s.id = QStringLiteral("strand:%1").arg(hubPort);
+            s.domain = c.domain;
+            if (slotIdx >= 0) {
+                s.state = StrandState::Solid;
+                s.palmPortId = QStringLiteral("slot:%1/%2").arg(c.dbName).arg(slotIdx);
+            } else {
+                s.state = StrandState::Ghost;     // WaitingForDevice
+                s.palmPortId = QStringLiteral("db:%1").arg(c.dbName);
+                for (auto &n : m_nodes) {
+                    if (n.kind != NodeKind::Hub) continue;
+                    for (auto &b : n.bands)
+                        for (auto &p : b.ports)
+                            if (p.id == hubPort) p.waiting = true;
+                }
+            }
+            m_strands << s;
+        }
+    }
+}
 
 // Edit ops — real bodies land in Task 9; stubs keep the lib linking.
 QString PatchbayModel::addMapping(const QString &, const QString &,

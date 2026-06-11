@@ -100,6 +100,11 @@ private slots:
     void portPerCollectionDomainPairing();
     void busyProviderShowsSubtitleAndNoPorts();
     void missingAccountSynthesizesGhostNode();
+    // Task 8
+    void wireFromWholeDomainRow();
+    void wireFromCategoryRow();
+    void wireStates();
+    void strandsSolidGhostAndNoFreeSlot();
 };
 
 void TstPatchbayModel::hubHasBandPerConduit()
@@ -228,6 +233,88 @@ void TstPatchbayModel::missingAccountSynthesizesGhostNode()
     QVERIFY(ghost->ghosted);
     QCOMPARE(ghost->bands.first().ports.first().id,
              QStringLiteral("col:calX|calendar"));
+}
+
+void TstPatchbayModel::wireFromWholeDomainRow()
+{
+    auto in = baseInputs();
+    in.mappings.append(row("m1", "calendar", "", "acc-1:cal1", "cal1"));
+    PatchbayModel m;
+    m.setInputs(in);
+    QCOMPARE(m.wires().size(), 1);
+    const WireDesc w = m.wires().first();
+    QCOMPARE(w.mappingId, QStringLiteral("m1"));
+    QCOMPARE(w.sourcePortId, QStringLiteral("dom:calendar"));
+    QCOMPARE(w.targetNodeId, QStringLiteral("remote:acc-1"));
+    QCOMPARE(w.targetPortId, QStringLiteral("col:cal1|calendar"));
+    QCOMPARE(w.state, WireState::TwoWay);
+}
+
+void TstPatchbayModel::wireFromCategoryRow()
+{
+    auto in = baseInputs();
+    in.mappings.append(row("m2", "calendar", "palm:calendar/name:Work",
+                           "acc-1:cal1", "cal1"));
+    PatchbayModel m;
+    m.setInputs(in);
+    QCOMPARE(m.wires().first().sourcePortId,
+             QStringLiteral("cat:calendar/Work"));
+}
+
+void TstPatchbayModel::wireStates()
+{
+    auto in = baseInputs();
+    in.mappings.append(row("up",   "calendar", "", "acc-1:cal1", "cal1", "OneWayUpload"));
+    in.mappings.append(row("off",  "calendar", "", "acc-1:cal1", "cal1", "TwoWay", false));
+    in.mappings.append(row("bad",  "calendar", "", "acc-1:cal1", "cal1"));
+    in.mappings.append(row("gone", "calendar", "", "nope:calX",  "calX"));
+    in.routeStatuses.insert("bad", RouteStatus::NotARoute);
+    PatchbayModel m;
+    m.setInputs(in);
+    QHash<QString, WireState> got;
+    for (const auto &w : m.wires()) got[w.mappingId] = w.state;
+    QCOMPARE(got["up"],   WireState::OneWayUpload);
+    QCOMPARE(got["off"],  WireState::Disabled);     // enabled=false wins over NotARoute
+    QCOMPARE(got["bad"],  WireState::Broken);
+    QCOMPARE(got["gone"], WireState::Broken);       // ghost target
+    // broken wires carry the ✗ bead glyph
+    for (const auto &w : m.wires())
+        if (w.state == WireState::Broken) QCOMPARE(w.beadGlyph, QStringLiteral("✗"));
+}
+
+void TstPatchbayModel::strandsSolidGhostAndNoFreeSlot()
+{
+    auto in = baseInputs();
+    // "Work" IS in the DatebookDB snapshot (slot 1) → Solid strand.
+    // "Offsite" is desired but NOT in the snapshot → Ghost strand (waiting).
+    // "Stuffed" desired, and a row referencing it reports NoFreeSlot → no
+    // strand, port flagged.
+    in.desiredCategories["DatebookDB"] = {"Work", "Offsite", "Stuffed"};
+    in.mappings.append(row("ns", "calendar", "palm:calendar/name:Stuffed",
+                           "acc-1:cal1", "cal1"));
+    in.routeStatuses.insert("ns", RouteStatus::NoFreeSlot);
+    PatchbayModel m;
+    m.setInputs(in);
+
+    QHash<QString, StrandDesc> byHubPort;
+    for (const auto &s : m.strands()) byHubPort[s.hubPortId] = s;
+
+    // whole-domain strand per conduit band that has a snapshot
+    QVERIFY(byHubPort.contains("dom:calendar"));
+    QVERIFY(byHubPort["dom:calendar"].wholeDomain);
+
+    QCOMPARE(byHubPort["cat:calendar/Work"].state, StrandState::Solid);
+    QCOMPARE(byHubPort["cat:calendar/Work"].palmPortId,
+             QStringLiteral("slot:DatebookDB/1"));
+
+    QCOMPARE(byHubPort["cat:calendar/Offsite"].state, StrandState::Ghost);
+    QCOMPARE(byHubPort["cat:calendar/Offsite"].palmPortId,
+             QStringLiteral("db:DatebookDB"));
+
+    QVERIFY(!byHubPort.contains("cat:calendar/Stuffed"));
+    const auto *band = bandByDomain(*nodeById(m.nodes(), "hub"), "calendar");
+    for (const auto &p : band->ports)
+        if (p.id == "cat:calendar/Stuffed") QVERIFY(p.noFreeSlot);
 }
 
 WILDPALMS_QTEST_MAIN(TstPatchbayModel)
