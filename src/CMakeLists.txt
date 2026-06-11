@@ -156,6 +156,9 @@ target_link_libraries(WildPalmsCore
         # SyncMappingsPage). Separate static lib so its TUs see
         # libkalburator's synctypes.h (not WP-local core/synctypes.h).
         WildPalmsAppMapping
+        # Sync Patchbay (Part 1) — three-tier graph centerpiece. Separate
+        # static lib, same synctypes.h isolation rationale as AppMapping.
+        WildPalmsAppPatchbay
         # Phase Ic — AccountsPage + AddAccountDialog.
         # SettingsDialog instantiates AccountsPage when AccountController +
         # PalmRuntime are supplied; without this link the symbols are missing.
@@ -311,6 +314,10 @@ add_subdirectory(app/conflict)
 # `#include "synctypes.h"` resolves to libkalburator's Kalburator::Sync
 # header (not WP-local Sync:: namespace).
 add_subdirectory(app/mapping)
+
+# Sync Patchbay (Part 1) — three-tier Graffodil graph (WildPalmsAppPatchbay).
+# Same synctypes.h isolation rationale as WildPalmsAppMapping.
+add_subdirectory(app/patchbay)
 
 # F.1c.1 — NewProfileWizard.
 add_subdirectory(app/wizard)

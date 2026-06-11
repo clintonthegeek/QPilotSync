@@ -77,6 +77,31 @@ else()
     FetchContent_MakeAvailable(libkalburator)
 endif()
 
+# Graffodil — graph rendering library (Sync Patchbay). Same consumption
+# pattern as libkalburator: sibling-dir override for development, pinned
+# tag via FetchContent otherwise. See docs/superpowers/specs/
+# 2026-06-11-sync-patchbay-design.md §9.
+set(WILDPALMS_GRAFFODIL_SOURCE_DIR "" CACHE PATH
+    "Optional path to a local Graffodil checkout (override FetchContent)")
+set(WILDPALMS_GRAFFODIL_GIT_TAG "v0.2.0" CACHE STRING
+    "Graffodil tag to fetch when WILDPALMS_GRAFFODIL_SOURCE_DIR is unset")
+set(GRAFFODIL_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(GRAFFODIL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+if(WILDPALMS_GRAFFODIL_SOURCE_DIR)
+    message(STATUS "Graffodil: using local source at ${WILDPALMS_GRAFFODIL_SOURCE_DIR}")
+    add_subdirectory(${WILDPALMS_GRAFFODIL_SOURCE_DIR} graffodil EXCLUDE_FROM_ALL)
+else()
+    message(STATUS "Graffodil: fetching ${WILDPALMS_GRAFFODIL_GIT_TAG} from Codeberg")
+    include(FetchContent)
+    FetchContent_Declare(graffodil
+        GIT_REPOSITORY https://codeberg.org/clintonthegeek/Graffodil.git
+        GIT_TAG        ${WILDPALMS_GRAFFODIL_GIT_TAG}
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(graffodil)
+endif()
+
 # Build pilot-link first
 add_subdirectory(lib)
 
