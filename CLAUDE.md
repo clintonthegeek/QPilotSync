@@ -8,12 +8,46 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ## Current branch and state (as of 2026-06-11)
 
-**Branch:** local `main` at `74cb635` — **~100 commits ahead of `origin/main`, unpushed**
+**Branch:** local `main` at `8c7571c` — **117 commits ahead of `origin/main`, unpushed**
 (push only at user request; both the v0.67 response §5 and the Plan 8 handoff §5 ask for a
 push so lib gates can run against WP's real baseline — flagged to user).
 **libkalburator pin:** `v0.69` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **120/120 pass.**
+**ctest:** **123/123 pass.**
+
+### Configuration Substrate (Sub-project A) — LANDED 2026-06-11
+
+Executed `docs/superpowers/plans/2026-06-11-config-substrate.md` in full (12 tasks,
+commits `ca29caf`→`8c7571c`). The hardcoded-four-conduits assumption is gone:
+
+- **Conduit descriptor.** `PimPlugin` is promoted to the conduit descriptor
+  (`conduitId`/`domain`/`primaryDbName`/`matchesCollection`/`categorySlotNames`/…);
+  the four stock plugins implement it (submodule commits pushed, gitlinks bumped).
+  PalmRuntime, the wizard, and `kf6mainwindow` enumerate `conduits()` instead of
+  `dynamic_cast` chains (one residual base-cast). `conduitcatalog::createStockConduits`
+  is the single source of truth. `domainfilter.{h,cpp}` deleted (folded into
+  `matchesCollection`). New seam `PalmRuntime::appendConduitForTest` + `tst_fifth_conduit`
+  prove a 5th conduit participates with zero WP source change.
+- **Names-first routes.** Rows persist `palm:<domain>/name:<categoryName>`;
+  `translateRouteSpec(row, conduits)` returns a `RouteTranslation{spec, status}` and
+  never silently drops a well-formed row (`RouteStatus` Active/WaitingForDevice/
+  NoFreeSlot/NotARoute; `PalmRuntime::routeStatuses()`). The graph view writes/reads the
+  name form (fixed a latent `palm:contact/` + `palm:memo/` domain bug). **No migration —
+  pre-existing profiles' slot-form rows won't translate; recreate via the wizard.**
+- **Category reconciler.** `Profile::desiredCategoryNames` + `initialSyncPending`;
+  `reconcileCategories()` (pure, case-insensitive, preserves AppInfo tail);
+  `IPalmDatabaseAccess::writeAppBlock` (dbName-level, link-thread marshaled);
+  `finishConnect` reconciles desired categories → device before backends read AppInfo.
+- **Everything-is-a-provider.** `LocalFolderContribution` — first credential-less source
+  in the same registry as DAV/Akonadi.
+
+**Hardware-verification queue (gated on a real Palm):** the **first live AppInfo write**
+(`PilotLinkPalmDatabaseAccess::writeAppBlock` → reconciler creating category slots on the
+device) joins clobber-sync Task 12. The reconciler is exercised on fakes (which return
+empty AppInfo → no-op) and in `tst_category_reconciler`, but never against hardware yet.
+**User smoke tests pending:** recreate a wizard profile (slot-form rows retired), HotSync,
+and confirm the reconciler creates the expected category slots; the contacts main-view
+page now appears (descriptor-driven `kf6mainwindow` wiring fixed the old omission).
 
 ### First live HotSync through the wizard profile — route dispatch FIXED (`fa67c83`, 2026-06-11)
 

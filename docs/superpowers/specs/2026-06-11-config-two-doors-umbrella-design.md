@@ -4,7 +4,12 @@
 **Status:** Approved umbrella design. Decomposes into three sub-projects, each
 with its own spec → plan → implementation cycle.
 **Sub-project specs:**
-- A — substrate: `2026-06-11-config-substrate-design.md` (written)
+- A — substrate: `2026-06-11-config-substrate-design.md` (written; **IMPLEMENTED
+  2026-06-11 on `main`** via `docs/superpowers/plans/2026-06-11-config-substrate.md`
+  — conduit descriptor, names-first routes + status, LocalFolderContribution,
+  device AppInfo write + reconciler, fifth-conduit proof. ctest 123/123. The
+  first live AppInfo write joins clobber-sync Task 12 in the hardware-verification
+  queue.)
 - B — wizard: not yet written
 - C — graph editor: not yet written
 
