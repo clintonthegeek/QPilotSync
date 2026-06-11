@@ -14,8 +14,10 @@ add_library(WildPalmsAppPatchbay STATIC
     signalpathwire.cpp
     syncpatchbayview.h
     syncpatchbayview.cpp
-    # patchbayinspector.h patchbayinspector.cpp # Task 14
-    # patchbaypage.h    patchbaypage.cpp      # Task 14
+    patchbayinspector.h
+    patchbayinspector.cpp
+    patchbaypage.h
+    patchbaypage.cpp
 )
 
 target_include_directories(WildPalmsAppPatchbay
