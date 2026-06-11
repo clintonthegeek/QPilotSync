@@ -978,6 +978,25 @@ set_tests_properties(tst_patchbay_model PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Sync Patchbay (Part 1) — view tests (real Graffodil scene).
+add_executable(tst_patchbay_view tst_patchbay_view.cpp)
+target_link_libraries(tst_patchbay_view
+    PRIVATE
+        Qt::Core Qt::Test Qt::Widgets
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsAppPatchbay
+        WildPalmsRuntime
+        WildPalmsPalmDevice
+        PalmDeviceAccessLib
+        KF6::I18n KF6::ConfigCore
+        pisock bluetooth usb
+)
+add_test(NAME tst_patchbay_view COMMAND tst_patchbay_view)
+set_tests_properties(tst_patchbay_view PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # Sub-project D Task 3: PalmRuntime::syncCompleted signal fires once per sync run.
 add_executable(tst_palm_runtime_emits_sync_completed
     tst_palm_runtime_emits_sync_completed.cpp)
