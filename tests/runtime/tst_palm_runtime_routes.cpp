@@ -23,7 +23,7 @@ private slots:
         QJsonObject m;
         m[QStringLiteral("id")]              = QStringLiteral("u1");
         m[QStringLiteral("sourceBackend")]   = QStringLiteral("calendar");
-        m[QStringLiteral("sourceCalendar")]  = QStringLiteral("palm:calendar/3");
+        m[QStringLiteral("sourceCalendar")]  = QStringLiteral("palm:calendar/name:Work");
         m[QStringLiteral("targetBackend")]   = QStringLiteral("caldav-uuid");
         m[QStringLiteral("targetCalendar")]  = QStringLiteral("WorkCal");
         m[QStringLiteral("mode")]            = QStringLiteral("TwoWay");

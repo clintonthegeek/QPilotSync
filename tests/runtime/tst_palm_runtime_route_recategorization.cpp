@@ -39,7 +39,7 @@ private slots:
         QJsonObject mWork;
         mWork[QStringLiteral("id")]              = QStringLiteral("u-work");
         mWork[QStringLiteral("sourceBackend")]   = QStringLiteral("calendar");
-        mWork[QStringLiteral("sourceCalendar")]  = QStringLiteral("palm:calendar/3");
+        mWork[QStringLiteral("sourceCalendar")]  = QStringLiteral("palm:calendar/name:Work");
         mWork[QStringLiteral("targetBackend")]   = QStringLiteral("mock-remote");
         mWork[QStringLiteral("targetCalendar")]  = QStringLiteral("WorkCal");
         mWork[QStringLiteral("mode")]            = QStringLiteral("TwoWay");
@@ -50,7 +50,7 @@ private slots:
         QJsonObject mHome;
         mHome[QStringLiteral("id")]              = QStringLiteral("u-home");
         mHome[QStringLiteral("sourceBackend")]   = QStringLiteral("calendar");
-        mHome[QStringLiteral("sourceCalendar")]  = QStringLiteral("palm:calendar/4");
+        mHome[QStringLiteral("sourceCalendar")]  = QStringLiteral("palm:calendar/name:Home");
         mHome[QStringLiteral("targetBackend")]   = QStringLiteral("mock-remote");
         mHome[QStringLiteral("targetCalendar")]  = QStringLiteral("HomeCal");
         mHome[QStringLiteral("mode")]            = QStringLiteral("TwoWay");

@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QHash>
 #include <QJsonArray>
 #include <QList>
 #include <QString>
@@ -16,6 +17,7 @@ namespace Kalburator { class PluginManager; class Plugin; }
 class Profile;
 
 #include "palmrunresult.h"
+#include "routemapping.h"   // substrate A3 — RouteStatus (m_routeStatuses member)
 #include <shaperegistries.h>
 
 class KPilotDeviceLink;
@@ -206,7 +208,14 @@ public:
     /// loaded plugins. Used to seed the dashboard conduit row before a sync.
     QVector<ConduitDescriptor> conduitDescriptors() const;
 
+    /// Per-mapping route status from the last buildRouteLogicalCalendars
+    /// (substrate A3 — replaces the old silent drop of unresolved routes).
+    /// Keyed by SyncMapping::id; only well-formed routes are present.
+    QHash<QString, WildPalms::Runtime::RouteStatus> routeStatuses() const
+    { return m_routeStatuses; }
+
 signals:
+    void routeStatusesChanged();
     void deviceConnected();
     void deviceDisconnected();
     void runStarted(QString modeLabel);
@@ -321,6 +330,9 @@ private:
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     bool                                                         m_running = false;
     std::vector<std::unique_ptr<Kalburator::Sync::SyncBackendBase>>  m_ownedBackends;
+    /// Substrate A3: per-mapping route status from the last
+    /// buildRouteLogicalCalendars(). Keyed by SyncMapping::id.
+    QHash<QString, WildPalms::Runtime::RouteStatus>             m_routeStatuses;
 };
 
 }  // namespace WildPalms::Runtime

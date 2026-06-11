@@ -84,7 +84,15 @@ private slots:
 private:
     static QString palmDomainForDb(const QString &dbName);
     static QString palmBackendIdForDb(const QString &dbName);
-    static QString palmCollectionIdForSlot(const QString &dbName, int slot);
+    /// Substrate A3: hub/route domain for a Palm DB (calendar/contacts/note/
+    /// todo). Distinct from palmDomainForDb() (which returns the plural
+    /// collection-type domain memos/todos used for provider compatibility).
+    static QString palmRouteDomainForDb(const QString &dbName);
+    /// Substrate A3: the persisted sourceCalendar for a slot, in names-first
+    /// form "palm:<routeDomain>/name:<categoryName>" (resolved from the
+    /// current snapshot). Empty for slot 0 / unnamed slots (a Direct route).
+    /// Now an instance method — it reads the live category-name snapshot.
+    QString palmCollectionIdForSlot(const QString &dbName, int slot) const;
 
     PalmDbNode  *nodeForDb(const QString &dbName) const;
     ProviderNode *nodeForProvider(const QString &providerId) const;

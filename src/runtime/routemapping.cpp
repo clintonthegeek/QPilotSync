@@ -1,27 +1,24 @@
 #include "routemapping.h"
 
+#include "plugins/pimplugin.h"
 #include "palm/calendar/categorymappingstore.h"
 #include "synctypes.h"
 
 namespace WildPalms::Runtime {
 
-QString domainForPalmPluginId(const QString &pluginId)
-{
-    if (pluginId == QLatin1String("calendar")) return QStringLiteral("calendar");
-    if (pluginId == QLatin1String("contacts")) return QStringLiteral("contacts");
-    if (pluginId == QLatin1String("memo"))     return QStringLiteral("note");
-    if (pluginId == QLatin1String("todo"))     return QStringLiteral("todo");
-    return {};
-}
-
-std::optional<RouteSpec> translateRouteSpec(
+RouteTranslation translateRouteSpec(
     const Kalburator::Sync::SyncMapping &p,
-    const QHash<QString, WildPalms::PalmCalendar::CategoryMappingStore*> &stores)
+    const QList<WildPalms::Plugins::PimPlugin*> &conduits)
 {
-    if (!p.enabled) return std::nullopt;
+    RouteTranslation out;
+    if (!p.enabled) return out;
 
-    const QString domain = domainForPalmPluginId(p.sourceBackend);
-    if (domain.isEmpty()) return std::nullopt;
+    WildPalms::Plugins::PimPlugin *conduit = nullptr;
+    for (auto *c : conduits)
+        if (c->conduitId() == p.sourceBackend) { conduit = c; break; }
+    if (!conduit) return out;
+
+    const QString domain = conduit->domain().toString();
 
     RouteSpec spec;
     spec.domain             = domain;
@@ -33,31 +30,38 @@ std::optional<RouteSpec> translateRouteSpec(
     if (p.sourceCalendar.isEmpty()) {
         spec.kind         = RouteSpec::Kind::Direct;
         spec.categoryName = QString();
-        return spec;
+        out.spec   = spec;
+        out.status = RouteStatus::Active;
+        return out;
     }
 
-    const QString prefix = QStringLiteral("palm:") + domain + QLatin1Char('/');
-    if (!p.sourceCalendar.startsWith(prefix)) return std::nullopt;
-    bool ok = false;
-    const int slot = p.sourceCalendar.mid(prefix.size()).toInt(&ok);
-    if (!ok || slot < 0 || slot > 15) return std::nullopt;
-
-    auto storeIt = stores.constFind(domain);
-    if (storeIt == stores.constEnd() || !storeIt.value()) return std::nullopt;
-
-    const QString dbName = (domain == QLatin1String("calendar")) ? QStringLiteral("DatebookDB")
-                         : (domain == QLatin1String("contacts")) ? QStringLiteral("AddressDB")
-                         : (domain == QLatin1String("todo"))     ? QStringLiteral("ToDoDB")
-                         : (domain == QLatin1String("note"))     ? QStringLiteral("MemoDB")
-                         : QString();
-    if (dbName.isEmpty()) return std::nullopt;
-
-    const QString name = storeIt.value()->slotName(dbName, slot);
-    if (name.isEmpty()) return std::nullopt;
+    const QString prefix =
+        QStringLiteral("palm:") + domain + QStringLiteral("/name:");
+    if (!p.sourceCalendar.startsWith(prefix)) return out;   // malformed
+    const QString name = p.sourceCalendar.mid(prefix.size());
+    if (name.isEmpty()) return out;
 
     spec.kind         = RouteSpec::Kind::Filtered;
     spec.categoryName = name;
-    return spec;
+    out.spec          = spec;
+    out.categoryName  = name;
+
+    // Status from the conduit's reconciled category store. The route is
+    // produced regardless — hub<->remote filtering works by name; the status
+    // reports the device-side binding state. NB: CategoryMappingStore::
+    // slotForName returns UnfiledSlot (0) for BOTH the "Unfiled" name and a
+    // not-found name, so a real on-device binding is slot > 0 (named routes
+    // never target Unfiled — that is the empty/Direct case).
+    auto *store = conduit->categoryStore();
+    const QString db = conduit->primaryDbName();
+    if (!store || store->populatedSlots(db).isEmpty()) {
+        out.status = RouteStatus::WaitingForDevice;
+    } else if (store->slotForName(db, name) > 0) {
+        out.status = RouteStatus::Active;
+    } else {
+        out.status = RouteStatus::NoFreeSlot;
+    }
+    return out;
 }
 
 } // namespace WildPalms::Runtime

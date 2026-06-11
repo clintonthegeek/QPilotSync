@@ -1068,13 +1068,14 @@ set_tests_properties(tst_accountssetuppage PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
-# hub↔remote routing Task 2: translateRouteSpec — pure translator + unit tests.
-# Links WildPalmsRuntime + Kalburator::Sync directly (not WildPalmsCore) so
-# that #include "synctypes.h" resolves to libkalburator's Kalburator::Sync
-# header rather than the WP-local src/core/synctypes.h (which WildPalmsCore's
-# PUBLIC include path would shadow it with).
-add_executable(tst_route_mapping tst_route_mapping.cpp)
-target_link_libraries(tst_route_mapping
+# Substrate A3: translateRouteSpec — names-first translator + per-route status.
+# (Replaces the old tst_route_mapping, which exercised the slot-form +
+# stores-hash signature that substrate A3 retired.) Links WildPalmsRuntime +
+# Kalburator::Sync directly (not WildPalmsCore) so that #include "synctypes.h"
+# resolves to libkalburator's Kalburator::Sync header rather than the WP-local
+# src/core/synctypes.h (which WildPalmsCore's PUBLIC include path would shadow).
+add_executable(tst_routemapping tst_routemapping.cpp)
+target_link_libraries(tst_routemapping
     PRIVATE
         Qt::Core
         Qt::Test
@@ -1086,12 +1087,12 @@ target_link_libraries(tst_route_mapping
 # Prepend libkalburator/src/types so that #include "synctypes.h" finds
 # Kalburator::Sync::SyncMapping before the WP-local src/core/synctypes.h
 # that WildPalmsCore's PUBLIC include path would otherwise win with.
-target_include_directories(tst_route_mapping BEFORE PRIVATE
+target_include_directories(tst_routemapping BEFORE PRIVATE
     ${CMAKE_SOURCE_DIR}/../libkalburator/src/types
     ${CMAKE_SOURCE_DIR}/src
 )
-add_test(NAME tst_route_mapping COMMAND tst_route_mapping)
-set_tests_properties(tst_route_mapping PROPERTIES
+add_test(NAME tst_routemapping COMMAND tst_routemapping)
+set_tests_properties(tst_routemapping PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 

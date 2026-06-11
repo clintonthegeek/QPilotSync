@@ -61,17 +61,34 @@ QString SyncMappingGraphView::palmBackendIdForDb(const QString &dbName)
     return {};
 }
 
-QString SyncMappingGraphView::palmCollectionIdForSlot(const QString &dbName, int slot)
+QString SyncMappingGraphView::palmRouteDomainForDb(const QString &dbName)
 {
-    if (dbName == QLatin1String("DatebookDB"))
-        return QStringLiteral("palm:calendar/") + QString::number(slot);
-    if (dbName == QLatin1String("AddressDB"))
-        return QStringLiteral("palm:contact/") + QString::number(slot);
-    if (dbName == QLatin1String("MemoDB"))
-        return QStringLiteral("palm:memo/") + QString::number(slot);
-    if (dbName == QLatin1String("ToDoDB"))
-        return QStringLiteral("palm:todo/") + QString::number(slot);
+    // The HUB/route domain (matches PimPlugin::domain()). Distinct from the
+    // plural collection-type domain in palmDomainForDb(). Fixes the latent bug
+    // where this writer emitted "palm:contact/N" / "palm:memo/N" while the
+    // route translator expected "palm:contacts/…" / "palm:note/…", so
+    // graph-created contact/memo routes never translated.
+    if (dbName == QLatin1String("DatebookDB")) return QStringLiteral("calendar");
+    if (dbName == QLatin1String("AddressDB"))  return QStringLiteral("contacts");
+    if (dbName == QLatin1String("MemoDB"))     return QStringLiteral("note");
+    if (dbName == QLatin1String("ToDoDB"))     return QStringLiteral("todo");
     return {};
+}
+
+QString SyncMappingGraphView::palmCollectionIdForSlot(const QString &dbName, int slot) const
+{
+    // Substrate A3: names-first form "palm:<routeDomain>/name:<categoryName>".
+    // Slot 0 (Unfiled) and unnamed slots map to an empty sourceCalendar — a
+    // whole-domain Direct route — so the persisted row never carries a stale
+    // slot index.
+    const QString domain = palmRouteDomainForDb(dbName);
+    if (slot <= 0 || domain.isEmpty())
+        return {};
+    const QStringList names = m_snapshot.value(dbName);
+    const QString name = (slot < names.size()) ? names.at(slot) : QString();
+    if (name.isEmpty())
+        return {};
+    return QStringLiteral("palm:%1/name:%2").arg(domain, name);
 }
 
 void SyncMappingGraphView::setSnapshot(const QHash<QString, QStringList> &snapshot)
@@ -163,20 +180,28 @@ void SyncMappingGraphView::rebuild()
         const QString targetProviderId =
             obj.value(QStringLiteral("targetBackend")).toString().section(QLatin1Char(':'), 0, 0);
 
-        // Find the Palm DB whose backendId == sourceBackend and parse slot.
+        // Substrate A3: reconstruct from the names-first form
+        // "palm:<routeDomain>/name:<categoryName>". Locate the Palm DB by
+        // sourceBackend, then resolve the category name to its slot index in
+        // the live snapshot for edge positioning. A named route whose category
+        // is absent from the snapshot (device not seen yet) attaches to the DB
+        // header (slot 0, pending). Empty/whole-domain rows render no edge.
         QString dbName;
         int slot = -1;
         for (const auto &p : kDbs) {
             const QString db = QString::fromLatin1(p.first);
-            if (palmBackendIdForDb(db) == sourceBackend) {
-                const QString prefix = palmCollectionIdForSlot(db, 0).chopped(1);
-                if (sourceCalendar.startsWith(prefix)) {
-                    bool ok = false;
-                    slot = sourceCalendar.mid(prefix.size()).toInt(&ok);
-                    if (ok) { dbName = db; break; }
-                    slot = -1;
-                }
+            if (palmBackendIdForDb(db) != sourceBackend) continue;
+            const QString prefix = QStringLiteral("palm:")
+                + palmRouteDomainForDb(db) + QStringLiteral("/name:");
+            if (sourceCalendar.startsWith(prefix)) {
+                const QString name = sourceCalendar.mid(prefix.size());
+                const QStringList names = m_snapshot.value(db);
+                slot = 0;   // pending: attach to the DB header until reconciled
+                for (int i = 1; i < names.size(); ++i)
+                    if (names.at(i) == name) { slot = i; break; }
+                dbName = db;
             }
+            break;
         }
         if (dbName.isEmpty() || slot < 0) continue;
 

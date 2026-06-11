@@ -348,35 +348,23 @@ void PalmRuntime::ensureHubCollections()
 void PalmRuntime::buildRouteLogicalCalendars(
     QList<Kalburator::Sync::LogicalCalendar> &lcs)
 {
-    using namespace WildPalms::CalendarPlugin;
-    using namespace WildPalms::ContactsPlugin;
-    using namespace WildPalms::Memo;
-    using namespace WildPalms::TodoPlugin;
     using Kalburator::Sync::LogicalCalendar;
     using Kalburator::Sync::CalendarBackendBinding;
     using Kalburator::Sync::BackendRole;
 
-    if (m_mappings.isEmpty()) return;
-
-    // Collect the per-domain CategoryMappingStore pointers from the loaded
-    // plugins. The plugin owns its store; we borrow it for translation.
-    QHash<QString, WildPalms::PalmCalendar::CategoryMappingStore*> stores;
-    for (const auto &plugin : m_palmPlugins) {
-        if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get()))
-            stores.insert(QStringLiteral("calendar"), p->categoryStore());
-        else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get()))
-            stores.insert(QStringLiteral("contacts"), p->categoryStore());
-        else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get()))
-            stores.insert(QStringLiteral("note"), p->categoryStore());
-        else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get()))
-            stores.insert(QStringLiteral("todo"), p->categoryStore());
-    }
-
+    // Substrate A3: translate each persisted row against the conduit
+    // descriptors. Names-first category rows ("palm:<domain>/name:<X>") carry
+    // their device-binding state in t.status — recorded per mapping for the
+    // UI; the route is still materialized whenever a spec is produced (filtering
+    // works by name even before the device slot is bound).
+    m_routeStatuses.clear();
+    const auto cs = conduits();
     for (const auto &persisted : m_mappings) {
-        const auto specOpt =
-            WildPalms::Runtime::translateRouteSpec(persisted, stores);
-        if (!specOpt) continue;
-        const auto &s = *specOpt;
+        const auto t = WildPalms::Runtime::translateRouteSpec(persisted, cs);
+        if (t.status != WildPalms::Runtime::RouteStatus::NotARoute)
+            m_routeStatuses.insert(persisted.id, t.status);
+        if (!t.spec) continue;
+        const auto &s = *t.spec;
 
         QString primaryBackendId = QStringLiteral("wp-hub");
         QString primaryColId     = s.hubCollectionId;
@@ -432,6 +420,7 @@ void PalmRuntime::buildRouteLogicalCalendars(
 
         lcs.append(lc);
     }
+    Q_EMIT routeStatusesChanged();
 }
 
 void PalmRuntime::connectDevice(const QStringList &devicePaths)
