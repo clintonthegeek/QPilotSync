@@ -1094,3 +1094,25 @@ add_test(NAME tst_route_mapping COMMAND tst_route_mapping)
 set_tests_properties(tst_route_mapping PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Substrate A1: conduit descriptor contract (PimPlugin virtuals + default
+# matchesCollection). Absorbs the old tst_domainfilter matching cases.
+# Pure-logic test — mirrors tst_route_mapping's lean link set (the descriptor
+# base lives in WildPalmsRuntime; categoryStore() touches WildPalmsPalmCalendar).
+add_executable(tst_conduit_descriptor tst_conduit_descriptor.cpp)
+target_link_libraries(tst_conduit_descriptor
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        WildPalmsRuntime
+        Kalburator::Sync
+        WildPalmsPalmCalendar
+)
+target_include_directories(tst_conduit_descriptor BEFORE PRIVATE
+    ${CMAKE_SOURCE_DIR}/../libkalburator/src/types
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME tst_conduit_descriptor COMMAND tst_conduit_descriptor)
+set_tests_properties(tst_conduit_descriptor PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

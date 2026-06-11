@@ -8,6 +8,13 @@ find_package(KF6 REQUIRED COMPONENTS CoreAddons Config I18n)
 find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 add_library(WildPalmsRuntime STATIC
+    # Substrate A1 — PimPlugin promoted to the conduit descriptor. Its
+    # out-of-line virtuals (matchesCollection / categorySlotNames) are the
+    # PimPlugin key function, so its vtable/typeinfo are emitted here and
+    # pulled into WildPalmsCore.so alongside palmruntime.o (PalmDeviceAccessLib)
+    # and routemapping.o, which both enumerate descriptors.
+    ../plugins/pimplugin.h
+    ../plugins/pimplugin.cpp
     pluginmetadatahelpers.h
     pluginmetadatahelpers.cpp
     # K.8b T13: BackendPluginManager deleted (IBackendPluginV2 also gone;
