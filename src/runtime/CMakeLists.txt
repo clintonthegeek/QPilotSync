@@ -61,6 +61,12 @@ add_library(WildPalmsRuntime STATIC
     # hub↔remote routing Task 2 — pure translator: persisted SyncMapping → RouteSpec
     routemapping.h
     routemapping.cpp
+    # Substrate A3 — pure category reconciliation over AppInfo bytes (matches
+    # desired names case-insensitively, claims free slots, preserves the
+    # app-specific tail). Uses CategoryInfo (WildPalmsCore) — resolved at the
+    # WildPalmsCore.so link.
+    categoryreconciler.h
+    categoryreconciler.cpp
     # Clobber-sync Task 4 — modal dialog for per-conduit Palm-clobber
     # selection. Pure Qt::Widgets; no engine/device knowledge.
     clobberdialog.h

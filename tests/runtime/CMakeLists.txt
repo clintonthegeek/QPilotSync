@@ -1098,3 +1098,22 @@ add_test(NAME tst_conduit_descriptor COMMAND tst_conduit_descriptor)
 set_tests_properties(tst_conduit_descriptor PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Substrate A3: CategoryReconciler — pure name->slot binding over AppInfo bytes.
+# Uses CategoryInfo (WildPalmsCore, which resolves pack/unpack_CategoryAppInfo
+# from pisock internally); reconcileCategories lives in WildPalmsRuntime.
+add_executable(tst_category_reconciler tst_category_reconciler.cpp)
+target_link_libraries(tst_category_reconciler
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        WildPalmsRuntime
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_category_reconciler COMMAND tst_category_reconciler)
+set_tests_properties(tst_category_reconciler PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
