@@ -147,6 +147,12 @@ public:
     /// A1 — replaces the hardcoded kPalmBackendIds array).
     bool isPalmConduitBackendId(const QString &backendId) const;
 
+    /// Substrate A1 test seam: append an extra conduit descriptor after
+    /// construction, then re-run hub-collection creation so the new domain
+    /// gets its hub collection (createCollection is idempotent for existing
+    /// ids). NOT a production plugin-loading path.
+    void appendConduitForTest(std::unique_ptr<WildPalms::Plugins::PimPlugin> conduit);
+
     // Replace the live mapping list. Caller must ensure isRunning() == false.
     // JSON shape is the same as Profile::syncMappingsJson() — array of objects
     // each round-trippable via syncMappingToJson()/syncMappingFromJson().

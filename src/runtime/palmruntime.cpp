@@ -321,6 +321,14 @@ bool PalmRuntime::isPalmConduitBackendId(const QString &backendId) const
     return false;
 }
 
+void PalmRuntime::appendConduitForTest(
+    std::unique_ptr<WildPalms::Plugins::PimPlugin> conduit)
+{
+    m_palmPlugins.push_back(std::move(conduit));
+    ensureHubCollections();   // idempotent: createCollection on an existing
+                              // id only re-registers the same shape (no dup row).
+}
+
 void PalmRuntime::ensureHubCollections()
 {
     using Kalburator::Shape::Shape;

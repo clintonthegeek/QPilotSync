@@ -1138,3 +1138,31 @@ add_test(NAME tst_localfolder_provider COMMAND tst_localfolder_provider)
 set_tests_properties(tst_localfolder_provider PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Substrate A1 acceptance: a fifth conduit participates everywhere a stock one
+# does, with zero WP source change beyond registration. Constructs a real
+# PalmRuntime (full Palm stack + WHOLE_ARCHIVE Kalburator::Sync for the static
+# DomainPlugin registrars) and uses translateRouteSpec / SyncMapping directly,
+# so prepend libkalburator/src/types for the canonical synctypes.h.
+add_executable(tst_fifth_conduit tst_fifth_conduit.cpp)
+target_link_libraries(tst_fifth_conduit
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+target_include_directories(tst_fifth_conduit BEFORE PRIVATE
+    ${CMAKE_SOURCE_DIR}/../libkalburator/src/types
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME tst_fifth_conduit COMMAND tst_fifth_conduit)
+set_tests_properties(tst_fifth_conduit PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
