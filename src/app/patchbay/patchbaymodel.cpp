@@ -138,9 +138,94 @@ void PatchbayModel::rebuild()
     emit rebuilt();
 }
 
-// Stubs completed in Tasks 7 and 8:
-void PatchbayModel::rebuildRemotes() {}
-void PatchbayModel::rebuildWiresAndStrands() {}
+void PatchbayModel::rebuildRemotes()
+{
+    // Real providers
+    for (const auto &prov : m_inputs.providers) {
+        NodeDesc n;
+        n.id = QStringLiteral("remote:%1").arg(prov.providerId);
+        n.kind = NodeKind::Remote;
+        n.title = prov.displayName;
+        n.subtitle = prov.busyText;
+        BandDesc band;
+        if (prov.busyText.isEmpty()) {
+            for (const auto &col : prov.collections) {
+                for (const auto &c : m_inputs.conduits) {
+                    if (!c.matchesCollection || !c.matchesCollection(col))
+                        continue;
+                    PortDesc p;
+                    p.id = QStringLiteral("col:%1|%2").arg(col.id, c.domain);
+                    p.label = col.name;
+                    p.domain = c.domain;
+                    p.kind = PortKind::RemoteCollection;
+                    band.ports << p;
+                }
+            }
+        }
+        n.bands << band;
+        m_nodes << n;
+    }
+
+    // Ghost remotes: rows whose targetBackend references an unknown provider
+    // or a provider that lacks the collection. targetBackend is
+    // "<providerId>:<collectionId>"; providerId never contains ':' (it is an
+    // account uuid), so split on the FIRST ':' only.
+    for (const auto &v : m_inputs.mappings) {
+        const QJsonObject r = v.toObject();
+        const QString target = r.value(QLatin1String("targetBackend")).toString();
+        const int colon = target.indexOf(QLatin1Char(':'));
+        if (colon <= 0)
+            continue;
+        const QString providerId = target.left(colon);
+        const QString collectionId = target.mid(colon + 1);
+        const ConduitFacts *c =
+            conduitForId(r.value(QLatin1String("sourceBackend")).toString());
+        if (!c)
+            continue;
+
+        bool resolved = false;
+        for (const auto &prov : m_inputs.providers) {
+            if (prov.providerId != providerId)
+                continue;
+            if (!prov.busyText.isEmpty()) { resolved = true; break; } // pending, not broken
+            for (const auto &col : prov.collections)
+                if (col.id == collectionId) { resolved = true; break; }
+            break;
+        }
+        if (resolved)
+            continue;
+
+        const QString ghostId = QStringLiteral("ghost:%1").arg(providerId);
+        NodeDesc *ghost = nullptr;
+        for (auto &n : m_nodes)
+            if (n.id == ghostId) ghost = &n;
+        if (!ghost) {
+            NodeDesc n;
+            n.id = ghostId;
+            n.kind = NodeKind::GhostRemote;
+            n.title = QStringLiteral("Missing account");
+            n.subtitle = providerId;
+            n.ghosted = true;
+            n.bands << BandDesc{};
+            m_nodes << n;
+            ghost = &m_nodes.last();
+        }
+        const QString portId = QStringLiteral("col:%1|%2").arg(collectionId, c->domain);
+        bool havePort = false;
+        for (const auto &p : ghost->bands.first().ports)
+            if (p.id == portId) havePort = true;
+        if (!havePort) {
+            PortDesc p;
+            p.id = portId;
+            p.label = collectionId;
+            p.domain = c->domain;
+            p.kind = PortKind::RemoteCollection;
+            ghost->bands.first().ports << p;
+        }
+    }
+}
+
+void PatchbayModel::rebuildWiresAndStrands() {}   // Task 8
 
 // Edit ops — real bodies land in Task 9; stubs keep the lib linking.
 QString PatchbayModel::addMapping(const QString &, const QString &,

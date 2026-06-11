@@ -95,6 +95,11 @@ private slots:
     void hubCategoriesUnionDesiredAndRows();
     void palmNodeBandsAndSlots();
     void disconnectedDeviceGhostsPalmNode();
+    // Task 7
+    void remoteNodePerProvider();
+    void portPerCollectionDomainPairing();
+    void busyProviderShowsSubtitleAndNoPorts();
+    void missingAccountSynthesizesGhostNode();
 };
 
 void TstPatchbayModel::hubHasBandPerConduit()
@@ -164,6 +169,65 @@ void TstPatchbayModel::disconnectedDeviceGhostsPalmNode()
     QVERIFY(palm);
     QVERIFY(palm->ghosted);                  // node never vanishes (spec §5.1)
     QVERIFY(!palm->bands.isEmpty());         // snapshot still rendered
+}
+
+void TstPatchbayModel::remoteNodePerProvider()
+{
+    PatchbayModel m;
+    m.setInputs(baseInputs());
+    const auto *nc = nodeById(m.nodes(), "remote:acc-1");
+    QVERIFY(nc);
+    QCOMPARE(nc->kind, NodeKind::Remote);
+    QCOMPARE(nc->title, QStringLiteral("Nextcloud"));
+    QCOMPARE(nc->bands.size(), 1);
+    QCOMPARE(nc->bands.first().ports.size(), 1);
+    QCOMPARE(nc->bands.first().ports.first().id,
+             QStringLiteral("col:cal1|calendar"));
+}
+
+void TstPatchbayModel::portPerCollectionDomainPairing()
+{
+    auto in = baseInputs();
+    // a mixed VEVENT+VTODO collection matches BOTH calendar and todo conduits
+    CollectionInfo mixed;
+    mixed.id = "cal2"; mixed.name = "Mixed"; mixed.type = "calendar";
+    in.conduits[0].matchesCollection =
+        [](const CollectionInfo &c) { return c.type == "calendar"; };
+    in.conduits[3].matchesCollection =
+        [](const CollectionInfo &c) { return c.id == "cal2"; };   // VTODO-capable
+    in.providers[0].collections << mixed;
+    PatchbayModel m;
+    m.setInputs(in);
+    const auto *nc = nodeById(m.nodes(), "remote:acc-1");
+    QStringList ids;
+    for (const auto &p : nc->bands.first().ports) ids << p.id;
+    QVERIFY(ids.contains("col:cal2|calendar"));
+    QVERIFY(ids.contains("col:cal2|todo"));     // spec §5.3
+}
+
+void TstPatchbayModel::busyProviderShowsSubtitleAndNoPorts()
+{
+    auto in = baseInputs();
+    in.providers[0].busyText = QStringLiteral("Connecting…");
+    PatchbayModel m;
+    m.setInputs(in);
+    const auto *nc = nodeById(m.nodes(), "remote:acc-1");
+    QCOMPARE(nc->subtitle, QStringLiteral("Connecting…"));
+    QVERIFY(nc->bands.first().ports.isEmpty());
+}
+
+void TstPatchbayModel::missingAccountSynthesizesGhostNode()
+{
+    auto in = baseInputs();
+    in.mappings.append(row("m9", "calendar", "", "gone-uuid:calX", "calX"));
+    PatchbayModel m;
+    m.setInputs(in);
+    const auto *ghost = nodeById(m.nodes(), "ghost:gone-uuid");
+    QVERIFY(ghost);                              // never silently drop (spec §10)
+    QCOMPARE(ghost->kind, NodeKind::GhostRemote);
+    QVERIFY(ghost->ghosted);
+    QCOMPARE(ghost->bands.first().ports.first().id,
+             QStringLiteral("col:calX|calendar"));
 }
 
 WILDPALMS_QTEST_MAIN(TstPatchbayModel)
