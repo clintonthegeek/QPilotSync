@@ -59,6 +59,8 @@ namespace Kalburator::Sinks {
     class FilteredCollectionBackend;
 }
 
+namespace WildPalms::Plugins { class PimPlugin; }   // substrate A1 — conduit descriptor
+
 // K.8b T13: IBackendPluginV2 forward-decl dropped — the V2 plugin ABI is
 // gone. registerPluginForTest overloads removed below (they had no live
 // callers after K.8b T6 turned them into no-ops).
@@ -131,6 +133,17 @@ public:
     /// Valid after registerPalmPlugins() (called from the constructor).
     const std::vector<std::unique_ptr<Kalburator::Plugin>> &palmPlugins() const
         { return m_palmPlugins; }
+
+    /// All loaded conduit plugins, as descriptors (substrate A1). Stable for
+    /// the lifetime of this PalmRuntime. Used by finishConnect, route
+    /// translation, and (later) the wizard/graph surfaces. One residual
+    /// dynamic_cast to the PimPlugin base replaces the per-concrete-type
+    /// cast chains that used to live throughout this class.
+    QList<WildPalms::Plugins::PimPlugin*> conduits() const;
+
+    /// True iff backendId names one of the loaded Palm conduits (substrate
+    /// A1 — replaces the hardcoded kPalmBackendIds array).
+    bool isPalmConduitBackendId(const QString &backendId) const;
 
     // Replace the live mapping list. Caller must ensure isRunning() == false.
     // JSON shape is the same as Profile::syncMappingsJson() — array of objects

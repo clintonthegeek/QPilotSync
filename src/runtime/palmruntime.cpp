@@ -68,9 +68,9 @@
 
 namespace {
 
-constexpr std::array<const char*, 4> kPalmBackendIds = {
-    "calendar", "contacts", "memo", "todo"
-};
+// Substrate A1: the hardcoded kPalmBackendIds array is gone —
+// PalmRuntime::isPalmConduitBackendId() derives the set from the loaded
+// conduit descriptors.
 
 static QString sanitizeForFilesystem(const QString &id)
 {
@@ -174,24 +174,11 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
         resolveMappingIdentity(mappingId, label, icon);
 
         // P2: Determine whether Palm is source, target, or both in this
-        // mapping.  Palm backend IDs match plugin->pluginId() values
-        // ("calendar", "contacts", "memo", "todo") — collect them once
-        // from m_palmPlugins, then compare against the mapping's backends.
-        using namespace WildPalms::CalendarPlugin;
-        using namespace WildPalms::ContactsPlugin;
-        using namespace WildPalms::Memo;
-        using namespace WildPalms::TodoPlugin;
+        // mapping. Palm backend IDs are the conduit descriptors' conduitId()
+        // values ("calendar", "contacts", "memo", "todo").
         QSet<QString> palmIds;
-        for (const auto &plugin : m_palmPlugins) {
-            if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get()))
-                palmIds.insert(p->pluginId());
-            else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get()))
-                palmIds.insert(p->pluginId());
-            else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get()))
-                palmIds.insert(p->pluginId());
-            else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get()))
-                palmIds.insert(p->pluginId());
-        }
+        for (auto *c : conduits())
+            palmIds.insert(c->conduitId());
         m_currentPalmIsSource = false;
         m_currentPalmIsTarget = false;
         for (const auto &m : m_mappings) {
@@ -317,26 +304,44 @@ void PalmRuntime::registerPalmPlugins()
     m_palmPlugins.push_back(std::move(todo));
 }
 
+QList<WildPalms::Plugins::PimPlugin*> PalmRuntime::conduits() const
+{
+    // Substrate A1: one dynamic_cast to the PimPlugin base replaces the five
+    // per-concrete-type cast chains that used to live throughout this class.
+    // Non-PIM plugins (e.g. plucker) inherit Kalburator::Plugin directly and
+    // cast to nullptr — they are skipped naturally.
+    QList<WildPalms::Plugins::PimPlugin*> out;
+    for (const auto &p : m_palmPlugins)
+        if (auto *c = dynamic_cast<WildPalms::Plugins::PimPlugin*>(p.get()))
+            out.append(c);
+    return out;
+}
+
+bool PalmRuntime::isPalmConduitBackendId(const QString &backendId) const
+{
+    for (auto *c : conduits())
+        if (c->conduitId() == backendId) return true;
+    return false;
+}
+
 void PalmRuntime::ensureHubCollections()
 {
     using Kalburator::Shape::Shape;
     using Kalburator::Shape::DomainId;
     using Kalburator::Shape::EncodingId;
 
-    const std::pair<const char *, const char *> domains[] = {
-        { "calendar", "calendar" }, { "contacts", "contacts" },
-        { "todo",     "todo"     }, { "note",     "note"     },
-    };
-
-    for (const auto &[colId, dom] : domains) {
+    // Substrate A1: one hub collection per conduit descriptor's domain
+    // (calendar, contacts, note, todo). Must run after registerPalmPlugins()
+    // populates m_palmPlugins — it does (ctor calls them in that order).
+    for (auto *c : conduits()) {
+        const QString dom = c->domain().toString();
         Kalburator::Sync::CollectionInfo info;
-        info.id   = QString::fromLatin1(colId);
-        info.name = QString::fromLatin1(colId);
-        info.type = QString::fromLatin1(dom);
+        info.id   = dom;
+        info.name = dom;
+        info.type = dom;
         m_hub->createCollection(
             info,
-            Shape{ DomainId{QString::fromLatin1(dom)},
-                   EncodingId{QStringLiteral("canon")} });
+            Shape{ DomainId{dom}, EncodingId{QStringLiteral("canon")} });
     }
 }
 
@@ -488,65 +493,25 @@ void PalmRuntime::finishConnect()
     // kept as the seam where that merge will happen.
     loadMappingsFromProfile();
 
-    // K.8b T6: iterate the five statically-loaded Palm plugins registered
-    // by registerPalmPlugins(). Replaces the old KPluginMetaData .so
-    // discovery loop.
-    for (auto &plugin : m_palmPlugins) {
-        std::unique_ptr<Kalburator::Sync::SyncBackendBase> ownedBackend;
-        QString id;
-
-        // Dynamic dispatch to each concrete plugin type for
-        // createPalmBackend(). The method is non-virtual on Kalburator::Plugin
-        // — each concrete class declares it independently.
-        using namespace WildPalms::CalendarPlugin;
-        using namespace WildPalms::ContactsPlugin;
-        using namespace WildPalms::Memo;
-        using namespace WildPalms::TodoPlugin;
-
-        if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
-            id = p->pluginId();
-            ownedBackend = p->createPalmBackend(m_device.get());
-        } else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get())) {
-            id = p->pluginId();
-            ownedBackend = p->createPalmBackend(m_device.get());
-        } else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get())) {
-            id = p->pluginId();
-            ownedBackend = p->createPalmBackend(m_device.get());
-        } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
-            id = p->pluginId();
-            ownedBackend = p->createPalmBackend(m_device.get());
-        }
-
+    // Substrate A1: enumerate conduit descriptors instead of casting to each
+    // concrete plugin type. createPalmBackend populates the plugin's internal
+    // CategoryMappingStore from the live AppInfo block; categorySlotNames()
+    // (read immediately after, same iteration) captures the snapshot for the
+    // F.3 Profile write-back.
+    for (auto *c : conduits()) {
+        const QString id = c->conduitId();
+        std::unique_ptr<Kalburator::Sync::SyncBackendBase> ownedBackend =
+            c->createPalmBackend(m_device.get());
         if (!ownedBackend) {
-            if (!id.isEmpty())
-                qWarning() << "[PalmRuntime::finishConnect] Plugin" << id
-                           << "returned null backend";
+            qWarning() << "[PalmRuntime::finishConnect] Plugin" << id
+                       << "returned null backend";
             continue;
         }
 
-        // F.3: write the category-slot snapshot for this plugin's primary
-        // database into the borrowed Profile, if one is set. Each plugin's
-        // createPalmBackend has already populated its internal
-        // CategoryMappingStore from the live AppInfo block.
-        if (m_profile) {
-            QString primaryDbName;
-            QStringList slotNames;
-            if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
-                primaryDbName = p->primaryDbName();
-                slotNames = p->categorySlotNames();
-            } else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get())) {
-                primaryDbName = p->primaryDbName();
-                slotNames = p->categorySlotNames();
-            } else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get())) {
-                primaryDbName = p->primaryDbName();
-                slotNames = p->categorySlotNames();
-            } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
-                primaryDbName = p->primaryDbName();
-                slotNames = p->categorySlotNames();
-            }
-            if (!primaryDbName.isEmpty() && slotNames.size() == 16) {
-                m_profile->setCategorySlotNames(primaryDbName, slotNames);
-            }
+        if (m_profile && c->supportsCategories()) {
+            const QStringList slotNames = c->categorySlotNames();
+            if (slotNames.size() == 16)
+                m_profile->setCategorySlotNames(c->primaryDbName(), slotNames);
         }
 
         m_registry->registerBackendInstance(id, ownedBackend.get());
@@ -563,14 +528,13 @@ void PalmRuntime::finishConnect()
     using Kalburator::Sync::CalendarBackendBinding;
     using Kalburator::Sync::BackendRole;
     QList<LogicalCalendar> lcs;
-    // (palmBackendId, hubCollectionId, palmDomainCollectionId)
-    const std::tuple<QString, QString, QString> wiring[] = {
-        { QStringLiteral("calendar"), QStringLiteral("calendar"), QStringLiteral("palm:calendar") },
-        { QStringLiteral("contacts"), QStringLiteral("contacts"), QStringLiteral("palm:contacts") },
-        { QStringLiteral("memo"),     QStringLiteral("note"),     QStringLiteral("palm:note")     },
-        { QStringLiteral("todo"),     QStringLiteral("todo"),     QStringLiteral("palm:todo")     },
-    };
-    for (const auto &[palmId, hubCol, palmCol] : wiring) {
+    // Substrate A1: per-conduit Palm<->hub Star wiring from the descriptors.
+    // (palmId, hubCol, palmCol) = (conduitId, domain, "palm:" + domain) —
+    // reproduces the old static table exactly (memo: id "memo", domain "note").
+    for (auto *c : conduits()) {
+        const QString palmId  = c->conduitId();
+        const QString hubCol  = c->domain().toString();
+        const QString palmCol = QStringLiteral("palm:") + hubCol;
         if (!m_registry->backendInstance(palmId)) continue;   // backend not connected this session
         LogicalCalendar lc;
         lc.id = QStringLiteral("wp-%1").arg(hubCol);
@@ -766,11 +730,7 @@ QList<Kalburator::Sync::SyncMapping> PalmRuntime::palmMappings() const {
 bool PalmRuntime::isPalmDirectMapping(
     const Kalburator::Sync::SyncMapping &m) const
 {
-    for (const char *id : kPalmBackendIds) {
-        if (m.targetBackend == QLatin1String(id))
-            return true;
-    }
-    return false;
+    return isPalmConduitBackendId(m.targetBackend);
 }
 
 QList<QString> PalmRuntime::palmDirectMappingsForDomain(
@@ -790,46 +750,20 @@ void PalmRuntime::resolveMappingIdentity(const QString &mappingId,
                                          QString &outLabel,
                                          QString &outIconName) const
 {
-    using namespace WildPalms::CalendarPlugin;
-    using namespace WildPalms::ContactsPlugin;
-    using namespace WildPalms::Memo;
-    using namespace WildPalms::TodoPlugin;
-
     outLabel = mappingId;
     outIconName = QStringLiteral("view-list-details");
-    static const QHash<QString, QString> kIcons = {
-        { QStringLiteral("calendar"), QStringLiteral("office-calendar") },
-        { QStringLiteral("contacts"), QStringLiteral("x-office-address-book") },
-        { QStringLiteral("memo"),     QStringLiteral("text-x-generic") },
-        { QStringLiteral("todo"),     QStringLiteral("view-task") },
-        { QStringLiteral("plucker"),  QStringLiteral("text-html") },
-    };
+    // Substrate A1: resolve identity from the conduit descriptors — each
+    // descriptor owns its display name + theme icon, subsuming the old kIcons
+    // hash and the per-concrete-type cast chain. (The old hash's "plucker"
+    // entry was dead: plucker is not a loaded Palm conduit.)
     for (const auto &m : m_mappings) {
         if (m.id != mappingId)
             continue;
-        // Base Kalburator::Plugin has no pluginId()/displayName(); the concrete
-        // Palm plugin subclasses do. Match m.sourceBackend (a bare plugin id
-        // like "calendar") against each plugin's pluginId() via dynamic_cast,
-        // mirroring the dispatch pattern in finishConnect().
-        for (const auto &plugin : m_palmPlugins) {
-            QString pid;
-            QString name;
-            if (auto *p = dynamic_cast<CalendarBackendPlugin *>(plugin.get())) {
-                pid = p->pluginId(); name = p->displayName();
-            } else if (auto *p = dynamic_cast<ContactsBackendPlugin *>(plugin.get())) {
-                pid = p->pluginId(); name = p->displayName();
-            } else if (auto *p = dynamic_cast<MemoPlugin *>(plugin.get())) {
-                pid = p->pluginId(); name = p->displayName();
-            } else if (auto *p = dynamic_cast<TodoBackendPlugin *>(plugin.get())) {
-                pid = p->pluginId(); name = p->displayName();
-            } else {
-                continue;
-            }
-            if (pid == m.sourceBackend) {
-                outLabel = name;
-                outIconName = kIcons.value(m.sourceBackend,
-                                           QStringLiteral("view-list-details"));
-                return;
+        for (auto *c : conduits()) {
+            if (c->conduitId() == m.sourceBackend) {
+                outLabel = c->conduitDisplayName();
+                outIconName = c->conduitIconName();
+                break;
             }
         }
         return;
