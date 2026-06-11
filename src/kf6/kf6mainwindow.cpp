@@ -29,6 +29,7 @@
 #include "../app/conflict/kalburatorinteractiveconflicthandler.h"
 // Widget includes
 #include "../widgets/dashboard/dashboardwidget.h"
+#include "../app/patchbay/patchbaypage.h"
 #include "../widgets/dialogs/profilepropertiesdialog.h"
 #include "../widgets/dialogs/conflictreviewdialog.h"
 
@@ -229,6 +230,12 @@ KF6MainWindow::KF6MainWindow(QWidget *parent)
 
 KF6MainWindow::~KF6MainWindow()
 {
+    // Destroy the Sync Patchbay page before the member unique_ptrs it borrows
+    // (m_accountController / m_palmRuntime / m_currentProfile) are torn down.
+    // The dtor body runs before member destruction, so the controllers are
+    // still alive here; the page dtor severs its connections to them safely.
+    destroyPatchbayPage();
+
     // Stop udev monitor
     if (m_deviceMonitor) {
         m_deviceMonitor->stop();
@@ -513,8 +520,24 @@ void KF6MainWindow::updateProfileMenuState()
 
 // ========== Profile Management ==========
 
+void KF6MainWindow::destroyPatchbayPage()
+{
+    // Remove + delete the page while its borrowed controllers are still
+    // alive (the page dtor severs connections to them). removePage deletes
+    // the page widget.
+    if (m_patchbayPageItem) {
+        m_pageWidget->removePage(m_patchbayPageItem);
+        m_patchbayPageItem = nullptr;
+        m_patchbayPage = nullptr;
+    }
+}
+
 void KF6MainWindow::loadProfile(const QString &path)
 {
+    // The Sync Patchbay borrows the about-to-be-replaced profile/runtime/
+    // accounts — tear it down first (1be66a3 lesson).
+    destroyPatchbayPage();
+
     // AccountController borrows the old profile + runtime; it
     // must be reset BEFORE the old Profile is deleted and the old
     // PalmRuntime is replaced.
@@ -675,6 +698,19 @@ void KF6MainWindow::loadProfile(const QString &path)
         m_palmPluginPages.insert(c->conduitId(), page);
     }
 
+    // Sync Patchbay (Part 1): the three-tier mapping editor as a central
+    // page. Replaces nothing yet — the F.3 Settings page retires in Part 2
+    // (spec §11). Built now that profile + runtime + accounts all exist.
+    m_patchbayPage = new WildPalms::AppPatchbay::PatchbayPage(
+        m_currentProfile.get(), m_accountController.get(),
+        m_palmRuntime.get(), this);
+    m_patchbayPageItem =
+        new KPageWidgetItem(m_patchbayPage, i18n("Patchbay"));
+    m_patchbayPageItem->setIcon(
+        QIcon::fromTheme(QStringLiteral("network-connect")));
+    m_pageWidget->addPage(m_patchbayPageItem);
+    m_pageWidget->setCurrentPage(m_patchbayPageItem);
+
     // Connection mode (USB serial vs network) is now encoded in the
     // devicePaths passed to PalmRuntime::connectDevice().
 
@@ -713,6 +749,9 @@ void KF6MainWindow::loadProfile(const QString &path)
 
 void KF6MainWindow::closeProfile()
 {
+    // Patchbay borrows accounts/runtime/profile — destroy it first.
+    destroyPatchbayPage();
+
     // AccountController teardown precedes Profile teardown.
     if (m_accountController) {
         m_accountController.reset();

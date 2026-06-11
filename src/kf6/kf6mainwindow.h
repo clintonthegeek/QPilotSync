@@ -22,6 +22,7 @@ class LogWidget;
 class KPilotDeviceLink;
 class Profile;
 class DashboardWidget;
+namespace WildPalms::AppPatchbay { class PatchbayPage; }
 class KStatusNotifierItem;
 class PalmDeviceMonitor;
 class AutoSyncOrchestrator;
@@ -209,6 +210,9 @@ private:
     // Profile management
     void loadProfile(const QString &path);
     void closeProfile();
+    /// Remove + delete the Sync Patchbay page (if present) while its borrowed
+    /// controllers are still alive. Safe to call when no page exists.
+    void destroyPatchbayPage();
     QString resolveStartupProfile();
 
     // Device handling
@@ -246,6 +250,14 @@ private:
 
     // Dynamic plugin pages (keyed by plugin id), populated synchronously in loadProfile()
     QMap<QString, KPageWidgetItem *> m_palmPluginPages;
+
+    // Sync Patchbay (Part 1) — three-tier mapping editor/monitor. Borrows
+    // m_currentProfile / m_accountController / m_palmRuntime; MUST be
+    // destroyed before any of them (1be66a3 teardown lesson) — see
+    // destroyPatchbayPage(), called at the top of loadProfile()/closeProfile()
+    // and ~KF6MainWindow.
+    WildPalms::AppPatchbay::PatchbayPage *m_patchbayPage = nullptr;
+    KPageWidgetItem *m_patchbayPageItem = nullptr;
 
     // PalmRuntime owns the hotSync path.
     std::unique_ptr<WildPalms::Runtime::PalmRuntime> m_palmRuntime;

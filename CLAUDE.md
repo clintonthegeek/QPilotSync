@@ -13,7 +13,45 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 push so lib gates can run against WP's real baseline — flagged to user).
 **libkalburator pin:** `v0.69` (`CMakeLists.txt:63`).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **123/123 pass.**
+**ctest:** **125/125 pass** (123 baseline + `tst_patchbay_model` + `tst_patchbay_view`).
+
+### Sync Patchbay — Part 1 (Phases 0–1) — LANDED 2026-06-11
+
+Executed `docs/superpowers/plans/2026-06-11-sync-patchbay-part1.md` in full (16 tasks).
+Spec: `docs/superpowers/specs/2026-06-11-sync-patchbay-design.md`. The three-tier
+**Palm | Hub | Remotes** mapping editor/monitor is now a central KPageWidget page
+("Patchbay", default-visible after profile load).
+
+- **New dependency: Graffodil** (`~/dev/Graffodil`, sibling-override + FetchContent,
+  pinned **`v0.2.0`**; `WILDPALMS_GRAFFODIL_SOURCE_DIR` / `WILDPALMS_GRAFFODIL_GIT_TAG`).
+  Phase 0 landed two Graffodil features upstream (WP drove them, Graffodil's own suite
+  16/16 gates): edge midpoint labels (`EdgeLabelStyle` + `GraphEdgeItem::setLabel`,
+  Phase 6c) and a consumer-steppable dash offset (`setDashOffset`), plus
+  `PROJECT_IS_TOP_LEVEL` demo/test guards. Tag `v0.2.0` pushed to Codeberg.
+- **`src/app/patchbay/`** (new static lib `WildPalmsAppPatchbay`, same synctypes.h
+  isolation as AppMapping): `PatchbayModel` (pure data — Profile rows + `routeStatuses()`
+  + provider state → nodes/ports/wires/strands; 17 unit tests, no graphics),
+  `PatchNodeItem` (one generic `IGraphNode` renderer for palm/hub/remote/ghost),
+  `SignalPathWire` (domain-colored wires + read-only strands + chevrons + ✗ beads),
+  `SyncPatchbayView` (Graffodil scene, three-column manual layout, drag-to-connect both
+  directions, Delete-key removal, inline "+ category…" editor, context-menu category
+  removal; 7 view tests), `PatchbayInspector` + `PatchbayPage` (write-through to Profile,
+  rebuild on account/runtime signals, `RouteStatus` status story).
+- **Edit parity with F.3:** drag port→port creates a validated row; selecting a wire
+  edits mode/policy/enabled; category lifecycle via the hub band. **Persisted rows
+  unchanged — no migration; F.3 Settings graph page still works in parallel** (retired in
+  Part 2).
+- **Teardown:** `KF6MainWindow::destroyPatchbayPage()` runs at the top of
+  `loadProfile()`/`closeProfile()` and in `~KF6MainWindow` so the page (which borrows
+  profile/runtime/accounts) dies before them (the `1be66a3` lesson).
+
+**Pending (Part 2, do NOT do yet):** live run animation (dash ticker), run-result beads,
+read-only-during-sync guard, retire `src/app/mapping/` + Settings page +
+`tst_syncmappingsgraphview`, dashboard → summary strip, hub record-count/baseline footers,
+"Add account…" ghost node, wire context-menu delete, patchbay-first page ordering.
+**User smoke test pending:** launch the app, load a wizard profile, confirm the Patchbay
+page renders 4 hub bands + palm↔hub strands + account wires, and that dragging a hub port
+to a collection creates a row.
 
 ### Configuration Substrate (Sub-project A) — LANDED 2026-06-11
 
