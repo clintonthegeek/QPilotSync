@@ -79,6 +79,10 @@ private slots:
     void rebuildPopulatesScene();
     void columnsAreOrdered();
     void wireCarriesState();
+    // Task 13
+    void dragConnectCreatesMapping();
+    void dragOnPalmTierIgnored();
+    void deleteSelectedRemovesMapping();
 };
 
 void TstPatchbayView::rebuildPopulatesScene()
@@ -121,6 +125,50 @@ void TstPatchbayView::wireCarriesState()
     SyncPatchbayView view;
     view.setModel(&model);
     QCOMPARE(view.wireItem("m1")->wireState(), WireState::OneWayUpload);
+}
+
+void TstPatchbayView::dragConnectCreatesMapping()
+{
+    PatchbayModel model;
+    model.setInputs(baseInputs());
+    SyncPatchbayView view;
+    view.setModel(&model);
+
+    view.requestEdgeForTest("hub", "cat:calendar/Work@r",
+                            "remote:acc-1", "col:cal1|calendar@l");
+    QCOMPARE(model.mappings().size(), 1);
+    QCOMPARE(view.wireCount(), 1);
+
+    // reverse drag direction also works
+    view.requestEdgeForTest("remote:acc-1", "col:cal1|calendar@l",
+                            "hub", "dom:calendar@r");
+    QCOMPARE(model.mappings().size(), 2);
+}
+
+void TstPatchbayView::dragOnPalmTierIgnored()
+{
+    PatchbayModel model;
+    model.setInputs(baseInputs());
+    SyncPatchbayView view;
+    view.setModel(&model);
+    view.requestEdgeForTest("palm", "slot:DatebookDB/1@r",
+                            "hub", "cat:calendar/Work@l");
+    QCOMPARE(model.mappings().size(), 0);   // strands are not user-wirable
+}
+
+void TstPatchbayView::deleteSelectedRemovesMapping()
+{
+    PatchbayModel model;
+    auto in = baseInputs();
+    in.mappings.append(row("m1", "calendar", "", "acc-1:cal1", "cal1"));
+    model.setInputs(in);
+    SyncPatchbayView view;
+    view.setModel(&model);
+
+    view.wireItem("m1")->graphicsItem()->setSelected(true);
+    view.deleteSelectedWires();
+    QCOMPARE(model.mappings().size(), 0);
+    QCOMPARE(view.wireCount(), 0);
 }
 
 WILDPALMS_QTEST_MAIN(TstPatchbayView)

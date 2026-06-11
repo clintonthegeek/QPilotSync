@@ -6,6 +6,7 @@
 #include <graffodil/GraphScene.h>
 #include <graffodil/DefaultGraphTool.h>
 #include <graffodil/CreateEdgeTool.h>
+#include <graffodil/SelectMoveTool.h>
 #include <graffodil/Types.h>
 
 #include "patchbaymodel.h"
@@ -38,6 +39,11 @@ SyncPatchbayView::SyncPatchbayView(QWidget *parent) : QGraphicsView(parent)
             this, &SyncPatchbayView::onEdgeRequested);
     connect(m_scene, &QGraphicsScene::selectionChanged,
             this, &SyncPatchbayView::onSelectionChanged);
+    connect(m_tool->selectMoveTool(), &Graffodil::SelectMoveTool::deleteRequested,
+            this, [this](const QList<Graffodil::IGraphNode *> &,
+                         const QList<Graffodil::IGraphEdge *> &) {
+                deleteSelectedWires();
+            });
 }
 
 SyncPatchbayView::~SyncPatchbayView() = default;
@@ -209,6 +215,29 @@ QPointF SyncPatchbayView::nodePos(const QString &nodeId) const
 {
     auto *item = m_nodeItems.value(nodeId);
     return item ? item->pos() : QPointF();
+}
+
+void SyncPatchbayView::requestEdgeForTest(const QString &sourceNodeId,
+                                          const QString &sourceAnchorId,
+                                          const QString &targetNodeId,
+                                          const QString &targetAnchorId)
+{
+    onEdgeRequested(m_nodeItems.value(sourceNodeId),
+                    sourceAnchorId,
+                    m_nodeItems.value(targetNodeId),
+                    targetAnchorId);
+}
+
+void SyncPatchbayView::deleteSelectedWires()
+{
+    if (!m_model)
+        return;
+    QStringList doomed;
+    for (auto it = m_wireItems.constBegin(); it != m_wireItems.constEnd(); ++it)
+        if (it.value()->graphicsItem()->isSelected())
+            doomed << it.key();
+    for (const QString &id : doomed)
+        m_model->removeMapping(id);
 }
 
 } // namespace WildPalms::AppPatchbay

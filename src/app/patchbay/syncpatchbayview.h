@@ -35,6 +35,14 @@ public:
     SignalPathWire *wireItem(const QString &mappingId) const;
     QPointF nodePos(const QString &nodeId) const;
 
+    /// Test seam: drive the CreateEdgeTool result path directly.
+    void requestEdgeForTest(const QString &sourceNodeId,
+                            const QString &sourceAnchorId,
+                            const QString &targetNodeId,
+                            const QString &targetAnchorId);
+    /// Delete all selected wires (Delete key path; also used by context menu).
+    void deleteSelectedWires();
+
 signals:
     void wireSelected(const QString &mappingId);   ///< empty = deselected
     void addCategoryRequested(const QString &domain, const QPointF &scenePos);
