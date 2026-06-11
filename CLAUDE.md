@@ -190,13 +190,18 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 
 Accounts-first wizard is **done** (landed this session). Hardware verification of clobber-sync (Plan Task 12) remains gated on a real Palm. Everything else below ships without hardware. Items roughly ordered by combined urgency / preparedness; user picks.
 
-### 1. FilteredCollectionBackend RFC (item B in prior sessions)
+### 1. ~~FilteredCollectionBackend RFC~~ — CLOSED (shipped lib v0.59; doc updated 2026-06-11)
 
-**State:** WIP. `docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` carries +177/-48 of unstaged WP-side edits on the 354-line file. Status header still reads "Proposal / RFC".
-
-**What it unlocks:** libkalburator gains a generic `RecordFilter` + `FilteredCollectionBackend` primitive for property-based slicing of a hub collection. WP needs it for hub-and-spoke remote routing by `categories` (the route mappings tests currently rely on a hand-rolled `FilteredCollectionBackend` in WP at `src/runtime/`). PlanStan benefits too.
-
-**Next move:** finish the edits, commit, ship via the standard handoff workflow (same pattern as the clobber-sync RFC + dispatchSync RFC). Single self-contained doc commit.
+The RFC was **accepted and shipped in libkalburator v0.59** as
+`Kalburator::Sinks::FilteredCollectionBackend` + `Kalburator::Shape::RecordFilter`;
+WP consumes the **library** class directly (no WP-local hand-rolled FCB — that prior
+note was stale), pinned `v0.69`. `buildRouteLogicalCalendars` builds one FCB per
+category route (`wp-route-<id>`, `RecordFilter{categories, Contains, <name>}`);
+substrate A's names-first `translateRouteSpec` feeds the parsed category name as the
+filter value. The handoff doc
+(`docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md`) now carries a
+**Resolution (CLOSED)** section recording the shipped API + delta, and was committed
+(no longer an unstaged working-tree file).
 
 ### 2. Hub↔remote-only sync gap (item D in prior sessions)
 
@@ -236,7 +241,7 @@ These either need a libkalburator response or sit on the WP-edit pile:
 |---|---|---|
 | `2026-06-10-plan8-consumer-wave-response-wildpalms.md` | WP → lib | **WP wave COMPLETE**; lib step 3 (runSyncFuture deletion) unblocked from WP's side |
 | `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **CLOSED** — shipped lib v0.67 (`2026-06-10-v067-response.md`); WP pinned at v0.69 |
-| `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | Open RFC; **actively edited (item B above)**; unstaged +177 lines |
+| `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | **CLOSED** — shipped lib v0.59 (`FilteredCollectionBackend`/`RecordFilter`); Resolution section added + committed 2026-06-11 |
 | `2026-05-27-libkalburator-topology-authority-proposal.md` | WP → lib | Open RFC; the hub editability authority/demotion question. No response yet from lib AFAICT. |
 | `2026-05-26-calendar-writer-palmwire-parse-handoff-libkalburator.md` | WP → lib | Labeled "Blocker for CalDAV→Palm calendar sync"; status not re-verified this session |
 
@@ -244,6 +249,8 @@ The DAV-config-integration handoff (`2026-05-26-dav-config-integration-handoff-f
 
 ---
 
-## Long-running unstaged file
+## Long-running unstaged file — RESOLVED 2026-06-11
 
-`docs/2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` carries +177/-48 of WIP edits (item B above). Leave it on the working tree if not actively shipping; don't accidentally commit it as part of unrelated work.
+The FilteredCollectionBackend proposal doc's long-running WIP edits were finished
+(Resolution/CLOSED section added) and **committed** — there is no longer a
+deliberately-uncommitted working-tree doc to step around.

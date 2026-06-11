@@ -3,8 +3,72 @@
 **Date:** 2026-05-28
 **From:** WildPalms (a downstream `SyncEngine` / `SyncBackend` consumer)
 **To:** libkalburator maintainer (+ PlanStan as co-consumer)
-**Status:** Proposal / RFC — requesting a small, focused addition
+**Status:** **CLOSED — SHIPPED in libkalburator v0.59** (accepted as-proposed with
+a minor ctor refinement). WildPalms consumes the library class directly; pinned
+`v0.69`. See the Resolution section below. The original proposal text (§0–§6) is
+preserved verbatim for the record.
 **Why now:** WildPalms is restoring its remote sync via the hub-and-spoke topology you adopted in v0.57. The remote leg needs to route records by the canonical `categories` field. We could build the slicing wholly inside WP, but it's a generic primitive PlanStan can reuse (any property-based tag filtering), so it belongs in libkalburator — small, narrow, persistable.
+
+---
+
+## Resolution — SHIPPED (CLOSED 2026-06-11)
+
+libkalburator **accepted this RFC and shipped it in v0.59** as
+`Kalburator::Sinks::FilteredCollectionBackend` + `Kalburator::Shape::RecordFilter`
+(both present in the v0.69 pin WildPalms now tracks). `RecordFilter` landed exactly
+as proposed in §2.1: `enum class Op { Contains, Equals }; PropertyId property;
+Op op = Op::Contains; QVariant value; bool matches(const QJsonDocument&)`. The
+backend's contract — `backendType()=="filtered-view"`, `resourceId()`,
+`isAvailable()`, shape/`discoveredWritable` delegation, and the additive-`Contains`
+/ authoritative-`Equals` write semantics — all match §2.2.
+
+**API delta from the proposal** (minor, accepted refinements):
+
+- The base class is `Kalburator::Sync::SyncBackendBase`, not `Sync::SyncBackend`
+  (post-P3 backend-interface neutralization renamed the base after this RFC was
+  written; the FCB is shape-transparent either way).
+- The shipped ctor adds two parameters over §2.2:
+
+  ```cpp
+  FilteredCollectionBackend(SyncBackendBase* parentBackend,
+                            QString parentBackendId,             // NEW: id to match on unregister
+                            QString parentCollectionId,
+                            QString virtualCollectionId,
+                            RecordFilter filter,
+                            BackendRegistry* registry = nullptr, // NEW: explicit, for the §2.4 hook
+                            QString displayNameOverride = QString(),
+                            QObject* parent = nullptr);
+  ```
+
+  `parentBackendId` + `registry` make the §2.4 parent-lifetime hook explicit: the
+  FCB connects to `BackendRegistry::backendInstanceUnregistered(QString)` and nulls
+  its borrowed parent on teardown, rather than inferring the id/registry. The
+  `displayNameOverride` + `QObject* parent` tail is preserved as proposed.
+
+**WildPalms consumption — now live, not "planned" (§5).**
+`PalmRuntime::buildRouteLogicalCalendars` builds one FCB per user category route,
+registered under `wp-route-<mappingId>`, with
+`RecordFilter{ property = categories, op = Contains, value = <categoryName> }`
+wrapping `wp-hub:<domain>`. The route's `LogicalCalendar` binds that view as Primary
+and the remote as Sync1, and the union of per-domain (Palm↔hub) and per-route
+(view↔remote) mappings runs as one `Star` queue — exactly the §5 design.
+
+**Refinement landed in sub-project A (2026-06-11 config substrate).** Route rows are
+now **names-first**: `sourceCalendar == "palm:<domain>/name:<categoryName>"` instead
+of the old slot-index form. `WildPalms::Runtime::translateRouteSpec` parses the
+category name straight from the row and feeds it as the `Contains` filter value (no
+device-slot lookup needed to materialize the view), and additionally reports a
+per-route `RouteStatus` (Active / WaitingForDevice / NoFreeSlot / NotARoute)
+describing whether the named category is bound to a device slot yet. **The FCB
+itself is unchanged** — only WildPalms' computation of the filter value moved from
+slot→name resolution to a direct name parse. There is **no WP-local
+FilteredCollectionBackend**; the earlier roadmap note to that effect was stale — WP
+consumes the library class directly.
+
+**Pin state:** WildPalms tracks `v0.69` (`CMakeLists.txt:63`); the FCB has been
+available since v0.59, so no further pin bump is needed for this primitive. Per §6,
+PlanStan still does not consume it (the primitive remains opt-in; PlanStan stays
+green without a code change).
 
 ---
 
@@ -28,11 +92,11 @@ struct RecordFilter {
 namespace Kalburator::Sinks {
 class FilteredCollectionBackend : public Sync::SyncBackend {
 public:
-    FilteredCollectionBackend(Sync::SyncBackend *parent,
+    FilteredCollectionBackend(Sync::SyncBackend *parentBackend,
                               QString parentCollectionId,
                               QString virtualCollectionId,
                               Shape::RecordFilter filter,
-                              QObject *parent_qobj = nullptr);
+                              QObject *parent = nullptr);
     // ...standard SyncBackend overrides...
 };
 }
@@ -41,7 +105,15 @@ public:
 One filter per instance, one virtual collection. Each instance presents a
 sliced view of a parent backend's collection: reads filter; writes stamp the
 filter value into the record (`Contains`: add to list if missing; `Equals`:
-set). Borrowing parent backend pointer (no ownership).
+set). The parent backend pointer is **borrowed**: the FCB connects to
+`BackendRegistry::backendInstanceUnregistered` and marks itself unavailable
+if the parent is unregistered (see §2.4).
+
+Each instance is registered with `BackendRegistry::registerBackendInstance`
+exactly like any other backend instance — the engine doesn't need to know
+it's filtered. It is **not** registered as a `BackendContribution`: there is
+no `backendType()`-driven instantiation from user config and no add-account
+UI surface; the consuming app composes FCBs at runtime.
 
 WildPalms instantiates one of these per user-configured **category route**
 (per `LogicalCalendar` whose primary is the filtered view + sync is a remote
@@ -93,8 +165,24 @@ struct RecordFilter {
   identifier used in property catalogues / differs). For calendar/contacts/todo,
   `categories` is a `StringList`-kind property already defined in their canon
   catalogues.
+- `PropertyId` is shape-scoped: the filter is implicitly tied to the shape
+  the parent collection exposes (via the FCB's `shapeFor(parentColId)`).
+  Constructing a `FilteredCollectionBackend` with a `PropertyId` that the
+  parent's shape's property catalogue does not contain is a programmer
+  error; the implementation should assert (debug) and treat it as
+  always-non-matching (release).
 - The set of ops is deliberately tiny (YAGNI). Extensions can be added when
   a real need arises; we'd rather not ship a query language.
+
+### 2.1.1 Note on parsing
+
+`matches` is shown here using `QJsonDocument::fromJson` against the
+record's payload bytes. If there is a preferred canon-record accessor
+in the shape layer (`Kalburator::Shape::RecordDiffer` already does this
+work), the implementation should route through that instead — both for
+consistency and so any future canon-envelope changes flow through one
+place. The proposal is agnostic on which path; flagging here so we can
+align with whatever the differs already do.
 
 ### 2.2 `FilteredCollectionBackend`
 
@@ -104,22 +192,25 @@ one virtual collection.
 ```cpp
 class FilteredCollectionBackend : public Sync::SyncBackend {
 public:
-    FilteredCollectionBackend(Sync::SyncBackend *parent,
+    FilteredCollectionBackend(Sync::SyncBackend *parentBackend,
                               QString parentCollectionId,
                               QString virtualCollectionId,
                               Shape::RecordFilter filter,
-                              QObject *parent_qobj = nullptr);
+                              QString displayNameOverride = {},
+                              QObject *parent = nullptr);
 
     QString backendType()  const override { return QStringLiteral("filtered-view"); }
     QString displayName()  const override;
     QString resourceId()   const override;
-    bool    isAvailable()  const override { return m_parent && m_parent->isAvailable(); }
+    bool    isAvailable()  const override; // false once parent unregistered
 
     QList<Shape::Shape> nativeShapes() const override; // delegates: parent.shapeFor(parentColId)
     Shape::Shape shapeFor(const QString &collectionId) const override;
 
     QList<Sync::CollectionInfo> availableCollections() override; // returns one entry
     Sync::CollectionInfo        collectionInfo(const QString &collectionId) override;
+
+    bool    discoveredWritable(const QString &collectionId) const override; // forwards
 
     QList<Sync::BackendRecord>            loadRecords(const QString &collectionId) override;
     std::optional<Sync::BackendRecord>    loadRecord(const QString &recordId)      override;
@@ -129,47 +220,112 @@ public:
     bool    deleteRecord(const QString &recordId)            override;
 
 private:
-    Sync::SyncBackend *m_parent = nullptr;  // borrowed
+    Sync::SyncBackend *m_parent = nullptr;  // borrowed; nulled on parent unregister
     QString             m_parentColId;
     QString             m_virtualColId;
     Shape::RecordFilter m_filter;
+    QString             m_displayNameOverride;
 };
 ```
 
 Behavior:
 
 - **Reads.** `loadRecords(virtualColId)` calls `m_parent->loadRecords(m_parentColId)`,
-  parses each record's payload as canon JSON (`QJsonDocument::fromJson`), and
-  filters by `m_filter.matches(...)`. Records not parseable as canon JSON
-  fail-closed (omitted, no exception). `loadRecord(recordId)` delegates and
-  applies the filter (returns `nullopt` if it doesn't pass).
-- **Writes.** `createRecord(virtualColId, record)` mutates `record.data` so
-  the filter would now pass — for `Contains`, ensure the array contains the
-  value (no-op if it already does); for `Equals`, set the property to the
-  value. Then `m_parent->createRecord(m_parentColId, modifiedRecord)`. The
-  returned id is the parent's. `updateRecord(record)` does the same stamping
-  and delegates. `deleteRecord(id)` delegates unchanged.
+  parses each record's payload as canon JSON, and filters by
+  `m_filter.matches(...)`. Records not parseable as canon JSON fail-closed
+  (omitted, no exception). `loadRecord(recordId)` delegates and applies the
+  filter (returns `nullopt` if it doesn't pass).
+- **Writes (`Contains`, additive).** `createRecord` / `updateRecord` ensure
+  the filter property's array contains the filter value: **append if absent;
+  preserve existing element order if present.** Other elements in the array
+  are preserved untouched, so a record legitimately tagged
+  `["Work","Important"]` keeps `Important` when written through a `Work`
+  filter. String comparison is **case-sensitive** (canonical for category
+  routes; consumers can normalise upstream if they need case-folding).
+- **Writes (`Equals`, filter-authoritative).** `createRecord` / `updateRecord`
+  **always overwrite** the filter property to the filter value, on both
+  create and update. There is no escape hatch: a record that lives in an
+  `Equals:status=Done` view *is* Done. To "move" a record out of an
+  `Equals` view, delete it from this view and create it in another. This
+  is the intentional design for sliced sync targets; if a consumer wants
+  user-overridable values they should not use a filtered view.
+- **`deleteRecord(id)`** delegates unchanged to the parent.
 - **`shapeFor` / `nativeShapes`** delegate: a filtered view has the same
   shape as the parent collection (the records are canon, just sliced).
-- **Identity.** `resourceId()` returns something like
-  `"filtered-view:<parent.resourceId>:<parentColId>?<filter>"` for the
-  baseline-store keying contract.
-- **Discovered-writable.** `discoveredWritable()` delegates to the parent
-  (consistent with v0.57's `discoveredWritable` enforcement in the write path).
+- **Identity / `resourceId`.** Returns a canonical, deterministic string:
 
-### 2.3 Stamping notes
+  ```
+  filtered-view:<parent.resourceId>/<parentColId>?p=<propertyId>&op=<contains|equals>&v=<urlencode(canonJson(value))>
+  ```
 
-- `Contains` is the WildPalms category-routing case. Stamping is **additive**:
-  preserves any other category names the record already carries, so a record
-  legitimately tagged `["Work","Important"]` doesn't lose `Important` when it
-  comes in via the Work route.
-- `Equals` resets the property. Useful for "every record in this view has
-  status=Done" type slicing.
+  Keys are in the fixed order `p`, `op`, `v`. `canonJson(value)` is the
+  canonical JSON serialisation of the filter value (sorted keys for
+  objects, no whitespace). `urlencode` is RFC-3986 percent-encoding.
+  The engine's baseline store keys on `resourceId()`, so this must be
+  stable across runs and across equivalent filter constructions.
+- **`discoveredWritable(collectionId)`** delegates to
+  `m_parent->discoveredWritable(m_parentColId)`. v0.57's authority
+  enforcement on the write path therefore applies transparently to the
+  filtered view: a read-only parent yields a read-only view.
+- **`isAvailable()`** returns `m_parent && m_parent->isAvailable()`. Once
+  the parent has been unregistered (see §2.4), `m_parent` is null and
+  `isAvailable()` returns false; subsequent reads return an empty list and
+  subsequent writes return a failure value (false / empty record id) cleanly.
 
-### 2.4 Loss profile
+### 2.3 `CollectionInfo` composition
+
+`availableCollections()` returns exactly one entry, for `m_virtualColId`.
+The entry's fields compose from the parent's `CollectionInfo` for
+`m_parentColId` as follows:
+
+- `id` = `m_virtualColId`.
+- `displayName` = `m_displayNameOverride` if non-empty, else
+  `"<parent.collectionInfo(parentColId).displayName> [<filterDescription>]"`
+  where `<filterDescription>` is human-friendly (e.g. `"categories ∋ Work"`
+  for `Contains`, `"status = Done"` for `Equals`). The override exists
+  precisely because consumers (WildPalms category routes) already know the
+  user-meaningful name and shouldn't have to live with the composed default.
+- `color` is inherited from the parent's `CollectionInfo`. Consumers that
+  want a distinct per-route colour can mutate the returned `CollectionInfo`
+  before exposing it; the FCB itself does not surface a colour-override
+  constructor argument (YAGNI; not requested by either consumer).
+- `readOnly` is inherited from the parent's `CollectionInfo`. (Authority
+  enforcement on the write path goes through `discoveredWritable` —
+  see §2.2 — but the `readOnly` flag on `CollectionInfo` also needs to be
+  honest for UI consumers that key off it.)
+
+`collectionInfo(collectionId)` returns the same composed `CollectionInfo`
+when `collectionId == m_virtualColId`, and a default-constructed value
+otherwise (matching existing backend convention).
+
+### 2.4 Parent backend lifetime
+
+The FCB borrows the parent backend pointer; it does not own it. To keep
+this safe under registry teardown, the constructor connects to
+`BackendRegistry::backendInstanceUnregistered(QString)`. On receiving
+that signal with the parent's backend id, the FCB:
+
+1. Nulls `m_parent` (so subsequent `isAvailable()` returns false and
+   subsequent reads/writes return clean failure values).
+2. Emits its own `availabilityChanged()` (if `SyncBackend` exposes one;
+   otherwise nothing).
+3. Optionally self-unregisters from `BackendRegistry` — recommended,
+   since a filtered view of a now-gone parent has no useful future.
+
+The FCB does **not** observe the parent backend's `availabilityChanged`
+signal for transient unavailability — being temporarily offline (e.g.
+network) is the parent's concern; `isAvailable()` delegates through, and
+that's enough. The unregister hook is specifically for permanent
+teardown.
+
+### 2.5 Loss profile
 
 A filtered view does not change the shape — no loss profile to introduce.
-The class is shape-transparent.
+The class is shape-transparent for reads. Writes mutate exactly one
+property (the filter property), with semantics fully documented in §2.2:
+`Contains` is additive (no loss of existing values); `Equals` is
+overwriting (intentional, by design of the view). This is filter
+*stamping*, not transcoding loss.
 
 ## 3. What we are NOT asking for
 
@@ -184,14 +340,31 @@ The class is shape-transparent.
 
 - Round-trip: stamping `Contains:"Work"` on a record with categories
   `["Personal"]` yields `["Personal","Work"]`; no duplicate on already-tagged
-  records.
+  records; **existing element order is preserved**.
 - Filtering: only records whose canon `categories` contains "Work" come
-  through `loadRecords`.
-- Equals semantics: replaces the property value (and the post-write
-  predicate trivially passes).
-- Delegation: `shapeFor` returns the parent's shape for the parent collection.
-- Negative: a record with bad / non-JSON payload is silently filtered out
-  (no throw).
+  through `loadRecords`; **case-sensitive** match.
+- Equals semantics: `createRecord` and `updateRecord` both overwrite the
+  filter property to the filter value, including the case where the
+  caller's `BackendRecord` carried a different value for that property
+  (filter-authoritative).
+- Delegation: `shapeFor` returns the parent's shape for the parent
+  collection; `discoveredWritable(virtualColId)` returns
+  `parent.discoveredWritable(parentColId)`.
+- Filter property absent from the record (e.g. a VEVENT with no
+  `categories` field at all): `matches` returns false, the record is
+  excluded from `loadRecords`, and `loadRecord(recordId)` returns
+  `nullopt`. No throw, no insertion of a default empty array.
+- Bad / non-JSON payload: silently filtered out (no throw).
+- Parent unregistered mid-session: after
+  `BackendRegistry::backendInstanceUnregistered(parentBackendId)`, the
+  FCB's `isAvailable()` returns false, `loadRecords` returns an empty
+  list, `createRecord` returns an empty string, `updateRecord` /
+  `deleteRecord` return false. No use-after-free, no crash.
+- Resource id stability: two FCBs constructed with equivalent
+  `(parent, parentColId, virtualColId, filter)` produce equal
+  `resourceId()` values. Construction in either argument order, or
+  with semantically-equivalent filter values that serialise to the
+  same canonical form, must yield the same id.
 
 ## 5. WildPalms' planned consumption (informational)
 
@@ -213,13 +386,33 @@ ordinary engine diff against each route's baseline (the filter excludes
 moved records on the old route ⇒ delete; includes them on the new route ⇒
 create). No special routing logic in the engine.
 
+**Implication for remotes.** To a remote sync target this looks like
+`DELETE id=X` (on the old route) followed by `CREATE` of a record with a
+**new** id on the new route — not as an `UPDATE`. Remotes that key by
+record id (CalDAV with stable UIDs, Palm record-id-based databases) will
+therefore see a record loss + a new record, not an in-place reassignment.
+For the WildPalms-Palm case this is the intended behaviour. Consumers
+whose remotes track per-record state (history, attachments, share
+permissions) keyed by id should weigh this before choosing the filtered-
+view routing approach over an in-engine recategorization mechanism.
+
 ## 6. Cost & risk
 
 - **Code**: one class (~200-300 lines incl. canon-JSON parsing), one struct
-  (~40 lines), one test file.
-- **Cross-repo**: this proposal + PlanStan-green is the standing gate.
-- **Forward compatibility**: the typed predicate gives room to grow ops
-  without breaking ABI.
+  (~40 lines), one test file. Possibly less if `matches` can route through
+  `Kalburator::Shape::RecordDiffer`'s existing canon-record accessor
+  (see §2.1.1).
+- **Cross-repo**: this proposal + the two consumers staying green is the
+  standing gate.
+- **Forward compatibility**: the typed predicate (`PropertyId` + `Op`)
+  gives room to grow ops without breaking ABI; new ops are
+  added one at a time with a concrete use case.
 
-WildPalms does not consume this until it lands; we'll re-pin from v0.57 to
-whatever release carries it.
+**Consumer pin state at time of writing:**
+- PlanStan `master` is at `fe6e8a9c` (post-2026-05-28 PlanEngine
+  severance), pinned to `libkalburator v0.57.1-phase2c-authority`.
+  PlanStan does not consume `FilteredCollectionBackend` today; landing
+  it requires only the pin bump (no PlanStan-side code change), and
+  PlanStan remains green throughout.
+- WildPalms re-pins from v0.57 to whatever release carries this. The
+  WildPalms consumption is described in §5 and lands behind the pin.
