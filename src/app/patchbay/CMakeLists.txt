@@ -8,7 +8,8 @@ add_library(WildPalmsAppPatchbay STATIC
     patchbaytypes.h
     patchbaymodel.h
     patchbaymodel.cpp
-    # patchnodeitem.h   patchnodeitem.cpp     # Task 10
+    patchnodeitem.h
+    patchnodeitem.cpp
     # signalpathwire.h  signalpathwire.cpp    # Task 11
     # syncpatchbayview.h syncpatchbayview.cpp  # Task 12
     # patchbayinspector.h patchbayinspector.cpp # Task 14
