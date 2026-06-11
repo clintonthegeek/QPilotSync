@@ -73,6 +73,7 @@ public:
     void flushPendingWrites() override;
 
     QByteArray readAppBlock(const QString &dbName) const override;
+    bool writeAppBlock(const QString &dbName, const QByteArray &block) override;
 
 private:
     // Scope guard opens a database on construction, closes on

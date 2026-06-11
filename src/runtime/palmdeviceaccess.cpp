@@ -400,6 +400,17 @@ QByteArray PalmDeviceAccess::readAppBlock(const QString &dbName) const {
     return result;
 }
 
+bool PalmDeviceAccess::writeAppBlock(const QString &dbName, const QByteArray &block) {
+    // Substrate A3: same BlockingQueuedConnection marshaling as readAppBlock —
+    // device I/O must run on the dedicated link thread (m_implOwner).
+    if (!m_impl) return false;
+    bool result = false;
+    QMetaObject::invokeMethod(m_implOwner,
+        [this, &dbName, &block, &result]() { result = m_impl->writeAppBlock(dbName, block); },
+        Qt::BlockingQueuedConnection);
+    return result;
+}
+
 bool PalmDeviceAccess::supportsDeleteTracking() const {
     if (!m_impl) return false;
     bool result = false;

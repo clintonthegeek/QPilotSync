@@ -201,4 +201,18 @@ QByteArray PilotLinkPalmDatabaseAccess::readAppBlock(const QString &dbName) cons
     return buf;
 }
 
+bool PilotLinkPalmDatabaseAccess::writeAppBlock(const QString &dbName,
+                                                const QByteArray &block)
+{
+    // Substrate A3: exact inverse of readAppBlock — open read-write, write the
+    // AppInfo bytes via the low-level DLP link, close (DbScope RAII).
+    if (!m_link) return false;
+    flushWriteHandle();
+    DbScope scope(m_link, dbName, /*rw=*/true);
+    if (!scope.ok()) return false;
+    return m_link->writeAppBlock(scope.handle(),
+        reinterpret_cast<const unsigned char *>(block.constData()),
+        static_cast<std::size_t>(block.size()));
+}
+
 } // namespace WildPalms::PalmDevice

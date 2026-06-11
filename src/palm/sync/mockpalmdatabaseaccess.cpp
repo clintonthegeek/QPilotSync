@@ -121,6 +121,15 @@ QByteArray MockPalmDatabaseAccess::readAppBlock(const QString &dbName) const
     return (it == m_dbs.cend()) ? QByteArray() : it->appInfo;
 }
 
+bool MockPalmDatabaseAccess::writeAppBlock(const QString &dbName,
+                                           const QByteArray &block)
+{
+    if (!m_dbs.contains(dbName))
+        m_dbs.insert(dbName, Database{});
+    m_dbs[dbName].appInfo = block;
+    return true;
+}
+
 void MockPalmDatabaseAccess::setAppBlock(const QString &dbName,
                                          const QByteArray &bytes)
 {

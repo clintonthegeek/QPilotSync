@@ -96,6 +96,12 @@ public:
     /// for Datebook/Address/Memo/Todo).
     virtual QByteArray readAppBlock(const QString &dbName) const = 0;
 
+    /// Substrate A3: write the database's AppInfo block back to the device.
+    /// Returns false on open/write error. The connect-time category reconciler
+    /// uses this to persist newly-claimed category slots into the device's
+    /// category table (the exact inverse of readAppBlock).
+    virtual bool writeAppBlock(const QString &dbName, const QByteArray &block) = 0;
+
     /// Whether the impl tracks deletions natively. PalmBackend surfaces
     /// this via IBlobBackend::supportsDeleteTracking().
     virtual bool supportsDeleteTracking() const = 0;

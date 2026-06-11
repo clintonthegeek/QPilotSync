@@ -49,6 +49,9 @@ public:
     bool isConnected() const override { return m_connected; }
 
     QByteArray readAppBlock(const QString &dbName) const override;
+    /// Substrate A3: stores `block` under `dbName` (round-trips with
+    /// readAppBlock/setAppBlock); always succeeds.
+    bool writeAppBlock(const QString &dbName, const QByteArray &block) override;
 
     /// Test setter: stores `bytes` under `dbName`. Subsequent
     /// readAppBlock(dbName) returns `bytes` verbatim.

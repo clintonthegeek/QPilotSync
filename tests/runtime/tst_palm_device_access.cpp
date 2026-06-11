@@ -57,6 +57,10 @@ public:
         m_lastCallThread.store(QThread::currentThreadId());
         return {};
     }
+    bool writeAppBlock(const QString &, const QByteArray &) override {
+        m_lastCallThread.store(QThread::currentThreadId());
+        return true;
+    }
     bool supportsDeleteTracking() const override {
         m_lastCallThread.store(QThread::currentThreadId());
         return false;

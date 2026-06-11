@@ -82,6 +82,7 @@ public:
                 recordsDeletedSince(const QString &dbName,
                                     const QDateTime &since) const override;
     QByteArray  readAppBlock(const QString &dbName) const override;
+    bool        writeAppBlock(const QString &dbName, const QByteArray &block) override;
     bool        supportsDeleteTracking() const override;
 
     QThread *linkThread() const { return m_linkThread.get(); }
