@@ -41,6 +41,8 @@ void AccountFormWidget::buildUi() {
             label = tr("DAV server (calendar + contacts)");
         else if (label == QStringLiteral("akonadi"))
             label = tr("Akonadi (local)");
+        else if (label == QStringLiteral("local-folder"))
+            label = tr("Local folder");
         else {
             label[0] = label[0].toUpper();
         }

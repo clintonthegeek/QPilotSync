@@ -1117,3 +1117,24 @@ add_test(NAME tst_category_reconciler COMMAND tst_category_reconciler)
 set_tests_properties(tst_category_reconciler PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# Substrate A2: LocalFolderProvider/Contribution — credential-less source.
+# Provider lives in PalmDeviceAccessLib (next to standardcontributions); the
+# sinks (RawFiles/Markdown) + IProvider come from Kalburator::Sync.
+add_executable(tst_localfolder_provider tst_localfolder_provider.cpp)
+target_link_libraries(tst_localfolder_provider
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsCore
+        WildPalmsPalmDevice
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_localfolder_provider COMMAND tst_localfolder_provider)
+set_tests_properties(tst_localfolder_provider PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)

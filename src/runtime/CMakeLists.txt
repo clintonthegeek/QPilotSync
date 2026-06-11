@@ -132,6 +132,12 @@ add_library(PalmDeviceAccessLib STATIC
     # PalmRuntime ctor and (T11) KF6MainWindow ctor.
     standardcontributions.h
     standardcontributions.cpp
+    # Substrate A2 — credential-less local-folder provider + its contribution,
+    # registered by registerStandardContributions above. QObject (Q_OBJECT) so
+    # it needs AUTOMOC, which this target already has.
+    localfolderprovider.h
+    localfolderprovider.cpp
+    localfoldercontribution.h
 )
 target_include_directories(PalmDeviceAccessLib
     PUBLIC
