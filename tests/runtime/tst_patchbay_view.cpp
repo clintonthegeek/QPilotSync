@@ -85,6 +85,10 @@ private slots:
     void deleteSelectedRemovesMapping();
     // Task 15
     void inlineCategoryEditorCommits();
+    // Bug fix: inline editor must be a viewport overlay, not a scene proxy
+    // (embedded proxies inherit the view transform — popups zoom — and the
+    // tool-routed GraphScene swallows their key events).
+    void inlineCategoryEditorIsNotSceneEmbedded();
 };
 
 void TstPatchbayView::rebuildPopulatesScene()
@@ -193,6 +197,22 @@ void TstPatchbayView::inlineCategoryEditorCommits()
     }
     QVERIFY(found);
     QVERIFY(!view.categoryEditorVisible());
+}
+
+void TstPatchbayView::inlineCategoryEditorIsNotSceneEmbedded()
+{
+    PatchbayModel model;
+    model.setInputs(baseInputs());
+    SyncPatchbayView view;
+    view.setModel(&model);
+
+    view.openCategoryEditorForTest("calendar");
+    QVERIFY(view.categoryEditorVisible());
+    // The editor must live on the viewport, NOT inside the GraphScene as a
+    // QGraphicsProxyWidget. An embedded proxy inherits the view transform
+    // (its context menu zooms with the wheel) and the tool-routed scene
+    // never delivers key events to it (can't type).
+    QVERIFY(!view.categoryEditorEmbeddedInSceneForTest());
 }
 
 WILDPALMS_QTEST_MAIN(TstPatchbayView)

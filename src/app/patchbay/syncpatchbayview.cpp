@@ -266,34 +266,44 @@ void SyncPatchbayView::openCategoryEditor(const QString &domain)
         return;
     m_categoryEditorDomain = domain;
 
-    auto *edit = new QLineEdit;
+    // Overlay the editor on the VIEWPORT, not inside the GraphScene. A
+    // scene-embedded QGraphicsProxyWidget inherits the view transform (its
+    // popups zoom with the wheel) and the tool-routed GraphScene never
+    // delivers key events to it. A viewport child is a normal widget:
+    // normal keyboard focus, native (top-level) context menu, no transform.
+    auto *edit = new QLineEdit(viewport());
     edit->setPlaceholderText(QStringLiteral("Category name"));
-    edit->setFixedWidth(int(PatchNodeItem::kWidth) - 24);
-    m_categoryEditor = m_scene->addWidget(edit);
-    const QPointF rowCenter =
-        hub->portRowCenter(QStringLiteral("add:%1").arg(domain));
-    m_categoryEditor->setPos(
-        hub->mapToScene(rowCenter - QPointF(edit->width() / 2.0, 11.0)));
-    m_categoryEditor->setZValue(20.0);
-    edit->setFocus();
+    const int w = int(PatchNodeItem::kWidth) - 24;
+    edit->resize(w, edit->sizeHint().height());
+    // Position in viewport (pixel) coordinates under the "+ category…" row.
+    const QPointF sceneCenter =
+        hub->mapToScene(hub->portRowCenter(QStringLiteral("add:%1").arg(domain)));
+    const QPoint vp = mapFromScene(sceneCenter);
+    edit->move(vp.x() - edit->width() / 2, vp.y() - edit->height() / 2);
+    edit->show();
+    edit->raise();
+    edit->setFocus(Qt::OtherFocusReason);
+    m_categoryEditor = edit;
 
     connect(edit, &QLineEdit::returnPressed, this, [this, edit] {
         const QString name = edit->text().trimmed();
         const QString domain = m_categoryEditorDomain;
-        // null-before-delete: deleting a focused proxy can re-enter via
-        // editingFinished; nulling first makes that re-entry a no-op.
+        // null-before-delete: nulling first makes the editingFinished
+        // re-entry (fired by hide/focus-out) a no-op. deleteLater (not
+        // delete) because we are inside the widget's own returnPressed.
         auto *ed = m_categoryEditor;
         m_categoryEditor = nullptr;
-        delete ed;
+        ed->hide();
+        ed->deleteLater();
         if (!name.isEmpty())
             m_model->addCategory(domain, name);   // rebuild() redraws
     });
     connect(edit, &QLineEdit::editingFinished, this, [this] {
-        // focus loss / Esc without commit
+        // focus loss (click away / Esc) without commit
         if (m_categoryEditor) {
             auto *ed = m_categoryEditor;
             m_categoryEditor = nullptr;
-            delete ed;
+            ed->deleteLater();   // we're inside the widget's own signal
         }
     });
 }
@@ -303,13 +313,21 @@ bool SyncPatchbayView::categoryEditorVisible() const
     return m_categoryEditor != nullptr;
 }
 
+bool SyncPatchbayView::categoryEditorEmbeddedInSceneForTest() const
+{
+    const auto items = m_scene->items();
+    for (auto *it : items)
+        if (qgraphicsitem_cast<QGraphicsProxyWidget *>(it))
+            return true;
+    return false;
+}
+
 void SyncPatchbayView::commitCategoryEditorForTest(const QString &text)
 {
     if (!m_categoryEditor)
         return;
-    auto *edit = qobject_cast<QLineEdit *>(m_categoryEditor->widget());
-    edit->setText(text);
-    emit edit->returnPressed();
+    m_categoryEditor->setText(text);
+    emit m_categoryEditor->returnPressed();
 }
 
 void SyncPatchbayView::contextMenuEvent(QContextMenuEvent *event)

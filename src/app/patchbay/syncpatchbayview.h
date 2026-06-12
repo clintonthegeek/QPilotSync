@@ -6,7 +6,7 @@
 
 #include "patchbaytypes.h"
 
-class QGraphicsProxyWidget;
+class QLineEdit;
 class QContextMenuEvent;
 
 namespace Graffodil {
@@ -52,6 +52,10 @@ public:
     void openCategoryEditorForTest(const QString &domain) { openCategoryEditor(domain); }
     bool categoryEditorVisible() const;
     void commitCategoryEditorForTest(const QString &text);
+    /// Regression seam: true if any QGraphicsProxyWidget exists in the scene
+    /// (i.e. the inline editor was embedded in the canvas — the bug). The
+    /// editor must be a viewport overlay, so this must be false.
+    bool categoryEditorEmbeddedInSceneForTest() const;
 
 signals:
     void wireSelected(const QString &mappingId);   ///< empty = deselected
@@ -77,7 +81,7 @@ private:
     QList<SignalPathWire *> m_strandItems;
     bool m_didInitialFit = false;
 
-    QGraphicsProxyWidget *m_categoryEditor = nullptr;
+    QLineEdit *m_categoryEditor = nullptr;   // viewport overlay (NOT a scene proxy)
     QString m_categoryEditorDomain;
 };
 
