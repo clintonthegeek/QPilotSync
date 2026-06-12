@@ -277,6 +277,7 @@ These either need a libkalburator response or sit on the WP-edit pile:
 
 | Doc | Direction | Status |
 |---|---|---|
+| `2026-06-12-libkalburator-akonadi-scoped-backend-read-handoff.md` | WP → lib | **OPEN, HIGH** — Akonadi sync transfers 0 records: the per-collection scoped `AkonadiBackend`/`AkonadiContactsBackend` never seeds `m_collections` (`loadCalendars` has no caller), so `fetchItems` fails fast and `loadRecords` returns empty; engine also swallows failed `fetchItems` (clobber-after-wipe data-loss risk). Blocks Akonadi→hub→Palm. Device-confirmed (coll 54=99, 64=28 events; hub.db empty). |
 | `2026-06-10-plan8-consumer-wave-response-wildpalms.md` | WP → lib | **WP wave COMPLETE**; lib step 3 (runSyncFuture deletion) unblocked from WP's side |
 | `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **CLOSED** — shipped lib v0.67 (`2026-06-10-v067-response.md`); WP pinned at v0.69 |
 | `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | **CLOSED** — shipped lib v0.59 (`FilteredCollectionBackend`/`RecordFilter`); Resolution section added + committed 2026-06-11 |
