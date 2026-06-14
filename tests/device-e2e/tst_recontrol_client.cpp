@@ -41,6 +41,7 @@ public:
 
         connect(&m_server, &QTcpServer::newConnection, this, [this] {
             QTcpSocket *c = m_server.nextPendingConnection();
+            connect(c, &QTcpSocket::disconnected, c, &QObject::deleteLater);
             connect(c, &QTcpSocket::readyRead, this, [this, c] {
                 while (c->canReadLine()) {
                     const QString line = QString::fromLatin1(c->readLine()).trimmed();

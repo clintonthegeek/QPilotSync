@@ -77,7 +77,8 @@ ReControlReply ReControlClient::command(const QString &cmd, int timeoutMs)
     if (!isConnected())
         return r;
     m_sock->write((cmd + QLatin1Char('\n')).toLatin1());
-    m_sock->waitForBytesWritten(timeoutMs);
+    if (!m_sock->waitForBytesWritten(timeoutMs))
+        return r;
     QString line;
     if (!readLineLatin1(line, timeoutMs))
         return r;
@@ -90,13 +91,13 @@ ReControlReply ReControlClient::commandMultiline(const QString &cmd, int timeout
     if (!isConnected())
         return r;
     m_sock->write((cmd + QLatin1Char('\n')).toLatin1());
-    m_sock->waitForBytesWritten(timeoutMs);
+    if (!m_sock->waitForBytesWritten(timeoutMs))
+        return r;
 
     QString first;
     if (!readLineLatin1(first, timeoutMs))
         return r;
     r = parseFirstLine(first);
-    r.raw = first.trimmed();
 
     // Read indented data lines until a line that is exactly "." (dot terminator).
     forever {
@@ -104,7 +105,7 @@ ReControlReply ReControlClient::commandMultiline(const QString &cmd, int timeout
         if (!readLineLatin1(line, timeoutMs))
             break;
         const QString trimmed = QString(line).remove(QLatin1Char('\n')).remove(QLatin1Char('\r'));
-        if (trimmed.trimmed() == QLatin1String("."))
+        if (trimmed == QLatin1String("."))
             break;
         r.body.append(trimmed);
         r.raw += QLatin1Char('\n') + trimmed;
