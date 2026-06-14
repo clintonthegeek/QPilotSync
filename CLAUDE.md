@@ -16,7 +16,38 @@ the Akonadi scoped-backend read fix on lib branch `fix/akonadi-scoped-backend-re
 v0.73. **Re-pin to the lib's next tag** once the lib runs the PlanStan gate and merges
 (the SHA could become unreachable if the lib rebases the branch instead of merging it).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **125/125 pass** (123 baseline + `tst_patchbay_model` + `tst_patchbay_view`).
+**ctest:** **125/125 pass** on `main` (126/126 on the multi-hop branch below).
+
+### Transparent multi-hop bidirectional sync — IMPLEMENTED on branch (2026-06-14, NOT on main)
+
+Branch `feature/multi-hop-bidirectional-sync` (off `main` at `ef86e79`; superproject HEAD
+`a248019`, **126/126 ctest**). Makes one HotSync/FullSync propagate changes across BOTH hops
+of the `Palm — Hub — Remote` star in a single user action (fixes the symptom where Akonadi
+events reached `hub.db` but not the Palm without a second HotSync). Spec/plan:
+`docs/superpowers/{specs,plans}/2026-06-14-multi-hop-bidirectional-sync*`.
+
+- **How:** Palm device exposes `databaseRevision` (DBInfo modnum via `dlp_FindDBInfo`); the
+  four Palm conduit backends implement `Sync::ChangeDetection` via a shared
+  `WildPalms::PalmSync::PalmChangeDetection` mixin over a per-profile `PalmRevisionStore`
+  (`<profile>/.state/palm-revisions.ini`, injected in `finishConnect`);
+  `PalmRuntime::runAllMappings(maxPasses, skipUnchanged)` runs a **fixpoint loop**
+  (HotSync 3 passes + skip ON; FullSync 2 passes + skip OFF), holding the device across
+  passes, terminating via the pure helper `shouldContinueSync`. Clobber/Mirror unchanged.
+- **Goal 1 (propagation) WORKS;** loop terminates via `SyncStats::hasChanges()`, independent
+  of skip.
+- **Goal 2 (cheap repeat passes) is INERT:** the engine skips only when BOTH mapping sides
+  implement `ChangeDetection`, but the hub (`GenericSqliteBackend`) + route wrapper
+  (`FilteredCollectionBackend`) don't — so every fixpoint pass does a full Palm serial read.
+  Needs a libkalburator change: **RFC `docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`**.
+  WP already calls `setSkipUnchangedMappings(true)`, so it activates with no WP change once
+  the lib lands hub-side `ChangeDetection`.
+- **Submodule commits (NOT pushed, gitlinks NOT bumped):** the four conduit backends gained
+  the mixin on their `feature/canon-adoption-phase1` branches — calendar `ad92ce5`, contacts
+  `c681fcc`, memo `3c2ca00`, todos `3893223`. Local builds use the working tree; Task 13
+  (push + gitlink bump) is **gated on user go-ahead**.
+- **PENDING:** (1) push the 4 submodules + bump gitlinks; (2) **on-device smoke test** — fresh
+  profile, populated Akonadi calendar → datebook, ONE HotSync should land events on the Palm
+  (previously needed two); a Palm edit should reach Akonadi in one sync; (3) merge to `main`.
 
 ### Akonadi scoped-backend read fix — consumed 2026-06-12 (pin bump v0.69 → SHA `493bd80`)
 
