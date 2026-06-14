@@ -59,9 +59,11 @@ In `src/palm/kpilotlink.h`, immediately after `virtual QStringList listDatabases
 
 ```cpp
     /// Cheap per-database modification number (Palm DBInfo.modnum).
-    /// Returns -1 when unavailable/not connected. Non-pure so non-device
-    /// KPilotLink implementations need no change.
-    virtual long databaseModnum(const QString &dbName) { Q_UNUSED(dbName); return -1; }
+    /// Returns -1 when unavailable/not connected. qint64 (not long): modnum is
+    /// unsigned long on the wire, so a 64-bit signed return keeps a 32-bit modnum
+    /// always positive and -1 a clean sentinel even on 32-bit builds. Non-pure so
+    /// non-device KPilotLink implementations need no change.
+    virtual qint64 databaseModnum(const QString &dbName) { Q_UNUSED(dbName); return -1; }
 ```
 
 - [ ] **Step 2: Declare the override in KPilotDeviceLink**
@@ -70,7 +72,7 @@ In `src/palm/kpilotdevicelink.h`, right after `bool findDatabase(const QString &
 
 ```cpp
     /// dlp_FindDBInfo()-backed modification number; -1 on failure/not connected.
-    long databaseModnum(const QString &dbName) override;
+    qint64 databaseModnum(const QString &dbName) override;
 ```
 
 - [ ] **Step 3: Implement it (mirror findDatabase)**
@@ -78,18 +80,18 @@ In `src/palm/kpilotdevicelink.h`, right after `bool findDatabase(const QString &
 In `src/palm/kpilotdevicelink.cpp`, immediately after the `findDatabase` definition (~line 1300):
 
 ```cpp
-long KPilotDeviceLink::databaseModnum(const QString &dbName)
+qint64 KPilotDeviceLink::databaseModnum(const QString &dbName)
 {
     if (!m_isConnected || m_socket < 0)
         return -1;
 
     struct DBInfo info;
     int rc = dlp_FindDBInfo(m_socket, 0, 0,
-                            dbName.toLocal8Bit().constData(),
+                            dbName.toUtf8().constData(),
                             0, 0, &info);
     if (rc < 0)
         return -1;
-    return static_cast<long>(info.modnum);
+    return static_cast<qint64>(info.modnum);
 }
 ```
 
@@ -237,7 +239,7 @@ Cpp:
 QString PilotLinkPalmDatabaseAccess::databaseRevision(const QString &dbName) const
 {
     if (!m_link) return {};
-    const long m = m_link->databaseModnum(dbName);
+    const qint64 m = m_link->databaseModnum(dbName);
     return m < 0 ? QString() : QString::number(m);
 }
 ```
