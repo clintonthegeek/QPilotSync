@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QPromise>
 #include <QHash>
 #include <QJsonArray>
 #include <QList>
@@ -288,8 +289,13 @@ private:
     // Mirror direction — local enum avoids pulling synctypes.h into this header.
     enum class MirrorDir { PalmToPC, PCToPalm };
 
-    QFuture<PalmRunResult> runAllMappings();
+    QFuture<PalmRunResult> runAllMappings(int maxPasses, bool skipUnchanged);
     QFuture<PalmRunResult> runMirror(MirrorDir dir, const QString &modeLabel);
+
+    /// Task 12: run ONE engine pass of the enabled mapping set, then fold its
+    /// results into m_syncAccum and either re-dispatch (next hop) or finalize.
+    /// Drives the multi-hop fixpoint loop set up by runAllMappings().
+    void dispatchSyncPass_();
 
     /// Resolve a mapping's display label + theme icon name from m_palmPlugins
     /// (matches plugin->pluginId() against mapping.sourceBackend).
@@ -311,6 +317,15 @@ private:
     // can call cancel() into SyncEngine::onCancelObserved.
     // QFutureWatcher<void> accepts any QFuture<T> via setFuture().
     QFutureWatcher<void>                                        *m_activeSyncWatcher = nullptr;
+    // Task 12: multi-hop fixpoint loop state (one in-flight run at a time).
+    // runAllMappings() seeds these and kicks the first pass; dispatchSyncPass_()
+    // re-dispatches until shouldContinueSync() says stop, accumulating into
+    // m_syncAccum and finalizing the caller's promise once at the end.
+    int     m_syncPass     = 0;     // 1-based current pass
+    int     m_syncMaxPass  = 1;     // 3 for HotSync, 2 for FullSync
+    QList<QString>                              m_syncIds;     // enabled mapping ids
+    std::shared_ptr<QPromise<PalmRunResult>>    m_syncPromise; // caller's promise
+    PalmRunResult                               m_syncAccum;   // accumulated across passes
     std::unique_ptr<PalmDeviceAccess>                            m_device;
     std::unique_ptr<Kalburator::Sync::BackendRegistry>           m_registry;
     // C: canonical local hub. Declared right after m_registry (and before

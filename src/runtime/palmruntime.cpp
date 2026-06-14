@@ -839,7 +839,7 @@ static QFuture<WildPalms::Runtime::PalmRunResult> makeSuccessFuture() {
     return f;
 }
 
-QFuture<PalmRunResult> PalmRuntime::runAllMappings()
+QFuture<PalmRunResult> PalmRuntime::runAllMappings(int maxPasses, bool skipUnchanged)
 {
     QList<QString> ids;
     for (const auto &m : m_mappings) {
@@ -848,6 +848,17 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     }
     if (ids.isEmpty())
         return makeSuccessFuture();
+
+    // Re-entrancy guard: a multi-pass loop is already in flight (m_syncPromise
+    // is set until the loop finalizes). Starting another run here would clobber
+    // m_syncPromise/m_syncIds/m_syncAccum and strand the first caller's future.
+    // The engine also rejects concurrent runs; the UI should disable the sync
+    // actions during a run (follow-up). Reject cleanly without disturbing state.
+    if (m_syncPromise) {
+        qWarning() << "[PalmRuntime] runAllMappings() called while a sync loop is "
+                      "already in flight — ignoring the re-entrant request";
+        return makeSuccessFuture();
+    }
 
     // P2 Investigation (2026-05-27): pauseTickle() rationale
     // Historical context (May 2, 2026, commit 0fefb6b): The original TickleWorker
@@ -869,21 +880,46 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     // the blanket pre-run pause is removed — the tickle is now paused/resumed per
     // phase via the phaseChanged lambda in the constructor.
 
+    // Task 12: multi-hop fixpoint loop. WildPalms sync is a depth-1 star
+    // (Palm — Hub — Remote), so a single pass of the mapping set crosses only
+    // ONE hop. Re-run the set until a pass moves no data (or fails/cancels/caps)
+    // so both hops propagate in one user action.
+    //
+    // Mode is applied only after the guards, so an early-return (no mappings /
+    // re-entrant) never leaks settings into the next run or clobbers an in-flight loop.
+    m_engine->setSkipUnchangedMappings(skipUnchanged);
+    m_syncMaxPass = maxPasses;
+
+    m_syncIds   = ids;
+    m_syncPass  = 0;
+    m_syncAccum = PalmRunResult{};
+    m_syncAccum.success   = true;
+    m_syncAccum.startTime = QDateTime::currentDateTimeUtc();
+
+    // K.8b T16 + Plan 8 B.3: the watcher (set up per-pass in dispatchSyncPass_)
+    // both propagates cancelSync() into SyncEngine::onCancelObserved AND delivers
+    // the result. Qt6's QFuture::then() drops its continuation when the source
+    // future is canceled, so runFinished must be emitted from the watcher's
+    // finished slot — it fires on both completion and cancel, on this object's
+    // thread (no invokeMethod marshalling needed). The caller's promise is held
+    // in m_syncPromise and finalized once, at the END of the loop.
+    m_syncPromise = std::make_shared<QPromise<PalmRunResult>>();
+    m_syncPromise->start();
+    QFuture<PalmRunResult> resultFuture = m_syncPromise->future();
+
+    dispatchSyncPass_();          // device stays connected across all passes
+    return resultFuture;
+}
+
+void PalmRuntime::dispatchSyncPass_()
+{
+    ++m_syncPass;
+
     // Plan 8 B.1: canonical subset dispatch (was runSyncFuture(ids, …)).
     Kalburator::Sync::SyncRequest req;
-    req.mappingIds = ids;
+    req.mappingIds = m_syncIds;
     req.behavior   = Kalburator::Sync::SyncEngine::SyncBehavior::Unmonitored;
     auto engineFuture = m_engine->runSync(req);
-
-    // K.8b T16 + Plan 8 B.3: the watcher both propagates cancelSync() into
-    // SyncEngine::onCancelObserved AND delivers the result. Qt6's
-    // QFuture::then() drops its continuation when the source future is
-    // canceled, so runFinished must be emitted from the watcher's finished
-    // slot — it fires on both completion and cancel, on this object's
-    // thread (no invokeMethod marshalling needed).
-    auto promise = std::make_shared<QPromise<PalmRunResult>>();
-    promise->start();
-    QFuture<PalmRunResult> resultFuture = promise->future();
 
     if (m_activeSyncWatcher) {
         m_activeSyncWatcher->cancel();
@@ -892,7 +928,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
     auto *watcher = new QFutureWatcher<void>(this);
     m_activeSyncWatcher = watcher;
     QObject::connect(watcher, &QFutureWatcher<void>::finished,
-            this, [this, watcher, engineFuture, promise, ids]() {
+            this, [this, watcher, engineFuture]() {
         // B.4: read via resultAt(0), not results() (empty after cancel).
         // The multi-mapping iface adds cancellation-marker results even
         // when canceled (setAddResultsIfCanceledEnabled); guard anyway.
@@ -900,10 +936,7 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         if (engineFuture.resultCount() > 0)
             results = engineFuture.resultAt(0);
 
-        PalmRunResult r;
-        r.startTime = QDateTime::currentDateTimeUtc();
-        r.success   = true;
-
+        // Fold this pass into m_syncAccum (accumulated across all passes).
         PalmRunResult::PluginStats stats;
         int linkLostCount = 0;
         bool anyCancelled = engineFuture.isCanceled();
@@ -911,12 +944,13 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
             if (sr.cancelled)
                 anyCancelled = true;
             if (!sr.success && !sr.cancelled && !sr.skipped) {
-                r.success = false;
+                m_syncAccum.success = false;
                 if (sr.errorMessage.contains(QLatin1String("Palm link"),
                                              Qt::CaseInsensitive)) {
                     ++linkLostCount;
-                } else if (r.errorMessage.isEmpty() && !sr.errorMessage.isEmpty()) {
-                    r.errorMessage = sr.errorMessage;
+                } else if (m_syncAccum.errorMessage.isEmpty()
+                           && !sr.errorMessage.isEmpty()) {
+                    m_syncAccum.errorMessage = sr.errorMessage;
                 }
             }
             stats.created   += sr.targetStats.created;
@@ -927,53 +961,73 @@ QFuture<PalmRunResult> PalmRuntime::runAllMappings()
         }
         // Layer B: collapse N "Palm link lost" errors into one summary so
         // the UI shows a single message instead of repeating the same string.
-        if (linkLostCount > 0 && r.errorMessage.isEmpty()) {
-            r.errorMessage = QStringLiteral(
+        if (linkLostCount > 0 && m_syncAccum.errorMessage.isEmpty()) {
+            m_syncAccum.errorMessage = QStringLiteral(
                 "HotSync aborted: Palm device disconnected "
                 "(%1 of %2 mappings affected)").arg(linkLostCount).arg(results.size());
         }
         // A cancelled run is not a successful one; pre-B.3 the result was
         // simply never delivered on cancel, so this branch is new surface.
         if (anyCancelled) {
-            r.success = false;
-            if (r.errorMessage.isEmpty())
-                r.errorMessage = QStringLiteral("Sync cancelled");
+            m_syncAccum.success = false;
+            if (m_syncAccum.errorMessage.isEmpty())
+                m_syncAccum.errorMessage = QStringLiteral("Sync cancelled");
         }
-        if (!results.isEmpty())
-            r.perPluginStats.insert(QStringLiteral("calendar"), stats);
+        // Accumulate per-plugin stats across passes (fold into existing entry).
+        if (!results.isEmpty()) {
+            auto &acc = m_syncAccum.perPluginStats[QStringLiteral("calendar")];
+            acc.created   += stats.created;
+            acc.updated   += stats.updated;
+            acc.deleted   += stats.deleted;
+            acc.unchanged += stats.unchanged;
+            acc.errors    += stats.errors;
+        }
 
         // Per-mapping finished — chips fill their counts here (run-end only;
-        // the engine has no per-mapping completion signal).
-        for (int i = 0; i < results.size() && i < ids.size(); ++i) {
+        // the engine has no per-mapping completion signal). Emitted per pass so
+        // the UI reflects each hop's movement.
+        for (int i = 0; i < results.size() && i < m_syncIds.size(); ++i) {
             const auto &sr = results[i];
             const auto &ts = sr.targetStats;
-            Q_EMIT mappingSyncFinished(ids[i], ts.created, ts.updated, ts.deleted,
+            Q_EMIT mappingSyncFinished(m_syncIds[i], ts.created, ts.updated, ts.deleted,
                                        sr.success && !sr.cancelled);
         }
 
-        r.endTime = QDateTime::currentDateTimeUtc();
-        if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
-        if (m_device) m_device->resumeTickle();
-        m_activeMappingId.clear();
-        Q_EMIT runFinished(r);
-        Q_EMIT syncCompleted();
-
-        promise->addResult(r);
-        promise->finish();
         if (m_activeSyncWatcher == watcher)
             m_activeSyncWatcher = nullptr;
         watcher->deleteLater();
+
+        // Loop or finalize. The device link is a PalmRuntime member and stays
+        // connected across passes — flushWrites/resumeTickle/runFinished/
+        // syncCompleted/promise.finish happen ONCE, only when the loop ends.
+        if (WildPalms::Runtime::shouldContinueSync(results, m_syncPass, m_syncMaxPass)) {
+            dispatchSyncPass_();          // next hop; prior engine run is complete
+            return;
+        }
+
+        // Single finalize funnel for ALL stop reasons (fixpoint reached, cap hit,
+        // mapping failure, or cancel — shouldContinueSync returned false for one of
+        // them). Everything below MUST run exactly once per run.
+        // Do not add an early return between the shouldContinueSync check and here.
+        m_syncAccum.endTime = QDateTime::currentDateTimeUtc();
+        if (m_device) m_device->flushWrites();    // close last mapping's DB before EndOfSync
+        if (m_device) m_device->resumeTickle();
+        m_activeMappingId.clear();
+        Q_EMIT runFinished(m_syncAccum);
+        Q_EMIT syncCompleted();
+
+        m_syncPromise->addResult(m_syncAccum);
+        m_syncPromise->finish();
+        m_syncPromise.reset();
     });
     watcher->setFuture(engineFuture);
-
-    return resultFuture;
 }
 
 QFuture<PalmRunResult> PalmRuntime::hotSync() {
     Q_EMIT runStarted(QStringLiteral("HotSync"));
     if (m_mappings.isEmpty())
         return makeSuccessFuture();
-    return runAllMappings();
+    return runAllMappings(/*maxPasses=*/3, /*skipUnchanged=*/true);
 }
 
 QFuture<PalmRunResult> PalmRuntime::fullSync()
@@ -982,7 +1036,9 @@ QFuture<PalmRunResult> PalmRuntime::fullSync()
     // Clear all baselines so the engine treats this as a fresh first sync.
     for (const auto &m : m_mappings)
         m_baselineStore->clearMappingV3(m.id);
-    return runAllMappings();
+    // Task 12: full re-diff every pass (no skip-unchanged); 2 passes suffice for
+    // the depth-1 star.
+    return runAllMappings(/*maxPasses=*/2, /*skipUnchanged=*/false);
 }
 
 QFuture<PalmRunResult> PalmRuntime::runMirror(MirrorDir dir, const QString &modeLabel)
