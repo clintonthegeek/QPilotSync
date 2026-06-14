@@ -56,7 +56,7 @@ set_tests_properties(tst_canon_calendar_seed PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 
 # --- integration test (opt-in; CTest label device-e2e) ---
 
-add_executable(tst_device_e2e_hotsync tst_device_e2e_hotsync.cpp)
+add_executable(tst_device_e2e_hotsync tst_device_e2e_hotsync.cpp canonseed.cpp)
 target_link_libraries(tst_device_e2e_hotsync
     PRIVATE
         Qt::Core
@@ -64,6 +64,14 @@ target_link_libraries(tst_device_e2e_hotsync
         Qt::Test
         Qt::Widgets  # required by wildpalms_qtest_main.h's unconditional <QApplication> include
         WildPalmsDeviceE2E
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
 )
 add_test(NAME tst_device_e2e_hotsync COMMAND tst_device_e2e_hotsync)
 set_tests_properties(tst_device_e2e_hotsync PROPERTIES
