@@ -6,26 +6,26 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-12)
+## Current branch and state (as of 2026-06-14)
 
-**Branch:** local `main` at `8c7571c` — **117 commits ahead of `origin/main`, unpushed**
-(push only at user request; both the v0.67 response §5 and the Plan 8 handoff §5 ask for a
-push so lib gates can run against WP's real baseline — flagged to user).
-**libkalburator pin:** tag **`v0.77`** (`CMakeLists.txt`; commit `5d225d8` on main) on the
-`feature/multi-hop-bidirectional-sync` branch — supersedes the earlier `493bd80` Akonadi-fix
-SHA (now merged to main) and adds hub-side `ChangeDetection`. `main` itself is still on
-`493bd80` until that branch merges. v0.77 is a verified superset: Akonadi scoped-backend read
-fix ✅, contacts id-prefix fix ✅ (shared `akonadiCollectionId` scheme — closes the
-2026-06-14 contacts handoff), hub `ChangeDetection` ✅.
+**Branch:** local `main` at `0b1d40e` — **18 commits ahead of `origin/main`, unpushed**
+(push only at user request; the multi-hop feature + earlier waves are unpushed. `main` is the
+ONLY working branch — the `feature/multi-hop-bidirectional-sync` branch was fast-forward
+merged and deleted 2026-06-14, per the project's linear-main convention).
+**libkalburator pin:** tag **`v0.77`** (`CMakeLists.txt`; commit `5d225d8` on main). Verified
+superset of the prior `493bd80` Akonadi-fix SHA: Akonadi scoped-backend read fix ✅, contacts
+id-prefix fix ✅ (shared `akonadiCollectionId` scheme), hub `ChangeDetection` ✅ (the piece
+that activates the multi-hop skip path). Re-pin only forward (newer tags).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **125/125 pass** on `main` (126/126 on the multi-hop branch below).
+**ctest:** **126/126 pass** (125 prior baseline + `tst_palm_change_detection`).
+**Stray branches** (pre-existing, not ours): `task8-three-tier-sync`, two `worktree-agent-*`.
 
-### Transparent multi-hop bidirectional sync — IMPLEMENTED on branch (2026-06-14, NOT on main)
+### Transparent multi-hop bidirectional sync — LANDED on main 2026-06-14
 
-Branch `feature/multi-hop-bidirectional-sync` (off `main` at `ef86e79`; superproject HEAD
-`a248019`, **126/126 ctest**). Makes one HotSync/FullSync propagate changes across BOTH hops
-of the `Palm — Hub — Remote` star in a single user action (fixes the symptom where Akonadi
-events reached `hub.db` but not the Palm without a second HotSync). Spec/plan:
+One HotSync/FullSync now propagates changes across BOTH hops of the `Palm — Hub — Remote`
+star in a single user action (fixes the symptom where Akonadi events reached `hub.db` but not
+the Palm without a second HotSync). 13-commit feature (Tasks 1–13 of the plan), subagent-
+driven with two-stage review per task. Spec/plan:
 `docs/superpowers/{specs,plans}/2026-06-14-multi-hop-bidirectional-sync*`.
 
 - **How:** Palm device exposes `databaseRevision` (DBInfo modnum via `dlp_FindDBInfo`); the
@@ -46,13 +46,15 @@ events reached `hub.db` but not the Palm without a second HotSync). Spec/plan:
   digest (not a write counter — a counter never settles under the engine's TwoWay re-writes);
   a settled hub skips on pass 1 of the next session, a real change costs one confirming pass
   (within cap-3). On-device verify: settled HotSync passes log `skipping unchanged mapping …`.
-- **Submodule commits (NOT pushed, gitlinks NOT bumped):** the four conduit backends gained
-  the mixin on their `feature/canon-adoption-phase1` branches — calendar `ad92ce5`, contacts
-  `c681fcc`, memo `3c2ca00`, todos `3893223`. Local builds use the working tree; Task 13
-  (push + gitlink bump) is **gated on user go-ahead**.
-- **PENDING:** (1) push the 4 submodules + bump gitlinks; (2) **on-device smoke test** — fresh
-  profile, populated Akonadi calendar → datebook, ONE HotSync should land events on the Palm
-  (previously needed two); a Palm edit should reach Akonadi in one sync; (3) merge to `main`.
+- **Submodule commits — PUSHED + gitlinks bumped** (`e6f0e0d`): the four conduit backends
+  gained the mixin on their `feature/canon-adoption-phase1` branches — calendar `ad92ce5`,
+  contacts `c681fcc`, memo `3c2ca00`, todos `3893223` (all on GitHub).
+- **ONLY PENDING = on-device smoke test** (gated on a real Palm; everything code-side is done
+  and merged): fresh profile, populated Akonadi calendar → datebook, **one** HotSync should
+  land events on the Palm (previously needed two) AND later fixpoint passes should log
+  `SyncEngine: skipping unchanged mapping …` instead of full `DatebookDB` reads (Goal-2 / RFC
+  criterion 3). Also worth re-binding contacts to the real address book (Akonadi coll 184) to
+  confirm the v0.77 contacts id-prefix fix. Then this feature is fully verified.
 
 ### Akonadi scoped-backend read fix — consumed 2026-06-12 (pin bump v0.69 → SHA `493bd80`)
 
@@ -330,13 +332,22 @@ filter value. The handoff doc
 **Resolution (CLOSED)** section recording the shipped API + delta, and was committed
 (no longer an unstaged working-tree file).
 
-### 2. Hub↔remote-only sync gap (item D in prior sessions)
+### 2. Hub↔remote-only sync gap (item D in prior sessions) — PARTIALLY closed
 
-**State:** scoped only conceptually — no spec, no plan.
+**The multi-hop fixpoint feature (landed 2026-06-14) closed the FIRST facet:** when a Palm
+*is* connected, one HotSync/FullSync now propagates across BOTH hops in either direction
+(Remote→Hub→Palm and Palm→Hub→Remote), instead of needing a second sync. The mapping-ordering
+limitation is gone.
 
-**The bug:** today a user editing a record in the WildPalms UI cannot propagate that edit to a cloud spoke (CalDAV/CardDAV) without connecting a Palm — `hotSync` and `fullSync` both require a connected Palm. The three-tier-sync architecture promises "hub buffers Palm edits and propagates to remotes when reachable"; the propagation half is wired only through hot/full-sync today.
+**STILL OPEN — the literal original concern:** propagating a hub/UI edit to a cloud spoke
+**without** a connected Palm. `hotSync`/`fullSync` still require a connected device, so a
+purely hub↔remote sync (no Palm present) is not yet possible. The three-tier architecture
+promises "hub buffers edits and propagates to remotes when reachable"; that no-device path is
+still unwired.
 
-**Next move:** brainstorm → spec → plan flow. Could parallel the clobber-sync flow (RFC for any lib-side primitives needed, then WP-side wiring).
+**Next move:** brainstorm → spec → plan for a device-less hub↔remote sync entry point
+(reuse `runAllMappings`'s fixpoint loop, but gate the palm↔hub legs off when no device is
+connected and run only the hub↔remote routes).
 
 ### 3. `dlp_DeleteDB` + `dlp_CreateDB` hardware fast path (item E in prior sessions)
 
