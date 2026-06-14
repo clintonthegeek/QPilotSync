@@ -18,6 +18,8 @@ class EmulatorFixture
 public:
     EmulatorFixture();
     ~EmulatorFixture();
+    EmulatorFixture(const EmulatorFixture &) = delete;
+    EmulatorFixture &operator=(const EmulatorFixture &) = delete;
 
     static bool configured();
 
@@ -36,7 +38,9 @@ public:
 
     bool exportDatabase(const QString &dbName, const QString &hostPath);
     bool cradleTap();
-    bool dismissProblemFormIfPresent(); // form id 12000 -> tap-id 12004
+    // Returns true if the problem form (id 12000) was present and dismissed (tap-id 12004).
+    // Returns false if the form was not present, or sets lastError() and returns false on tap failure.
+    bool dismissProblemFormIfPresent();
 
     void quit();
 
