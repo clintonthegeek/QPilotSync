@@ -60,7 +60,10 @@ option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" ON)
 
 set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
     "Optional path to a local libkalburator checkout (override FetchContent)")
-set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v0.69" CACHE STRING
+# SHA pin (2026-06-12): Akonadi scoped-backend read fix + engine fetch-failure
+# discrimination, on lib branch fix/akonadi-scoped-backend-reads (off v0.73).
+# Re-pin to the lib's next tag once it passes the PlanStan gate and merges.
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "493bd804a549e161718986065848f0af301b5667" CACHE STRING
     "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
 
 if(WILDPALMS_LIBKALBURATOR_SOURCE_DIR)

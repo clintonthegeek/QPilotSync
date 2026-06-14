@@ -6,14 +6,66 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-11)
+## Current branch and state (as of 2026-06-12)
 
 **Branch:** local `main` at `8c7571c` — **117 commits ahead of `origin/main`, unpushed**
 (push only at user request; both the v0.67 response §5 and the Plan 8 handoff §5 ask for a
 push so lib gates can run against WP's real baseline — flagged to user).
-**libkalburator pin:** `v0.69` (`CMakeLists.txt:63`).
+**libkalburator pin:** SHA `493bd804a549e161718986065848f0af301b5667` (`CMakeLists.txt`) —
+the Akonadi scoped-backend read fix on lib branch `fix/akonadi-scoped-backend-reads`, off
+v0.73. **Re-pin to the lib's next tag** once the lib runs the PlanStan gate and merges
+(the SHA could become unreachable if the lib rebases the branch instead of merging it).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
 **ctest:** **125/125 pass** (123 baseline + `tst_patchbay_model` + `tst_patchbay_view`).
+
+### Akonadi scoped-backend read fix — consumed 2026-06-12 (pin bump v0.69 → SHA `493bd80`)
+
+The 2026-06-12 handoff (Akonadi sync transfers 0 records) was verified against the v0.69
+tree, amended (Fix B rescoped: the engine must discriminate the base-class "fetchItems not
+implemented" default — which loadRecords-only backends like the hub's
+`FilteredCollectionBackend` and WP's palm plugins rely on — from a genuine fetch failure;
+a blanket "Failed ⇒ fail mapping" would have broken every palm↔hub leg), and **fixed
+same-day by libkalburator** at `493bd80` (lib suite 149/149): lazy
+`ensureScopedCollection` seeding for both Akonadi backends + a new
+`SyncOperation::NotSupported` terminal state driving the engine's fetch gate. WP pinned
+to the SHA; builds clean, ctest 125/125. Full trail: the handoff doc's §Resolution and
+the lib's `docs/2026-06-12-akonadi-scoped-backend-fix-response.md`.
+
+**Watch item (lib-flagged known gap):** the first-sync fast path (`dispatchFirstSync`,
+OneWayUpload + quick-path) is NOT fetch-gated — a cache-backed source like Akonadi reads
+0 records there and genuine fetch failures stay silent. WP's Akonadi routes are TwoWay
+today, so unaffected; if WP ever runs an Akonadi route as OneWayUpload, the lib follow-up
+(gate `dispatchFirstSync`) becomes load-bearing first.
+
+**On-device test 2026-06-14 — calendar read CONFIRMED working; two follow-ups found.**
+New profile, populated Akonadi calendar → datebook, real address book (coll 184) →
+contacts; Clobber then HotSync. Result: `hub.db` got **83 calendar events** (akonadi-54
+read works ✓) but **0 contacts**, and **nothing reached the Palm**. Two distinct issues,
+both diagnosed (systematic-debugging, evidence in hand):
+
+1. **Mapping execution order (WP-side, = roadmap item #2 "hub↔remote-only sync gap").**
+   `PalmRuntime::runAllMappings` dispatches mappings in `m_mappings` order — palm↔hub legs
+   FIRST, then hub↔remote routes. So in one HotSync the hub→palm calendar leg runs while
+   the hub is still empty (no-op), THEN the akonadi→hub route fills the hub (83 events) too
+   late. Proof: 83 events sit in `hub.db`, 0 on Palm. **A second HotSync pushes them to the
+   Palm** (the hub→palm leg then sees the 83). Reordering routes-first only flips the
+   failure to the outbound (palm→remote) direction — the real fix is an inbound-then-
+   outbound sweep / fixpoint, which needs the brainstorm→spec→plan flow (NOT a quick
+   reorder). Engine honors request order (no internal topo-sort); WP owns the ordering.
+2. **Contacts id-prefix mismatch (lib bug in the just-landed fix).** `AkonadiProvider`
+   emits `"akonadi-<id>"` for ALL domains (`akonadiprovider.cpp:137`), but
+   `AkonadiContactsBackend` parses `"akonadi-contacts-<id>"`
+   (`akonadicontactsbackend.cpp:29,133-139`) → `ensureScopedCollection` can't resolve
+   `"akonadi-184"` → contacts `fetchItems` fast-fails → 0 records. Calendar is immune (its
+   prefix matches). The lib's regression test passed only because it used the backend's
+   self-invented `"akonadi-contacts-1"` instead of the provider's real scheme. Fix B works
+   correctly here (caught the genuine failure → no "completed" log line). **Handoff written:
+   `docs/2026-06-14-libkalburator-akonadi-contacts-id-prefix-mismatch-handoff.md`** (prefer
+   aligning the contacts backend prefix to `"akonadi-"`, no WP migration).
+
+**Immediate user action:** run HotSync once more — the 83 calendar events already in the
+hub should appear on the Palm (confirms the ordering diagnosis). Contacts stays empty until
+the lib prefix fix lands.
 
 ### Sync Patchbay — Part 1 (Phases 0–1) — LANDED 2026-06-11
 
@@ -204,7 +256,8 @@ Clobber-sync Task 12 (hardware verification) remains pending — gated on a real
 ## Build + test
 
 ```bash
-cmake -S . -B build -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR= -DWILDPALMS_LIBKALBURATOR_GIT_TAG=v0.66
+cmake -S . -B build -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR= \
+      -DWILDPALMS_LIBKALBURATOR_GIT_TAG=493bd804a549e161718986065848f0af301b5667
 cmake --build build -j 8
 ctest --test-dir build -j 8
 ```
@@ -277,7 +330,8 @@ These either need a libkalburator response or sit on the WP-edit pile:
 
 | Doc | Direction | Status |
 |---|---|---|
-| `2026-06-12-libkalburator-akonadi-scoped-backend-read-handoff.md` | WP → lib | **OPEN, HIGH** — Akonadi sync transfers 0 records: the per-collection scoped `AkonadiBackend`/`AkonadiContactsBackend` never seeds `m_collections` (`loadCalendars` has no caller), so `fetchItems` fails fast and `loadRecords` returns empty; engine also swallows failed `fetchItems` (clobber-after-wipe data-loss risk). Blocks Akonadi→hub→Palm. Device-confirmed (coll 54=99, 64=28 events; hub.db empty). |
+| `2026-06-14-libkalburator-akonadi-contacts-id-prefix-mismatch-handoff.md` | WP → lib | **OPEN, HIGH (follow-up to the 2026-06-12 fix)** — scoped Akonadi *contacts* read transfers 0: provider emits `"akonadi-<id>"` for all domains but `AkonadiContactsBackend` parses `"akonadi-contacts-<id>"`, so `ensureScopedCollection` can't resolve it. Calendar unaffected (prefix matches). Lib regression test used the wrong (self-invented) scheme. Device-confirmed (hub.db: 83 calendar, 0 contacts). |
+| `2026-06-12-libkalburator-akonadi-scoped-backend-read-handoff.md` | WP → lib | **RESOLVED lib-side same-day** at `493bd80` (branch `fix/akonadi-scoped-backend-reads`); WP pinned to the SHA, ctest 125/125; calendar read on-device CONFIRMED (83 events → hub). Remaining: lib PlanStan gate → merge → tag (WP re-pins). Contacts half blocked by the prefix follow-up above. See doc §Resolution. |
 | `2026-06-10-plan8-consumer-wave-response-wildpalms.md` | WP → lib | **WP wave COMPLETE**; lib step 3 (runSyncFuture deletion) unblocked from WP's side |
 | `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **CLOSED** — shipped lib v0.67 (`2026-06-10-v067-response.md`); WP pinned at v0.69 |
 | `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | **CLOSED** — shipped lib v0.59 (`FilteredCollectionBackend`/`RecordFilter`); Resolution section added + committed 2026-06-11 |
