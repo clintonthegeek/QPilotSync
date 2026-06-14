@@ -60,10 +60,12 @@ option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" ON)
 
 set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
     "Optional path to a local libkalburator checkout (override FetchContent)")
-# SHA pin (2026-06-12): Akonadi scoped-backend read fix + engine fetch-failure
-# discrimination, on lib branch fix/akonadi-scoped-backend-reads (off v0.73).
-# Re-pin to the lib's next tag once it passes the PlanStan gate and merges.
-set(WILDPALMS_LIBKALBURATOR_GIT_TAG "493bd804a549e161718986065848f0af301b5667" CACHE STRING
+# Tag pin v0.77 (2026-06-14, commit 5d225d8 on main): superset of the prior
+# 493bd80 Akonadi-fix branch (merged to main) PLUS hub-side ChangeDetection
+# (GenericSqliteBackend content-digest + FilteredCollectionBackend) — which
+# activates WP's already-shipped setSkipUnchangedMappings(true). See
+# docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md.
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v0.77" CACHE STRING
     "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
 
 if(WILDPALMS_LIBKALBURATOR_SOURCE_DIR)

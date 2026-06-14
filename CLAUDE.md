@@ -11,10 +11,12 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 **Branch:** local `main` at `8c7571c` — **117 commits ahead of `origin/main`, unpushed**
 (push only at user request; both the v0.67 response §5 and the Plan 8 handoff §5 ask for a
 push so lib gates can run against WP's real baseline — flagged to user).
-**libkalburator pin:** SHA `493bd804a549e161718986065848f0af301b5667` (`CMakeLists.txt`) —
-the Akonadi scoped-backend read fix on lib branch `fix/akonadi-scoped-backend-reads`, off
-v0.73. **Re-pin to the lib's next tag** once the lib runs the PlanStan gate and merges
-(the SHA could become unreachable if the lib rebases the branch instead of merging it).
+**libkalburator pin:** tag **`v0.77`** (`CMakeLists.txt`; commit `5d225d8` on main) on the
+`feature/multi-hop-bidirectional-sync` branch — supersedes the earlier `493bd80` Akonadi-fix
+SHA (now merged to main) and adds hub-side `ChangeDetection`. `main` itself is still on
+`493bd80` until that branch merges. v0.77 is a verified superset: Akonadi scoped-backend read
+fix ✅, contacts id-prefix fix ✅ (shared `akonadiCollectionId` scheme — closes the
+2026-06-14 contacts handoff), hub `ChangeDetection` ✅.
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
 **ctest:** **125/125 pass** on `main` (126/126 on the multi-hop branch below).
 
@@ -35,12 +37,15 @@ events reached `hub.db` but not the Palm without a second HotSync). Spec/plan:
   passes, terminating via the pure helper `shouldContinueSync`. Clobber/Mirror unchanged.
 - **Goal 1 (propagation) WORKS;** loop terminates via `SyncStats::hasChanges()`, independent
   of skip.
-- **Goal 2 (cheap repeat passes) is INERT:** the engine skips only when BOTH mapping sides
-  implement `ChangeDetection`, but the hub (`GenericSqliteBackend`) + route wrapper
-  (`FilteredCollectionBackend`) don't — so every fixpoint pass does a full Palm serial read.
-  Needs a libkalburator change: **RFC `docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`**.
-  WP already calls `setSkipUnchangedMappings(true)`, so it activates with no WP change once
-  the lib lands hub-side `ChangeDetection`.
+- **Goal 2 (cheap repeat passes) is now LIVE** as of the **v0.77** pin (2026-06-14). The
+  engine skips only when BOTH mapping sides implement `ChangeDetection`; v0.77 added it to the
+  hub (`GenericSqliteBackend` SHA-256 content digest + `_collection_revisions` table) and
+  `FilteredCollectionBackend`, so WP's already-shipped `setSkipUnchangedMappings(true)`
+  activated on the pin bump (no WP source change). RFC **CLOSED**:
+  `docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`. Lib uses a content
+  digest (not a write counter — a counter never settles under the engine's TwoWay re-writes);
+  a settled hub skips on pass 1 of the next session, a real change costs one confirming pass
+  (within cap-3). On-device verify: settled HotSync passes log `skipping unchanged mapping …`.
 - **Submodule commits (NOT pushed, gitlinks NOT bumped):** the four conduit backends gained
   the mixin on their `feature/canon-adoption-phase1` branches — calendar `ad92ce5`, contacts
   `c681fcc`, memo `3c2ca00`, todos `3893223`. Local builds use the working tree; Task 13
@@ -361,8 +366,9 @@ These either need a libkalburator response or sit on the WP-edit pile:
 
 | Doc | Direction | Status |
 |---|---|---|
-| `2026-06-14-libkalburator-akonadi-contacts-id-prefix-mismatch-handoff.md` | WP → lib | **OPEN, HIGH (follow-up to the 2026-06-12 fix)** — scoped Akonadi *contacts* read transfers 0: provider emits `"akonadi-<id>"` for all domains but `AkonadiContactsBackend` parses `"akonadi-contacts-<id>"`, so `ensureScopedCollection` can't resolve it. Calendar unaffected (prefix matches). Lib regression test used the wrong (self-invented) scheme. Device-confirmed (hub.db: 83 calendar, 0 contacts). |
-| `2026-06-12-libkalburator-akonadi-scoped-backend-read-handoff.md` | WP → lib | **RESOLVED lib-side same-day** at `493bd80` (branch `fix/akonadi-scoped-backend-reads`); WP pinned to the SHA, ctest 125/125; calendar read on-device CONFIRMED (83 events → hub). Remaining: lib PlanStan gate → merge → tag (WP re-pins). Contacts half blocked by the prefix follow-up above. See doc §Resolution. |
+| `2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md` | WP → lib | **CLOSED** — shipped lib **v0.77** (`GenericSqliteBackend` content digest + `FilteredCollectionBackend` parent-derived revision). WP re-pinned v0.77; skip-unchanged now live, ctest 126/126. On-device skip-log verify pending. See doc §Resolution. |
+| `2026-06-14-libkalburator-akonadi-contacts-id-prefix-mismatch-handoff.md` | WP → lib | **CLOSED** — fixed in **v0.77** via a shared `akonadiCollectionId` scheme (provider `…ToString` + backend `…FromString` agree); cleaner than the proposed one-liner. Contacts Akonadi reads should now resolve (on-device re-test pending). |
+| `2026-06-12-libkalburator-akonadi-scoped-backend-read-handoff.md` | WP → lib | **CLOSED** — `493bd80` Akonadi fix merged to main and is in the **v0.77** tag; WP pinned v0.77. Calendar read on-device CONFIRMED earlier (83 events → hub). See doc §Resolution. |
 | `2026-06-10-plan8-consumer-wave-response-wildpalms.md` | WP → lib | **WP wave COMPLETE**; lib step 3 (runSyncFuture deletion) unblocked from WP's side |
 | `2026-06-09-libkalburator-collectioninfo-contenttypes-handoff.md` | WP → lib | **CLOSED** — shipped lib v0.67 (`2026-06-10-v067-response.md`); WP pinned at v0.69 |
 | `2026-05-28-libkalburator-filteredcollectionbackend-proposal.md` | WP → lib | **CLOSED** — shipped lib v0.59 (`FilteredCollectionBackend`/`RecordFilter`); Resolution section added + committed 2026-06-11 |

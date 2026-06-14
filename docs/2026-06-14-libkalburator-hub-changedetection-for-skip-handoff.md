@@ -2,8 +2,8 @@
 
 **Date:** 2026-06-14
 **Direction:** WildPalms → libkalburator
-**Status:** OPEN — efficiency RFC (not a correctness bug). WildPalms's transparent multi-hop
-sync works today; this unlocks the "cheap repeat passes" half.
+**Status:** RESOLVED — shipped in libkalburator **v0.77** (commit `5d225d8`, main); WP
+re-pinned to `v0.77` (`CMakeLists.txt`), builds clean, ctest 126/126. See §Resolution.
 **Severity:** Medium. Without it, every WildPalms HotSync pass does a full Palm serial read
 of every leg (no skip), so a settled multi-pass HotSync is ~Nx slower than designed.
 **Pinned at:** `493bd804a549e161718986065848f0af301b5667`.
@@ -108,3 +108,38 @@ So the engine and the Palm side are ready; implementing #1 + #2 makes the optimi
 The propagation feature (Goal 1) is complete WP-side and needs nothing here. This RFC is
 purely the efficiency half (Goal 2). If libkalburator declines or defers, WP's HotSync still
 propagates correctly — it just does full device reads on each fixpoint pass until this lands.
+
+---
+
+## Resolution (CLOSED) — libkalburator v0.77, consumed 2026-06-14
+
+Shipped in **v0.77** (commit `5d225d8` on main; lib ctest 151/151, PlanStan gate clean):
+
+- **`GenericSqliteBackend`** now implements `Sync::ChangeDetection`
+  (`src/universal/genericsqlitebackend.{h,cpp}`). `collectionRevision()` is a per-collection
+  **content digest** (SHA-256 over ordered `(record_id, content_hash)` tuples), with the
+  engine-primed baseline persisted in a new `_collection_revisions` table.
+- **`FilteredCollectionBackend`** (moved to `src/universal/filteredcollectionbackend.{h,cpp}`)
+  derives its token from the parent collection's revision (conservative; non-capable/null
+  parent → empty).
+
+**Design note from the lib (matters for our convergence):** they deliberately did NOT use a
+write counter (this RFC's "preferred" option). The engine re-writes records back to both
+backends on every TwoWay reconcile, so a counter never settles — it chases its own writes. A
+content digest is stable under idempotent re-writes, so settled collections converge.
+Practically: the `synced_rev` baseline persists across HotSync sessions, so a settled hub
+skips on **pass 1 of the next session**; within a session, propagating a real change costs one
+extra confirming pass before it skips again — well within WP's cap-3 fixpoint.
+
+**WP consumption:** pin v0.77 (`CMakeLists.txt`); **no WP source change** — the
+already-shipped `setSkipUnchangedMappings(true)` now activates because both mapping sides
+(hub + Palm) implement `ChangeDetection`. Build clean, ctest 126/126.
+
+**Verification (RFC criterion 3) — on-device, user step:** a fully-settled HotSync's later
+fixpoint passes should log `SyncEngine: skipping unchanged mapping …` instead of a full
+`DatebookDB` serial read.
+
+**FYI (not WP's problem):** the lib flagged a pre-existing latent bug — two
+`GenericSqliteBackend`s syncing each other accumulate duplicates (collection-prefixed record
+ids grow each round-trip). Does NOT affect WP (our hub's peers are Palm / CalDAV with stable
+bare ids); tracked lib-side as a future follow-up.

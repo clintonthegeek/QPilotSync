@@ -34,9 +34,11 @@ the symptom we are removing.)
 1. One HotSync or FullSync propagates changes **both directions across both hops**
    transparently — no second manual run.
 2. Repeat passes are **cheap**: a mapping whose collections are unchanged skips its full
-   *(STATUS 2026-06-14: this half is built but currently INERT — see "Known limitation"
-   below. The engine skips only when BOTH mapping sides implement `ChangeDetection`, and the
-   WP hub (`GenericSqliteBackend`) does not yet. Goal 1 below is fully delivered regardless.)*
+   *(STATUS: LIVE as of the libkalburator **v0.77** pin (2026-06-14). Was inert on the
+   prior pin because the engine skips only when BOTH mapping sides implement
+   `ChangeDetection`; v0.77 added it to the hub (`GenericSqliteBackend` content digest) and
+   `FilteredCollectionBackend`, so WP's `setSkipUnchangedMappings(true)` now activates. RFC
+   closed: `docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`.)*
    fetch/diff (and, for the Palm, its serial device read) entirely.
 3. Entirely WP-side; preserve TwoWay merge/conflict semantics (no directional-overwrite
    restructuring).
@@ -185,17 +187,20 @@ Outbound changes need no extra pass (they complete in pass 1: leg writes Palm ed
 then the later route pushes it to the remote, same pass). The cap of 3 = star-diameter (2)
 + 1 settle pass.
 
-**Cost note (Known limitation):** ideally pass 2 would *skip* every mapping except the
-affected calendar leg (no device read), and pass 3 would skip everything (a cheap modnum-only
-settle). That requires the engine's `prepareSyncFastPath` to find `ChangeDetection` on
-**both** sides of a mapping (`syncengine.cpp:725-726`). The WP hub
-(`GenericSqliteBackend`) and route wrapper (`FilteredCollectionBackend`) do **not** implement
-`ChangeDetection`, so today **no mapping is ever skipped** — each pass does a full Palm serial
-read of every leg. The loop still converges correctly (via `hasChanges()`), just not cheaply.
-Closing this is a libkalburator RFC:
-`docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`. WP already calls
-`setSkipUnchangedMappings(true)`, so the optimization activates with no further WP change once
-the hub backends gain `ChangeDetection`.
+**Cost note — RESOLVED at the v0.77 pin:** pass 2 now *skips* every mapping except the
+affected calendar leg (no device read), and pass 3 skips everything (a cheap digest-only
+settle). The engine's `prepareSyncFastPath` requires `ChangeDetection` on **both** sides of a
+mapping (`syncengine.cpp:725-726`); libkalburator v0.77 added it to the hub
+(`GenericSqliteBackend` — a per-collection SHA-256 content digest persisted in a
+`_collection_revisions` table) and to `FilteredCollectionBackend` (derives from the parent's
+revision), so both sides of every WP mapping are now covered. WP already calls
+`setSkipUnchangedMappings(true)`, so the optimization went live on the pin bump with no WP
+source change. Note (lib's design): the hub uses a content **digest**, not a write counter —
+a counter never settles because the engine re-writes records on every TwoWay reconcile; a
+digest is stable under idempotent re-writes. So a settled hub skips on pass 1 of the next
+session, and propagating a real change costs one extra confirming pass within a session
+(inside the cap-3 fixpoint). RFC closed:
+`docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`.
 
 ---
 
