@@ -32,6 +32,17 @@ target_link_libraries(tst_recontrol_client
 add_test(NAME tst_recontrol_client COMMAND tst_recontrol_client)
 set_tests_properties(tst_recontrol_client PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+add_executable(tst_pilotlink_decoder tst_pilotlink_decoder.cpp)
+target_link_libraries(tst_pilotlink_decoder
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets  # required by wildpalms_qtest_main.h's unconditional <QApplication> include
+        WildPalmsDeviceE2E
+)
+add_test(NAME tst_pilotlink_decoder COMMAND tst_pilotlink_decoder)
+set_tests_properties(tst_pilotlink_decoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- integration test (opt-in; CTest label device-e2e) ---
 
 add_executable(tst_device_e2e_hotsync tst_device_e2e_hotsync.cpp)
