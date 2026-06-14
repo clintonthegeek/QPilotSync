@@ -43,6 +43,17 @@ target_link_libraries(tst_pilotlink_decoder
 add_test(NAME tst_pilotlink_decoder COMMAND tst_pilotlink_decoder)
 set_tests_properties(tst_pilotlink_decoder PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+add_executable(tst_canon_calendar_seed tst_canon_calendar_seed.cpp canonseed.cpp)
+target_link_libraries(tst_canon_calendar_seed
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        Qt::Widgets  # required by wildpalms_qtest_main.h's unconditional <QApplication> include
+        Kalburator::Sync
+)
+add_test(NAME tst_canon_calendar_seed COMMAND tst_canon_calendar_seed)
+set_tests_properties(tst_canon_calendar_seed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # --- integration test (opt-in; CTest label device-e2e) ---
 
 add_executable(tst_device_e2e_hotsync tst_device_e2e_hotsync.cpp)
