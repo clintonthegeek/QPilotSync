@@ -97,6 +97,9 @@ public:
     /// CategoryMappingStore at session start.
     QByteArray readAppBlock(const QString &dbName) const;
 
+    /// Forwards the device's cheap per-DB change token (for ChangeDetection).
+    QString databaseRevision(const QString &dbName) const;
+
     /// Drop+recreate a Palm-side database. The clobber-sync flow uses
     /// this on the plugin's classic DB name (e.g. "DatebookDB") to
     /// produce an empty target before re-pushing hub data. Idempotent:

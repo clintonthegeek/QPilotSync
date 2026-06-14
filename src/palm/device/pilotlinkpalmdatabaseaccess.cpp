@@ -215,4 +215,11 @@ bool PilotLinkPalmDatabaseAccess::writeAppBlock(const QString &dbName,
         static_cast<std::size_t>(block.size()));
 }
 
+QString PilotLinkPalmDatabaseAccess::databaseRevision(const QString &dbName) const
+{
+    if (!m_link) return {};
+    const qint64 m = m_link->databaseModnum(dbName);
+    return m < 0 ? QString() : QString::number(m);
+}
+
 } // namespace WildPalms::PalmDevice

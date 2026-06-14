@@ -75,6 +75,8 @@ public:
     QByteArray readAppBlock(const QString &dbName) const override;
     bool writeAppBlock(const QString &dbName, const QByteArray &block) override;
 
+    QString databaseRevision(const QString &dbName) const override;
+
 private:
     // Scope guard opens a database on construction, closes on
     // destruction. Handle is -1 if the open failed.

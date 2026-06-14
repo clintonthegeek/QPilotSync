@@ -327,6 +327,11 @@ QByteArray PalmBackend::readAppBlock(const QString &dbName) const
     return m_device ? m_device->readAppBlock(dbName) : QByteArray();
 }
 
+QString PalmBackend::databaseRevision(const QString &dbName) const
+{
+    return m_device ? m_device->databaseRevision(dbName) : QString();
+}
+
 bool PalmBackend::wipePalmDatabase(const QString &dbName)
 {
     if (!m_device) return false;

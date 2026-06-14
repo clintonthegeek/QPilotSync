@@ -1,5 +1,6 @@
 #include <QtTest>
 #include "palm/sync/mockpalmdatabaseaccess.h"
+#include "palm/sync/palmbackend.h"
 
 using WildPalms::PalmSync::MockPalmDatabaseAccess;
 using WildPalms::PalmSync::PalmRecord;
@@ -9,6 +10,7 @@ class TestPalmChangeDetection : public QObject {
 private slots:
     void mockRevision_emptyForUnknownDb();
     void mockRevision_bumpsOnWrite();
+    void palmBackendForwardsRevision();
 };
 
 void TestPalmChangeDetection::mockRevision_emptyForUnknownDb()
@@ -27,6 +29,17 @@ void TestPalmChangeDetection::mockRevision_bumpsOnWrite()
     const QString r1 = dev.databaseRevision("DatebookDB");
     QVERIFY(!r1.isEmpty());
     QVERIFY(r0 != r1);
+}
+
+void TestPalmChangeDetection::palmBackendForwardsRevision()
+{
+    MockPalmDatabaseAccess dev;
+    dev.createDatabase("AddressDB");
+    WildPalms::PalmSync::PalmBackend backend(&dev);
+    PalmRecord rec;
+    dev.createRecord("AddressDB", rec);
+    QCOMPARE(backend.databaseRevision("AddressDB"), dev.databaseRevision("AddressDB"));
+    QVERIFY(!backend.databaseRevision("AddressDB").isEmpty());
 }
 
 QTEST_MAIN(TestPalmChangeDetection)

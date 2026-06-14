@@ -63,6 +63,7 @@ public:
     KPilotLink *link() const;
 
     QStringList availableDatabases() const override;
+    QString     databaseRevision(const QString &dbName) const override;
     bool        hasDatabase(const QString &dbName) const override;
     bool        createDatabase(const QString &dbName) override;
     QList<WildPalms::PalmSync::PalmRecord>

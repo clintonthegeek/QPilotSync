@@ -302,6 +302,15 @@ QStringList PalmDeviceAccess::availableDatabases() const {
     return result;
 }
 
+QString PalmDeviceAccess::databaseRevision(const QString &dbName) const {
+    if (!m_impl) return {};
+    QString result;
+    QMetaObject::invokeMethod(m_implOwner,
+        [this, &result, &dbName]() { result = m_impl->databaseRevision(dbName); },
+        Qt::BlockingQueuedConnection);
+    return result;
+}
+
 bool PalmDeviceAccess::hasDatabase(const QString &dbName) const {
     if (!m_impl) return false;
     bool result = false;
