@@ -28,6 +28,7 @@ namespace Kalburator::Sync {
     struct SyncMapping;
     struct LogicalCalendar;
     class SyncBackend;
+    struct SyncResult;
 }
 
 namespace Kalburator::Engine {
@@ -344,6 +345,15 @@ private:
     /// future UI; translateRouteSpec already reports these rows as NoFreeSlot.
     QHash<QString, QStringList>                                 m_categoryNoFreeSlot;
 };
+
+/// Decide whether the multi-hop loop should run another pass.
+/// `results` are the SyncResults of the pass that just finished.
+/// Continues only if some mapping changed data (so a hop may still be
+/// pending), the run is healthy, and we are under the cap.
+///   passJustFinished : 1-based index of the pass that just completed
+///   maxPasses        : hard cap (3 for HotSync)
+bool shouldContinueSync(const QList<Kalburator::Sync::SyncResult> &results,
+                        int passJustFinished, int maxPasses);
 
 }  // namespace WildPalms::Runtime
 

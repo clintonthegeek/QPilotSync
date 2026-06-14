@@ -1271,4 +1271,18 @@ QFuture<PalmRunResult> PalmRuntime::restore()
     });
 }
 
+bool shouldContinueSync(const QList<Kalburator::Sync::SyncResult> &results,
+                        int passJustFinished, int maxPasses)
+{
+    if (passJustFinished >= maxPasses) return false;        // cap reached
+    bool anyChange = false;
+    for (const auto &sr : results) {
+        if (sr.cancelled) return false;                     // cancelled -> stop
+        if (!sr.success && !sr.skipped) return false;       // failure -> stop
+        if (sr.sourceStats.hasChanges() || sr.targetStats.hasChanges())
+            anyChange = true;
+    }
+    return anyChange;                                       // loop only if data moved
+}
+
 }  // namespace WildPalms::Runtime
