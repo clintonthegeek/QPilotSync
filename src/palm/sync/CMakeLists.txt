@@ -16,6 +16,8 @@ add_library(WildPalmsPalmSync STATIC
     mockpalmdatabaseaccess.h
     palmbackend.cpp
     palmbackend.h
+    palmrevisionstore.cpp
+    palmrevisionstore.h
     # Phase E.15a — IPalmFileInstaller mock recorder.
     mockpalmfileinstaller.cpp
     mockpalmfileinstaller.h
