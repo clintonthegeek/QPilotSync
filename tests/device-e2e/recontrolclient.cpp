@@ -98,6 +98,10 @@ ReControlReply ReControlClient::commandMultiline(const QString &cmd, int timeout
     if (!readLineLatin1(first, timeoutMs))
         return r;
     r = parseFirstLine(first);
+    // ERR replies are single-line (no dot terminator); return now rather than
+    // blocking the full timeout waiting for a "." that never arrives.
+    if (!r.ok)
+        return r;
 
     // Read indented data lines until a line that is exactly "." (dot terminator).
     forever {
