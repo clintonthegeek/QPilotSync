@@ -18,6 +18,7 @@ class Profile;
 
 #include "palmrunresult.h"
 #include "routemapping.h"   // substrate A3 — RouteStatus (m_routeStatuses member)
+#include "palm/sync/palmrevisionstore.h"
 #include <shaperegistries.h>
 
 class KPilotDeviceLink;
@@ -336,6 +337,10 @@ private:
     std::vector<std::unique_ptr<Kalburator::Plugin>>             m_palmPlugins;
     QList<Kalburator::Sync::SyncMapping>                         m_mappings;
     bool                                                         m_running = false;
+    // T7: per-profile cached-revision store. Must be declared BEFORE
+    // m_ownedBackends so it is destroyed AFTER them (reverse declaration
+    // order) — the backends hold a borrowed pointer to this store.
+    std::unique_ptr<WildPalms::PalmSync::PalmRevisionStore>      m_palmRevisionStore;
     std::vector<std::unique_ptr<Kalburator::Sync::SyncBackendBase>>  m_ownedBackends;
     /// Substrate A3: per-mapping route status from the last
     /// buildRouteLogicalCalendars(). Keyed by SyncMapping::id.

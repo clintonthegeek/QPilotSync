@@ -65,6 +65,7 @@
 #include "routemapping.h"
 #include "conduitcatalog.h"
 #include "categoryreconciler.h"
+#include "palm/sync/palmchangedetection.h"
 
 #include "standardcontributions.h"
 
@@ -154,6 +155,10 @@ PalmRuntime::PalmRuntime(const QString &profilePath, QObject *parent)
     // exists because BaselineStore uses it (.state/.wildpalms-blob-baselines.db).
     m_hub = std::make_unique<Kalburator::Sinks::GenericSqliteBackend>(
         QDir(profilePath).filePath(QStringLiteral(".state/hub.db")));
+
+    // T7: per-profile Palm revision token store. .state/ dir already exists.
+    m_palmRevisionStore = std::make_unique<WildPalms::PalmSync::PalmRevisionStore>(
+        QDir(profilePath).filePath(QStringLiteral(".state/palm-revisions.ini")));
     m_registry->registerBackendInstance(QStringLiteral("wp-hub"), m_hub.get());
 
     m_syncHost = std::make_unique<PalmSyncHost>(m_registry.get());
@@ -548,6 +553,11 @@ void PalmRuntime::finishConnect()
         }
 
         m_registry->registerBackendInstance(id, ownedBackend.get());
+        // T7: inject the per-profile revision store into any backend that
+        // inherits PalmChangeDetection. Returns nullptr today (no backend
+        // inherits it yet — Tasks 8–11); the cast is a no-op until then.
+        if (auto *cd = dynamic_cast<WildPalms::PalmSync::PalmChangeDetection*>(ownedBackend.get()))
+            cd->setPalmRevisionStore(m_palmRevisionStore.get());
         m_ownedBackends.push_back(std::move(ownedBackend));
 
         qDebug() << "[PalmRuntime::finishConnect] Registered backend plugin:" << id;
