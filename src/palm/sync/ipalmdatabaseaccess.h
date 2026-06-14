@@ -114,6 +114,11 @@ public:
     /// Layer B silent-success fix (2026-05-16).
     virtual bool isConnected() const = 0;
 
+    /// Cheap collection-change token (the DB modification number as a string).
+    /// Empty string = "cannot answer cheaply" (caller treats it as changed).
+    /// Non-pure: implementers that can't answer need no override.
+    virtual QString databaseRevision(const QString &dbName) const { Q_UNUSED(dbName); return {}; }
+
     /// Flush any cached write handle (close the open DLP database). Default
     /// no-op. Real DLP impls that batch writes override this; the runtime
     /// calls it at end-of-sync so the final mapping's DB is closed before

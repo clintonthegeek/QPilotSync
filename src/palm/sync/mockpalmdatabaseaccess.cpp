@@ -62,6 +62,7 @@ std::uint32_t MockPalmDatabaseAccess::createRecord(
         stored.lastModified = QDateTime::currentDateTimeUtc();
     }
     db.records.insert(stored.recordId, stored);
+    ++db.revision;
     return stored.recordId;
 }
 
@@ -77,6 +78,7 @@ bool MockPalmDatabaseAccess::updateRecord(const QString &dbName,
         stored.lastModified = QDateTime::currentDateTimeUtc();
     }
     db.records[record.recordId] = stored;
+    ++db.revision;
     return true;
 }
 
@@ -87,6 +89,7 @@ bool MockPalmDatabaseAccess::deleteRecord(const QString &dbName,
     Database &db = m_dbs[dbName];
     if (db.records.remove(recordId) == 0) return false;
     db.deletionLog.insert(QDateTime::currentDateTimeUtc(), recordId);
+    ++db.revision;
     return true;
 }
 
@@ -139,6 +142,13 @@ void MockPalmDatabaseAccess::setAppBlock(const QString &dbName,
         m_dbs.insert(dbName, Database{});
     }
     m_dbs[dbName].appInfo = bytes;
+}
+
+QString MockPalmDatabaseAccess::databaseRevision(const QString &dbName) const
+{
+    auto it = m_dbs.constFind(dbName);
+    if (it == m_dbs.constEnd()) return {};
+    return QString::number(it->revision);
 }
 
 } // namespace WildPalms::PalmSync

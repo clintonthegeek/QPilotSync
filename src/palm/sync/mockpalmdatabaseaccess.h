@@ -40,6 +40,7 @@ public:
                       const PalmRecord &record) override;
     bool deleteRecord(const QString &dbName,
                       std::uint32_t recordId) override;
+    QString databaseRevision(const QString &dbName) const override;
 
     QList<PalmRecord> recordsModifiedSince(
         const QString &dbName, const QDateTime &since) const override;
@@ -68,6 +69,7 @@ private:
         QMultiMap<QDateTime, std::uint32_t> deletionLog;
         std::uint32_t                       nextId = 1;
         QByteArray                          appInfo;
+        quint64                             revision = 0;   ///< bumps on every create/update/delete
     };
 
     QHash<QString, Database> m_dbs;

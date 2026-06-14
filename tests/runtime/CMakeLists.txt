@@ -94,6 +94,30 @@ set_tests_properties(tst_palm_runtime_hotsync PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+# Change-detection unit tests (grows across the multi-hop-sync tasks): mock
+# revision counter (Task 2), PalmBackend forwarding (Task 3), PalmChangeDetection
+# mixin (Task 5), and the shouldContinueSync loop helper (Task 6). The later cases
+# pull in WildPalmsRuntime + Kalburator::Sync (SyncResult), so the full link set
+# below (mirroring tst_palm_runtime_hotsync) is needed by the end, not dead weight.
+add_executable(tst_palm_change_detection tst_palm_change_detection.cpp)
+target_link_libraries(tst_palm_change_detection
+    PRIVATE
+        Qt::Core
+        Qt::Test
+        PalmDeviceAccessLib
+        WildPalmsRuntime
+        $<LINK_LIBRARY:WHOLE_ARCHIVE,Kalburator::Sync>
+        WildPalmsPalmDevice
+        WildPalmsCore
+        pisock
+        bluetooth
+        usb
+)
+add_test(NAME tst_palm_change_detection COMMAND tst_palm_change_detection)
+set_tests_properties(tst_palm_change_detection PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # K.8b T16: PalmRuntime::cancelSync() — mid-sync cancel restoration
 add_executable(tst_palm_runtime_cancel_sync tst_palm_runtime_cancel_sync.cpp)
 target_link_libraries(tst_palm_runtime_cancel_sync
