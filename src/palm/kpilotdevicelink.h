@@ -182,6 +182,9 @@ public:
      */
     bool findDatabase(const QString &dbName);
 
+    /// dlp_FindDBInfo()-backed modification number; -1 on failure/not connected.
+    qint64 databaseModnum(const QString &dbName) override;
+
 signals:
     void connectionComplete(bool success);
     void ticklePauseRequested();

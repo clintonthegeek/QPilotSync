@@ -1298,3 +1298,17 @@ bool KPilotDeviceLink::findDatabase(const QString &dbName)
                              0, 0, &info);
     return (rc >= 0);
 }
+
+qint64 KPilotDeviceLink::databaseModnum(const QString &dbName)
+{
+    if (!m_isConnected || m_socket < 0)
+        return -1;
+
+    struct DBInfo info;
+    int rc = dlp_FindDBInfo(m_socket, 0, 0,
+                            dbName.toUtf8().constData(),
+                            0, 0, &info);
+    if (rc < 0)
+        return -1;
+    return static_cast<qint64>(info.modnum);
+}

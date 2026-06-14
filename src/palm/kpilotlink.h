@@ -57,6 +57,13 @@ public:
     virtual bool closeDatabase(int handle) = 0;
     virtual QStringList listDatabases() = 0;
 
+    /// Cheap per-database modification number (Palm DBInfo.modnum).
+    /// Returns -1 when unavailable/not connected. qint64 (not long): modnum is
+    /// unsigned long on the wire, so a 64-bit signed return keeps a 32-bit modnum
+    /// always positive and -1 a clean sentinel even on 32-bit builds. Non-pure so
+    /// non-device KPilotLink implementations need no change.
+    virtual qint64 databaseModnum(const QString &dbName) { Q_UNUSED(dbName); return -1; }
+
     // Record operations
     virtual QList<PilotRecord*> readAllRecords(int dbHandle) = 0;
     virtual PilotRecord* readRecordByIndex(int dbHandle, int index) = 0;
