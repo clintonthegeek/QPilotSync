@@ -55,6 +55,34 @@ private slots:
         QCOMPARE(d.advanceUnits, int(advMinutes));
         QCOMPARE(d.category, 0);
     }
+
+    void decodesAllDayEvent()
+    {
+        Appointment_t a{};
+        a.event = 1; // all-day / untimed
+        a.begin = tm{}; a.begin.tm_year = 126; a.begin.tm_mon = 6; a.begin.tm_mday = 2;
+        a.alarm = 0; a.advance = 0; a.advanceUnits = 0;
+        a.repeatType = repeatNone; a.repeatForever = 0; a.exceptions = 0; a.exception = nullptr;
+        char desc[] = "All Day";
+        a.description = desc;
+        a.note = nullptr;
+
+        pi_buffer_t *buf = pi_buffer_new(256);
+        QVERIFY(buf);
+        const int packed = pack_Appointment(&a, buf, datebook_v1);
+        QVERIFY(packed >= 0);
+        const QByteArray raw(reinterpret_cast<const char *>(buf->data), int(buf->used));
+        pi_buffer_free(buf);
+
+        bool ok = false;
+        const DecodedAppointment d = decodeAppointmentRecord(raw, /*category=*/0, &ok);
+        QVERIFY(ok);
+        QCOMPARE(d.allDay, true);
+        QCOMPARE(d.description, QStringLiteral("All Day"));
+        QCOMPARE(d.note, QString());
+        QCOMPARE(d.begin, QDateTime(QDate(2026, 7, 2), QTime(0, 0, 0)));
+        QCOMPARE(d.end, QDateTime()); // end left default for all-day
+    }
 };
 
 WILDPALMS_QTEST_GUILESS_MAIN(TestPilotLinkDecoder)

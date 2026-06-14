@@ -27,6 +27,9 @@ DecodedAppointment decodeAppointmentRecord(const QByteArray &raw, int category, 
     if (ok)
         *ok = false;
 
+    if (raw.isEmpty())
+        return d;
+
     pi_buffer_t *buf = pi_buffer_new(size_t(raw.size()));
     if (!buf)
         return d;
@@ -77,7 +80,7 @@ QList<DecodedAppointment> readAppointments(const QString &pdbPath)
             continue;
         if (attrs & dlpRecAttrDeleted) // skip tombstones (rawBuf belongs to pf; do not free)
             continue;
-        const QByteArray raw(reinterpret_cast<const char *>(rawBuf), int(size));
+        const QByteArray raw(reinterpret_cast<const char *>(rawBuf), static_cast<int>(size));
         bool ok = false;
         const DecodedAppointment d = decodeAppointmentRecord(raw, category, &ok);
         if (ok)
