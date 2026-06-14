@@ -209,3 +209,6 @@ add_test(NAME test_addaccountdialog_baseline COMMAND test_addaccountdialog_basel
 set_tests_properties(test_addaccountdialog_baseline PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# End-to-end POSE64 HotSync harness (opt-in, CTest label "device-e2e").
+add_subdirectory(device-e2e)
