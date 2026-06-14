@@ -34,6 +34,9 @@ the symptom we are removing.)
 1. One HotSync or FullSync propagates changes **both directions across both hops**
    transparently — no second manual run.
 2. Repeat passes are **cheap**: a mapping whose collections are unchanged skips its full
+   *(STATUS 2026-06-14: this half is built but currently INERT — see "Known limitation"
+   below. The engine skips only when BOTH mapping sides implement `ChangeDetection`, and the
+   WP hub (`GenericSqliteBackend`) does not yet. Goal 1 below is fully delivered regardless.)*
    fetch/diff (and, for the Palm, its serial device read) entirely.
 3. Entirely WP-side; preserve TwoWay merge/conflict semantics (no directional-overwrite
    restructuring).
@@ -166,20 +169,33 @@ to each GitHub remote), then the superproject gitlinks are bumped. The device la
 
 ## Convergence
 
-For the depth-1 star, the loop settles in **≤3 passes**, driven by the engine priming the
-revision cache from the *pre-pass* snapshot:
+For the depth-1 star, the loop settles in **≤3 passes**. Termination is driven by
+`shouldContinueSync`, which stops as soon as a pass reports no data movement
+(`SyncStats::hasChanges()` across all mappings is false) — this is **independent of the
+skip-unchanged optimization** and is what guarantees the loop ends.
 
-- **Pass 1** (fresh profile: no cached revisions ⇒ nothing skipped): legs run (hub empty,
-  no-op to Palm), then routes pull remote → hub. Hub:calendar now holds the remote records,
-  but the cache was primed with the *pre-pass* (empty-hub) revision.
-- **Pass 2**: `prepareSyncFastPath` samples the now-changed hub revision ≠ cached ⇒ the
-  calendar leg is **not** skipped ⇒ delivers the records to the Palm. Unrelated mappings
-  (unchanged both sides) are **skipped** — no device read. (A route may re-run as a 0-op.)
-- **Pass 3**: every collection's fresh revision now equals cached ⇒ all skipped ⇒ no
-  changes ⇒ loop stops. This pass only samples modnums (cheap), no record reads.
+- **Pass 1** (fresh profile): legs run (hub empty, no-op to Palm), then routes pull
+  remote → hub. Hub:calendar now holds the remote records.
+- **Pass 2**: the calendar leg now sees the populated hub and delivers the records to the
+  Palm (its `hasChanges()` is true → another pass is warranted).
+- **Pass 3**: no mapping moves data (everything already converged) ⇒ `hasChanges()` false
+  everywhere ⇒ loop stops.
 
-Outbound changes need no extra pass (they complete in pass 1, as shown above). The cap of 3
-= star-diameter (2) + 1 settle pass.
+Outbound changes need no extra pass (they complete in pass 1: leg writes Palm edit → hub,
+then the later route pushes it to the remote, same pass). The cap of 3 = star-diameter (2)
++ 1 settle pass.
+
+**Cost note (Known limitation):** ideally pass 2 would *skip* every mapping except the
+affected calendar leg (no device read), and pass 3 would skip everything (a cheap modnum-only
+settle). That requires the engine's `prepareSyncFastPath` to find `ChangeDetection` on
+**both** sides of a mapping (`syncengine.cpp:725-726`). The WP hub
+(`GenericSqliteBackend`) and route wrapper (`FilteredCollectionBackend`) do **not** implement
+`ChangeDetection`, so today **no mapping is ever skipped** — each pass does a full Palm serial
+read of every leg. The loop still converges correctly (via `hasChanges()`), just not cheaply.
+Closing this is a libkalburator RFC:
+`docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md`. WP already calls
+`setSkipUnchangedMappings(true)`, so the optimization activates with no further WP change once
+the hub backends gain `ChangeDetection`.
 
 ---
 
