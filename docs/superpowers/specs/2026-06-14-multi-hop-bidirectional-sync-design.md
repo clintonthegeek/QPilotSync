@@ -55,44 +55,78 @@ Keep the existing leg-first mapping order. Wrap the multi-mapping run in a **fix
 that re-runs the enabled set until a pass makes no changes, and enable the engine's
 **skip-unchanged** fast path so settled mappings cost nothing. Three layers, all WP-side.
 
-### Layer A — Palm device collection revision
+### Layer A — Palm device collection revision (all main-repo)
 
-`IPalmDatabaseAccess` (`src/palm/sync/ipalmdatabaseaccess.h`) gains:
+`IPalmDatabaseAccess` (`src/palm/sync/ipalmdatabaseaccess.h`) gains a **non-pure** virtual
+(default returns empty so the several implementers that can't answer need no change):
 
 ```cpp
-/// Cheap collection-change token: the Palm database's modification number.
+/// Cheap collection-change token: the Palm database's modification number as a string.
 /// Empty string = "cannot answer cheaply" (caller treats the collection as changed).
-virtual QString databaseRevision(const QString &dbName) const = 0;
+virtual QString databaseRevision(const QString &dbName) const { return {}; }
 ```
 
-- **`KPilotDeviceLink`** implements it via `dlp_FindDBInfo` → `DBInfo.modnum`
-  (already used at `src/palm/kpilotdevicelink.cpp:1244-1296` for viewer-app checks).
-  One DLP call, **no record traversal**. Marshaled to the link thread like every other DLP
-  call (`BlockingQueuedConnection`, per the `runAllMappings` threading note).
-- **`MockPalmDatabaseAccess`** implements it from a settable per-db counter that bumps on
-  writes (so tests can drive change detection deterministically).
-- `modnum` increments on every record change. Caveat: **our own writes bump it**, so after
-  a sync that writes a Palm DB, that DB's next-sync revision differs from the cached value
-  → the next sync re-diffs it (finds nothing). Correct, mildly less efficient for DBs we
-  wrote; read-only DBs get the full skip benefit.
+Delegation chain (each layer a thin forward, mirroring the existing `availableDatabases` /
+`readAllRecords` path):
+
+- **`KPilotLink`** (`src/palm/kpilotlink.h`) gains `virtual long databaseModnum(const QString &dbName) { return -1; }` (-1 = unknown).
+- **`KPilotDeviceLink`** (`src/palm/kpilotdevicelink.{h,cpp}`) overrides `databaseModnum` via
+  `dlp_FindDBInfo` → `DBInfo.modnum` (mirrors the existing `findDatabase` at
+  `kpilotdevicelink.cpp:~1289`). One DLP call, **no record traversal**.
+- **`PilotLinkPalmDatabaseAccess`** (`src/palm/device/pilotlinkpalmdatabaseaccess.{h,cpp}`)
+  overrides `databaseRevision` → `m_link->databaseModnum(dbName)` to a string (empty if < 0).
+- **`PalmDeviceAccess`** (`src/runtime/palmdeviceaccess.{h,cpp}`) overrides `databaseRevision`
+  → marshals to its `m_impl` on the link thread (mirror its `availableDatabases` marshaling;
+  DLP must run on `m_linkThread`).
+- **`PalmBackend`** (`src/palm/sync/palmbackend.{h,cpp}`) — the adapter the four conduit
+  backends hold — gains `QString databaseRevision(const QString &dbName) const` forwarding to
+  its `m_device->databaseRevision(dbName)`.
+- **`MockPalmDatabaseAccess`** (`src/palm/sync/mockpalmdatabaseaccess.{h,cpp}`) overrides it
+  from a settable per-db value that bumps on `createRecord`/`deleteRecord`/`updateRecord`
+  (so the fixpoint test drives change detection deterministically).
+
+`modnum` increments on every record change. Caveat: **our own writes bump it**, so after a
+sync that writes a Palm DB, that DB's next-sync revision differs from the cached value → the
+next sync re-diffs it (finds nothing). Correct, mildly less efficient for DBs we wrote;
+read-only DBs get the full skip benefit.
 
 ### Layer B — Palm backends implement `Sync::ChangeDetection`
 
-`PalmCalendarBackend`, `PalmContactsBackend`, `PalmMemoBackend`, `PalmTodoBackend`
-(`src/palm/{calendar,contacts,memo,todo}/`) additionally inherit the neutral mixin
-`Kalburator::Sync::ChangeDetection` (`build/_deps/libkalburator-src/src/sync/changedetection.h`
-— the interface doc explicitly names "Palm hot-sync per-database sync anchor" as an intended
-use):
+**Which classes (corrected after code-mapping):** the *live, registered* Palm backends are
+the **plugin submodule** classes returned by each conduit's `createPalmBackend`, NOT the
+unused `src/palm/*` legacy classes:
 
-- `collectionRevision(collectionId)` — map the collection id (`palm:calendar`) to its DB
-  name (`DatebookDB`) and return `databaseRevision(dbName)`. Keep the default
-  `collectionRevisions` loop (≤4 PIM dbs; cheaper than the 189-entry `listDatabases`
-  enumeration, so prefer per-db `dlp_FindDBInfo` over a full sweep).
-- `cachedCollectionRevision(collectionId)` / `primeRevisionCache(cache)` — read/write
-  last-synced revisions from a per-profile persistent store: a `QSettings` ini at
-  `<profile>/.state/palm-revisions.ini`, keyed by DB name (same pattern as the existing
-  `akonadi-calendar-revisions.ini`).
-- `persistsCollectionRevisions()` → true.
+| conduit | registered class | header | DB |
+|---|---|---|---|
+| calendar | `PalmCalendarBackend` (base `SyncBackend`) | `src/plugins/calendar/palmcalendarbackend.h` | DatebookDB |
+| contacts | `PalmContactsBackend` (base `SyncBackendBase`) | `src/plugins/contacts/palmcontactsbackend.h` | AddressDB |
+| memo | `MemoBlobBackend` (base `SyncBackendBase`) | `src/plugins/memo/memoblobbackend.h` | MemoDB |
+| todo | `TodoBlobBackend` (base `SyncBackendBase`) | `src/plugins/todos/todoblobbackend.h` | ToDoDB |
+
+All four reach the device uniformly through a private `m_palmBackend`
+(`WildPalms::PalmSync::PalmBackend*` → its `IPalmDatabaseAccess* m_device`). Each wraps
+**exactly one** physical DB, so `collectionRevision` returns that DB's modnum regardless of
+which collection id (`palm:calendar`, `palm:calendar/3`, …) the engine asks about — no id
+parsing needed.
+
+**Shared mixin (DRY, main-repo).** Add `WildPalms::PalmSync::PalmChangeDetection`
+(`src/palm/sync/palmchangedetection.h`) inheriting the neutral
+`Kalburator::Sync::ChangeDetection` (the lib interface doc explicitly names "Palm hot-sync
+per-database sync anchor" as an intended use). It implements everything generic:
+`cachedCollectionRevision`/`primeRevisionCache` (delegate to an injected `PalmRevisionStore`),
+`collectionRevision` (returns `currentDbRevision()`), and a `setPalmRevisionStore(...)`
+setter. It declares one protected hook `virtual QString currentDbRevision() const = 0`.
+
+Each of the four submodule backends then adds `public PalmChangeDetection` as a base and a
+one-line override: `currentDbRevision() { return m_palmBackend ? m_palmBackend->databaseRevision(DatabaseName) : QString(); }`.
+
+**Persistence (`PalmRevisionStore`, main-repo `src/palm/sync/`).** A small `QSettings`-ini
+token store (`token`/`setToken`), one instance owned by `PalmRuntime` at
+`<profile>/.state/palm-revisions.ini` (keyed by collection id — unique per backend, no
+collision; same pattern as the lib's `AkonadiRevisionStore`). `PalmRuntime` injects it into
+each registered backend (dynamic_cast to `PalmChangeDetection*`) in `finishConnect`, after
+registration and before any sync. Per-profile location prevents two profiles on one device
+from wrongly skipping each other.
 
 The engine's existing fast path then works unchanged for the Palm side: `prepareSyncFastPath`
 (`syncengine.cpp:660`) batches `collectionRevisions`, compares fresh vs
@@ -100,6 +134,10 @@ The engine's existing fast path then works unchanged for the Palm side: `prepare
 and unchanged (`syncengine.cpp:725-726`). After each successful mapping the engine primes
 the cache from the **pre-pass** snapshot (`m_freshState`, `syncengine.cpp:1109-1133`) — see
 Convergence below for why that pre-pass timing is what makes the loop settle.
+
+**Submodule workflow:** the four backend edits land in their submodule repos (commit + push
+to each GitHub remote), then the superproject gitlinks are bumped. The device layer
+(Layer A) and runtime (Layer C) are all main-repo.
 
 ### Layer C — Runtime: enable skip + fixpoint loop
 
@@ -166,11 +204,14 @@ mid-loop.
   bumps after writes; unit test.
 - **Palm backend**: each backend reports `collectionRevision`, persists/reads cached
   revisions across instances, and yields a stable revision for an unchanged collection.
-- **Runtime fixpoint** (key test): fake topology = one palm↔hub leg + one route whose source
-  seeds N records into the hub (reuse the `appendConduitForTest` / fake-runtime seam,
-  `tst_fifth_conduit`). Assert a single `runAllMappings()` delivers all N to the Palm side
-  within ≤3 passes; a no-change run settles in 1–2 passes touching the device minimally;
-  outbound (Palm-seeded) records reach the route target in pass 1.
+- **Loop decision** (key unit test): the fixpoint loop's control logic is extracted into a
+  pure function `shouldContinueSync(results, passJustFinished, maxPasses)` and exhaustively
+  tested — continues on data change, stops at fixpoint (no changes), stops at the cap, stops
+  on failure, stops on cancel. This isolates the only new decision logic. A full
+  device-connected multi-pass integration test is **not** feasible in-harness (the Palm side
+  needs a live HotSync session), so end-to-end Remote→Hub→Palm delivery is validated by the
+  on-device smoke test below — consistent with this project's hardware-gated verification
+  model.
 - **Regression**: existing single-hop HotSync / Mirror / Clobber tests stay green;
   skip-unchanged must not break a first sync (no cached revisions ⇒ full run).
 
