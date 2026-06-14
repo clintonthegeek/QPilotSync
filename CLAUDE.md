@@ -18,7 +18,25 @@ id-prefix fix ✅ (shared `akonadiCollectionId` scheme), hub `ChangeDetection` �
 that activates the multi-hop skip path). Re-pin only forward (newer tags).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
 **ctest:** **126/126 pass** (125 prior baseline + `tst_palm_change_detection`).
-**Stray branches** (pre-existing, not ours): `task8-three-tier-sync`, two `worktree-agent-*`.
+**Stray branches** (pre-existing, not ours): `task8-three-tier-sync`, two `worktree-agent-*`, `feature/pose64-e2e-hotsync-harness`.
+
+### POSE64 e2e HotSync harness (Phase 1) — LANDED 2026-06-14 (branch `feature/pose64-e2e-hotsync-harness`)
+
+`tests/device-e2e/` drives a real HotSync against a headless POSE64 emulator over
+its pty/DLP link and asserts calendar fidelity via an independent pilot-link decoder
+— the first test surface to exercise WP's real DLP wire (all other tests mock the
+device). Opt-in: `ctest -L device-e2e` with `WILDPALMS_POSE64_BIN` +
+`WILDPALMS_PALM_BASELINE_PSF`; skips otherwise (plain ctest unchanged, 130/130 + 3
+new always-on unit tests). First scenario (GREEN on hardware-emulator): hub→Palm
+calendar, clean first HotSync — a canon event seeded into the hub lands on the Palm's
+DatebookDB with description/note/start/end/category verified by export+decode. No
+src/ change (single-element device-path list skips WP's probe → pi_bind direct).
+Runbook: `docs/device-e2e-harness.md`. Spec/plan:
+`docs/superpowers/{specs,plans}/2026-06-14-pose64-e2e-hotsync-harness*`.
+**Two real issues surfaced (follow-ups, unfixed):** (1) contacts conduit write-back
+fails against a baseline with pre-seeded AddressDB ("Write to contacts failed");
+(2) canon→Palm calendar alarm transcode is lossy (`warnings: QList("alarms")`).
+Next phases: fidelity matrix + three-tier remote leg.
 
 ### Transparent multi-hop bidirectional sync — LANDED on main 2026-06-14
 
