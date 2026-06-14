@@ -7,7 +7,7 @@ target_link_libraries(tst_device_e2e_hotsync
     PRIVATE
         Qt::Core
         Qt::Test
-        Qt::Widgets
+        Qt::Widgets  # required by wildpalms_qtest_main.h's unconditional <QApplication> include
 )
 add_test(NAME tst_device_e2e_hotsync COMMAND tst_device_e2e_hotsync)
 set_tests_properties(tst_device_e2e_hotsync PROPERTIES
