@@ -32,8 +32,27 @@ The baseline .psf and ROM images are machine-local (not in this repo).
 
 See `docs/superpowers/specs/2026-06-14-pose64-e2e-hotsync-harness-design.md` and
 `docs/superpowers/plans/2026-06-14-pose64-e2e-hotsync-harness.md`. Phase 1 covers
-hub->Palm calendar (clean first HotSync). Next phases: the fidelity matrix
-(conduits x modes x edit/conflict/delete) and the three-tier remote leg.
+hub->Palm calendar (clean first HotSync).
+
+## Roadmap (Phase 2 = fidelity matrix, Phase 3 = three-tier)
+
+The authoritative, detailed roadmap lives in `CLAUDE.md` →
+"POSE64 e2e harness: Phase 2 (fidelity matrix) + Phase 3 (three-tier)". Summary of the
+**fidelity matrix** axes the harness scales to:
+
+- **Conduits (4):** calendar (`DatebookDB`), contacts (`AddressDB`), memo (`MemoDB`), todos (`ToDoDB`)
+  — each adds a `buildCanon<Domain>Event` seed helper and a pilot-link decoder
+  (`unpack_Address`/`unpack_ToDo`/`unpack_Memo`).
+- **Sync modes (5):** hotSync, fullSync, copyPalmToPC, copyPCToPalm, clobberSync.
+- **Patterns (per conduit × mode):** seed-on-hub→Palm; seed-on-Palm→hub; both-edited→conflict;
+  delete→tombstone + mass-delete guard; recategorize→named-category routing (+ first live
+  `writeAppBlock`); unchanged-second-pass→skip-unchanged log; per-domain field coverage.
+
+Make the integration test data-driven (`QTest::addRow`) so each cell is a named row; extend
+`scripts/make-baseline.sh` + `mkdatebook.c` to bake empty `AddressDB`/`MemoDB`/`ToDoDB` (and a
+category AppInfo block for the recategorize pattern). **Phase 3** adds a remote tier
+(`FakeCalDavServer` / `LocalFolderContribution`) to verify Remote↔Hub↔Palm propagation in one
+HotSync on real hardware.
 
 ## Components (`tests/device-e2e/`)
 

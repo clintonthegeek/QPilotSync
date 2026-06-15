@@ -8,19 +8,21 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ## Current branch and state (as of 2026-06-14)
 
-**Branch:** local `main` at `0b1d40e` — **18 commits ahead of `origin/main`, unpushed**
-(push only at user request; the multi-hop feature + earlier waves are unpushed. `main` is the
-ONLY working branch — the `feature/multi-hop-bidirectional-sync` branch was fast-forward
-merged and deleted 2026-06-14, per the project's linear-main convention).
+**Branch:** local `main` at `007f4a7` — **pushed to `origin/main`** (GitHub) 2026-06-14.
+`main` is the ONLY working branch; both the multi-hop feature and the POSE64 e2e harness were
+fast-forward merged from short-lived branches and deleted, per the project's linear-main
+convention. (Push happens at user request; everything through `007f4a7` is pushed.)
 **libkalburator pin:** tag **`v0.77`** (`CMakeLists.txt`; commit `5d225d8` on main). Verified
 superset of the prior `493bd80` Akonadi-fix SHA: Akonadi scoped-backend read fix ✅, contacts
 id-prefix fix ✅ (shared `akonadiCollectionId` scheme), hub `ChangeDetection` ✅ (the piece
 that activates the multi-hop skip path). Re-pin only forward (newer tags).
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **126/126 pass** (125 prior baseline + `tst_palm_change_detection`).
-**Stray branches** (pre-existing, not ours): `task8-three-tier-sync`, two `worktree-agent-*`, `feature/pose64-e2e-hotsync-harness`.
+**ctest:** **130/130 pass** (126 prior baseline + 3 always-on `tests/device-e2e/` unit tests +
+1 skip-gated integration test). The device-e2e integration test runs **GREEN against a POSE64
+emulator** via `ctest -L device-e2e` with `WILDPALMS_POSE64_BIN` + `WILDPALMS_PALM_BASELINE_PSF` set.
+**Stray branches** (pre-existing, not ours): `task8-three-tier-sync`, two `worktree-agent-*`.
 
-### POSE64 e2e HotSync harness (Phase 1) — LANDED 2026-06-14 (branch `feature/pose64-e2e-hotsync-harness`)
+### POSE64 e2e HotSync harness (Phase 1) — LANDED 2026-06-14 (merged to `main`, `007f4a7`, pushed)
 
 `tests/device-e2e/` drives a real HotSync against a headless POSE64 emulator over
 its pty/DLP link and asserts calendar fidelity via an independent pilot-link decoder
@@ -36,7 +38,8 @@ Runbook: `docs/device-e2e-harness.md`. Spec/plan:
 **Two real issues surfaced (follow-ups, unfixed):** (1) contacts conduit write-back
 fails against a baseline with pre-seeded AddressDB ("Write to contacts failed");
 (2) canon→Palm calendar alarm transcode is lossy (`warnings: QList("alarms")`).
-Next phases: fidelity matrix + three-tier remote leg.
+Next phases: the full fidelity matrix (Phase 2) and three-tier remote leg (Phase 3) — see
+Roadmap → "POSE64 e2e harness — Phase 2 (fidelity matrix) + Phase 3 (three-tier)" below.
 
 ### Transparent multi-hop bidirectional sync — LANDED on main 2026-06-14
 
@@ -336,6 +339,62 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 ## Roadmap — what to work on next
 
 Accounts-first wizard is **done** (landed this session). Hardware verification of clobber-sync (Plan Task 12) remains gated on a real Palm. Everything else below ships without hardware. Items roughly ordered by combined urgency / preparedness; user picks.
+
+### NEXT (most prepared, highest-leverage) — POSE64 e2e harness: Phase 2 (fidelity matrix) + Phase 3 (three-tier)
+
+Phase 1 (LANDED, see above) is the walking skeleton: one scenario (hub→Palm calendar, clean
+first HotSync), real pty/DLP wire, independent pilot-link oracle. It established the
+**seed → run → export → decode → assert** pattern and the two-process orchestration. Phases 2–3
+scale that pattern. This is the vehicle that finally retires the long "hardware-pending /
+user-smoke-test-pending" backlog scattered through this file (clobber Task 12, category-reconciler
+first live `writeAppBlock`, multi-hop skip-unchanged on-device log, contacts id-prefix re-test).
+
+**Phase 2 — the fidelity matrix.** Parametrize the Phase-1 oracle over a scenario table and assert
+record-level fidelity in every cell. Grow `tests/device-e2e/` incrementally (one scenario family
+per commit); spin a full spec→plan only for a family that's genuinely large.
+
+- **Conduits (4):** calendar (`DatebookDB`), contacts (`AddressDB`), memo (`MemoDB`), todos (`ToDoDB`).
+  Each needs a `buildCanon<Domain>Event`-style seed helper (sibling to `canonseed`) and a
+  pilot-link decoder (`unpack_Address` / `unpack_ToDo` / `unpack_Memo`, sibling to the
+  appointment decoder — all independent of WP's encoder).
+- **Sync modes (5):** `hotSync`, `fullSync`, `copyPalmToPC` (mirror PC←Palm), `copyPCToPalm`,
+  `clobberSync`.
+- **Edit / direction patterns (per conduit × mode):**
+  1. **seed-on-hub → assert on Palm** (Phase-1 shape; inbound leg).
+  2. **seed-on-Palm** (ReControl `install` a populated DB) **→ assert in `hub.db`** (outbound read leg).
+  3. **both-edited same record →** conflict policy (AskUser / last-writer) behaves; assert resolution.
+  4. **delete-on-one-side →** tombstone propagates; the mass-delete guard fires above threshold.
+  5. **recategorize →** named-category routing survives (exercises the AppInfo reconciler +
+     first live `writeAppBlock` — folds in that hardware gap).
+  6. **unchanged second pass →** assert the skip-unchanged log (`skipping unchanged mapping …`),
+     i.e. multi-hop Goal-2 / v0.77 `ChangeDetection` verified on real hardware.
+  7. **field coverage per domain →** every field that should survive the Palm wire round-trips
+     (calendar recurrence/exceptions/alarm; contacts phone/address/IM fields; todo
+     priority/due/completed; memo body + category).
+- **Oracle depth:** extend `DecodedAppointment` (and the new sibling structs) to the fields each
+  pattern asserts. Keep decoders pilot-link-based.
+- **Harness ergonomics:** make the integration test data-driven (`QTest::addColumn`/`addRow`) so
+  each matrix cell is a named row. Extend `tests/device-e2e/scripts/make-baseline.sh` +
+  `mkdatebook.c` to also bake empty `AddressDB`/`MemoDB`/`ToDoDB` (and, for the recategorize
+  pattern, a category AppInfo block) into the baseline `.psf`.
+
+**Phase 3 — three-tier (Remote↔Hub↔Palm).** Add a remote tier to the harness
+(`FakeCalDavServer`/`FakeCardDavServer` from libkalburator's tests, or a `LocalFolderContribution`)
+and assert ONE HotSync propagates across BOTH hops with fidelity at each tier — the on-hardware
+verification of the multi-hop feature. Also the natural home for verifying the device-less
+hub↔remote path once Roadmap item "Hub↔remote-only sync gap" lands.
+
+**Two real bugs the Phase-1 harness already surfaced** (fix candidates; reproduce via the matrix):
+- **Contacts conduit write-back fails** ("Write to contacts failed") when syncing against a
+  baseline whose `AddressDB` has pre-seeded records → reproduce with Phase-2 *contacts ×
+  seed-on-Palm*, then debug (systematic-debugging); likely the contacts update/merge path or the
+  `AddressDB` record codec.
+- **canon→Palm calendar alarm transcode is lossy** — a seeded alarm doesn't reach the device
+  (engine logs `onWorkerTranscodingWarning warnings: QList("alarms")`). libkalburator-side
+  (canon→ical→palm alarm stage); write a handoff doc once the matrix pins the exact loss.
+
+References: spec/plan `docs/superpowers/{specs,plans}/2026-06-14-pose64-e2e-hotsync-harness*`;
+runbook + baseline tooling `docs/device-e2e-harness.md`, `tests/device-e2e/scripts/`.
 
 ### 1. ~~FilteredCollectionBackend RFC~~ — CLOSED (shipped lib v0.59; doc updated 2026-06-11)
 
