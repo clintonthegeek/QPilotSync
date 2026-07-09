@@ -220,8 +220,12 @@ FetchOperation *PalmCalendarBackend::fetchItems(const QString &calendarId)
             continue;
         }
         items.append(decoded.event);
-        emit itemFetched(calendarId, decoded.event);
     }
+
+    // Batch-form streaming (libkalburator E10/v0.90.1): one itemsFetched
+    // per fetch pass — the per-item itemFetched signal was deleted.
+    if (!items.isEmpty())
+        emit itemsFetched(calendarId, items);
 
     op->setFetchedItems(items);
     op->complete();
