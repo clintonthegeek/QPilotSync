@@ -1,3 +1,4 @@
+#include <vector>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
 #include <QDir>
@@ -42,8 +43,8 @@ public:
     }
     bool isConnected() const override { return m_connected; }
     QList<Kalburator::Sync::CollectionInfo> collections() const override { return {}; }
-    std::unique_ptr<Kalburator::Sync::IBlobBackend>
-        createBackend(const QString &) override { return nullptr; }
+    std::vector<Kalburator::Sync::ProviderBackendSpec> createBackends() override
+    { return {}; }
 private:
     bool m_connected = false;
 };

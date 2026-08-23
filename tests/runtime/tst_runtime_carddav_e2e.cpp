@@ -107,7 +107,9 @@ void TstRuntimeCardDavE2E::palm_to_carddav_propagates()
     auto cols = provider.collections();
     QVERIFY(!cols.isEmpty());
     const QString carddavColId = cols.first().id;
-    auto carddavBackendOwned = provider.createBackend(carddavColId);
+    auto specs = provider.createBackends();
+    QVERIFY(!specs.empty());
+    auto carddavBackendOwned = std::move(specs.front().backend);
     QVERIFY(carddavBackendOwned);
     auto *carddavSync = dynamic_cast<SyncBackendBase *>(carddavBackendOwned.get());
     QVERIFY(carddavSync);
@@ -168,7 +170,9 @@ void TstRuntimeCardDavE2E::carddav_to_palm_propagates()
     auto cols = provider.collections();
     QVERIFY(!cols.isEmpty());
     const QString carddavColId = cols.first().id;
-    auto carddavBackendOwned = provider.createBackend(carddavColId);
+    auto specs = provider.createBackends();
+    QVERIFY(!specs.empty());
+    auto carddavBackendOwned = std::move(specs.front().backend);
     QVERIFY(carddavBackendOwned);
     auto *carddavSync = dynamic_cast<SyncBackendBase *>(carddavBackendOwned.get());
     QVERIFY(carddavSync);

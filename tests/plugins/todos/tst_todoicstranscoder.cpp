@@ -1,3 +1,4 @@
+#include <QRegularExpression>
 #include <QtTest/QtTest>
 
 #include <KCalendarCore/Todo>
@@ -103,8 +104,14 @@ void TestTodoIcsTranscoder::encodeStampsCategoryAndRecordIdProperties()
 {
     PalmRecord pr = makeTodoRecordFull();   // category = 3, recordId = 17
     QByteArray ics = encodePalmToIcs(pr, nullptr, kDb);
-    QVERIFY(ics.contains("X-WP-PALM-CATEGORY-SLOT:3"));
-    QVERIFY(ics.contains("X-WP-PALM-RECORDID:17"));
+    // Newer KCalendarCore appends ";VALUE=TEXT" to X- properties, so match
+    // the property name + value rather than the exact serialized form.
+    static const QRegularExpression catSlot(
+        QStringLiteral("X-WP-PALM-CATEGORY-SLOT[^:]*:3\\b"));
+    static const QRegularExpression recId(
+        QStringLiteral("X-WP-PALM-RECORDID[^:]*:17\\b"));
+    QVERIFY(catSlot.match(QString::fromUtf8(ics)).hasMatch());
+    QVERIFY(recId.match(QString::fromUtf8(ics)).hasMatch());
 }
 
 void TestTodoIcsTranscoder::encodeIndefiniteDueOmitsDtDue()

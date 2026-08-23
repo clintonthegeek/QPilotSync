@@ -74,18 +74,38 @@ void LocalFolderProvider::disconnect()
     emit connectionStateChanged(false);
 }
 
-std::unique_ptr<Kalburator::Sync::IBlobBackend>
-LocalFolderProvider::createBackend(const QString &collectionId)
+std::vector<Kalburator::Sync::ProviderBackendSpec>
+LocalFolderProvider::createBackends()
 {
-    if (!m_connected) return nullptr;
+    std::vector<Kalburator::Sync::ProviderBackendSpec> out;
+    if (!m_connected) return out;
     for (const auto &e : m_entries) {
-        if (e.collectionId != collectionId) continue;
         // v1 dispatch (substrate spec A2): note -> Markdown; rest -> RawFiles.
-        if (e.domain == QLatin1String("note"))
-            return std::make_unique<Kalburator::Sinks::MarkdownFilesBackend>(e.path);
-        return std::make_unique<Kalburator::Sinks::RawFilesBackend>(e.path);
+        std::unique_ptr<Kalburator::Sinks::RawFilesBackend> backend;
+        Kalburator::Shape::Shape shape;
+        if (e.domain == QLatin1String("note")) {
+            backend = std::make_unique<Kalburator::Sinks::MarkdownFilesBackend>(e.path);
+            shape = Kalburator::Shape::Shape{
+                Kalburator::Shape::DomainId{QStringLiteral("note")},
+                Kalburator::Shape::EncodingId{QStringLiteral("markdown")} };
+        } else {
+            backend = std::make_unique<Kalburator::Sinks::RawFilesBackend>(e.path);
+            shape = Kalburator::Shape::Shape{
+                Kalburator::Shape::DomainId{e.domain},
+                Kalburator::Shape::EncodingId{QStringLiteral("raw")} };
+        }
+        Kalburator::Sync::CollectionInfo ci = m_collections.at(
+            static_cast<int>(out.size()));
+        // K.9: universal sinks must re-declare each collection with its
+        // shape on every construction.
+        backend->createCollection(ci, shape);
+        Kalburator::Sync::ProviderBackendSpec spec;
+        spec.domainId    = e.collectionId;
+        spec.collections = { ci };
+        spec.backend     = std::move(backend);
+        out.push_back(std::move(spec));
     }
-    return nullptr;
+    return out;
 }
 
 QWidget *LocalFolderProvider::createConfigWidget(QWidget *parent)

@@ -5,6 +5,8 @@
 #include <backendconfiguration.h>
 #include <collectioninfo.h>
 
+#include <vector>
+
 namespace WildPalms::Runtime {
 
 /// Credential-less provider (substrate A2): each configured (path, domain)
@@ -26,8 +28,7 @@ public:
     bool isConnected() const override { return m_connected; }
     QList<Kalburator::Sync::CollectionInfo> collections() const override
     { return m_collections; }
-    std::unique_ptr<Kalburator::Sync::IBlobBackend>
-        createBackend(const QString &collectionId) override;
+    std::vector<Kalburator::Sync::ProviderBackendSpec> createBackends() override;
     QString lastWarning() const override { return {}; }
     QString lastError() const override { return m_lastError; }
 

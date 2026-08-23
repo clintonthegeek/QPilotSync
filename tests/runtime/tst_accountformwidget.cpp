@@ -1,3 +1,4 @@
+#include <vector>
 // tests/runtime/tst_accountformwidget.cpp
 #include <QtTest/QtTest>
 #include <QComboBox>
@@ -34,9 +35,7 @@ public:
     void disconnect() override {}
     bool isConnected() const override { return false; }
     QList<Kalburator::Sync::CollectionInfo> collections() const override { return {}; }
-    std::unique_ptr<Kalburator::Sync::IBlobBackend> createBackend(const QString &) override {
-        return nullptr;
-    }
+    std::vector<Kalburator::Sync::ProviderBackendSpec> createBackends() override { return {}; }
 };
 
 class StubContribution : public Kalburator::Sync::BackendContribution {

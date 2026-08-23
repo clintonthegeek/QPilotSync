@@ -60,12 +60,15 @@ option(KALBURATOR_HAVE_AKONADI "Build with KPim6 Akonadi support" ON)
 
 set(WILDPALMS_LIBKALBURATOR_SOURCE_DIR "" CACHE PATH
     "Optional path to a local libkalburator checkout (override FetchContent)")
-# Tag pin v0.77 (2026-06-14, commit 5d225d8 on main): superset of the prior
-# 493bd80 Akonadi-fix branch (merged to main) PLUS hub-side ChangeDetection
-# (GenericSqliteBackend content-digest + FilteredCollectionBackend) — which
-# activates WP's already-shipped setSkipUnchangedMappings(true). See
-# docs/2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md.
-set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v0.77" CACHE STRING
+# Tag pin v1.01 (2026-08-22, commit b847ab8 on main): superset of v0.77 PLUS
+# O55 record-id aliasing + O56 anchor-stable aliasing and unresolved-conflict
+# all-or-nothing write hold — fixes the hub churn regressions documented in
+# docs/2026-08-21-libkalburator-hub-record-id-join-churn-handoff.md (CLOSED;
+# lib response: docs/2026-08-22-o55-hub-record-id-aliasing-response.md) and
+# its follow-up docs/2026-08-22-libkalburator-o55-followup-recategorization-
+# handoff.md (lib response: docs/2026-08-22-o56-recategorization-followup-
+# response.md).
+set(WILDPALMS_LIBKALBURATOR_GIT_TAG "v1.01" CACHE STRING
     "libkalburator tag to fetch when WILDPALMS_LIBKALBURATOR_SOURCE_DIR is unset")
 
 if(WILDPALMS_LIBKALBURATOR_SOURCE_DIR)

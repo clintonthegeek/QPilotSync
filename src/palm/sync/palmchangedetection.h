@@ -28,7 +28,9 @@ public:
         return m_revStore ? m_revStore->token(collectionId) : QString();
     }
 
-    void primeRevisionCache(const QMap<QString, QString> &cache) override
+    // Not part of the lib interface (removed upstream, sync-hardening H3):
+    // WP-side helper persisting tokens into the per-profile store.
+    void primeRevisionCache(const QMap<QString, QString> &cache)
     {
         if (!m_revStore) return;
         for (auto it = cache.constBegin(); it != cache.constEnd(); ++it)

@@ -108,7 +108,9 @@ void TstRuntimeCalDavE2E::palm_to_caldav_propagates()
     auto cols = provider.collections();
     QVERIFY(!cols.isEmpty());
     const QString caldavColId = cols.first().id;
-    auto caldavBackendOwned = provider.createBackend(caldavColId);
+    auto specs = provider.createBackends();
+    QVERIFY(!specs.empty());
+    auto caldavBackendOwned = std::move(specs.front().backend);
     QVERIFY(caldavBackendOwned);
     auto *caldavSync = dynamic_cast<SyncBackend *>(caldavBackendOwned.get());
     QVERIFY(caldavSync);
@@ -174,7 +176,9 @@ void TstRuntimeCalDavE2E::caldav_to_palm_propagates()
     auto cols = provider.collections();
     QVERIFY(!cols.isEmpty());
     const QString caldavColId = cols.first().id;
-    auto caldavBackendOwned = provider.createBackend(caldavColId);
+    auto specs = provider.createBackends();
+    QVERIFY(!specs.empty());
+    auto caldavBackendOwned = std::move(specs.front().backend);
     QVERIFY(caldavBackendOwned);
     auto *caldavSync = dynamic_cast<SyncBackend *>(caldavBackendOwned.get());
     QVERIFY(caldavSync);
@@ -228,7 +232,9 @@ void TstRuntimeCalDavE2E::bidirectional_no_conflict()
     auto cols = provider.collections();
     QVERIFY(!cols.isEmpty());
     const QString caldavColId = cols.first().id;
-    auto caldavBackendOwned = provider.createBackend(caldavColId);
+    auto specs = provider.createBackends();
+    QVERIFY(!specs.empty());
+    auto caldavBackendOwned = std::move(specs.front().backend);
     QVERIFY(caldavBackendOwned);
     auto *caldavSync = dynamic_cast<SyncBackend *>(caldavBackendOwned.get());
     QVERIFY(caldavSync);
@@ -299,7 +305,9 @@ void TstRuntimeCalDavE2E::memory_calendar_observable_during_sync()
     auto cols = provider.collections();
     QVERIFY(!cols.isEmpty());
     const QString caldavColId = cols.first().id;
-    auto caldavBackendOwned = provider.createBackend(caldavColId);
+    auto specs = provider.createBackends();
+    QVERIFY(!specs.empty());
+    auto caldavBackendOwned = std::move(specs.front().backend);
     QVERIFY(caldavBackendOwned);
     auto *caldavSync = dynamic_cast<SyncBackend *>(caldavBackendOwned.get());
     QVERIFY(caldavSync);

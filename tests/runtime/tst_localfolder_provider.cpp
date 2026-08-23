@@ -73,11 +73,13 @@ void TstLocalFolderProvider::createBackendDispatchesPerDomain()
     auto f = p.connect();
     QTRY_VERIFY_WITH_TIMEOUT(f.isFinished(), 5000);
     const auto cols = p.collections();
-    auto noteBackend = p.createBackend(cols[0].id);
-    auto todoBackend = p.createBackend(cols[1].id);
-    QVERIFY(noteBackend);   // MarkdownFilesBackend
-    QVERIFY(todoBackend);   // RawFilesBackend fallback
-    QVERIFY(!p.createBackend(QStringLiteral("nonexistent")));
+    auto specs = p.createBackends();
+    QCOMPARE(specs.size(), 2);
+    // Specs come back in entry order; each hosts exactly one collection.
+    QCOMPARE(specs[0].domainId, cols[0].id);   // MarkdownFilesBackend
+    QCOMPARE(specs[1].domainId, cols[1].id);   // RawFilesBackend fallback
+    QVERIFY(specs[0].backend);
+    QVERIFY(specs[1].backend);
 }
 
 void TstLocalFolderProvider::missingFolderFailsConnect()

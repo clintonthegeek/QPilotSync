@@ -1,3 +1,4 @@
+#include <vector>
 // tests/runtime/tst_accountssetuppage.cpp
 #include <QtTest/QtTest>
 #include <QLabel>
@@ -48,9 +49,7 @@ public:
     void disconnect() override { m_connected = false; }
     bool isConnected() const override { return m_connected; }
     QList<CollectionInfo> collections() const override { return m_collections; }
-    std::unique_ptr<Kalburator::Sync::IBlobBackend> createBackend(const QString &) override {
-        return nullptr;
-    }
+    std::vector<Kalburator::Sync::ProviderBackendSpec> createBackends() override { return {}; }
 
 private:
     bool m_connectResult = true;
