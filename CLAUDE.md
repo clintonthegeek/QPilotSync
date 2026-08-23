@@ -6,21 +6,36 @@ For deeper history check `~/dev/CLAUDE.md` (the global dev-root instructions) an
 
 ---
 
-## Current branch and state (as of 2026-06-14)
+## Current branch and state (as of 2026-08-22)
 
-**Branch:** local `main` at `007f4a7` — **pushed to `origin/main`** (GitHub) 2026-06-14.
-`main` is the ONLY working branch; both the multi-hop feature and the POSE64 e2e harness were
-fast-forward merged from short-lived branches and deleted, per the project's linear-main
-convention. (Push happens at user request; everything through `007f4a7` is pushed.)
-**libkalburator pin:** tag **`v0.77`** (`CMakeLists.txt`; commit `5d225d8` on main). Verified
-superset of the prior `493bd80` Akonadi-fix SHA: Akonadi scoped-backend read fix ✅, contacts
-id-prefix fix ✅ (shared `akonadiCollectionId` scheme), hub `ChangeDetection` ✅ (the piece
-that activates the multi-hop skip path). Re-pin only forward (newer tags).
+**Branch:** local `main` at `7a4d564` ("port PalmCalendarBackend to libkalburator's
+batch itemsFetched signal"). `main` is the ONLY working branch; linear-main convention.
+**Working tree is dirty with this session's uncommitted work:** ~10 API ports for
+libkalburator v0.77→v1.01 drift (LocalFolderProvider `createBackends()`,
+`PalmChangeDetection.primeRevisionCache` demoted to helper, four test files),
+pin bump v1.00→v1.01 in `CMakeLists.txt`, two O55/O56 handoff docs (+Resolution
+sections), and `docs/2026-08-22-first-run-simulated-shakedown.md`. Commit+push pending user go-ahead.
+**libkalburator pin:** tag **`v1.01`** (`CMakeLists.txt`; commit `b847ab8` on main).
+v1.00 = O55 record-id aliasing + identity-conflict fail-loud guard (fixes hub churn);
+v1.01 = O56 anchor-stable aliasing + all-or-nothing unresolved-conflict write hold.
+Re-pin only forward (newer tags). Build against local checkout via
+`-DWILDPALMS_LIBKALBURATOR_SOURCE_DIR=~/dev/libkalburator`.
 **Build dir convention:** legacy `build/` (no `CMakePresets.json`). Stray dirs `build-dev/`, `build-c/`, `build-fetchcontent/`, `build-appimage/` may exist on disk from prior experiments; ignore unless cleaning house.
-**ctest:** **130/130 pass** (126 prior baseline + 3 always-on `tests/device-e2e/` unit tests +
-1 skip-gated integration test). The device-e2e integration test runs **GREEN against a POSE64
-emulator** via `ctest -L device-e2e` with `WILDPALMS_POSE64_BIN` + `WILDPALMS_PALM_BASELINE_PSF` set.
+**ctest:** **130/130 pass** (as of pin v1.01, 2026-08-22). The device-e2e integration test runs GREEN
+against a POSE64 emulator via `ctest -L device-e2e` with `WILDPALMS_POSE64_BIN` +
+`WILDPALMS_PALM_BASELINE_PSF` set.
 **Stray branches** (pre-existing, not ours): `task8-three-tier-sync`, two `worktree-agent-*`.
+
+### First-run simulated shakedown — DOCUMENTED 2026-08-22
+
+Code-derived walkthrough of launch → wizard → device plug-in → HotSync as a new
+user, with exact UI strings + file:line refs and 17 numbered findings (F1–F18):
+**`docs/2026-08-22-first-run-simulated-shakedown.md`.** This now drives roadmap
+priority — see Roadmap → "UX shakedown remediation" below. Headline findings:
+first-run prompt bypasses the real wizard (F1), empty-profile HotSync hangs the
+dashboard forever (`runStarted` without `runFinished`, F11), conflict-review
+"Apply Resolutions" button is wired to nothing (F10), Akonadi task lists
+unbindable via wizard (F4, lib-side).
 
 ### POSE64 e2e HotSync harness (Phase 1) — LANDED 2026-06-14 (merged to `main`, `007f4a7`, pushed)
 
@@ -39,7 +54,7 @@ Runbook: `docs/device-e2e-harness.md`. Spec/plan:
 fails against a baseline with pre-seeded AddressDB ("Write to contacts failed");
 (2) canon→Palm calendar alarm transcode is lossy (`warnings: QList("alarms")`).
 Next phases: the full fidelity matrix (Phase 2) and three-tier remote leg (Phase 3) — see
-Roadmap → "POSE64 e2e harness — Phase 2 (fidelity matrix) + Phase 3 (three-tier)" below.
+Roadmap → "POSE64 e2e harness: Phase 2 (fidelity matrix) + Phase 3 (three-tier)" below.
 
 ### Transparent multi-hop bidirectional sync — LANDED on main 2026-06-14
 
@@ -315,8 +330,9 @@ Clobber-sync Task 12 (hardware verification) remains pending — gated on a real
 ## Build + test
 
 ```bash
-cmake -S . -B build -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR= \
-      -DWILDPALMS_LIBKALBURATOR_GIT_TAG=493bd804a549e161718986065848f0af301b5667
+# Default: FetchContent at the pinned tag (v1.01). For local-lib development:
+cmake -S . -B build -DWILDPALMS_LIBKALBURATOR_SOURCE_DIR=$HOME/dev/libkalburator \
+      -DWILDPALMS_GRAFFODIL_SOURCE_DIR=$HOME/dev/Graffodil
 cmake --build build -j 8
 ctest --test-dir build -j 8
 ```
@@ -338,9 +354,58 @@ Submodules ARE part of WildPalms's scope: edit freely in `src/plugins/<conduit>/
 
 ## Roadmap — what to work on next
 
-Accounts-first wizard is **done** (landed this session). Hardware verification of clobber-sync (Plan Task 12) remains gated on a real Palm. Everything else below ships without hardware. Items roughly ordered by combined urgency / preparedness; user picks.
+**Reoriented 2026-08-22 after the first-run simulated shakedown**
+(`docs/2026-08-22-first-run-simulated-shakedown.md`, findings F1–F18). The
+engine core is solid (130/130, multi-hop works end-to-end); the shell around
+it drops information on the floor and mis-steers new users. Priority is now
+UX-integrity first, test-matrix breadth second. Items roughly ordered by
+combined urgency / preparedness; user picks.
 
-### NEXT (most prepared, highest-leverage) — POSE64 e2e harness: Phase 2 (fidelity matrix) + Phase 3 (three-tier)
+### 0. NEXT — UX shakedown remediation (F-numbers ref the shakedown doc)
+
+**Tier 1 — onboarding + run-lifecycle integrity (compound into the worst
+first-run outcome):**
+- **F1:** route the startup stopgap (`showProfilePickerStopgap`,
+  `kf6mainwindow.cpp:1880`) through `runProfileWizard()` instead of the bare
+  name prompt — hollow profiles are the root of the worst demo path.
+- **F3/F11:** emit `runFinished` on `PalmRuntime::hotSync`'s empty-mappings
+  early return (`palmruntime.cpp:1026-1031`) and make re-entrant sync clicks
+  a user-visible no-op (`:857-861`). Currently the dashboard spins forever.
+
+**Tier 2 — conflict honesty:**
+- **F10:** bridge `ConflictReviewDialog::applyResolutionsRequested`
+  (`widgets/dialogs/conflictreviewdialog.cpp:31`) into PalmRuntime's
+  `SyncConflictStore` accessor (`palmruntime.cpp:725-729`) so resolutions
+  actually replay on the next sync — or hide all conflict UI until this
+  exists. Also consider installing a ConflictManager or surfacing pending-
+  conflict counts per mapping.
+
+**Tier 3 — lib handoff:**
+- **F4:** Akonadi provider never populates `contentTypes` and types every
+  collection `"calendar"` → Tasks unbindable via wizard, tasks-only
+  collections over-match Calendar (lib `akonadiprovider.cpp:126-141`;
+  WP matcher `src/plugins/pimplugin.cpp:8-29`). Write handoff doc per
+  cross-repo discipline (precedent: `2026-06-09-libkalburator-collectioninfo-
+  contenttypes-handoff.md`, same surface, DAV side).
+
+**Tier 4 — feedback-honesty batch (small, independent):**
+- **F12:** bridge engine `transcodingWarning`/qWarning/qInfo into the Log
+  dock; start emitting the never-emitted `PalmRuntime::runLog`.
+- **F13:** report cancellation as cancelled, not error.
+- **F14:** call `Profile::setLastSyncTime` at run completion ("Last sync:
+  Never" forever today).
+- **F15:** remove/fix dead UI: Navigate menu (never-connected signals),
+  permanently-disabled "Review Conflicts...", "Change Sync Folder..." invoking
+  the profile-name prompt.
+- **F16:** quit confirmation / tray explanation (File→Quit silently hides to
+  tray by default).
+
+**Tier 5 — polish queue:** F2 (local-folder config widget), F5 (empty-binding
+hint suppression), F6/F7 (device-detection guidance + initial enumeration),
+F8/F9 (silent reconcile failures, opaque bind errors), F17 (post-sync counts;
+Patchbay Part-2 overlap), F18 (window title).
+
+### POSE64 e2e harness: Phase 2 (fidelity matrix) + Phase 3 (three-tier)
 
 Phase 1 (LANDED, see above) is the walking skeleton: one scenario (hub→Palm calendar, clean
 first HotSync), real pty/DLP wire, independent pilot-link oracle. It established the
@@ -348,6 +413,8 @@ first HotSync), real pty/DLP wire, independent pilot-link oracle. It established
 scale that pattern. This is the vehicle that finally retires the long "hardware-pending /
 user-smoke-test-pending" backlog scattered through this file (clobber Task 12, category-reconciler
 first live `writeAppBlock`, multi-hop skip-unchanged on-device log, contacts id-prefix re-test).
+**Note: Tier-5 items F17 (record counts) and the O55/O56-era hub behaviors now have
+harness-shaped verification paths too — matrix cells can pin them.**
 
 **Phase 2 — the fidelity matrix.** Parametrize the Phase-1 oracle over a scenario table and assert
 record-level fidelity in every cell. Grow `tests/device-e2e/` incrementally (one scenario family
@@ -454,7 +521,10 @@ These either need a libkalburator response or sit on the WP-edit pile:
 
 | Doc | Direction | Status |
 |---|---|---|
-| `2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md` | WP → lib | **CLOSED** — shipped lib **v0.77** (`GenericSqliteBackend` content digest + `FilteredCollectionBackend` parent-derived revision). WP re-pinned v0.77; skip-unchanged now live, ctest 126/126. On-device skip-log verify pending. See doc §Resolution. |
+| `2026-08-22-libkalburator-o55-followup-recategorization-handoff.md` | WP → lib | **CLOSED** — FINDINGS **O56**, fixed lib `b847ab8` / tag **v1.01** (anchor-stable aliasing + all-or-nothing unresolved-conflict write hold). WP pinned v1.01; recategorization test passes; ctest 130/130. |
+| `2026-08-21-libkalburator-hub-record-id-join-churn-handoff.md` | WP → lib | **CLOSED** — FINDINGS **O55**, fixed lib `db3b1c8` / tag **v1.00** (engine record-id aliasing + identity-conflict fail-loud guard; WP's proposed Direction 1). See doc §Resolution. Follow-up above. |
+| *(pending: Akonadi `contentTypes` handoff for shakedown F4)* | WP → lib | **TO WRITE** — Tasks unbindable via wizard / Calendar over-match (lib `akonadiprovider.cpp:126-141`). Precedent: the v0.67 contentTypes handoff, DAV side. Roadmap Tier 3. |
+| `2026-06-14-libkalburator-hub-changedetection-for-skip-handoff.md` | WP → lib | **CLOSED** — shipped lib **v0.77** (`GenericSqliteBackend` content digest + `FilteredCollectionBackend` parent-derived revision). Skip-unchanged live; on-device skip-log verify folded into POSE64 Phase-2 matrix cell 6. See doc §Resolution. |
 | `2026-06-14-libkalburator-akonadi-contacts-id-prefix-mismatch-handoff.md` | WP → lib | **CLOSED** — fixed in **v0.77** via a shared `akonadiCollectionId` scheme (provider `…ToString` + backend `…FromString` agree); cleaner than the proposed one-liner. Contacts Akonadi reads should now resolve (on-device re-test pending). |
 | `2026-06-12-libkalburator-akonadi-scoped-backend-read-handoff.md` | WP → lib | **CLOSED** — `493bd80` Akonadi fix merged to main and is in the **v0.77** tag; WP pinned v0.77. Calendar read on-device CONFIRMED earlier (83 events → hub). See doc §Resolution. |
 | `2026-06-10-plan8-consumer-wave-response-wildpalms.md` | WP → lib | **WP wave COMPLETE**; lib step 3 (runSyncFuture deletion) unblocked from WP's side |
